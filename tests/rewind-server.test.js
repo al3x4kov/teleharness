@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnPortal } from "./helpers/spawn-server.mjs";
 import { backup } from "../lib/turn-undo-hook.mjs";
+import { physicalDir } from "../lib/turn-undo.js";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
@@ -196,7 +197,8 @@ test("Claude: after «Отменить ход» the next turn forks a cut transc
   h = await ask(id, "HISTORY 3", 6);
   assert.deepEqual(JSON.parse(textOf(h[5])), ["запомни PELICAN", "HISTORY 2"]);
   // no cut copies are left behind in the CLI project folder
-  const proj = path.join(CLAUDE_CFG, "projects", HOME.replace(/[^A-Za-z0-9]/g, "-"));
+  // the CLI project folder is named after its physical cwd (macOS: /private/var/...)
+  const proj = path.join(CLAUDE_CFG, "projects", physicalDir(HOME).replace(/[^A-Za-z0-9]/g, "-"));
   const uuids = readdirSync(proj).filter((n) => /^[0-9a-f]{8}-[0-9a-f]{4}-/.test(n));
   assert.deepEqual(uuids, [], "the cut copy is removed after its resume");
 });

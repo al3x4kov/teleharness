@@ -89,6 +89,13 @@ function runHooks(tool, filePath) {
   }
 }
 const line = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
+// Exit only after stdout is flushed: on POSIX a stdout pipe is asynchronous
+// and a bare process.exit() drops whatever is still queued past the pipe
+// buffer (~64K) — a 100K ECHO answer lost its `result` line on Linux/macOS.
+// The callback of an empty write fires once every earlier chunk is written.
+const exit = (code) => {
+  process.stdout.write("", () => process.exit(code));
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const delta = (text, extra = {}) => line({ type: "stream_event", ...extra, event: { type: "content_block_delta", delta: { type: "text_delta", text } } });
 
@@ -99,13 +106,13 @@ process.stdin.on("end", () => main(Buffer.concat(chunks).toString("utf8")));
 async function main(prompt) {
   if (!argv.includes("-p") || flagValue("--input-format") !== "text") {
     process.stderr.write("fake: expected -p --input-format text\n");
-    process.exit(2);
+    return exit(2);
   }
   // Title generator mode (lib/title.js, BUG-13.14): plain text out.
   //   prompt contains "TITLEFAIL" → exit 3; "TITLEHANG" → never answers;
   //   otherwise «Заголовок: «Тема <first 3 words>»» (exercises cleaning).
   if (flagValue("--output-format") === "text") {
-    if (prompt.includes("TITLEFAIL")) process.exit(3);
+    if (prompt.includes("TITLEFAIL")) return exit(3);
     if (prompt.includes("TITLEHANG")) {
       setTimeout(() => process.exit(0), 60_000);
       return;
@@ -113,10 +120,10 @@ async function main(prompt) {
     const tools = argv.indexOf("--tools");
     if (tools < 0 || argv[tools + 1] !== "") {
       process.stderr.write("fake: title mode expects --tools \"\"\n");
-      process.exit(4);
+      return exit(4);
     }
     process.stdout.write(`Заголовок: «Тема ${prompt.split(/\s+/).slice(0, 3).join(" ")}»\n`);
-    process.exit(0);
+    return exit(0);
   }
   line({ type: "system", subtype: "init", session_id: sid });
   // BUG-184: "STALEBG" → a resumed session whose background task died with the
@@ -126,7 +133,7 @@ async function main(prompt) {
   if (prompt.includes("STALEBG") || prompt.includes("EMPTYONLY")) {
     line({ type: "system", subtype: "task_notification" });
     line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: "", used_model: model });
-    if (prompt.includes("EMPTYONLY")) process.exit(0);
+    if (prompt.includes("EMPTYONLY")) return exit(0);
     line({ type: "system", subtype: "init", session_id: sid });
   }
   if (prompt.includes("TOOLHANG")) {
@@ -235,5 +242,5 @@ async function main(prompt) {
       line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: "Фоновая задача завершилась.", used_model: model });
     }
   }
-  process.exit(0);
+  return exit(0);
 }

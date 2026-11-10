@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ClaudeRunner } from "../lib/claude.js";
+import { physicalDir } from "../lib/turn-undo.js";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
@@ -180,7 +181,8 @@ test("FEAT-04.12 Б: ход тенанта с подпапкой чата — CL
   await runner.dispatch({ res: fakeRes(), sid: "ses_abc", dir: root, workDir: work, body: body("ECHO первый") });
   await waitIdle(hub, 1, 6000);
   const echo = JSON.parse(textOf(runner.messages("ses_abc")[1]));
-  assert.equal(path.resolve(echo.cwd).toLowerCase(), path.resolve(work).toLowerCase(), "CLI запущен в подпапке чата");
+  // the CLI reports its physical cwd (macOS tmp: /var → /private/var)
+  assert.equal(path.resolve(echo.cwd).toLowerCase(), path.resolve(physicalDir(work)).toLowerCase(), "CLI запущен в подпапке чата");
   const i = echo.argv.indexOf("--add-dir");
   assert.ok(echo.argv.some((a, k) => a === "--add-dir" && path.resolve(echo.argv[k + 1]).toLowerCase() === path.resolve(root).toLowerCase()), "корень тенанта доступен: " + echo.argv.join(" "));
   await runner.dispatch({ res: fakeRes(), sid: "ses_abc", dir: root, workDir: work, body: body("HISTORY") });
