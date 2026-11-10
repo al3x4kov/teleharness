@@ -1,8 +1,6 @@
 <div align="center">
 
-# Teleharness
-
-### Your coding-agent CLIs — with their whole harness — on your phone
+<img src="docs/screenshots/social-preview.png" alt="Teleharness: your coding-agent CLIs — with their whole harness — on your phone" width="100%">
 
 Run **Claude Code** and **opencode** on your own machine and drive them from any browser.
 You don't chat with a bare model: every message goes through a real agent CLI, with its agents,
