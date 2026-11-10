@@ -1,0 +1,7 @@
+{
+  "context7": { "status": "connected" },
+  "grep_app": { "status": "connected" },
+  "lsp": { "status": "connected" },
+  "playwright": { "status": "connected" },
+  "websearch": { "status": "connected" }
+}

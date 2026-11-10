@@ -1,0 +1,25 @@
+{
+ "ok": true,
+ "plan": "pro",
+ "fetchedAt": 1794302940000,
+ "windows": [
+  {
+   "kind": "hours",
+   "number": 5,
+   "percent": 23,
+   "used": 6440,
+   "total": 28000,
+   "remaining": 21560,
+   "resetAt": 1794314520000
+  },
+  {
+   "kind": "week",
+   "number": 1,
+   "percent": 31,
+   "used": 43400,
+   "total": 140000,
+   "remaining": 96600,
+   "resetAt": 1794670200000
+  }
+ ]
+}

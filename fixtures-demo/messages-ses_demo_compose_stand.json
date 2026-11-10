@@ -1,0 +1,98 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_compose_stand_001",
+   "sessionID": "ses_demo_compose_stand",
+   "role": "user",
+   "time": {
+    "created": 1794043800000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "agent": "orchestrator",
+   "model": {
+    "providerID": "zai-coding-plan",
+    "modelID": "glm-5.3"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_compose_stand_002",
+    "sessionID": "ses_demo_compose_stand",
+    "messageID": "msg_demo_compose_stand_001",
+    "type": "text",
+    "text": "Put together a docker-compose file for a test stack: api, postgres, redis. Keep postgres data in a volume."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_compose_stand_003",
+   "sessionID": "ses_demo_compose_stand",
+   "role": "assistant",
+   "time": {
+    "created": 1794043801200,
+    "completed": 1794043805400
+   },
+   "parentID": "msg_demo_compose_stand_001",
+   "modelID": "glm-5.3",
+   "providerID": "zai-coding-plan",
+   "mode": "orchestrator",
+   "agent": "orchestrator",
+   "path": {
+    "cwd": "/home/dev/infra",
+    "root": "/home/dev/infra"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_compose_stand_004",
+    "sessionID": "ses_demo_compose_stand",
+    "messageID": "msg_demo_compose_stand_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_compose_stand_005",
+    "sessionID": "ses_demo_compose_stand",
+    "messageID": "msg_demo_compose_stand_003",
+    "type": "text",
+    "text": "```yaml\nservices:\n  api:\n    build: .\n    ports: [\"8080:8080\"]\n    environment:\n      DATABASE_URL: postgres://app:app@db:5432/app\n      REDIS_URL: redis://cache:6379\n    depends_on:\n      db: { condition: service_healthy }\n      cache: { condition: service_started }\n\n  db:\n    image: postgres:17\n    environment: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app }\n    volumes: [pgdata:/var/lib/postgresql/data]\n    healthcheck:\n      test: [\"CMD\", \"pg_isready\", \"-U\", \"app\"]\n      interval: 5s\n\n  cache:\n    image: redis:7-alpine\n\nvolumes:\n  pgdata:\n```\n\n`depends_on` with `service_healthy` keeps the API from starting until the database accepts connections.",
+    "time": {
+     "start": 1794043801200,
+     "end": 1794043805200
+    }
+   },
+   {
+    "id": "prt_demo_compose_stand_006",
+    "sessionID": "ses_demo_compose_stand",
+    "messageID": "msg_demo_compose_stand_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

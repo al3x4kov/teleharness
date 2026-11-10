@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "@playwright/mcp@latest",
+        "--browser",
+        "chrome",
+        "--user-data-dir",
+        "D:\\BrowserProfile"
+      ],
+      "env": {}
+    }
+  }
+}

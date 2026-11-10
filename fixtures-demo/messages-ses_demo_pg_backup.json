@@ -1,0 +1,95 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_pg_backup_001",
+   "sessionID": "ses_demo_pg_backup",
+   "role": "user",
+   "time": {
+    "created": 1794209400000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-5-5"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_pg_backup_002",
+    "sessionID": "ses_demo_pg_backup",
+    "messageID": "msg_demo_pg_backup_001",
+    "type": "text",
+    "text": "I need a daily Postgres backup script: compressed dump, keep 14 days, write to a log."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_pg_backup_003",
+   "sessionID": "ses_demo_pg_backup",
+   "role": "assistant",
+   "time": {
+    "created": 1794209401200,
+    "completed": 1794209405400
+   },
+   "parentID": "msg_demo_pg_backup_001",
+   "modelID": "claude-sonnet-5-5",
+   "providerID": "anthropic",
+   "path": {
+    "cwd": "/home/dev/infra",
+    "root": "/home/dev/infra"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_pg_backup_004",
+    "sessionID": "ses_demo_pg_backup",
+    "messageID": "msg_demo_pg_backup_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_pg_backup_005",
+    "sessionID": "ses_demo_pg_backup",
+    "messageID": "msg_demo_pg_backup_003",
+    "type": "text",
+    "text": "Here's a compact bash version: `pg_dump` in custom format (already compressed), date-based rotation, logging to syslog.\n\n```bash\n#!/usr/bin/env bash\nset -euo pipefail\n\nDB=\"shop\"\nDIR=\"/var/backups/postgres\"\nKEEP_DAYS=14\nFILE=\"$DIR/$DB-$(date +%F_%H%M).dump\"\n\nmkdir -p \"$DIR\"\npg_dump -Fc -Z 6 \"$DB\" -f \"$FILE\"\nfind \"$DIR\" -name \"$DB-*.dump\" -mtime +$KEEP_DAYS -delete\nlogger -t pg-backup \"ok: $FILE ($(du -h \"$FILE\" | cut -f1))\"\n```\n\nRun it daily at 03:30:\n\n```cron\n30 3 * * * postgres /usr/local/bin/pg-backup.sh\n```\n\nTo check that a dump is restorable: `pg_restore --list \"$FILE\" | head`.",
+    "time": {
+     "start": 1794209401200,
+     "end": 1794209405200
+    }
+   },
+   {
+    "id": "prt_demo_pg_backup_006",
+    "sessionID": "ses_demo_pg_backup",
+    "messageID": "msg_demo_pg_backup_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

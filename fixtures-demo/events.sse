@@ -1,0 +1,4 @@
+data: {"id":"evt_demo_0001","type":"server.connected","properties":{}}
+
+data: {"id":"evt_demo_0002","type":"server.heartbeat","properties":{}}
+

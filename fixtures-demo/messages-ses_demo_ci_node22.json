@@ -1,0 +1,192 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_ci_node22_001",
+   "sessionID": "ses_demo_ci_node22",
+   "role": "user",
+   "time": {
+    "created": 1794205800000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "agent": "orchestrator",
+   "model": {
+    "providerID": "zai-coding-plan",
+    "modelID": "glm-5.3-flash"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_ci_node22_002",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_001",
+    "type": "text",
+    "text": "After switching to Node 22 the CI build fails, while locally on Node 20 everything is fine. Can you take a look?"
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_ci_node22_003",
+   "sessionID": "ses_demo_ci_node22",
+   "role": "assistant",
+   "time": {
+    "created": 1794205801200,
+    "completed": 1794205804200
+   },
+   "parentID": "msg_demo_ci_node22_001",
+   "modelID": "glm-5.3-flash",
+   "providerID": "zai-coding-plan",
+   "mode": "orchestrator",
+   "agent": "orchestrator",
+   "path": {
+    "cwd": "/home/dev/projects/api-server",
+    "root": "/home/dev/projects/api-server"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 8000,
+    "input": 6400,
+    "output": 960,
+    "reasoning": 640,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_ci_node22_004",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_ci_node22_005",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_003",
+    "type": "text",
+    "text": "Let me check the log of the failed build.",
+    "time": {
+     "start": 1794205801200,
+     "end": 1794205801800
+    }
+   },
+   {
+    "id": "prt_demo_ci_node22_006",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_003",
+    "type": "tool",
+    "callID": "call_demo_ci_node22_007",
+    "tool": "bash",
+    "state": {
+     "status": "completed",
+     "input": {
+      "command": "gh run view --log-failed | tail -n 6",
+      "description": "Failed build log"
+     },
+     "output": "npm error gyp ERR! node -v v22.11.0\nnpm error gyp ERR! node-gyp -v v10.2.0\nnpm error gyp ERR! not ok\nnpm error Build failed with error code: 1\nnpm error path node_modules/node-sass\nError: Process completed with exit code 1.",
+     "title": "",
+     "metadata": {
+      "truncated": false,
+      "exit": 0
+     },
+     "time": {
+      "start": 1794205801900,
+      "end": 1794205803800
+     }
+    }
+   },
+   {
+    "id": "prt_demo_ci_node22_008",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_003",
+    "type": "step-finish",
+    "reason": "tool-calls",
+    "cost": 0,
+    "tokens": {
+     "total": 8000,
+     "input": 6400,
+     "output": 960,
+     "reasoning": 640,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_ci_node22_009",
+   "sessionID": "ses_demo_ci_node22",
+   "role": "assistant",
+   "time": {
+    "created": 1794205804500,
+    "completed": 1794205808700
+   },
+   "parentID": "msg_demo_ci_node22_001",
+   "modelID": "glm-5.3-flash",
+   "providerID": "zai-coding-plan",
+   "mode": "orchestrator",
+   "agent": "orchestrator",
+   "path": {
+    "cwd": "/home/dev/projects/api-server",
+    "root": "/home/dev/projects/api-server"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_ci_node22_010",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_009",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_ci_node22_011",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_009",
+    "type": "text",
+    "text": "The culprit is `node-sass`: it has no prebuilt binaries for Node 22, so `npm ci` tries to compile it from source and fails.\n\n**Fix:** replace it with `sass` (Dart Sass). The API is compatible for typical use.\n\n```bash\nnpm uninstall node-sass && npm install -D sass\n```\n\nNo changes needed in `vite.config.ts`: Vite picks up `sass` automatically.",
+    "time": {
+     "start": 1794205804500,
+     "end": 1794205808500
+    }
+   },
+   {
+    "id": "prt_demo_ci_node22_012",
+    "sessionID": "ses_demo_ci_node22",
+    "messageID": "msg_demo_ci_node22_009",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

@@ -1,0 +1,98 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_precommit_001",
+   "sessionID": "ses_demo_precommit",
+   "role": "user",
+   "time": {
+    "created": 1793266200000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "agent": "orchestrator",
+   "model": {
+    "providerID": "zai-coding-plan",
+    "modelID": "glm-5.3-flash"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_precommit_002",
+    "sessionID": "ses_demo_precommit",
+    "messageID": "msg_demo_precommit_001",
+    "type": "text",
+    "text": "I want eslint and prettier to run before each commit, but only on changed files."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_precommit_003",
+   "sessionID": "ses_demo_precommit",
+   "role": "assistant",
+   "time": {
+    "created": 1793266201200,
+    "completed": 1793266205400
+   },
+   "parentID": "msg_demo_precommit_001",
+   "modelID": "glm-5.3-flash",
+   "providerID": "zai-coding-plan",
+   "mode": "orchestrator",
+   "agent": "orchestrator",
+   "path": {
+    "cwd": "/home/dev/projects/api-server",
+    "root": "/home/dev/projects/api-server"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_precommit_004",
+    "sessionID": "ses_demo_precommit",
+    "messageID": "msg_demo_precommit_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_precommit_005",
+    "sessionID": "ses_demo_precommit",
+    "messageID": "msg_demo_precommit_003",
+    "type": "text",
+    "text": "Use `husky` + `lint-staged`:\n\n```bash\nnpm install -D husky lint-staged\nnpx husky init\necho \"npx lint-staged\" > .husky/pre-commit\n```\n\n```json\n{\n  \"lint-staged\": {\n    \"*.{ts,tsx}\": [\"eslint --fix\", \"prettier --write\"],\n    \"*.{json,md,css}\": \"prettier --write\"\n  }\n}\n```\n\nOnly staged files are checked, so commits stay fast.",
+    "time": {
+     "start": 1793266201200,
+     "end": 1793266205200
+    }
+   },
+   {
+    "id": "prt_demo_precommit_006",
+    "sessionID": "ses_demo_precommit",
+    "messageID": "msg_demo_precommit_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

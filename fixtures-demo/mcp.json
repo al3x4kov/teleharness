@@ -1,0 +1,14 @@
+{
+ "context7": {
+  "status": "connected"
+ },
+ "playwright": {
+  "status": "connected"
+ },
+ "websearch": {
+  "status": "connected"
+ },
+ "github": {
+  "status": "disabled"
+ }
+}

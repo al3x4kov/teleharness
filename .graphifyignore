@@ -1,0 +1,10 @@
+node_modules/
+public/
+data/
+dogfood-output/
+shots/
+graphify-out/
+.omo/
+.taste-skill/
+tracker/corpus/
+*.log

@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="320" viewBox="0 0 200 160" class="turn-preloader tp-dark" style="background:transparent" role="img" aria-labelledby="preloader-dark_title preloader-dark_desc">
+<title id="preloader-dark_title">Готовлю ответ — DARK</title>
+<desc id="preloader-dark_desc">Анимированный робот-помощник бросает светящийся жетон ai в корзину. Внизу надпись «Готовлю ответ…». Вариант dark: прозрачный фон для чата #262624.</desc>
+<defs>
+  <radialGradient id="preloader-dark-haze"><stop offset="0" stop-color="#ab74ff" stop-opacity=".27"/><stop offset="1" stop-color="#ab74ff" stop-opacity="0"/></radialGradient>
+  <linearGradient id="preloader-dark-suit" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f7ff"/><stop offset=".55" stop-color="#d9e4ff"/><stop offset="1" stop-color="#8aa2db"/></linearGradient>
+  <linearGradient id="preloader-dark-shell" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f7ff"/><stop offset=".7" stop-color="#d9e4ff"/><stop offset="1" stop-color="#a7baf0"/></linearGradient>
+  <linearGradient id="preloader-dark-ribbon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d17cff"/><stop offset="1" stop-color="#866bff"/></linearGradient>
+  <linearGradient id="preloader-dark-token" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6f5ff"/><stop offset=".45" stop-color="#866bff"/><stop offset="1" stop-color="#d17cff"/></linearGradient>
+  <linearGradient id="preloader-dark-trail" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#866bff" stop-opacity=".1"/><stop offset=".55" stop-color="#866bff" stop-opacity=".75"/><stop offset="1" stop-color="#d17cff" stop-opacity=".05"/></linearGradient>
+  <linearGradient id="preloader-dark-box" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#57477f"/><stop offset=".55" stop-color="#383162"/><stop offset="1" stop-color="#242143"/></linearGradient>
+  <linearGradient id="preloader-dark-ground" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#51504a" stop-opacity="0"/><stop offset=".2" stop-color="#51504a" stop-opacity=".55"/><stop offset=".8" stop-color="#51504a" stop-opacity=".55"/><stop offset="1" stop-color="#51504a" stop-opacity="0"/></linearGradient>
+  <linearGradient id="preloader-dark-track" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#866bff"/><stop offset=".58" stop-color="#d17cff"/><stop offset="1" stop-color="#866bff"/></linearGradient>
+  <clipPath id="preloader-dark-loader-clip"><rect x="21" y="122.2" width="158" height="1.6" rx=".8"/></clipPath>
+  <g id="preloader-dark-ai" >
+    <circle r="16" fill="url(#preloader-dark-haze)"/>
+    <rect x="-9.25" y="-9.25" width="18.5" height="18.5" rx="6" fill="url(#preloader-dark-token)" stroke="#dbb4ff" stroke-width=".95"/>
+    <path d="M-6.4 -4.5 Q-5.2 -7.4 -1.8 -7.4 L2 -7.4" fill="none" stroke="#f6f5ff" stroke-opacity=".75" stroke-width="1.15" stroke-linecap="round"/>
+    <rect x="-6.25" y="-5.65" width="2.6" height="1.5" rx=".75" fill="#f6f5ff" opacity=".62"/>
+    <text x="0" y="3.25" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="10.6" font-weight="850" text-anchor="middle" letter-spacing="-.6" fill="#ffffff">ai</text>
+    <path d="M4.75 5.3 L6.4 3.7" stroke="#f6f5ff" stroke-opacity=".6" stroke-width="1.15" stroke-linecap="round"/>
+  </g>
+  <g id="preloader-dark-spark"><path d="M0 -5.2 Q.85 -.8 4.6 0 Q.85 .8 0 5.2 Q-.8 .8 -4.6 0 Q-.8 -.8 0 -5.2Z" fill="#dcb0ff"/></g>
+</defs>
+<style><![CDATA[
+  .turn-preloader { display:block; overflow:visible; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  .turn-preloader .tp-robot { transform-origin: 50px 108px; transform-box:view-box; transform:translateY(0); }
+  .turn-preloader .tp-arm { transform-origin: 61px 78px; transform-box:view-box; transform:rotate(-13deg); }
+  .turn-preloader .tp-head { transform-origin:49px 60px; transform-box:view-box; }
+  .turn-preloader .tp-token-fly { transform:translate(110px,37px) rotate(-7deg); opacity:1; transform-box:view-box; }
+  .turn-preloader .tp-held { opacity:0; }
+  .turn-preloader .tp-basket { transform-origin:144px 110px; transform-box:view-box; }
+  .turn-preloader .tp-impact, .turn-preloader .tp-impact-ring {opacity:0; transform-origin:144px 83px; transform-box:view-box;}
+  .turn-preloader .tp-flight-highlight { stroke-dasharray:17 144; stroke-dashoffset:95; }
+  .turn-preloader .tp-progress-runner { transform:translateX(50px); transform-box:view-box; }
+  .turn-preloader .tp-visor-glint { opacity:.65; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .turn-preloader:not(.tp-static) .tp-robot {animation:tp-ready 3.2s cubic-bezier(.4,0,.2,1) infinite;}
+    .turn-preloader:not(.tp-static) .tp-arm {animation:tp-toss-arm 3.2s cubic-bezier(.4,0,.2,1) infinite;}
+    .turn-preloader:not(.tp-static) .tp-head {animation:tp-nod 3.2s ease-in-out infinite;}
+    .turn-preloader:not(.tp-static) .tp-held {animation:tp-held 3.2s linear infinite;}
+    .turn-preloader:not(.tp-static) .tp-token-fly {animation:tp-throw 3.2s linear infinite;}
+    .turn-preloader:not(.tp-static) .tp-basket {animation:tp-catch 3.2s cubic-bezier(.25,.7,.3,1) infinite;}
+    .turn-preloader:not(.tp-static) .tp-impact {animation:tp-impact 3.2s ease-out infinite;}
+    .turn-preloader:not(.tp-static) .tp-impact-ring {animation:tp-ring 3.2s ease-out infinite;}
+    .turn-preloader:not(.tp-static) .tp-flight-highlight {animation:tp-comet 3.2s linear infinite;}
+    .turn-preloader:not(.tp-static) .tp-progress-runner {animation:tp-progress 2.25s ease-in-out infinite;}
+    .turn-preloader:not(.tp-static) .tp-visor-glint {animation:tp-blink 3.2s linear infinite;}
+  }
+  @keyframes tp-ready {
+    0%,11%,100% {transform:translateY(0) rotate(0deg)}
+    18% {transform:translateY(1.8px) rotate(-3deg)}
+    31% {transform:translateY(-2.5px) rotate(3deg)}
+    41% {transform:translateY(0px) rotate(0deg)}
+    72% {transform:translateY(0px) rotate(0deg)}
+  }
+  @keyframes tp-toss-arm {
+    0%,10%,100% {transform:rotate(18deg)}
+    19% {transform:rotate(27deg)}
+    27% {transform:rotate(8deg)}
+    35% {transform:rotate(-30deg)}
+    43% {transform:rotate(-14deg)}
+    57%,90% {transform:rotate(0deg)}
+  }
+  @keyframes tp-nod {0%,10%,100%{transform:rotate(0)} 20%{transform:rotate(-5deg)} 39%{transform:rotate(4deg)} 50%{transform:rotate(0)}}
+  @keyframes tp-held {0%,5%{opacity:0} 12%,30%{opacity:1} 32%,100%{opacity:0}}
+  @keyframes tp-throw {
+    0%,30% {transform:translate(82px,59px) rotate(-16deg) scale(.76);opacity:0}
+    32% {transform:translate(82px,59px) rotate(-16deg) scale(.76);opacity:1}
+    43% {transform:translate(102px,36px) rotate(-5deg) scale(.93);opacity:1}
+    53% {transform:translate(119px,34px) rotate(15deg) scale(1.04);opacity:1}
+    64% {transform:translate(136px,55px) rotate(28deg) scale(.9);opacity:1}
+    73% {transform:translate(144px,81px) rotate(40deg) scale(.57);opacity:1}
+    77%,100% {transform:translate(144px,85px) rotate(42deg) scale(.18);opacity:0}
+  }
+  @keyframes tp-catch {
+    0%,71%,100% {transform:translateY(0) scale(1,1)}
+    76% {transform:translateY(2px) scale(1.055,.89)}
+    84% {transform:translateY(-1px) scale(.975,1.055)}
+    92% {transform:translateY(0) scale(1,1)}
+  }
+  @keyframes tp-impact {0%,70%,100%{opacity:0;transform:scale(.4)} 77%{opacity:1;transform:scale(1.15)} 90%{opacity:0;transform:scale(1.4)}}
+  @keyframes tp-ring {0%,70%,100%{opacity:0;transform:scale(.45)} 76%{opacity:.85;transform:scale(1)} 91%{opacity:0;transform:scale(1.7)}}
+  @keyframes tp-comet {0%,30%{stroke-dashoffset:104;opacity:0} 35%{opacity:.95} 73%{stroke-dashoffset:-14;opacity:.8} 81%,100%{stroke-dashoffset:-30;opacity:0}}
+  @keyframes tp-progress {0%{transform:translateX(-30px);opacity:.1} 20%{opacity:1} 85%{opacity:1} 100%{transform:translateX(165px);opacity:0}}
+  @keyframes tp-blink {0%,45%,51%,100%{opacity:.72} 48%{opacity:0}}
+]]></style>
+
+<g>
+  <!-- Background intentionally EMPTY. All pixels outside the illustration are transparent. -->
+
+  <g class="tp-scene" transform="translate(0 6)">
+  <!-- ground / subtle reflections -->
+  <ellipse cx="49" cy="112" rx="24" ry="3.4" fill="#886fe5" opacity=".20"/>
+  <ellipse cx="144" cy="112" rx="27" ry="4.1" fill="#886fe5" opacity=".22"/>
+  <path d="M16 112 H184" stroke="url(#preloader-dark-ground)" stroke-width="1.6" stroke-linecap="round"/>
+
+  <!-- delicate flight guide and swept comet ribbon -->
+  <path d="M82 59 C101 24 128 25 144 81" fill="none" stroke="#866bff" stroke-width=".8" stroke-linecap="round" stroke-dasharray="2.5 5.5" stroke-opacity=".27"/>
+  <path class="tp-flight-highlight" d="M82 59 C101 24 128 25 144 81" fill="none" stroke="url(#preloader-dark-trail)" stroke-width="2.65" stroke-linecap="round"/>
+
+  <!-- receiving basket (animated rebound) -->
+  <g class="tp-basket">
+    <ellipse cx="144" cy="85" rx="28" ry="14" fill="url(#preloader-dark-haze)" opacity=".75"/>
+    <path d="M122 86 C124 78 164 78 166 86 L160.5 108 Q144 115 127.5 108 Z" fill="url(#preloader-dark-box)" stroke="#a383ff" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M125 94 L128.5 106 Q143 112 158.7 106 L163 93" fill="none" stroke="#8f76be" stroke-width=".85" stroke-linecap="round" opacity=".55"/>
+    <path d="M131 94.5 L133.5 105 M155.5 95 L153.6 105" stroke="#8f76be" stroke-width=".95" stroke-linecap="round" opacity=".45"/>
+    <ellipse cx="144" cy="85.2" rx="23.4" ry="6.1" fill="#9d79f9" stroke="#a383ff" stroke-width="1.2"/>
+    <ellipse cx="144" cy="84.8" rx="19.2" ry="3.65" fill="#1d1739"/>
+    <path d="M127 83.9 C132 80.9 153 80.6 161 83.8" fill="none" stroke="#f6f5ff" stroke-opacity=".83" stroke-width="1.25" stroke-linecap="round"/>
+    <use href="#preloader-dark-spark" transform="translate(144 99.6) scale(.66)"/>
+    <circle cx="150.5" cy="96.5" r=".8" fill="#8f76be" opacity=".75"/>
+  </g>
+
+  <!-- bloom, splash + receipt on impact -->
+  <ellipse class="tp-impact-ring" cx="144" cy="83.5" rx="17" ry="3.3" fill="none" stroke="#866bff" stroke-width="1.7"/>
+  <g class="tp-impact">
+     <path d="M143 71 V66 M135 76 L130 71 M151 76 L156 71 M136 68 L133 65 M151 68 L154 65" stroke="#866bff" stroke-width="1.8" stroke-linecap="round"/>
+     <use href="#preloader-dark-spark" transform="translate(125 77) scale(.56)"/>
+     <use href="#preloader-dark-spark" transform="translate(164 73) scale(.67)"/>
+  </g>
+
+  <!-- mascot: dimensional helmet, expressive face, scarf, flexible arm -->
+  <g class="tp-robot">
+    <path d="M38 75 Q27 70 24 72 Q18 74 12 68 Q15 82 31 84 L40 80Z" fill="url(#preloader-dark-ribbon)" opacity=".9"/>
+    <path d="M28 76 Q19 75 16 73" fill="none" stroke="#f6f5ff" stroke-width="1" stroke-opacity=".5" stroke-linecap="round"/>
+    <!-- legs and boots -->
+    <path d="M43 92 Q41 99 36 106" fill="none" stroke="#7a60a0" stroke-width="9" stroke-linecap="round"/>
+    <path d="M43 92 Q41 99 36 106" fill="none" stroke="url(#preloader-dark-suit)" stroke-width="6.6" stroke-linecap="round"/>
+    <path d="M56 92 Q59 100 63 106" fill="none" stroke="#7a60a0" stroke-width="9" stroke-linecap="round"/>
+    <path d="M56 92 Q59 100 63 106" fill="none" stroke="url(#preloader-dark-suit)" stroke-width="6.6" stroke-linecap="round"/>
+    <rect x="28.9" y="104" width="14.5" height="7.5" rx="3.8" fill="#695a97" stroke="#9e89cf" stroke-width=".8"/>
+    <rect x="57.1" y="104" width="14.8" height="7.5" rx="3.8" fill="#695a97" stroke="#9e89cf" stroke-width=".8"/>
+    <path d="M30.7 106 H39.5 M60 106 H68" stroke="#f6f5ff" stroke-width=".85" stroke-linecap="round" opacity=".55"/>
+    <!-- back arm -->
+    <path d="M38.5 78 L27 88" fill="none" stroke="#7a60a0" stroke-width="8.5" stroke-linecap="round"/>
+    <path d="M38.5 78 L27 88" fill="none" stroke="url(#preloader-dark-suit)" stroke-width="5.6" stroke-linecap="round"/>
+    <circle cx="27" cy="88" r="4" fill="#695a97" stroke="#9e89cf" stroke-width=".8"/>
+    <!-- torso -->
+    <path d="M42 73 Q51 69.7 59 73 Q66 76 67.3 84 L67.6 94 Q52 102 35 94 L35.6 83 Q36.7 76 42 73Z" fill="url(#preloader-dark-suit)" stroke="#9e89cf" stroke-width="1.2"/>
+    <path d="M40 78 Q51 75 61 79" fill="none" stroke="#f6f5ff" stroke-width="1.25" stroke-opacity=".65" stroke-linecap="round"/>
+    <rect x="44.5" y="80" width="13" height="13" rx="5" fill="#bea2ff" stroke="#9e89cf" stroke-width=".65"/>
+    <use href="#preloader-dark-spark" transform="translate(51 86.5) scale(.78)"/>
+    <path d="M39 96 Q51 99 64 96" fill="none" stroke="#9e89cf" stroke-opacity=".6" stroke-width=".9"/>
+    <!-- head / visor -->
+    <g class="tp-head">
+      <path d="M49 44 L49 40" stroke="#9e89cf" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="49" cy="39.5" r="2.4" fill="#866bff" stroke="#f6f5ff" stroke-width=".7"/>
+      <rect x="29" y="44" width="40.5" height="30.5" rx="14.5" fill="url(#preloader-dark-shell)" stroke="#9e89cf" stroke-width="1.2"/>
+      <rect x="33.4" y="48.2" width="32" height="21.2" rx="10.15" fill="#160f30" stroke="#8568ad" stroke-width="1.2"/>
+      <path class="tp-visor-glint" d="M37 52 Q43 48.8 51 50" fill="none" stroke="#f6f5ff" stroke-opacity=".5" stroke-width="1.1" stroke-linecap="round"/>
+      <path d="M40 58 Q43.2 54.2 46.4 58 M52.2 58 Q55.5 54.2 58.7 58" fill="none" stroke="#f0d8ff" stroke-width="1.65" stroke-linecap="round"/>
+      <path d="M47 63 Q49.5 65.1 52 63" fill="none" stroke="#f0d8ff" stroke-width="1" stroke-linecap="round" opacity=".85"/>
+      <ellipse cx="39" cy="62.6" rx="2.4" ry="1" fill="#d17cff" opacity=".66"/>
+      <ellipse cx="60" cy="62.6" rx="2.4" ry="1" fill="#d17cff" opacity=".66"/>
+      <circle cx="29.8" cy="59.1" r="5.5" fill="url(#preloader-dark-ribbon)" stroke="#9e89cf" stroke-width="1.25"/>
+      <circle cx="29.8" cy="59.1" r="2.55" fill="#f4f7ff" opacity=".88"/>
+      <path d="M40 72 Q50 74 58 71" fill="none" stroke="#9e89cf" stroke-width=".8" opacity=".42"/>
+    </g>
+    <!-- throwing arm rendered in front -->
+    <g class="tp-arm">
+       <path d="M61 78 Q69 73 79 62" fill="none" stroke="#7a60a0" stroke-width="9" stroke-linecap="round"/>
+       <path d="M61 78 Q69 73 79 62" fill="none" stroke="url(#preloader-dark-suit)" stroke-width="6.5" stroke-linecap="round"/>
+       <circle cx="67" cy="74" r="2.4" fill="#f4f7ff" opacity=".9"/>
+       <circle cx="79" cy="62" r="4.7" fill="#695a97" stroke="#9e89cf" stroke-width=".8"/>
+       <path d="M79 59 L81 56 M82 61 L84 59" stroke="#f4f7ff" stroke-width="1.25" stroke-linecap="round"/>
+       <g class="tp-held" transform="translate(85 55) scale(.68)"><use href="#preloader-dark-ai"/></g>
+    </g>
+  </g>
+
+  <!-- token is duplicated only during its discrete flight segment -->
+  <g class="tp-token-fly"><use href="#preloader-dark-ai"/></g>
+
+  </g>
+
+  <!-- content divider, animated progress line & exact original caption -->
+  <path d="M21 123 H179" stroke="#45443f" stroke-width=".8" stroke-opacity=".7"/>
+  <rect x="21" y="122.2" width="158" height="1.6" rx=".8" fill="#45443f" opacity=".52"/>
+  <g clip-path="url(#preloader-dark-loader-clip)"><rect class="tp-progress-runner" x="0" y="122.2" width="42" height="1.6" rx=".8" fill="url(#preloader-dark-track)" opacity=".9"/></g>
+  <text x="22" y="146" fill="#aaa79f" font-size="13.5" font-weight="600" letter-spacing="-.25">Готовлю ответ…</text>
+  <circle cx="175.5" cy="141.5" r="2.2" fill="#866bff" opacity=".18"/>
+  <circle cx="175.5" cy="141.5" r="1" fill="#866bff" opacity=".88"/>
+</g>
+</svg>

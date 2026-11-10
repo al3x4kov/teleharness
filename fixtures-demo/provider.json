@@ -1,0 +1,257 @@
+{
+ "all": [
+  {
+   "id": "zai-coding-plan",
+   "name": "Z.AI Coding Plan",
+   "source": "api",
+   "env": [
+    "ZHIPU_API_KEY"
+   ],
+   "options": {},
+   "models": {
+    "glm-5.3": {
+     "id": "glm-5.3",
+     "providerID": "zai-coding-plan",
+     "api": {
+      "id": "glm-5.3",
+      "url": "https://api.z.ai/api/coding/paas/v4",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "GLM-5.3",
+     "family": "glm",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": false,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": {
+       "field": "reasoning_content"
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 1000000,
+      "output": 131072
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "2026-08-14",
+     "variants": {
+      "low": {
+       "reasoningEffort": "low"
+      },
+      "high": {
+       "reasoningEffort": "high"
+      },
+      "max": {
+       "reasoningEffort": "max"
+      }
+     }
+    },
+    "glm-5.3-flash": {
+     "id": "glm-5.3-flash",
+     "providerID": "zai-coding-plan",
+     "api": {
+      "id": "glm-5.3-flash",
+      "url": "https://api.z.ai/api/coding/paas/v4",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "GLM-5.3-Flash",
+     "family": "glm-flash",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": true,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": true,
+       "video": true,
+       "pdf": true
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": {
+       "field": "reasoning_content"
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 1000000,
+      "output": 131072
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "2026-08-26",
+     "variants": {
+      "low": {
+       "reasoningEffort": "low"
+      },
+      "high": {
+       "reasoningEffort": "high"
+      },
+      "max": {
+       "reasoningEffort": "max"
+      }
+     }
+    },
+    "glm-5.3-highspeed": {
+     "id": "glm-5.3-highspeed",
+     "providerID": "zai-coding-plan",
+     "api": {
+      "id": "glm-5.3-highspeed",
+      "url": "https://api.z.ai/api/coding/paas/v4",
+      "npm": "@ai-sdk/openai-compatible"
+     },
+     "name": "GLM-5.3 Highspeed",
+     "family": "glm",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": false,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "interleaved": {
+       "field": "reasoning_content"
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 1000000,
+      "output": 131072
+     },
+     "status": "active",
+     "options": {},
+     "headers": {},
+     "release_date": "2026-08-14",
+     "variants": {
+      "low": {
+       "reasoningEffort": "low"
+      },
+      "high": {
+       "reasoningEffort": "high"
+      },
+      "max": {
+       "reasoningEffort": "max"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "anthropic",
+   "name": "Claude (subscription)",
+   "models": {
+    "claude-opus-5-5": {
+     "id": "claude-opus-5-5",
+     "name": "Claude Opus 5.5",
+     "providerID": "anthropic",
+     "status": "active",
+     "capabilities": {
+      "input": {
+       "text": true,
+       "image": true
+      }
+     },
+     "limit": {
+      "context": 200000
+     }
+    },
+    "claude-sonnet-5-5": {
+     "id": "claude-sonnet-5-5",
+     "name": "Claude Sonnet 5.5",
+     "providerID": "anthropic",
+     "status": "active",
+     "capabilities": {
+      "input": {
+       "text": true,
+       "image": true
+      }
+     },
+     "limit": {
+      "context": 200000
+     }
+    },
+    "claude-haiku-4-5": {
+     "id": "claude-haiku-4-5",
+     "name": "Claude Haiku 4.5",
+     "providerID": "anthropic",
+     "status": "active",
+     "capabilities": {
+      "input": {
+       "text": true,
+       "image": true
+      }
+     },
+     "limit": {
+      "context": 200000
+     }
+    }
+   }
+  }
+ ],
+ "default": {
+  "zai-coding-plan": "glm-5.3",
+  "anthropic": "claude-opus-5-5"
+ },
+ "connected": [
+  "zai-coding-plan",
+  "anthropic"
+ ]
+}

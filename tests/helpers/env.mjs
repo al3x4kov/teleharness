@@ -1,0 +1,105 @@
+// Общие правила изоляции тестов (TASK-14.4, tests.md §3.1-5/6, §3.6-25).
+//
+// Тестовый сервер НИКОГДА не наследует переменные шелла (TELEHARNESS_MOCK, TELEHARNESS_UPSTREAM,
+// TELEHARNESS_COOKIE_NAME, TELEHARNESS_TENANT_*, TELEHARNESS_CLAUDE_BIN …): env собирается из белого
+// списка системных переменных + явно переданных значений. Прод-порты
+// (opencode :4096, портал :4170, edge :80/:443) и стенд (:4172, его opencode
+// :4097) запрещены как цели — assertSafeUrl() бросает до спавна.
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+// Только то, без чего node.exe на Windows не стартует / не резолвит сеть.
+export const ENV_WHITELIST = [
+  "SystemRoot", "SYSTEMROOT", "windir", "WINDIR", "ComSpec", "COMSPEC",
+  "PATH", "Path", "PATHEXT", "TEMP", "TMP", "NUMBER_OF_PROCESSORS",
+  "PROCESSOR_ARCHITECTURE", "OS", "LANG", "LC_ALL", "TZ",
+  // macOS / Linux: os.tmpdir() / os.homedir() of the child match the parent's.
+  "TMPDIR", "HOME",
+];
+
+// Порты, в которые тест/харнесс не имеет права ходить.
+export const FORBIDDEN_PORTS = new Set([80, 443, 4096, 4097, 4170, 4172]);
+
+export function cleanEnv(extra = {}) {
+  const env = {};
+  for (const k of ENV_WHITELIST) if (process.env[k] !== undefined) env[k] = process.env[k];
+  for (const [k, v] of Object.entries(extra)) if (v !== undefined && v !== null) env[k] = String(v);
+  return env;
+}
+
+// Бросает, если URL указывает на прод/стенд. Хост не важен: любой адрес этой
+// машины (127.0.0.1, localhost, 192.168.x) на запрещённом порту — это прод.
+export function assertSafeUrl(url, what = "url") {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error(`${what}: не URL: ${url}`);
+  }
+  const port = Number(u.port || (u.protocol === "https:" ? 443 : 80));
+  if (FORBIDDEN_PORTS.has(port)) {
+    throw new Error(`${what} = ${url}: порт ${port} — прод/стенд, тестам запрещён (TASK-14.4)`);
+  }
+  return url;
+}
+
+// Свежий tmp-корень с подпапками DATA/HOME/TENANT_HOME/TENANT_VAULT/LOGS.
+// cleanup() удаляет всё дерево.
+export function makeTmpRoot(prefix = "th-test-") {
+  const root = mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dirs = {
+    root,
+    data: path.join(root, "data"),
+    home: path.join(root, "home"),
+    tenants: path.join(root, "tenants"),
+    vault: path.join(root, "vault"),
+    logs: path.join(root, "logs"),
+  };
+  for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
+  dirs.cleanup = () => {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch {
+      /* Windows может держать хэндл лога секунду — не валим тест */
+    }
+  };
+  return dirs;
+}
+
+// Env изолированного портала: все пути данных — в tmp, upstream обязателен.
+export function isolatedServerEnv({ tmp, upstream, mock = false, extra = {} }) {
+  if (!mock) {
+    if (!upstream) throw new Error("upstream обязателен для не-мок сервера (иначе дефолт = прод :4096)");
+    assertSafeUrl(upstream, "TELEHARNESS_UPSTREAM");
+  }
+  return cleanEnv({
+    PORT: "0",
+    TELEHARNESS_MOCK: mock ? "1" : "0",
+    // даже для мока: дефолт TELEHARNESS_UPSTREAM — прод :4096, хаб мока не должен туда стучаться
+    TELEHARNESS_UPSTREAM: upstream ?? "http://127.0.0.1:9",
+    TELEHARNESS_DATA_DIR: tmp.data,
+    TELEHARNESS_LOG_DIR: tmp.logs,
+    TELEHARNESS_HOME: tmp.home,
+    TELEHARNESS_CHAT_DIR: tmp.home,
+    TELEHARNESS_TENANT_HOME: tmp.tenants,
+    TELEHARNESS_TENANT_VAULT: tmp.vault,
+    TELEHARNESS_FILE_ROOTS: tmp.root,
+    // FEAT-13.11: never the real D:\Obsidian\agents; tests opt in via extra
+    TELEHARNESS_KB_ROOT: "off",
+    // FEAT-06.2: never the real voice worker (D:\Voice); tests opt in via extra
+    TELEHARNESS_VOICE: "0",
+    TELEHARNESS_ACCESS_LOG: "0",
+    TELEHARNESS_QUOTA_BASE: "http://127.0.0.1:9", // квота-upstream недоступен мгновенно
+    TELEHARNESS_AUTH_FILE: path.join(tmp.root, "no-auth.json"),
+    TELEHARNESS_CLAUDE_BIN: path.join(tmp.root, "no-claude.exe"),
+    TELEHARNESS_ENV: "test",
+    // every test chat lives under %TEMP%: the BUG-01.28 temp-dir filter off
+    TELEHARNESS_HIDE_TEMP_SESSIONS: "0",
+    // the empty-chat gc (BUG-01.48) would delete fixture sessions; tests opt in
+    TELEHARNESS_GC_EMPTY_MIN: "0",
+    // auto titles: heuristic only unless a test opts into the fake CLI
+    TELEHARNESS_TITLE_LLM: "0",
+    ...extra,
+  });
+}

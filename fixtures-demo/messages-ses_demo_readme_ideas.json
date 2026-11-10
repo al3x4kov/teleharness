@@ -1,0 +1,95 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_readme_ideas_001",
+   "sessionID": "ses_demo_readme_ideas",
+   "role": "user",
+   "time": {
+    "created": 1793525400000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-opus-5-5"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_readme_ideas_002",
+    "sessionID": "ses_demo_readme_ideas",
+    "messageID": "msg_demo_readme_ideas_001",
+    "type": "text",
+    "text": "How do I write an open-source README that people actually read to the end?"
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_readme_ideas_003",
+   "sessionID": "ses_demo_readme_ideas",
+   "role": "assistant",
+   "time": {
+    "created": 1793525401200,
+    "completed": 1793525405400
+   },
+   "parentID": "msg_demo_readme_ideas_001",
+   "modelID": "claude-opus-5-5",
+   "providerID": "anthropic",
+   "path": {
+    "cwd": "/home/dev",
+    "root": "/home/dev"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_readme_ideas_004",
+    "sessionID": "ses_demo_readme_ideas",
+    "messageID": "msg_demo_readme_ideas_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_readme_ideas_005",
+    "sessionID": "ses_demo_readme_ideas",
+    "messageID": "msg_demo_readme_ideas_003",
+    "type": "text",
+    "text": "A good README answers questions in the order people ask them:\n\n1. **What is it** — one sentence and a screenshot.\n2. **Why** — what pain it removes and how it differs from alternatives.\n3. **How to run it** — three commands that definitely work.\n4. **How it works** — a diagram and links to the docs.\n5. **How to help** — CONTRIBUTING and good first issue labels.\n\nPoint 3 matters most: if the demo starts with one command, no keys and no setup, far more people will make it to point 4.",
+    "time": {
+     "start": 1793525401200,
+     "end": 1793525405200
+    }
+   },
+   {
+    "id": "prt_demo_readme_ideas_006",
+    "sessionID": "ses_demo_readme_ideas",
+    "messageID": "msg_demo_readme_ideas_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

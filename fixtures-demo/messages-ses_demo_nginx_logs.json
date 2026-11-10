@@ -1,0 +1,262 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_nginx_logs_001",
+   "sessionID": "ses_demo_nginx_logs",
+   "role": "user",
+   "time": {
+    "created": 1794285000000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "agent": "orchestrator",
+   "model": {
+    "providerID": "zai-coding-plan",
+    "modelID": "glm-5.3"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_nginx_logs_002",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_001",
+    "type": "text",
+    "text": "The site was slow last night. Here's a chunk of access.log: figure out what happened and suggest what to change in the nginx config."
+   },
+   {
+    "id": "prt_demo_nginx_logs_003",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_001",
+    "type": "file",
+    "mime": "text/plain",
+    "filename": "access.log",
+    "url": "data:text/plain;base64,MjAzLjAuMTEzLjE3IC0gLSBbMTAvTm92LzIwMjY6MDY6MTI6MDEgKzAwMDBdICJHRVQgL2FwaS9wcm9kdWN0cz9wYWdlPTEgSFRUUC8xLjEiIDIwMCA1MTIzICItIiAiTW96aWxsYS81LjAiCjIwMy4wLjExMy4xNyAtIC0gWzEwL05vdi8yMDI2OjA2OjEyOjAxICswMDAwXSAiR0VUIC9hcGkvcHJvZHVjdHM/cGFnZT0yIEhUVFAvMS4xIiAyMDAgNTA5OCAiLSIgIk1vemlsbGEvNS4wIgoxOTguNTEuMTAwLjQyIC0gLSBbMTAvTm92LzIwMjY6MDY6MTI6MDMgKzAwMDBdICJQT1NUIC9sb2dpbiBIVFRQLzEuMSIgNDAxIDExMiAiLSIgInB5dGhvbi1yZXF1ZXN0cy8yLjMyIgoxOTguNTEuMTAwLjQyIC0gLSBbMTAvTm92LzIwMjY6MDY6MTI6MDMgKzAwMDBdICJQT1NUIC9sb2dpbiBIVFRQLzEuMSIgNDAxIDExMiAiLSIgInB5dGhvbi1yZXF1ZXN0cy8yLjMyIgoxOTIuMC4yLjggLSAtIFsxMC9Ob3YvMjAyNjowNjoxMjowNSArMDAwMF0gIkdFVCAvc3RhdGljL2FwcC5qcyBIVFRQLzEuMSIgMzA0IDAgImh0dHBzOi8vZXhhbXBsZS5jb20vIiAiTW96aWxsYS81LjAiCjE5OC41MS4xMDAuNDIgLSAtIFsxMC9Ob3YvMjAyNjowNjoxMjowNiArMDAwMF0gIlBPU1QgL2xvZ2luIEhUVFAvMS4xIiA0MDEgMTEyICItIiAicHl0aG9uLXJlcXVlc3RzLzIuMzIiCjIwMy4wLjExMy45MCAtIC0gWzEwL05vdi8yMDI2OjA2OjEyOjA5ICswMDAwXSAiR0VUIC9hcGkvcmVwb3J0IEhUVFAvMS4xIiA1MDQgMTY3ICItIiAiTW96aWxsYS81LjAiCg=="
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_nginx_logs_004",
+   "sessionID": "ses_demo_nginx_logs",
+   "role": "assistant",
+   "time": {
+    "created": 1794285001200,
+    "completed": 1794285007800
+   },
+   "parentID": "msg_demo_nginx_logs_001",
+   "modelID": "glm-5.3",
+   "providerID": "zai-coding-plan",
+   "mode": "orchestrator",
+   "agent": "orchestrator",
+   "path": {
+    "cwd": "/home/dev/infra",
+    "root": "/home/dev/infra"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 11000,
+    "input": 8800,
+    "output": 1320,
+    "reasoning": 880,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "tool-calls"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_nginx_logs_005",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_nginx_logs_006",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "reasoning",
+    "text": "Count requests by IP and by status; look separately at POST /login with 401 and at 5xx.",
+    "time": {
+     "start": 1794285001200,
+     "end": 1794285003600
+    }
+   },
+   {
+    "id": "prt_demo_nginx_logs_007",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "text",
+    "text": "Let me count who was hitting the server and how often.",
+    "time": {
+     "start": 1794285003800,
+     "end": 1794285004400
+    }
+   },
+   {
+    "id": "prt_demo_nginx_logs_008",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "tool",
+    "callID": "call_demo_nginx_logs_009",
+    "tool": "bash",
+    "state": {
+     "status": "completed",
+     "input": {
+      "command": "awk '{print $1}' access.log | sort | uniq -c | sort -rn | head",
+      "description": "Top IPs by request count"
+     },
+     "output": "  18342 198.51.100.42\n   2210 203.0.113.17\n    944 192.0.2.8\n    131 203.0.113.90",
+     "title": "Top IPs by request count",
+     "metadata": {
+      "truncated": false,
+      "exit": 0
+     },
+     "time": {
+      "start": 1794285004500,
+      "end": 1794285005200
+     }
+    }
+   },
+   {
+    "id": "prt_demo_nginx_logs_010",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "tool",
+    "callID": "call_demo_nginx_logs_011",
+    "tool": "bash",
+    "state": {
+     "status": "completed",
+     "input": {
+      "command": "awk '{print $9}' access.log | sort | uniq -c | sort -rn",
+      "description": "Response statuses"
+     },
+     "output": "  18120 401\n   3011 200\n    402 304\n     94 504",
+     "title": "Response statuses",
+     "metadata": {
+      "truncated": false,
+      "exit": 0
+     },
+     "time": {
+      "start": 1794285005600,
+      "end": 1794285006200
+     }
+    }
+   },
+   {
+    "id": "prt_demo_nginx_logs_012",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "tool",
+    "callID": "call_demo_nginx_logs_013",
+    "tool": "bash",
+    "state": {
+     "status": "completed",
+     "input": {
+      "command": "grep ' 504 ' access.log | awk '{print $7}' | sort | uniq -c",
+      "description": "Slow endpoint"
+     },
+     "output": "     94 /api/report",
+     "title": "Slow endpoint",
+     "metadata": {
+      "truncated": false,
+      "exit": 0
+     },
+     "time": {
+      "start": 1794285006600,
+      "end": 1794285007400
+     }
+    }
+   },
+   {
+    "id": "prt_demo_nginx_logs_014",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_004",
+    "type": "step-finish",
+    "reason": "tool-calls",
+    "cost": 0,
+    "tokens": {
+     "total": 11000,
+     "input": 8800,
+     "output": 1320,
+     "reasoning": 880,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_nginx_logs_015",
+   "sessionID": "ses_demo_nginx_logs",
+   "role": "assistant",
+   "time": {
+    "created": 1794285008100,
+    "completed": 1794285012300
+   },
+   "parentID": "msg_demo_nginx_logs_001",
+   "modelID": "glm-5.3",
+   "providerID": "zai-coding-plan",
+   "mode": "orchestrator",
+   "agent": "orchestrator",
+   "path": {
+    "cwd": "/home/dev/infra",
+    "root": "/home/dev/infra"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 13400,
+    "input": 10720,
+    "output": 1608,
+    "reasoning": 1072,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_nginx_logs_016",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_015",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_nginx_logs_017",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_015",
+    "type": "text",
+    "text": "## What happened\n\n1. **Password brute force.** `198.51.100.42` sent ~18k `POST /login` requests (almost all `401`) from `python-requests`. That's ~85% of all traffic overnight.\n2. **Report timeouts.** `/api/report` returned 94 `504`s: the backend can't finish within `proxy_read_timeout` while the workers are busy with logins.\n3. The rest is normal traffic: the product catalog and static files with `304`.\n\n## What to fix\n\nRate-limit the login and give the heavy report its own location:\n\n```nginx\nlimit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;\n\nserver {\n    location = /login {\n        limit_req zone=login burst=10 nodelay;\n        limit_req_status 429;\n        proxy_pass http://app;\n    }\n\n    location = /api/report {\n        proxy_read_timeout 120s;\n        proxy_pass http://app;\n    }\n}\n```\n\nThen apply it: `nginx -t && systemctl reload nginx`. If the attacks keep coming, add a fail2ban jail on `401` for `/login`.",
+    "time": {
+     "start": 1794285008100,
+     "end": 1794285012100
+    }
+   },
+   {
+    "id": "prt_demo_nginx_logs_018",
+    "sessionID": "ses_demo_nginx_logs",
+    "messageID": "msg_demo_nginx_logs_015",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 13400,
+     "input": 10720,
+     "output": 1608,
+     "reasoning": 1072,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

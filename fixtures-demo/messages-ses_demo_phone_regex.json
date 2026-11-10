@@ -1,0 +1,95 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_phone_regex_001",
+   "sessionID": "ses_demo_phone_regex",
+   "role": "user",
+   "time": {
+    "created": 1793957400000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-haiku-4-5"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_phone_regex_002",
+    "sessionID": "ses_demo_phone_regex",
+    "messageID": "msg_demo_phone_regex_001",
+    "type": "text",
+    "text": "A regex for US phone numbers: optional +1, spaces, parentheses and dashes allowed."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_phone_regex_003",
+   "sessionID": "ses_demo_phone_regex",
+   "role": "assistant",
+   "time": {
+    "created": 1793957401200,
+    "completed": 1793957405400
+   },
+   "parentID": "msg_demo_phone_regex_001",
+   "modelID": "claude-haiku-4-5",
+   "providerID": "anthropic",
+   "path": {
+    "cwd": "/home/dev",
+    "root": "/home/dev"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_phone_regex_004",
+    "sessionID": "ses_demo_phone_regex",
+    "messageID": "msg_demo_phone_regex_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_phone_regex_005",
+    "sessionID": "ses_demo_phone_regex",
+    "messageID": "msg_demo_phone_regex_003",
+    "type": "text",
+    "text": "```js\nconst PHONE = /^(?:\\+?1[\\s.-]?)?\\(?\\d{3}\\)?[\\s.-]?\\d{3}[\\s.-]?\\d{4}$/;\n\nPHONE.test(\"+1 (555) 010-4477\"); // true\nPHONE.test(\"5550104477\");         // true\nPHONE.test(\"555-010-447\");        // false\n```\n\nTip: normalize the number before saving it, e.g. to E.164: `\"+1\" + value.replace(/\\D/g, \"\").slice(-10)`.",
+    "time": {
+     "start": 1793957401200,
+     "end": 1793957405200
+    }
+   },
+   {
+    "id": "prt_demo_phone_regex_006",
+    "sessionID": "ses_demo_phone_regex",
+    "messageID": "msg_demo_phone_regex_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]
