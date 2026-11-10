@@ -14,7 +14,7 @@
 import { test, after, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -432,7 +432,11 @@ test("BUG-11.13: a normal answer raises no empty-turn error", async () => {
   assert.equal(got, null);
 });
 
-test("BUG-04.6: account deletion removes its chats, disposes the instance, reports an undeletable folder and retries it later", async () => {
+test("BUG-04.6: account deletion removes its chats, disposes the instance, reports an undeletable folder and retries it later", async (t) => {
+  // POSIX: an open file or a process cwd does not block deletion; a folder
+  // without write permission does — unless we run as root (bypasses modes).
+  const posix = process.platform !== "win32";
+  if (posix && process.getuid?.() === 0) return t.skip("root ignores folder permissions — no way to make a folder undeletable");
   const created = await (await api(srv, "/zai/api/admin/users", { method: "POST", body: { name: "gone1" } })).json();
   const tdir = created.user.directories[0];
   const vdir = created.user.obsidianRoot;
@@ -441,6 +445,11 @@ test("BUG-04.6: account deletion removes its chats, disposes the instance, repor
   // A process sitting in the folder (like opencode serve) — Windows refuses to remove it.
   const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 120000)"], { cwd: tdir, stdio: "ignore", windowsHide: true });
   const holderExit = new Promise((r) => holder.once("exit", r));
+  // POSIX: a file inside a read-only folder cannot be unlinked → rm fails (EACCES).
+  if (posix) {
+    writeFileSync(path.join(tdir, "held.txt"), "x");
+    chmodSync(tdir, 0o555);
+  }
   await sleep(300);
   try {
     const r = await api(srv, "/zai/api/admin/users/gone1", { method: "DELETE" });
@@ -467,6 +476,7 @@ test("BUG-04.6: account deletion removes its chats, disposes the instance, repor
   } finally {
     holder.kill();
     await holderExit;
+    if (posix && existsSync(tdir)) chmodSync(tdir, 0o755); // the deferred retry below must succeed
   }
   await sleep(300);
   const sweep = await (await api(srv, "/zai/api/admin/gc", { method: "POST" })).json();

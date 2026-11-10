@@ -22,7 +22,7 @@ import { dirProblem, dirProblemText, driveProblem, isUnderAny } from "./lib/path
 import { accessLogger, clientIp, errLog, requestId } from "./lib/accesslog.js";
 import { adminAgentFor, adminDefaultAgent, agentAllowedForTenant, defaultTenantAgent, modelInCatalog, parseModelRef, pickDefaultModel, providerForUser, publicAgent, redactMessages, redactPart, setTenantVaultRoots, tenantAgents } from "./lib/policy.js";
 import { PendingRemovals, findOwnerlessTenantDirs, planGc, runEmptyChatGc, sweepOwnerlessTenantDirs, sweepTurnUndo } from "./lib/gc.js";
-import { TurnUndo, isInside } from "./lib/turn-undo.js";
+import { TurnUndo, isInside, physicalDir } from "./lib/turn-undo.js";
 import { AutoTitler, TitleStore, makeClaudeTitler } from "./lib/title.js";
 import { markEmptyTail } from "./lib/empty-turn.js";
 import { buildSnapshot as buildKbSnapshot, zoneForUser as kbZoneForUser } from "./lib/kb-cache.js";
@@ -1331,8 +1331,11 @@ async function upstreamSnapshotOff(dir) {
 function revertPathFace(p, dir) {
   if (typeof p !== "string" || !p) return null;
   if (dir && path.isAbsolute(p)) {
-    const rel = path.relative(dir, p);
-    if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel.replace(/\\/g, "/");
+    // The CLI reports physical paths (POSIX: macOS /var/... is /private/var/...).
+    for (const base of new Set([dir, physicalDir(dir)])) {
+      const rel = path.relative(base, p);
+      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel.replace(/\\/g, "/");
+    }
   }
   return p.replace(/\\/g, "/");
 }

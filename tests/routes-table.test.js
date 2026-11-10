@@ -6,9 +6,14 @@ import assert from "node:assert/strict";
 import { SCOPES, dispatchRoute, matchRoute, validateTable } from "../routes/router.js";
 import { fileRoutes } from "../routes/files.js";
 import { catalogRoutes } from "../routes/catalog.js";
+import path from "node:path";
 
-const HOME = "C:\\Users\\USER";
-const OWN = "C:\\t\\alice";
+// Absolute on this OS (the dirQuery scope wants an absolute folder):
+// C:\... on Windows, /... on POSIX.
+const FS_ROOT = path.parse(process.cwd()).root;
+const HOME = path.join(FS_ROOT, "Users", "USER");
+const OWN = path.join(FS_ROOT, "t", "alice");
+const OTHER = path.join(FS_ROOT, "other");
 const calls = [];
 const sendJson = (res, status, body) => {
   res.status = status;
@@ -67,12 +72,12 @@ test("role × route → status (same answers as the former if-chain)", async () 
     [ALICE, "HEAD", `/zai/api/file?directory=${q(OWN)}&path=a.png`, 200],
     [ALICE, "GET", `/zai/api/file/exists?directory=${q(OWN)}&path=a.png`, 200],
     [ALICE, "GET", `/zai/api/file/exists?directory=${q(OWN)}`, 400],
-    [ALICE, "GET", `/zai/api/file/exists?directory=${q("C:\\other")}&path=a.png`, 403],
+    [ALICE, "GET", `/zai/api/file/exists?directory=${q(OTHER)}&path=a.png`, 403],
     [ALICE, "GET", `/zai/api/turn-files?directory=${q(OWN)}&w=1-2`, 200],
     [ALICE, "GET", "/zai/api/turn-files?w=1-2", 400],
-    [ALICE, "GET", `/zai/api/turn-files?directory=${q("C:\\other")}&w=1-2`, 403],
+    [ALICE, "GET", `/zai/api/turn-files?directory=${q(OTHER)}&w=1-2`, 403],
     [ALICE, "GET", `/zai/api/dircheck?directory=${q(OWN)}`, 200],
-    [ALICE, "GET", `/zai/api/dircheck?directory=${q("C:\\other")}`, 403],
+    [ALICE, "GET", `/zai/api/dircheck?directory=${q(OTHER)}`, 403],
   ];
   for (const [user, method, p, status] of cases) {
     const r = await call(user, method, p);

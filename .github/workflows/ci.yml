@@ -28,6 +28,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # Windows runners expose TEMP as an 8.3 short path (C:\Users\RUNNER~1\...);
+      # the portal rejects "~" in folder paths, so point temp to a long path.
+      - name: Use a long temp path on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "TEMP=${{ runner.temp }}" >> "$GITHUB_ENV"
+          echo "TMP=${{ runner.temp }}" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run build
       - run: npm test
