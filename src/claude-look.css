@@ -1,0 +1,1102 @@
+/* ============================================================
+   zai — слой «стиль приложения Claude» (FEAT-09.20, 2026-11-03)
+   Подключается ПОСЛЕДНИМ (src/main.jsx) и перекрывает токены и вид
+   компонентов data-terminal, не трогая геометрию клавиатурного шелла,
+   оверлеев чата и состояний. Откат — убрать импорт.
+   Эталон — скриншоты приложения Claude для iOS ;
+   бриф — design/briefs/BRIEF-11-claude-look.md.
+   Язык: тёплый фон, белые группы без рамок (r 20), мягкие тени только
+   у плавающего хрома, синий — выбор, терракота — знак и отправка;
+   гротеск в интерфейсе, антиква в ответах и приветствии.
+   ============================================================ */
+
+/* == tokens: тёмная (по умолчанию и явная) == */
+:root,
+:root[data-theme="dark"] {
+  --bg: #262624;
+  --surface: #30302e;
+  --input: #3a3936;
+  --border: #45443f;
+  --text: #f3f2ee;
+  --text-2: #aaa79f;
+  --text-3: rgba(243, 242, 238, 0.5);
+  --accent: #6e9fea;
+  --accent-press: #8db3ef;
+  --accent-ink: #10213d;
+  --accent-wash: color-mix(in srgb, #6e9fea 14%, transparent);
+  --on-accent: #ffffff;
+  --brand: #d97757;
+  --brand-press: #c4664a;
+  --ink-pill: #f3f2ee;      /* тёмная пилюля действий в тёмной теме — светлая */
+  --ink-pill-text: #1f1e1d;
+  --drawer-bg: #1f1e1d;
+  --success: #6cbf8f;
+  --error: #f07167;
+  --warning: #e0b057;
+  --shadow-1: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
+  --r-xl: 28px;
+  --r-lg: 26px;
+  --r-md: 20px;
+  --r-sm: 12px;
+  --font-ui: -apple-system, BlinkMacSystemFont, "Golos Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", "Iowan Old Style", "Charter", Georgia, "Times New Roman", serif;
+  --bubble-user: var(--input);
+  --drawer-w: 280px;
+  color-scheme: dark;
+}
+
+/* == tokens: светлая == */
+:root[data-theme="light"] {
+  --bg: #f8f8f6;
+  --surface: #ffffff;
+  --input: #efeeea;
+  --border: #e6e4df;
+  --text: #1f1e1d;
+  --text-2: #74716b;
+  --text-3: rgba(31, 30, 29, 0.48);
+  --accent: #2b6cd0;
+  --accent-press: #1f58b0;
+  --accent-ink: #ffffff;
+  --accent-wash: color-mix(in srgb, #2b6cd0 10%, transparent);
+  --on-accent: #ffffff;
+  --brand: #d97757;
+  --brand-press: #c4664a;
+  --ink-pill: #2a2927;
+  --ink-pill-text: #ffffff;
+  --drawer-bg: #f2f1ee;
+  --success: #2e7d5c;
+  --error: #d6403a;
+  --warning: #9a7420;
+  --shadow-1: 0 12px 32px rgba(40, 32, 20, 0.14);
+  --shadow-float: 0 1px 3px rgba(40, 32, 20, 0.06), 0 6px 20px rgba(40, 32, 20, 0.08);
+  --bubble-user: var(--input);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f8f8f6;
+    --surface: #ffffff;
+    --input: #efeeea;
+    --border: #e6e4df;
+    --text: #1f1e1d;
+    --text-2: #74716b;
+    --text-3: rgba(31, 30, 29, 0.48);
+    --accent: #2b6cd0;
+    --accent-press: #1f58b0;
+    --accent-ink: #ffffff;
+    --accent-wash: color-mix(in srgb, #2b6cd0 10%, transparent);
+    --on-accent: #ffffff;
+    --brand: #d97757;
+    --brand-press: #c4664a;
+    --ink-pill: #2a2927;
+    --ink-pill-text: #ffffff;
+    --drawer-bg: #f2f1ee;
+    --success: #2e7d5c;
+    --error: #d6403a;
+    --warning: #9a7420;
+    --shadow-1: 0 12px 32px rgba(40, 32, 20, 0.14);
+    --shadow-float: 0 1px 3px rgba(40, 32, 20, 0.06), 0 6px 20px rgba(40, 32, 20, 0.08);
+    --bubble-user: var(--input);
+    color-scheme: light;
+  }
+}
+
+body {
+  font-family: var(--font-ui);
+  letter-spacing: -0.1px;
+}
+
+/* == плавающие круглые кнопки (шапки, меню) == */
+.float-btn,
+.page-header .icon-btn,
+.chat-header > .icon-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+}
+
+.page-action {
+  color: var(--text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .float-btn:hover:not(:disabled),
+  .page-header .icon-btn:hover:not(:disabled),
+  .chat-header > .icon-btn:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--text);
+    filter: brightness(0.97);
+  }
+}
+
+.float-btn:active,
+.page-header .icon-btn:active,
+.chat-header > .icon-btn:active {
+  transform: scale(0.96);
+}
+
+/* == шапки экранов: круглые кнопки по краям, заголовок по центру == */
+.page-header {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0 16px;
+}
+
+.page-header > h1,
+.page-header > .project-heading {
+  grid-column: 2;
+  text-align: center;
+  min-width: 0;
+}
+
+.page-header > :last-child:not(h1):not(.project-heading) {
+  grid-column: 3;
+}
+
+.page-header h1 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-heading h1 {
+  font-size: 17px;
+}
+
+.project-sub {
+  text-align: center;
+}
+
+/* ☰ нужна только там, где панели не видно (<900px) */
+@media (min-width: 900px) {
+  .menu-btn {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+/* == оболочка и боковое меню == */
+.shell {
+  background: var(--bg);
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 35;
+  width: min(320px, 86vw);
+  display: flex;
+  flex-direction: column;
+  padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+  background: var(--drawer-bg);
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition: transform 260ms cubic-bezier(0.3, 0.7, 0.2, 1), visibility 0s linear 260ms;
+  overscroll-behavior: contain;
+}
+
+.drawer.is-open {
+  transform: none;
+  visibility: visible;
+  transition: transform 260ms cubic-bezier(0.3, 0.7, 0.2, 1), visibility 0s;
+  box-shadow: 8px 0 40px rgba(0, 0, 0, 0.18);
+}
+
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 34;
+  background: rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+
+.drawer-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 12px 10px;
+}
+
+.drawer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.zai-mark {
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.drawer-word {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.6px;
+  line-height: 1;
+}
+
+.drawer-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 76px; /* пилюля «Новый чат» не закрывает последний чат */
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 16px;
+  font-size: 17px;
+  color: var(--text);
+}
+
+.drawer-item svg {
+  flex-shrink: 0;
+  color: var(--text);
+}
+
+.drawer-item.is-chat {
+  min-height: 46px;
+  font-size: 16px;
+}
+
+.drawer-item.is-chat svg {
+  color: var(--text-2);
+}
+
+.drawer-chat-title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawer-item.is-active {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.drawer-item:active {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .drawer-item:hover {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+  }
+}
+
+.drawer-label {
+  padding: 18px 14px 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.drawer-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+.drawer-foot {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawer-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Тёмная пилюля действия («+ Новый чат») */
+.dark-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 22px 0 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink-pill);
+  color: var(--ink-pill-text);
+  font-size: 17px;
+  font-weight: 500;
+  box-shadow: var(--shadow-float);
+}
+
+.dark-pill:disabled {
+  opacity: 0.6;
+}
+
+.dark-pill:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Десктоп: панель закреплена слева */
+@media (min-width: 900px) {
+  .shell {
+    padding-left: var(--drawer-w);
+  }
+
+  .drawer {
+    width: var(--drawer-w);
+    transform: none;
+    visibility: visible;
+    transition: none;
+    box-shadow: none;
+    border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  }
+
+  .drawer-scrim,
+  .drawer-close {
+    display: none;
+  }
+}
+
+/* == списки: Чаты == */
+.home-search,
+.search {
+  height: 48px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.group-label {
+  padding: 18px 14px 6px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.session-row {
+  padding: 12px 14px 12px 52px;
+  border-radius: 16px;
+  position: relative;
+}
+
+/* иконка-облачко у строки чата, как в «Недавних» Claude */
+.session-row::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  width: 22px;
+  height: 22px;
+  background: var(--text-2);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M20 11.5a7.5 7.5 0 0 1-11.2 6.5L4 19.5l1.5-4.3A7.5 7.5 0 1 1 20 11.5Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M20 11.5a7.5 7.5 0 0 1-11.2 6.5L4 19.5l1.5-4.3A7.5 7.5 0 1 1 20 11.5Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.session-title {
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.session-meta,
+.badge,
+.msg-meta,
+.project-path,
+.quota-pct,
+.host-value {
+  font-family: var(--font-ui);
+}
+
+.session-meta {
+  font-size: 14px;
+}
+
+.swipe-content {
+  background: var(--bg);
+}
+
+/* == карточки-группы (Настройки, Проекты): iOS inset grouped == */
+.card-list {
+  gap: 0;
+  background: var(--surface);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.card-list > .card {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  position: relative;
+}
+
+.card-list > .card + .card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: var(--border);
+}
+
+.card {
+  border: none;
+  border-radius: var(--r-md);
+}
+
+.row-title {
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.set-value {
+  font-size: 14px;
+}
+
+.set-row {
+  min-height: 60px;
+  padding: 14px 16px;
+}
+
+.settings-section-title {
+  padding-left: 16px;
+}
+
+.project-name {
+  font-size: 17px;
+}
+
+/* сегмент «Тема» — как переключатель iOS: белый ползунок */
+.seg {
+  border: none;
+  background: var(--input);
+}
+
+.seg-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* == кнопки == */
+.btn-primary {
+  border-radius: 999px;
+  background: var(--ink-pill);
+  color: var(--ink-pill-text);
+  font-size: 15px;
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--ink-pill);
+  opacity: 0.85;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover:not(:disabled) {
+    background: var(--ink-pill);
+    opacity: 0.9;
+  }
+}
+
+.btn {
+  border-radius: 999px;
+  border-color: var(--border);
+  background: transparent;
+  font-size: 15px;
+}
+
+.btn-danger {
+  border-radius: 999px;
+  background: var(--error);
+  color: #fff;
+  font-size: 15px;
+}
+
+/* «Новый чат в проекте» — контурная кнопка во всю ширину (скрин 2179) */
+.project-new {
+  width: 100%;
+  height: 52px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.project-new:active:not(:disabled) {
+  background: var(--input);
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .project-new:hover:not(:disabled) {
+    background: var(--surface);
+    opacity: 1;
+  }
+}
+
+.link-btn {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* == модалки и шиты == */
+.modal-backdrop,
+.sheet-backdrop {
+  background: rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.modal {
+  border: none;
+  border-radius: 28px;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.modal-input {
+  height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 0 20px;
+}
+
+.sheet {
+  border: none;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: var(--bg);
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 5px;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+/* Шапка шита как у Claude: заголовок по центру, круглая ✕ (справа —
+   порядок DOM сохранён, чтобы не трогать фокус-ловушку шита). */
+.sheet-head {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  padding: 10px 12px;
+}
+
+.sheet-title {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-head > .icon-btn {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/* Программный фокус на самом шите/модалке (фокус-ловушка) — без кольца по
+   краю карточки (WebKit рисовал синюю дугу, стенд 2026-11-03). */
+.sheet:focus,
+.sheet:focus-visible,
+.modal:focus,
+.modal:focus-visible {
+  outline: none;
+}
+
+.sheet-head .icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+}
+
+.sheet-footer {
+  background: var(--bg);
+  border-top: none;
+}
+
+.picker-search {
+  border: none;
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.picker-group-label,
+.sheet-section-title {
+  background: var(--bg);
+  font-size: 14px;
+}
+
+.picker-row {
+  min-height: 56px;
+  padding: 10px 14px;
+  border-radius: 16px;
+}
+
+.picker-row-title {
+  font-size: 17px;
+}
+
+.picker-row-desc {
+  font-size: 14px;
+}
+
+.picker-row.active {
+  background: var(--surface);
+}
+
+.picker-check {
+  color: var(--accent);
+}
+
+@media (min-width: 900px) {
+  .sheet {
+    border-radius: var(--r-xl);
+  }
+}
+
+/* == чат: шапка == */
+/* Сплошной фон под заголовком + короткое растворение ниже: подпись модели
+   не должна ложиться на текст ленты (стенд 2026-11-03). */
+.chat-header {
+  background: var(--bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom: none;
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 14px;
+}
+
+.chat-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 20px;
+  background: linear-gradient(to bottom, var(--bg), color-mix(in srgb, var(--bg) 0%, transparent));
+  pointer-events: none;
+}
+
+.chat-title {
+  font-size: 16px;
+}
+
+.stop-btn {
+  color: var(--text);
+}
+
+/* == чат: приветствие пустого чата == */
+.chat-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+}
+
+.hero {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  letter-spacing: -0.3px;
+}
+
+.hero.greeting {
+  font-size: 30px;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+/* == чат: сообщения == */
+.bubble-user {
+  max-width: 85%;
+  padding: 12px 18px;
+  border-radius: 24px;
+  background: var(--bubble-user);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.msg-assistant .md {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 1.6;
+  font-optical-sizing: auto;
+  color: var(--text);
+}
+
+.msg-assistant .md h1,
+.msg-assistant .md h2,
+.msg-assistant .md h3,
+.msg-assistant .md h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+}
+
+.md code {
+  font-size: 0.82em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--accent);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.md pre code {
+  color: inherit;
+  background: none;
+  padding: 0;
+}
+
+.md-code {
+  border: none;
+  border-radius: 16px;
+  font-family: var(--font-mono);
+}
+
+/* «Живая линия» стрима data-terminal не нужна — стрим виден по самому тексту */
+.msg-assistant.is-streaming::before {
+  display: none;
+}
+
+.msg-author {
+  font-family: var(--font-ui);
+}
+
+/* «Копировать ответ» — иконка без рамки, как строка действий Claude;
+   подпись остаётся доступным именем и проявляется после нажатия. */
+.copy-turn {
+  border: none;
+  padding: 0 8px;
+  min-width: 36px;
+  height: 36px;
+  justify-content: center;
+  background: none;
+  color: var(--text-2);
+}
+
+.copy-turn:not(.is-done) > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.copy-turn::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+/* == чат: композер — белая карточка == */
+.chat-bottom {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent) 0, var(--bg) 22px);
+  padding-top: 18px;
+}
+
+.composer {
+  /* Таббара больше нет: нижний safe-area несёт сам композер (в .kb шелл
+     удлиняется на ту же вставку и уходит под клавиатуру — полоса не видна). */
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+}
+
+.composer > .composer-pill {
+  order: 1;
+}
+
+.composer > .model-bar,
+.composer > .model-bar-note {
+  order: 2;
+}
+
+.composer-pill {
+  padding: 8px 8px 8px 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: var(--shadow-float);
+  min-height: 60px;
+}
+
+.composer-pill:focus-within {
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.composer-ta {
+  font-size: 17px;
+}
+
+.composer-ta::placeholder {
+  color: var(--text-2);
+}
+
+.composer-pill > .icon-btn {
+  border-radius: 50%;
+  background: var(--input);
+  color: var(--text);
+}
+
+.send-btn {
+  background: var(--brand);
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .send-btn:hover:not(:disabled) {
+    background: var(--brand-press);
+  }
+}
+
+/* режим микрофона (пустое поле) — чёрная круглая кнопка, как у Claude */
+.send-btn[aria-label^="Отправить — удерживайте"] {
+  background: var(--ink-pill);
+  color: var(--ink-pill-text);
+}
+
+.model-bar {
+  padding: 10px 2px 0;
+}
+
+.model-pill {
+  position: relative;
+  min-height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--input);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  font: 500 15px/1.2 var(--font-ui);
+}
+
+.model-pill.is-static {
+  background: transparent;
+}
+
+/* BUG-102: хит-зона пилюли 44 px по высоте (видимая — 40), как у .copy-turn. */
+.model-pill::after {
+  content: "";
+  position: absolute;
+  inset: -2px 0;
+}
+
+.model-pill:hover {
+  border-color: transparent;
+}
+
+/* == служебные полосы == */
+.stall-bar,
+.notice-bar {
+  border-radius: 18px;
+}
+
+.conn-bar {
+  border-radius: 0 0 16px 16px;
+}
+
+/* == карточки файлов в ответе (FEAT-05.17, BRIEF-12) ==
+   Эталон — приложение Claude: плашка-«страничка» слева срезана низом
+   карточки, имя без расширения, «Тип · РАСШ» серым. */
+.file-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 12px;
+  min-width: 0;
+}
+.file-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  height: 64px;
+  padding: 11px 14px 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--t, 0.15s);
+}
+.file-card:active { background: var(--input); }
+.file-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (hover: hover) {
+  .file-card:hover { background: var(--input); }
+}
+.fc-tile {
+  --tile: #e7eefb;
+  --tile-ink: #2f5fa8;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 46px;
+  height: 60px;
+  padding-top: 15px;
+  border-radius: 10px 10px 0 0;
+  background: var(--tile);
+  color: var(--tile-ink);
+  box-shadow: 0 1px 2px rgba(40, 32, 20, 0.08);
+  overflow: hidden;
+}
+.is-code .fc-tile { --tile: #fbecd5; --tile-ink: #9a5a10; }
+.is-image .fc-tile, .is-video .fc-tile { --tile: #ece6fa; --tile-ink: #6a4bb8; }
+.is-audio .fc-tile, .is-archive .fc-tile { --tile: #e3efe8; --tile-ink: #3b7556; }
+.fc-tile.has-thumb { padding: 0; background: var(--input); }
+.fc-tile.has-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-top: 3px;
+}
+.fc-name {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc-sub {
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  line-height: 1.3;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-theme="dark"] .fc-tile,
+:root:not([data-theme="light"]) .fc-tile { --tile: #2f3a4d; --tile-ink: #a9c4f0; box-shadow: none; }
+:root[data-theme="dark"] .is-code .fc-tile,
+:root:not([data-theme="light"]) .is-code .fc-tile { --tile: #4a3a24; --tile-ink: #f0c58a; }
+:root[data-theme="dark"] .is-image .fc-tile, :root[data-theme="dark"] .is-video .fc-tile,
+:root:not([data-theme="light"]) .is-image .fc-tile, :root:not([data-theme="light"]) .is-video .fc-tile { --tile: #3b3350; --tile-ink: #c7b6f2; }
+:root[data-theme="dark"] .is-audio .fc-tile, :root[data-theme="dark"] .is-archive .fc-tile,
+:root:not([data-theme="light"]) .is-audio .fc-tile, :root:not([data-theme="light"]) .is-archive .fc-tile { --tile: #2c4236; --tile-ink: #9fd1b4; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .fc-tile { --tile: #e7eefb; --tile-ink: #2f5fa8; box-shadow: 0 1px 2px rgba(40, 32, 20, 0.08); }
+  :root:not([data-theme]) .is-code .fc-tile { --tile: #fbecd5; --tile-ink: #9a5a10; }
+  :root:not([data-theme]) .is-image .fc-tile, :root:not([data-theme]) .is-video .fc-tile { --tile: #ece6fa; --tile-ink: #6a4bb8; }
+  :root:not([data-theme]) .is-audio .fc-tile, :root:not([data-theme]) .is-archive .fc-tile { --tile: #e3efe8; --tile-ink: #3b7556; }
+}
+
+/* == BUG-091 (BUG-01.51): место под ленту на iPhone == */
+/* Клавиатура открыта (html.kb ставит AppShell): строка пилюль модели/агента
+   уходит — ленте остаётся больше места; сменить модель — закрыть клавиатуру
+   (решение владельца 2026-11-03). */
+.kb .composer > .model-bar,
+.kb .composer > .model-bar-note {
+  display: none;
+}
+
+/* Короткий экран + открыт диалог-вопрос/разрешение над композером: пилюли
+   тоже уходят (ответ на диалог — не момент смены модели), стек ≤ 50 %. */
+@media (max-height: 760px), (max-width: 480px) and (max-height: 900px) {
+  .chat-bottom:has(.dlg-card) .composer > .model-bar,
+  .chat-bottom:has(.dlg-card) .composer > .model-bar-note {
+    display: none;
+  }
+}
+
+/* Поле ввода без рамки фокуса: глобальное :focus-visible срабатывает на
+   textarea всегда (синий прямоугольник внутри скруглённого композера на
+   iPhone). Фокус видно по каретке и клавиатуре; кнопки рамку сохраняют. */
+.composer-ta:focus-visible {
+  outline: none;
+}
+
+/* BUG-091, итерация 2 (2026-11-03): при открытой
+   клавиатуре композер компактный — поле 44 вместо 60, кнопки 40 (не меньше
+   нормы тап-цели), отступы над/под композером меньше. Без клавиатуры — как было. */
+.kb .chat-bottom {
+  padding-top: 8px;
+}
+.kb .composer {
+  padding-bottom: calc(4px + env(safe-area-inset-bottom));
+}
+.kb .composer-pill {
+  min-height: 44px;
+  padding: 1px 2px;
+  align-items: center;
+}
+.kb .composer-pill > .icon-btn,
+.kb .composer-pill .send-btn {
+  width: 40px;
+  height: 40px;
+}
+/* высоту поля держит автоподгонка Composer (инлайн height), её не трогаем:
+   поле 44 + рамка 1+1 + бордер → 48 px. */

@@ -1,0 +1,3 @@
+{
+  "password": "${OPENCODE_SERVER_PASSWORD}"
+}

@@ -1,0 +1,270 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1960" viewBox="0 0 1400 1960" font-family="Segoe UI, Inter, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1017"/>
+      <stop offset="1" stop-color="#111520"/>
+    </linearGradient>
+    <linearGradient id="srv" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3ecf8e" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#3ecf8e" stop-opacity="0.03"/>
+    </linearGradient>
+    <linearGradient id="glmHead" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4f8cff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#4f8cff" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="clHead" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e07a52" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#e07a52" stop-opacity="0.05"/>
+    </linearGradient>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <marker id="aW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c9ced8"/></marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f8cff"/></marker>
+    <marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e07a52"/></marker>
+    <marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3ecf8e"/></marker>
+    <style>
+      .t  { fill:#e6e8ee; }
+      .m  { fill:#9aa3b2; }
+      .d  { fill:#6b7385; }
+      .h  { font-weight:700; letter-spacing:0.6px; }
+      .mono { font-family: Cascadia Code, Consolas, monospace; }
+      .box { fill:#161a24; stroke:#2b3242; stroke-width:1.2; }
+      .chip { fill:#1e2432; stroke:#323a4d; stroke-width:1; }
+      .ext { fill:#13161d; stroke:#596173; stroke-width:1.3; stroke-dasharray:7 6; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="1960" fill="url(#bg)"/>
+
+  <!-- ============ TITLE ============ -->
+  <text x="60" y="62" class="t h" font-size="30">Портал zai — как он работает с моделями Claude и GLM</text>
+  <text x="60" y="94" class="m" font-size="15">Архитектура по слоям · сверено с кодом и конфигами 2026-11-04 · прод 1.11.x</text>
+  <!-- legend -->
+  <g font-size="13">
+    <rect x="1010" y="40" width="340" height="66" rx="10" fill="#141824" stroke="#2b3242"/>
+    <rect x="1026" y="54" width="14" height="14" rx="3" fill="#3ecf8e" fill-opacity="0.25" stroke="#3ecf8e"/>
+    <text x="1048" y="66" class="t">этот сервер</text>
+    <rect x="1200" y="54" width="14" height="14" rx="3" fill="none" stroke="#596173" stroke-dasharray="3 3"/>
+    <text x="1222" y="66" class="t">вне сервера</text>
+    <line x1="1026" y1="88" x2="1056" y2="88" stroke="#4f8cff" stroke-width="3"/>
+    <text x="1064" y="92" class="t">путь GLM</text>
+    <line x1="1200" y1="88" x2="1230" y2="88" stroke="#e07a52" stroke-width="3"/>
+    <text x="1238" y="92" class="t">путь Claude</text>
+  </g>
+
+  <!-- ============ L0 CLIENT ============ -->
+  <g filter="url(#shadow)">
+    <rect x="420" y="130" width="560" height="84" rx="14" class="box"/>
+  </g>
+  <text x="444" y="160" class="m h" font-size="12">0 · КЛИЕНТ</text>
+  <text x="444" y="186" class="t" font-size="18" font-weight="600">iPhone Safari / браузер</text>
+  <text x="444" y="204" class="m" font-size="13">SPA на Preact · public/app.js · REST /zai/api/* + поток SSE</text>
+
+  <line x1="700" y1="216" x2="700" y2="282" stroke="#c9ced8" stroke-width="2" marker-start="url(#aW)" marker-end="url(#aW)"/>
+  <text x="714" y="254" class="m" font-size="13">HTTPS · zai.example.com/zai/</text>
+
+  <!-- ============ L1 INBOUND (external) ============ -->
+  <rect x="40" y="288" width="1320" height="132" rx="18" class="ext"/>
+  <text x="62" y="314" class="d h" font-size="12">ВНЕ СЕРВЕРА · СЕТЬ</text>
+  <text x="62" y="334" class="m h" font-size="12">1 · ВХОДНАЯ СЕТЬ</text>
+  <g font-size="14">
+    <rect x="150" y="346" width="300" height="52" rx="10" class="chip"/>
+    <text x="300" y="368" class="t" text-anchor="middle" font-weight="600">Публичный DNS</text>
+    <text x="300" y="388" class="m" text-anchor="middle" font-size="12">имя портала → публичный адрес</text>
+    <rect x="550" y="346" width="300" height="52" rx="10" class="chip"/>
+    <text x="700" y="368" class="t" text-anchor="middle" font-weight="600">NAT / межсетевой экран</text>
+    <text x="700" y="388" class="m" text-anchor="middle" font-size="12">проброс порта 443</text>
+    <rect x="950" y="346" width="300" height="52" rx="10" class="chip"/>
+    <text x="1100" y="368" class="t" text-anchor="middle" font-weight="600">reverse proxy (опционально)</text>
+    <text x="1100" y="388" class="m" text-anchor="middle" font-size="12">upstream https → edge :443</text>
+    <line x1="452" y1="372" x2="546" y2="372" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+    <line x1="852" y1="372" x2="946" y2="372" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+  </g>
+  <text x="1338" y="314" class="d" font-size="12" text-anchor="end"></text>
+
+  <line x1="1100" y1="400" x2="1100" y2="420" stroke="#c9ced8" stroke-width="2"/>
+  <path d="M1100,420 L1100,440 L700,440 L700,500" fill="none" stroke="#c9ced8" stroke-width="2" marker-end="url(#aW)"/>
+
+  <!-- ============ SERVER ZONE ============ -->
+  <rect x="30" y="462" width="1340" height="938" rx="24" fill="url(#srv)" stroke="#3ecf8e" stroke-width="2.2" stroke-dasharray="12 7" filter="url(#glow)"/>
+  <rect x="60" y="448" width="470" height="30" rx="15" fill="#0f2a20" stroke="#3ecf8e" stroke-width="1.5"/>
+  <text x="80" y="469" fill="#3ecf8e" font-size="14" class="h">ЭТОТ СЕРВЕР · Windows 11</text>
+
+  <!-- L2 EDGE -->
+  <rect x="100" y="502" width="1200" height="70" rx="12" class="box"/>
+  <text x="124" y="528" class="m h" font-size="12">2 · EDGE</text>
+  <text x="124" y="554" class="t" font-size="16"><tspan class="mono" font-weight="600">ops/portal-server.js</tspan><tspan class="m" font-size="14">  :80 / :443 · задача zai-portal</tspan></text>
+  <text x="1276" y="544" class="m" font-size="13" text-anchor="end">TLS · 308 http→https · allow-list статики · X-Forwarded-* · edge-лог</text>
+
+  <line x1="700" y1="574" x2="700" y2="608" stroke="#c9ced8" stroke-width="2" marker-end="url(#aW)"/>
+  <text x="714" y="596" class="m" font-size="12">только 127.0.0.1</text>
+
+  <!-- L3 CORE -->
+  <g filter="url(#shadow)"><rect x="100" y="612" width="1200" height="168" rx="14" class="box"/></g>
+  <text x="124" y="638" class="m h" font-size="12">3 · ЯДРО ПОРТАЛА</text>
+  <text x="124" y="664" class="t" font-size="18"><tspan class="mono" font-weight="600">server.js</tspan><tspan class="m" font-size="14">  127.0.0.1:4170 · задача zai-web · Node без runtime-зависимостей</tspan></text>
+  <g font-size="13">
+    <rect x="124" y="680" width="180" height="40" rx="8" class="chip"/>
+    <text x="214" y="698" class="t" text-anchor="middle" font-weight="600">auth.js</text>
+    <text x="214" y="713" class="m" text-anchor="middle" font-size="11">sid-кука · тенанты</text>
+    <rect x="316" y="680" width="180" height="40" rx="8" class="chip"/>
+    <text x="406" y="698" class="t" text-anchor="middle" font-weight="600">policy.js</text>
+    <text x="406" y="713" class="m" text-anchor="middle" font-size="11">что можно тенанту</text>
+    <rect x="508" y="680" width="180" height="40" rx="8" class="chip"/>
+    <text x="598" y="698" class="t" text-anchor="middle" font-weight="600">routes/*</text>
+    <text x="598" y="713" class="m" text-anchor="middle" font-size="11">session · files · admin</text>
+    <rect x="700" y="680" width="200" height="40" rx="8" class="chip" stroke="#8b7cf6"/>
+    <text x="800" y="698" class="t" text-anchor="middle" font-weight="600">BindingStore</text>
+    <text x="800" y="713" class="m" text-anchor="middle" font-size="11">чат → движок+модель+агент</text>
+    <rect x="912" y="680" width="180" height="40" rx="8" class="chip" stroke="#8b7cf6"/>
+    <text x="1002" y="698" class="t" text-anchor="middle" font-weight="600">EventHub</text>
+    <text x="1002" y="713" class="m" text-anchor="middle" font-size="11">SSE fan-out · watchdog</text>
+    <rect x="1104" y="680" width="172" height="40" rx="8" class="chip"/>
+    <text x="1190" y="698" class="t" text-anchor="middle" font-weight="600">data/*.json</text>
+    <text x="1190" y="713" class="m" text-anchor="middle" font-size="11">users · runs · bindings</text>
+  </g>
+  <text x="124" y="756" class="m" font-size="13">Движок закреплён за чатом (сменить нельзя → 409). Оба движка пишут события в один хаб → один поток SSE на телефон.</text>
+
+  <!-- core → engines -->
+  <path d="M390,782 L390,830" stroke="#4f8cff" stroke-width="2.6" marker-end="url(#aB)" fill="none"/>
+  <text x="404" y="812" fill="#7fa8ff" font-size="13" font-weight="600">engine = opencode · REST-прокси + SSE /event</text>
+  <path d="M1010,782 L1010,830" stroke="#e07a52" stroke-width="2.6" marker-end="url(#aO)" fill="none"/>
+  <text x="1024" y="812" fill="#f09a77" font-size="13" font-weight="600">engine = claude · spawn</text>
+
+  <!-- L4a GLM -->
+  <g filter="url(#shadow)"><rect x="100" y="834" width="580" height="272" rx="14" class="box" stroke="#4f8cff" stroke-opacity="0.7"/></g>
+  <rect x="101" y="835" width="578" height="46" rx="13" fill="url(#glmHead)"/>
+  <text x="124" y="864" fill="#9cc0ff" font-size="16" class="h">4a · ДВИЖОК GLM</text>
+  <text x="656" y="864" class="t mono" font-size="13" text-anchor="end">opencode serve 1.19.5 · :4096</text>
+  <text x="124" y="904" class="m" font-size="13">oh-my-openagent 5.1.60 — агенты:</text>
+  <g font-size="12">
+    <rect x="124" y="914" width="84" height="24" rx="12" class="chip"/><text x="166" y="930" class="t" text-anchor="middle">Sisyphus</text>
+    <rect x="214" y="914" width="98" height="24" rx="12" class="chip"/><text x="263" y="930" class="t" text-anchor="middle">Hephaestus</text>
+    <rect x="318" y="914" width="70" height="24" rx="12" class="chip"/><text x="353" y="930" class="t" text-anchor="middle">Oracle</text>
+    <rect x="394" y="914" width="70" height="24" rx="12" class="chip"/><text x="429" y="930" class="t" text-anchor="middle">explore</text>
+    <rect x="470" y="914" width="186" height="24" rx="12" fill="#2a1f12" stroke="#d9a441"/><text x="563" y="930" fill="#f2c46b" text-anchor="middle">Sandbox · агент тенанта</text>
+  </g>
+  <text x="124" y="966" class="t mono" font-size="13" font-weight="600">плагин vault-cache.ts</text>
+  <g font-size="13" class="m">
+    <text x="136" y="988">• песочница тенанта, fail-closed: allowlist, пути через realpath</text>
+    <text x="136" y="1008">• bash тенанта → <tspan class="mono" fill="#f2c46b">zai-jail.exe</tspan> (Windows AppContainer)</text>
+    <text x="136" y="1028">• бэкапы файлов для undo хода · data/turn-undo</text>
+  </g>
+  <rect x="124" y="1044" width="532" height="44" rx="8" fill="#14203a" stroke="#2c4a80"/>
+  <text x="140" y="1063" fill="#9cc0ff" font-size="12">выбор модели по агенту: ~/.omo/omo.jsonc</text>
+  <text x="140" y="1080" class="t mono" font-size="12">glm-5.3 → glm-5.2 (запасная) · glm-5.3-flash</text>
+
+  <!-- L4b CLAUDE -->
+  <g filter="url(#shadow)"><rect x="720" y="834" width="580" height="272" rx="14" class="box" stroke="#e07a52" stroke-opacity="0.7"/></g>
+  <rect x="721" y="835" width="578" height="46" rx="13" fill="url(#clHead)"/>
+  <text x="744" y="864" fill="#f5a585" font-size="16" class="h">4b · ДВИЖОК CLAUDE</text>
+  <text x="1276" y="864" class="t mono" font-size="13" text-anchor="end">ClaudeRunner · lib/claude.js</text>
+  <text x="744" y="904" class="m" font-size="13">на каждый ход — отдельный процесс CLI:</text>
+  <rect x="744" y="914" width="532" height="50" rx="8" fill="#0c0e13" stroke="#323a4d"/>
+  <text x="758" y="934" fill="#f5a585" class="mono" font-size="12.5">claude.exe -p --output-format stream-json</text>
+  <text x="758" y="953" class="t mono" font-size="12.5">  --model &lt;id&gt; [--resume &lt;sid&gt;]   ← промпт в stdin</text>
+  <g font-size="13" class="m">
+    <text x="756" y="988">• cwd = папка чата · stream-json → события EventHub</text>
+    <text x="756" y="1008">• admin: <tspan class="mono t">bypassPermissions</tspan> + --add-dir + Playwright MCP</text>
+    <text x="756" y="1028">• tenant: <tspan class="mono t">--restricted · dontAsk</tspan> · только если включён</text>
+  </g>
+  <rect x="744" y="1044" width="532" height="44" rx="8" fill="#2a1912" stroke="#7a4430"/>
+  <text x="760" y="1063" fill="#f5a585" font-size="12">CLI сам ведёт агентный цикл; хук turn-undo</text>
+  <text x="760" y="1080" class="t" font-size="12">история: data/claude-sessions.json + сессии CLI</text>
+
+  <!-- engines ⇄ tools -->
+  <line x1="390" y1="1108" x2="390" y2="1150" stroke="#4f8cff" stroke-width="2.2" marker-start="url(#aB)" marker-end="url(#aB)"/>
+  <text x="404" y="1134" fill="#7fa8ff" font-size="12">вызов инструмента ⇄ результат</text>
+  <line x1="1010" y1="1108" x2="1010" y2="1150" stroke="#e07a52" stroke-width="2.2" marker-start="url(#aO)" marker-end="url(#aO)"/>
+  <text x="1024" y="1134" fill="#f09a77" font-size="12">вызов инструмента ⇄ результат</text>
+
+  <!-- L5 TOOLS -->
+  <rect x="100" y="1152" width="1200" height="110" rx="14" class="box" stroke="#3ecf8e" stroke-opacity="0.55"/>
+  <text x="124" y="1178" fill="#3ecf8e" font-size="12" class="h">5 · ИНСТРУМЕНТЫ ВЫПОЛНЯЮТСЯ ЗДЕСЬ, ЛОКАЛЬНО</text>
+  <text x="1276" y="1178" class="m" font-size="13" text-anchor="end">модель только просит вызвать инструмент — выполняет его этот сервер</text>
+  <g font-size="13">
+    <rect x="124" y="1194" width="170" height="48" rx="10" class="chip"/><text x="209" y="1215" class="t" text-anchor="middle" font-weight="600">Файлы проекта</text><text x="209" y="1232" class="m" text-anchor="middle" font-size="11">read · edit · glob · grep</text>
+    <rect x="304" y="1194" width="170" height="48" rx="10" class="chip"/><text x="389" y="1215" class="t" text-anchor="middle" font-weight="600">cmd / bash</text><text x="389" y="1232" class="m" text-anchor="middle" font-size="11">тенант — только в jail</text>
+    <rect x="484" y="1194" width="170" height="48" rx="10" class="chip"/><text x="569" y="1215" class="t" text-anchor="middle" font-weight="600">Python</text><text x="569" y="1232" class="m" text-anchor="middle" font-size="11">D:\zai-sandbox\python</text>
+    <rect x="664" y="1194" width="170" height="48" rx="10" class="chip"/><text x="749" y="1215" class="t" text-anchor="middle" font-weight="600">Playwright MCP</text><text x="749" y="1232" class="m" text-anchor="middle" font-size="11">браузер для агента</text>
+    <rect x="844" y="1194" width="200" height="48" rx="10" class="chip"/><text x="944" y="1215" class="t" text-anchor="middle" font-weight="600">Вложения</text><text x="944" y="1232" class="m" text-anchor="middle" font-size="11">.zai-uploads в папке чата</text>
+    <rect x="1054" y="1194" width="222" height="48" rx="10" class="chip"/><text x="1165" y="1215" class="t" text-anchor="middle" font-weight="600">Инструкции агентам</text><text x="1165" y="1232" class="m" text-anchor="middle" font-size="11">D:\Obsidian\agents\_index.md</text>
+  </g>
+
+  <!-- side lanes: engines → egress -->
+  <path d="M100,970 L66,970 L66,1318 L96,1318" fill="none" stroke="#4f8cff" stroke-width="2.6" marker-end="url(#aB)"/>
+  <path d="M1300,970 L1334,970 L1334,1318 L1304,1318" fill="none" stroke="#e07a52" stroke-width="2.6" marker-end="url(#aO)"/>
+  <text x="58" y="1150" fill="#7fa8ff" font-size="12" font-weight="600" transform="rotate(-90 58 1150)" text-anchor="middle">запросы к GLM API</text>
+  <text x="1350" y="1150" fill="#f09a77" font-size="12" font-weight="600" transform="rotate(90 1350 1150)" text-anchor="middle">запросы к Anthropic API</text>
+
+  <!-- L6 EGRESS -->
+  <rect x="100" y="1282" width="1200" height="92" rx="14" class="box"/>
+  <text x="124" y="1308" class="m h" font-size="12">6 · ВЫХОДНАЯ СЕТЬ</text>
+  <text x="124" y="1334" class="t" font-size="16"><tspan class="mono" font-weight="600">исходящий трафик</tspan><tspan class="m" font-size="13">  только HTTPS к API моделей</tspan></text>
+  <text x="124" y="1356" class="m" font-size="12">маршрутизация — на усмотрение администратора</text>
+  <rect x="560" y="1300" width="330" height="56" rx="10" class="chip"/>
+  <text x="725" y="1324" class="t" text-anchor="middle" font-size="14" font-weight="600">локальная сеть → напрямую</text>
+  <text x="725" y="1343" class="m" text-anchor="middle" font-size="12">без прокси</text>
+  <rect x="910" y="1300" width="366" height="56" rx="10" fill="#0f2a20" stroke="#3ecf8e"/>
+  <text x="1093" y="1324" fill="#3ecf8e" text-anchor="middle" font-size="14" font-weight="600">api.z.ai · api.anthropic.com</text>
+  <text x="1093" y="1343" class="m" text-anchor="middle" font-size="12">напрямую или через корпоративный прокси</text>
+
+
+  <!-- ============ OUTSIDE: TRANSIT + CLOUDS ============ -->
+  <rect x="40" y="1418" width="1320" height="436" rx="18" class="ext"/>
+  <text x="62" y="1446" class="d h" font-size="12">ВНЕ СЕРВЕРА · ИНТЕРНЕТ И ОБЛАКА</text>
+  <!-- exit -->
+  <path d="M1093,1358 L1093,1440 L700,1440 L700,1462" fill="none" stroke="#3ecf8e" stroke-width="2.6" marker-end="url(#aG)"/>
+  <text x="1108" y="1394" fill="#3ecf8e" font-size="13" font-weight="600">HTTPS</text>
+
+  <rect x="400" y="1466" width="600" height="80" rx="12" class="box" stroke="#596173"/>
+  <text x="424" y="1492" class="m h" font-size="12">7 · ИНТЕРНЕТ</text>
+  <text x="424" y="1516" class="t" font-size="16" font-weight="600">Публичный интернет</text>
+  <text x="424" y="1536" class="d" font-size="12">TLS до облаков провайдеров моделей</text>
+
+  <path d="M560,1548 L560,1574 L390,1574 L390,1600" fill="none" stroke="#4f8cff" stroke-width="2.6" marker-end="url(#aB)"/>
+  <path d="M840,1548 L840,1574 L1010,1574 L1010,1600" fill="none" stroke="#e07a52" stroke-width="2.6" marker-end="url(#aO)"/>
+
+  <!-- L8a Z.AI -->
+  <g filter="url(#shadow)"><rect x="100" y="1604" width="580" height="226" rx="16" fill="#121a2b" stroke="#4f8cff" stroke-width="1.5"/></g>
+  <text x="124" y="1634" fill="#9cc0ff" font-size="12" class="h">8a · ОБЛАКО Z.AI</text>
+  <text x="124" y="1662" class="t" font-size="20" font-weight="700">GLM · Coding Plan</text>
+  <text x="656" y="1662" class="m mono" font-size="13" text-anchor="end">api.z.ai</text>
+  <g font-size="13">
+    <text x="124" y="1694" class="t"><tspan class="mono" fill="#9cc0ff">glm-5.3</tspan>  основная · reasoning low / high / max</text>
+    <text x="124" y="1716" class="t"><tspan class="mono" fill="#9cc0ff">glm-5.3-flash</tspan>  explore · librarian · multimodal-looker</text>
+    <text x="124" y="1738" class="t"><tspan class="mono" fill="#9cc0ff">glm-5.2</tspan>  запасная модель для агентов OmO</text>
+    <text x="124" y="1770" class="m">ключ: ~/.local/share/opencode/auth.json</text>
+    <text x="124" y="1790" class="m">квота: /api/monitor/usage → lib/usage.js (только admin)</text>
+    <text x="124" y="1810" class="d" font-size="12">провайдер zai-coding-plan · timeout 600 с</text>
+  </g>
+
+  <!-- L8b Anthropic -->
+  <g filter="url(#shadow)"><rect x="720" y="1604" width="580" height="226" rx="16" fill="#22160f" stroke="#e07a52" stroke-width="1.5"/></g>
+  <text x="744" y="1634" fill="#f5a585" font-size="12" class="h">8b · ОБЛАКО ANTHROPIC</text>
+  <text x="744" y="1662" class="t" font-size="20" font-weight="700">Claude · подписка владельца</text>
+  <text x="1276" y="1662" class="m mono" font-size="13" text-anchor="end">api.anthropic.com</text>
+  <g font-size="13">
+    <text x="744" y="1694" class="t"><tspan fill="#f5a585" font-weight="600">Opus</tspan>  5.5 (по умолчанию) · 5 · 4.8</text>
+    <text x="744" y="1716" class="t"><tspan fill="#f5a585" font-weight="600">Sonnet</tspan>  5.5 · 5 · 4.6 · 4.5</text>
+    <text x="744" y="1738" class="t"><tspan fill="#f5a585" font-weight="600">Haiku</tspan>  5.5 · 4.5</text>
+    <text x="960" y="1738" class="t"><tspan fill="#f5a585" font-weight="600">Fable</tspan>  5.1 · 5</text>
+    <text x="744" y="1770" class="m">доступ: логин claude CLI владельца</text>
+    <text x="744" y="1790" class="m">каталог: shared/engine.js (11 моделей)</text>
+    <text x="744" y="1810" class="d" font-size="12">лимиты считаются по подписке</text>
+  </g>
+
+  <!-- ============ FOOTER ============ -->
+  <rect x="40" y="1876" width="652" height="66" rx="12" fill="#0f2a20" stroke="#3ecf8e" stroke-opacity="0.6"/>
+  <text x="60" y="1902" fill="#3ecf8e" font-size="14" font-weight="700">ЗДЕСЬ (слои 2–6)</text>
+  <text x="60" y="1926" class="t" font-size="13">агентный цикл, инструменты, файлы, история, песочница, поток на телефон</text>
+
+  <rect x="708" y="1876" width="652" height="66" rx="12" fill="#13161d" stroke="#596173" stroke-dasharray="6 5"/>
+  <text x="728" y="1902" class="t" font-size="14" font-weight="700">ТАМ (слои 7–8): только инференс моделей</text>
+  <text x="728" y="1926" class="m" font-size="13">уходят промпт, история и результаты инструментов. Диска облако не видит</text>
+</svg>

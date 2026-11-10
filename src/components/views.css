@@ -1,0 +1,2547 @@
+/* ============================================================
+   zai views.css — component styles for Home / Projects / Settings
+   and the picker sheets. Built on the src/app.css tokens; the only
+   new tokens are defined here and stay in this file's namespace.
+   Imported from src/components (Pickers.jsx, views/*.jsx); esbuild
+   emits it into public/app.css after src/app.css.
+   ============================================================ */
+
+/* == tokens (extensions) == */
+:root {
+  --r-xl: 24px;
+  --swipe-w: 130px; /* keep in sync with SWIPE_W in HomeView.jsx */
+}
+
+/* app.css runs .view > * with `animation: view-in var(--t) both`, and the
+   retained final keyframe leaves an identity transform on the page root —
+   a permanent stacking context that traps fixed overlays (sheets, modals,
+   FAB) below the tabbar. "backwards" shows the identical frames but lets
+   the transform clear once the animation ends. */
+.shell .view > * {
+  animation-fill-mode: backwards;
+}
+
+/* == buttons == */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--t), opacity var(--t);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.btn-danger {
+  height: 44px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--error);
+  color: var(--on-accent);
+  font-size: 14px;
+  font-weight: 500;
+  transition: opacity var(--t);
+}
+
+/* == home: list == */
+.home-search {
+  margin: 4px 0 8px;
+}
+
+/* Swipe-to-actions row. The content slides left over the page background
+   revealing the action cluster; on hover-capable devices the actions simply
+   fade in on the right. touch-action: pan-y keeps vertical scrolling native. */
+.swipe {
+  position: relative;
+  border-radius: var(--r-md);
+}
+
+.swipe-content {
+  position: relative;
+  transition: transform var(--t);
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.swipe.is-open .swipe-content {
+  transform: translateX(calc(-1 * var(--swipe-w)));
+}
+
+.swipe-actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--t), visibility var(--t);
+}
+
+.swipe.is-open .swipe-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (hover: hover) {
+  .swipe:hover .swipe-actions {
+    opacity: 1;
+    visibility: visible;
+    background: var(--surface); /* matches the row hover wash */
+  }
+}
+
+/* Keyboard focus reveals the actions on EVERY device (BUG-014): inside the
+   hover query, Tab on a hover-less browser landed on invisible buttons.
+   :focus-visible, not :focus-within — a plain TAP on touch Chromium focuses
+   the row link and left the buttons over the row (G7 finding, 1.7.0). */
+.swipe:has(:focus-visible) .swipe-actions {
+  opacity: 1;
+  visibility: visible;
+  background: var(--surface);
+}
+
+/* Actions replace the right-edge badges while revealed: cost/⏸ badges sit at
+   the row's right edge and otherwise cover the buttons (hit-test 2026-11-01:
+   elementFromPoint over the rename button returned span.badge). */
+.swipe-actions {
+  z-index: 1;
+}
+.badge {
+  transition: opacity var(--t);
+}
+.swipe.is-open .badge {
+  opacity: 0;
+}
+@media (hover: hover) {
+  .swipe:hover .badge {
+    opacity: 0;
+  }
+}
+.swipe:has(:focus-visible) .badge {
+  opacity: 0;
+}
+
+.swipe-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 44px;
+  border: none;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--text-2);
+  transition: color var(--t);
+}
+
+/* == home: empty state == */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 64px 24px 24px;
+  text-align: center;
+}
+
+.empty .hero {
+  font-size: 30px;
+}
+
+.empty .hint {
+  max-width: 320px;
+  padding: 0;
+}
+
+.empty-cta {
+  margin-top: 12px;
+  min-width: 200px;
+}
+
+/* «Новый чат» живёт в шапке (.page-action в app.css): плавающая кнопка
+   перекрывала последнюю строку списка — паттерн app-screens
+   «primary action in the title row». */
+
+/* == modals (rename / delete) == */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  overflow-y: auto; /* scroll the backdrop, never trap taps on an off-screen card */
+  overscroll-behavior: contain;
+  animation: fade-in var(--t) backwards;
+}
+
+.modal {
+  width: min(420px, 100%);
+  margin: auto; /* robust centering: no flex-overflow clipping */
+  padding: 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  animation: modal-in var(--t) backwards;
+  outline: none; /* the programmatic focus target; controls keep their rings */
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.modal-text {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.modal-error {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--error);
+}
+
+.modal-input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.modal-input {
+  width: 100%;
+  height: 44px;
+  margin-top: 16px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--input);
+  font-size: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.modal-actions .btn,
+.modal-actions .btn-primary,
+.modal-actions .btn-danger {
+  min-width: 96px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* == bottom sheet == */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: fade-in var(--t) backwards;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 100%);
+  max-height: 84dvh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: sheet-up 200ms ease-out backwards;
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  margin: 8px auto 0;
+  border-radius: var(--r-pill);
+  background: var(--border);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 4px 20px;
+}
+
+.sheet-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain; /* don't chain the drag into the view behind */
+  padding: 0 12px 12px;
+}
+
+.sheet-section-title {
+  padding: 12px 8px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.sheet-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 8px 4px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.sheet-footer .btn-primary {
+  flex: 1;
+  height: 48px;
+}
+
+@media (min-width: 900px) {
+  .sheet-backdrop {
+    align-items: center;
+    padding: 32px;
+  }
+
+  .sheet {
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--r-xl);
+  }
+
+  .sheet-handle {
+    display: none;
+  }
+
+  .sheet-head {
+    padding-top: 14px;
+  }
+
+  .sheet {
+    animation: modal-in var(--t) backwards;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* == picker lists == */
+.picker {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* BUG-11.11 / PK-1: .search is width:100% — side margins pushed it 8px past
+   the sheet edge. Full width of the sheet body, vertical rhythm only. */
+.picker-search {
+  margin: 4px 0 8px;
+}
+
+/* Engine group heading: name + human subtitle (never a provider id). */
+.engine-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 9px;
+  align-items: center;
+  padding: 14px 10px 6px;
+  background: var(--bg);
+}
+
+.engine-group .engine-dot {
+  grid-row: 1;
+}
+
+.eg-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.eg-sub {
+  grid-column: 2;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--text-3);
+}
+
+.agent-group-label {
+  padding: 12px 10px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.picker-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.glyph-label {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.picker-foot {
+  padding: 8px 10px 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+.sk-pick {
+  display: grid;
+  gap: 14px;
+  padding: 12px 10px;
+}
+
+.picker-fail {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  padding: 16px 10px;
+  font-size: 15px;
+}
+
+.picker-fail .hint {
+  padding: 0;
+}
+
+.picker-fail .btn {
+  margin-top: 6px;
+}
+
+.picker-empty .link-btn {
+  margin-left: 6px;
+}
+
+.picker-group-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 8px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--bg);
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--r-md);
+  background: none;
+  text-align: left;
+  transition: background var(--t);
+}
+
+.picker-row.active {
+  background: var(--accent-wash);
+}
+
+.picker-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-row-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-row-title .glyph {
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+
+.picker-row-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.picker-check {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.picker-empty {
+  padding: 24px 8px;
+  font-size: 14px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+/* == settings == */
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background var(--t);
+}
+
+.set-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.set-value {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.set-value.is-error {
+  color: var(--error);
+  white-space: normal;
+}
+
+/* Inline text button («Повторить», …): underline instead of a boxed control. */
+.link-btn {
+  position: relative;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.set-chevron {
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+
+/* segmented control (theme) */
+.seg {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--input);
+}
+
+.seg-btn {
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: none;
+  font-size: 13px;
+  color: var(--text-2);
+  transition: background var(--t), color var(--t);
+}
+
+.seg-btn.active {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+@media (max-width: 420px) {
+  .set-row.is-theme {
+    flex-wrap: wrap;
+  }
+
+  .set-row.is-theme .set-main {
+    flex: 1 1 100%;
+  }
+
+  .seg {
+    flex: 1;
+  }
+}
+
+/* == projects == */
+.project-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.project-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.project-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.project-chevron {
+  flex-shrink: 0;
+  color: var(--text-2);
+  transition: transform var(--t);
+}
+
+.project-card.is-open .project-chevron {
+  transform: rotate(90deg);
+}
+
+.project-sessions {
+  padding: 2px 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.project-empty {
+  padding: 12px 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* == project screen (one folder) == */
+.page-header.is-project {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 8px 0 12px;
+}
+
+.project-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-heading h1 {
+  font-size: 24px;
+}
+
+.project-sub {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  word-break: break-all;
+}
+
+.project-new {
+  width: 100%;
+  margin: 2px 0 14px;
+}
+
+.project-path {
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  vertical-align: 2px;
+}
+
+.modal-hint {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+/* «Не удалось загрузить … · Повторить» on the list screens (BUG-01.40). */
+.load-error {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 18px 16px;
+  border: 1px solid color-mix(in srgb, var(--error) 30%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--error) 6%, var(--surface));
+}
+
+.load-error-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.load-error-hint {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.load-error .btn {
+  margin-top: 6px;
+}
+
+/* «работает» on a chat row (FEAT-01.31): a quiet pulsing dot + word. */
+.badge-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.busy-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: busy-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes busy-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Inline spinner for buttons in progress («Создаём…», «Проверяем…»). */
+.btn-spin {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: login-spin 0.8s linear infinite;
+}
+
+/* == settings: MCP servers == */
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.mcp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.mcp-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.mcp-dot.is-on {
+  background: var(--success);
+}
+
+.mcp-dot.is-off,
+.mcp-dot.is-bad {
+  background: var(--error);
+}
+
+.mcp-dot.is-warn {
+  background: var(--warning);
+}
+
+.mcp-dot.is-idle {
+  background: var(--text-3);
+}
+
+/* BUG-03.13: status in words + the reason on its own ellipsized line. */
+.mcp-row {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.mcp-status.is-bad {
+  color: var(--error);
+}
+
+.mcp-status.is-warn {
+  color: var(--warning);
+}
+
+.mcp-why {
+  flex-basis: 100%;
+  min-width: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-status {
+  margin-left: auto;
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* == settings: host stats (Компьютер) == */
+.host-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.host-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.host-label {
+  flex-shrink: 0;
+  width: 44px;
+  font-weight: 500;
+}
+
+.host-bar {
+  flex: 1;
+  height: 6px;
+  min-width: 0;
+  border-radius: var(--r-pill);
+  background: var(--input);
+  overflow: hidden;
+}
+
+.host-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transition: width var(--t);
+}
+
+.host-bar-fill.is-high {
+  background: var(--error);
+}
+
+.host-value {
+  flex-shrink: 0;
+  min-width: 88px;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.host-temp {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+/* == settings: subscription quota rows (Подписка z.ai) ==
+   Two-line layout: label + value share the top line, the bar spans the
+   full width below — long labels like «Кредиты · неделя» never wrap
+   mid-label the way they did inside the 44px .host-label column. */
+.quota-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13.5px;
+}
+
+.quota-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.quota-label {
+  flex-shrink: 0;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.quota-value {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.quota-bar {
+  display: block;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--input);
+  overflow: hidden;
+}
+
+.quota-row + .quota-row {
+  margin-top: 10px;
+}
+
+.quota-pct {
+  margin-left: 6px;
+  color: var(--text-3);
+}
+
+.quota-row.is-high .quota-value,
+.quota-row.is-high .quota-pct {
+  color: var(--error);
+}
+
+/* Reset line under its own bar: two atomic nowrap pieces that may stack,
+   never break inside («1 ч 58 / мин», BUG-01.41 п.2). */
+.quota-reset {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  font: 12px/1.4 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+
+.nw {
+  white-space: nowrap;
+}
+
+.host-temp b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.host-note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+.set-value.is-wrap {
+  white-space: normal;
+}
+
+.set-value .engine-dot {
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: 1px;
+}
+
+.row-title .engine-tag {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* Активные ходы (FEAT-07.16, admin). */
+.busy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.busy-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.busy-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.busy-title {
+  display: block;
+  /* BUG-151: строка-ссылка 20px → тап-зона ≥ 40px без сдвига вёрстки */
+  padding: 10px 0;
+  margin: -10px 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.busy-meta {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.footnote {
+  padding: 16px 4px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+/* == loading skeletons ==
+   Home first load: rows shaped like session rows. Settings: lines inside the
+   cards. The shimmer itself lives on .sk in app.css (theme-aware). */
+.sk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.sk-row {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.sk-title {
+  height: 15px;
+  width: 62%;
+}
+
+.sk-meta {
+  height: 12px;
+  width: 40%;
+  opacity: 0.7;
+}
+
+.sk-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.sk-line {
+  height: 12px;
+  width: 85%;
+}
+
+.sk-line-60 {
+  width: 60%;
+}
+
+.sk-line-40 {
+  width: 40%;
+}
+
+/* ============================================================
+   Auth: login screen (token paste) + splash.
+   Centered column, animated zai mark: gradient tile + slow
+   dashed ring + breathing halo. Portal-colored matrix rain
+   (canvas, accent glyphs) fills the background, masked into a
+   vignette so the zone behind the card stays clear, and fades
+   in after the card's entrance; the accent washes float above
+   it via ::before so the storm sits inside them. All motion
+   dies under prefers-reduced-motion (global kill in app.css +
+   a static-scatter branch in LoginView).
+   ============================================================ */
+.login-screen {
+  /* Same visual-viewport pin as .shell (BUG-003): the token input opens the
+     keyboard too — without top: offsetTop the whole login screen gets
+     visually displaced on iOS Safari. */
+  position: fixed;
+  top: var(--vv-top, 0px);
+  left: 0;
+  right: 0;
+  height: var(--vvh, 100dvh);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.login-rain {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+  /* starts hidden, fades in once LoginView adds .is-on (~80ms after
+     mount) so the storm never fights the card's 320ms entrance */
+  opacity: 0;
+  transition: opacity 640ms ease-out;
+  /* vignette: the storm is clear behind the card and only reaches full
+     strength toward the screen edges — the token field stays legible. */
+  -webkit-mask-image: radial-gradient(ellipse 480px 420px at 50% 50%, transparent 0%, transparent 52%, #000 100%); /* taste-skill-ignore: functional scrim over the user-requested matrix rain */
+  mask-image: radial-gradient(ellipse 480px 420px at 50% 50%, transparent 0%, transparent 52%, #000 100%); /* taste-skill-ignore: same scrim, standard property */
+}
+
+.login-rain.is-on {
+  /* set by LoginView from the active theme — light stays quieter */
+  opacity: var(--rain-on, 0.85);
+}
+
+.login-core {
+  position: relative;
+  z-index: 2;
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  animation: login-in 320ms cubic-bezier(0.2, 0.7, 0.3, 1) backwards;
+}
+
+@keyframes login-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The mark (BUG-104, FEAT-09.20 / BRIEF-11): тот же знак, что в боковом
+   меню и приветствии пустого чата — терракотовая «искра» (.zai-mark,
+   цвет --brand в claude-look.css) + «zai» антиквой. Синий — цвет выбора,
+   не бренда; моно-тайл и пунктирное кольцо data-terminal убраны. */
+.login-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  user-select: none;
+}
+
+.login-word {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: -0.8px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.login-title {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.login-hint {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  margin: 0 0 4px;
+  max-width: 300px;
+}
+
+.login-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-input {
+  width: 100%;
+  height: 48px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0 16px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text);
+  text-align: center;
+}
+
+.login-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+.login-error {
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--error);
+}
+
+/* L-1: the field itself shows the token was wrong (aria-invalid mirrors it). */
+.login-input.is-invalid,
+.login-input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.login-input.is-invalid:focus {
+  outline-color: var(--error);
+}
+
+.login-input[readonly] {
+  opacity: 0.75;
+}
+
+.login-btn.is-busy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* L-4: «Сессия завершена» after a 401 in the middle of work. */
+.login-note {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+  text-align: center;
+}
+
+.login-btn {
+  height: 48px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: none;
+  border-radius: var(--r-md);
+  font-size: 16px;
+  font-weight: 600;
+  transition: background var(--t);
+}
+
+.login-btn:active:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.login-btn:disabled {
+  opacity: 0.5;
+}
+
+.login-splash {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.login-splash-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  animation: login-spin 0.8s linear infinite;
+}
+
+@keyframes login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   Доступ: admin tenant management
+   ============================================================ */
+.access-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 2px;
+}
+
+.access-badge.is-admin {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.access-badge.is-off {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+}
+
+.access-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 4px;
+}
+
+.access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.access-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  height: 44px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  transition: background var(--t), border-color var(--t);
+}
+
+.access-btn:active {
+  background: var(--accent-wash);
+}
+
+.access-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.access-btn:disabled {
+  opacity: 0.5;
+}
+
+/* FEAT-03.11 / A-1…A-4: labelled account actions + consequences block. */
+.acct-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.acct-actions .access-btn .glyph {
+  color: var(--text-2);
+}
+
+.acct-actions .access-btn.is-danger .glyph,
+.acct-actions .access-btn.is-armed .glyph {
+  color: var(--error);
+}
+
+.access-btn.is-armed {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  color: var(--error);
+}
+
+.access-btn.is-warn-armed {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--text);
+}
+
+.acct-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.acct-confirm.is-warn {
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.acct-confirm .glyph {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--error);
+}
+
+.acct-confirm.is-warn .glyph {
+  color: var(--warning);
+}
+
+.access-input.is-invalid {
+  border-color: var(--error);
+}
+
+.access-modal-note.is-ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success);
+}
+
+.access-modal-note.is-warn {
+  padding: 8px 10px;
+  border-radius: var(--r-sm, 8px);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--text);
+}
+
+.access-token.is-selected {
+  background: color-mix(in srgb, var(--accent) 22%, var(--input));
+}
+
+/* Section heading inside Настройки (the «Доступ» tab is gone). */
+.settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 4px 12px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.settings-section-title .access-badge.is-admin {
+  order: 2;
+}
+
+/* Per-account icon actions: ⏻ / ⧉ / 🗑. 40×40 with hover/armed states;
+   armed = two-tap confirm (tint + «точно?» hint beside). */
+.access-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--input);
+  color: var(--text-2);
+  transition: background var(--t), color var(--t), border-color var(--t);
+}
+
+.access-icon-btn.is-armed {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.access-icon-btn.is-danger.is-armed {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.access-hint {
+  flex: 1 1 100%;
+  align-self: center;
+  padding-left: 2px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.access-btn.is-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.access-btn.is-primary:active {
+  background: var(--accent-press);
+}
+
+.access-btn.is-danger {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, var(--border));
+}
+
+.access-input {
+  width: 100%;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  font-size: 16px;
+  color: var(--text);
+  margin-top: 8px;
+}
+
+.access-create {
+  align-items: center;
+  gap: 14px;
+}
+
+.access-acterr {
+  font-size: 13px;
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 30%, transparent);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+/* BUG-04.6: what an account deletion left behind (folders, chats). */
+.access-delwarn {
+  margin: 0 0 12px;
+}
+
+.access-delwarn-line {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.access-delwarn .link-btn {
+  margin-top: 6px;
+}
+
+.access-user .row-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Token modal: portaled to <body> (never inside a touch scroller). */
+.access-modal {
+  position: fixed;
+  inset: 0;
+  outline: none; /* programmatic focus target (BUG-01.38) */
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.access-modal-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 22px 20px;
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.access-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.access-token {
+  display: block;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+  user-select: all;
+  color: var(--text);
+}
+
+.access-modal-note {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.access-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* == hover (точный указатель) — консолидировано из секций выше (CHALLENGE M8).
+   Строки на карточках проектов берут --input (шаг тона над --surface). */
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-press);
+  }
+
+  .btn-danger:hover {
+    opacity: 0.85;
+  }
+
+  .swipe-action:hover {
+    color: var(--text);
+  }
+
+  .swipe-action.is-danger:hover {
+    color: var(--error);
+  }
+
+  .picker-row:hover {
+    background: var(--surface);
+  }
+
+  button.set-row:hover {
+    background: var(--input);
+  }
+
+  .link-btn:hover {
+    color: var(--accent-press);
+  }
+
+  .seg-btn:hover {
+    color: var(--text);
+  }
+
+  .project-head:hover {
+    background: var(--input);
+  }
+
+  .project-sessions .session-row:hover {
+    background: var(--input); /* rows sit on the card surface, hover needs a step */
+  }
+
+  .login-btn:hover:not(:disabled) {
+    background: var(--accent-press);
+  }
+
+  .access-icon-btn:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .access-icon-btn.is-danger:hover:not(:disabled) {
+    color: var(--error);
+    border-color: color-mix(in srgb, var(--error) 40%, var(--border));
+  }
+}
+
+.swipe-action:active {
+  color: var(--text);
+}
+
+.swipe-action.is-danger:active {
+  color: var(--error);
+}
+
+.picker-row:active {
+  background: var(--accent-wash);
+}
+
+/* ---- chat-model-binding (BRIEF-10): пилюли модели/агента, движки ---- */
+.model-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 2px 8px;
+}
+/* BUG-105: пилюли модели и агента — одна строка без переноса; не влезают
+   (402 px, длинное имя агента) — пилюля сжимается, имя режется многоточием.
+   Подсказка «закрепятся…» — следующей строкой .model-bar. */
+.model-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.model-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 0 10px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  color: var(--text);
+  font: 500 12.5px/1.2 var(--font-ui);
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.model-pill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.model-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.model-pill:disabled { cursor: default; opacity: 0.6; }
+.model-pill.is-static { cursor: default; color: var(--text-2); background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.model-pill.is-static:hover { border-color: var(--border); }
+.pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill-chev { color: var(--text-3); flex-shrink: 0; transform: rotate(90deg); }
+.engine-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.engine-dot.is-claude { background: #d97757; }
+.model-bar-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-3);
+  padding: 2px 4px 0;
+}
+.badge-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  color: var(--text-2);
+  font: 500 11.5px/1 var(--font-ui);
+}
+.picker-group-label .engine-dot { display: inline-block; margin-right: 7px; vertical-align: 1px; }
+.picker-note {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+  padding: 10px 8px 4px;
+}
+.set-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-3);
+  margin-top: 5px;
+}
+
+/* BUG-137: the saved default model is gone from the catalog. */
+.set-warn {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--warning);
+  margin-top: 5px;
+}
+/* Portal-wide transient notice rendered by AppShell above any view content
+   (the chat overlay stack renders its own bars; this one covers Home and
+   Settings failures that used to be invisible). */
+.notice-bar.global {
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  /* Overlay, not flow (dogfood retest 2026-11-02): in flow it pushed the
+     full-height chat down and the composer slid under the tab bar. The
+     notice is transient (store timer), so covering the header briefly is
+     the lesser evil. */
+  position: absolute;
+  /* Ревью шагов 2026-11-05 (П31.Н1, макет E1): плашка жила поверх шапки и на
+     10 с прятала ☰ и «⋯» — нельзя было ни повторить из меню, ни уйти. Теперь
+     это карточка ПОД шапкой; шапка всегда доступна. */
+  top: calc(env(safe-area-inset-top, 0px) + 68px);
+  left: 12px;
+  right: 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
+  z-index: 30;
+}
+
+/* FEAT-07.20 «Уведомления» (BRIEF-06 кадры 10–14): переключатель 51×31 с
+   тап-зоной ≥ 44, «Проверить» — access-btn 44. */
+.notif-row {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+.notif-row .set-value {
+  white-space: normal;
+}
+
+.switch {
+  position: relative;
+  flex: none;
+  width: 51px;
+  height: 31px;
+  margin: 6px 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-3) 45%, transparent);
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.switch::before {
+  content: "";
+  position: absolute;
+  inset: -7px -4px; /* тап-зона 59×45 */
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: transform var(--t);
+}
+
+.switch[aria-checked="true"] {
+  background: var(--accent);
+}
+
+.switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+}
+
+.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.notif-actions {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.notif-status {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.notif-status.is-ok {
+  color: var(--success);
+}
+
+.notif-status.is-error {
+  color: var(--error);
+}
+
+.notif-ios {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--accent-wash);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+/* BUG-151: строчная кнопка-ссылка («Сбросить поиск» и др.) — тап-зона ≥ 44px по высоте */
+.link-btn::after {
+  content: "";
+  position: absolute;
+  inset: -12px -4px;
+}
+
+/* BUG-154: время/токены и состояние чата — одной строкой под заголовком */
+.session-meta-row {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.session-meta-row .session-meta {
+  margin-top: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-meta-row .badge {
+  flex: none;
+}
+
+/* FEAT-03.22: «Системный промпт» — row value and the editing sheet. */
+.set-value.is-empty {
+  color: var(--text-3, var(--text-2));
+}
+
+.sysprompt {
+  padding: 4px 8px 8px;
+}
+
+.sysprompt-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 176px;
+  max-height: 50vh;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* ≥ 16 px: iOS Safari does not zoom into the field */
+  line-height: 1.45;
+}
+
+.sysprompt-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.sysprompt-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.sysprompt-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.sysprompt-count.is-over {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.sheet-footer .sysprompt-clear {
+  height: 48px;
+  padding: 0 16px;
+}
+
+/* == FEAT-01.69: меню чата «⋯», закреплённые == */
+.chat-head-actions {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.chat-header:has(.chat-head-actions.has-stop) {
+  grid-template-columns: 102px minmax(0, 1fr) 102px;
+}
+
+.chat-menu-btn[aria-expanded="true"] {
+  filter: brightness(0.94);
+}
+
+.chat-menu {
+  position: fixed;
+  z-index: 60;
+  padding: 6px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22);
+  animation: chat-menu-in 140ms ease-out;
+}
+
+@keyframes chat-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-menu {
+    animation: none;
+  }
+}
+
+.chat-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-menu-item + .chat-menu-item {
+  border-top: 1px solid var(--border);
+}
+
+.chat-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chat-menu-item:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--text) 7%, transparent);
+  }
+}
+
+.chat-menu-item.is-danger {
+  color: var(--error);
+}
+
+.chat-menu-item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.chat-menu-ico {
+  display: inline-flex;
+  flex: none;
+}
+
+.chat-menu-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-menu-note {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.row-pin {
+  display: inline-flex;
+  flex: none;
+  order: 3;
+  margin-left: 8px;
+  color: var(--text-2);
+}
+
+.pins-more {
+  margin: 4px 16px 8px;
+  min-height: 44px;
+}
+
+.modal-warn {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--warning);
+}
+
+.modal-count {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.modal-count.is-over {
+  color: var(--error);
+}
+
+.notice-action {
+  flex: none;
+  margin-left: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* боковая панель: «⋯» строки — в браузере при наведении/фокусе (D1) */
+.drawer-row {
+  position: relative;
+}
+
+.drawer-row .drawer-item {
+  padding-right: 44px;
+}
+
+.drawer-pin {
+  display: inline-flex;
+  flex: none;
+  width: 20px;
+  justify-content: center;
+  color: var(--text-2);
+}
+
+.row-menu-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  opacity: 0;
+}
+
+.drawer-row:hover .row-menu-btn,
+.drawer-row:focus-within .row-menu-btn,
+.row-menu-btn[aria-expanded="true"] {
+  opacity: 1;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .row-menu-btn {
+    display: none;
+  }
+
+  .drawer-row .drawer-item {
+    padding-right: 14px;
+  }
+}
+
+/* == FEAT-03.23: вложенные настройки == */
+.has-section .settings-root,
+.at-root .settings-pane {
+  display: none;
+}
+
+.settings-head {
+  padding-bottom: 12px;
+}
+
+@media (min-width: 900px) {
+  .settings-close {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+.set-account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  background: var(--surface);
+}
+
+.set-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--input);
+  font-weight: 600;
+}
+
+.set-group {
+  margin-top: 18px;
+}
+
+.set-group-title {
+  padding: 0 16px 6px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.set-link {
+  min-height: 50px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.set-link.is-active {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.set-icon {
+  flex: none;
+  color: var(--text-2);
+}
+
+/* Root rows (FEAT-03.23, стенд 1.14.0): the title never wraps or runs into
+   the value — «УведомленияВыключены» on a 360 px column. The title keeps
+   whole words (may wrap), the value yields and ellipsizes. */
+.settings-root .set-row .set-main { flex: 1 1 0; min-width: 0; }
+.settings-root .set-row .row-title { white-space: normal; overflow-wrap: normal; }
+.settings-root .set-row-value { max-width: 42%; flex-shrink: 1; }
+.set-row-value {
+  flex: 0 1 auto;
+  max-width: 45%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14.5px;
+  color: var(--text-2);
+}
+
+.settings-section {
+  animation: set-in 200ms ease-out;
+}
+
+@keyframes set-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-section {
+    animation: none;
+  }
+}
+
+.settings-section-head {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 8px 0 14px;
+}
+
+/* Focus lands on the heading programmatically (screen reader announces the
+   section) — not a control, so no focus ring (it read as a broken box). */
+.settings-section-title-h:focus { outline: none; }
+.settings-section-title-h {
+  grid-column: 2;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+}
+
+.set-back {
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  max-width: 40vw;
+  padding: 0 8px 0 2px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.set-back-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.set-crumbs,
+.set-hist {
+  display: none;
+}
+
+.settings-section-body .card-list + .card-list {
+  margin-top: 14px;
+}
+
+.set-card-pad {
+  padding: 14px 16px;
+  background: var(--surface);
+}
+
+.set-lead {
+  margin: 0 0 10px;
+}
+
+.set-offline {
+  margin-right: auto;
+  align-self: center;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.set-fail {
+  padding: 22px 18px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  text-align: center;
+}
+
+.set-fail-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.set-fail-hint {
+  margin: 6px 0 12px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.set-sk {
+  padding: 16px;
+}
+
+.settings-empty {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+@media (min-width: 1024px) {
+  .page.settings-page {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .settings-cols {
+    display: grid;
+    grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+    min-height: calc(var(--vvh, 100dvh) - 16px);
+  }
+
+  .has-section .settings-root,
+  .at-root .settings-pane {
+    display: block;
+  }
+
+  .settings-root {
+    padding: 0 20px 24px;
+    border-right: 1px solid var(--border);
+  }
+
+  .settings-head {
+    display: block;
+  }
+
+  .settings-head h1 {
+    text-align: left;
+    font-size: 22px;
+  }
+
+  .settings-head .settings-close,
+  .settings-head > span {
+    display: none;
+  }
+
+  .settings-pane {
+    min-width: 0;
+    padding: 0 40px 24px;
+  }
+
+  .settings-section,
+  .settings-empty {
+    max-width: 680px;
+    margin-inline: auto; /* 2K/4K: the open section sits centred in its pane (макет D2) */
+  }
+
+  .set-back {
+    display: none;
+  }
+
+  .set-crumbs {
+    display: flex;
+    grid-column: 1;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--text-2);
+  }
+
+  .set-crumb {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .set-crumbs a {
+    color: var(--text-2);
+    text-decoration: none;
+  }
+
+  .set-crumbs a:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+
+  .settings-section-title-h {
+    text-align: left;
+    font-size: 20px;
+  }
+
+  .set-hist {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .set-hist-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .set-hist-btn:disabled {
+    opacity: 0.35;
+  }
+}
+
+/* Ревью шагов 2026-11-05 (П32.Н13): на 320–379 px «Модель / и / агенты» вставало
+   по слову в строку, «Системный» упирался в «Не задан». Узкий экран — значение
+   второй строкой под названием (как в настройках iOS), стрелка по центру. */
+@media (max-width: 379px) {
+  .settings-root .set-link.set-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 12px;
+    row-gap: 1px;
+    align-items: center;
+  }
+  .settings-root .set-link .set-icon { grid-column: 1; grid-row: 1 / span 2; }
+  .settings-root .set-link .set-main { grid-column: 2; grid-row: 1; }
+  .settings-root .set-link .set-row-value { grid-column: 2; grid-row: 2; max-width: none; font-size: 13px; }
+  .settings-root .set-link .set-chevron { grid-column: 3; grid-row: 1 / span 2; }
+}

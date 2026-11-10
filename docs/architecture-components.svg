@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1730" viewBox="0 0 1400 1730" font-family="Segoe UI, Inter, Arial, sans-serif">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1017"/><stop offset="1" stop-color="#111520"/></linearGradient>
+  <linearGradient id="srv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3ecf8e" stop-opacity="0.08"/><stop offset="1" stop-color="#3ecf8e" stop-opacity="0.02"/></linearGradient>
+  <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/></filter>
+  <marker id="a_blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f8cff"/></marker>
+  <marker id="a_orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e07a52"/></marker>
+  <marker id="a_green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3ecf8e"/></marker>
+  <marker id="a_purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>
+  <marker id="a_teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf"/></marker>
+  <marker id="a_yellow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f5b942"/></marker>
+  <marker id="a_white" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c9ced8"/></marker>
+  <style>
+    .t { fill:#e6e8ee; } .m { fill:#9aa3b2; } .d { fill:#6b7385; }
+    .h { letter-spacing:0.5px; } .mono { font-family: Cascadia Code, Consolas, monospace; }
+    .chip { fill:#1e2432; stroke:#323a4d; stroke-width:1.1; }
+  </style>
+</defs>
+<rect width="1400" height="1730" fill="url(#bg)"/>
+<text x="60" y="62" class="t h" font-size="30" font-weight="700" text-anchor="start">Teleharness — components and data flow</text>
+<text x="60" y="94" class="m" font-size="15" font-weight="400" text-anchor="start">You talk to agent CLIs with their full harness, not to a bare model. One portal, several CLIs, any provider.</text>
+<g filter="url(#shadow)"><rect x="100" y="130" width="1200" height="112" rx="14" fill="#161a24" stroke="#2b3242" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="124" y="158" class="m h" font-size="13" font-weight="700" text-anchor="start">0 · CLIENT — any browser, phone first</text>
+<rect x="124" y="172" width="276" height="54" rx="9" class="chip"/>
+<text x="262" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">SPA · Preact + signals</text>
+<text x="262" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">installable, light / dark</text>
+<rect x="416" y="172" width="276" height="54" rx="9" class="chip"/>
+<text x="554" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Chats · files · settings</text>
+<text x="554" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">agent steps, file cards</text>
+<rect x="708" y="172" width="276" height="54" rx="9" class="chip"/>
+<text x="846" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Voice mode</text>
+<text x="846" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">mic → PCM, WAV playback</text>
+<rect x="1000" y="172" width="276" height="54" rx="9" class="chip"/>
+<text x="1138" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Service Worker</text>
+<text x="1138" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">push when a turn ends</text>
+<path d="M700,246 L700,322" fill="none" stroke="#c9ced8" stroke-width="2.2" marker-start="url(#a_white)" marker-end="url(#a_white)"/>
+<text x="716" y="285" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#c9ced8">HTTPS · REST · SSE · audio</text>
+<rect x="30" y="300" width="1340" height="1140" rx="24" fill="url(#srv)" stroke="#3ecf8e" stroke-width="2" stroke-dasharray="12 7"/>
+<rect x="60" y="286" width="300" height="30" rx="15" fill="#10241c" stroke="#3ecf8e" stroke-width="1.6"/>
+<text x="80" y="306" class="h" font-size="14" font-weight="700" text-anchor="start" fill="#3ecf8e">YOUR SERVER · Node.js</text>
+<g filter="url(#shadow)"><rect x="100" y="330" width="1200" height="62" rx="14" fill="#161a24" stroke="#2b3242" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="124" y="368" class="t" font-size="17" font-weight="700" text-anchor="start">Edge</text>
+<text x="180" y="368" class="m mono" font-size="13.5" font-weight="400" text-anchor="start">ops/portal-server.js · :80 / :443</text>
+<text x="1276" y="368" class="m" font-size="13" font-weight="400" text-anchor="end">TLS · http → https · static allow-list · X-Forwarded-*</text>
+<path d="M700,392 L700,426" fill="none" stroke="#c9ced8" stroke-width="2.2" marker-end="url(#a_white)"/>
+<g filter="url(#shadow)"><rect x="100" y="430" width="1200" height="262" rx="14" fill="#161a24" stroke="#3a4356" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="124" y="462" class="m h" font-size="13" font-weight="700" text-anchor="start">1 · PORTAL</text>
+<text x="220" y="462" class="t mono" font-size="13.5" font-weight="400" text-anchor="start">server.js · zero runtime dependencies</text>
+<text x="1276" y="462" class="m" font-size="13" font-weight="400" text-anchor="end">every engine → one hub → one SSE stream</text>
+<rect x="124" y="482" width="276" height="54" rx="9" class="chip"/>
+<text x="262" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">API router</text>
+<text x="262" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">routes/*</text>
+<rect x="416" y="482" width="276" height="54" rx="9" class="chip"/>
+<text x="554" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">Auth · tenants · policy</text>
+<text x="554" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">sessions, rights, quotas</text>
+<rect x="708" y="482" width="276" height="54" rx="9" class="chip"/>
+<text x="846" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">EventHub</text>
+<text x="846" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">SSE fan-out, replay, stall</text>
+<rect x="1000" y="482" width="276" height="54" rx="9" class="chip"/>
+<text x="1138" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">BindingStore</text>
+<text x="1138" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">chat → engine + model + agent</text>
+<rect x="124" y="548" width="276" height="54" rx="9" class="chip"/>
+<text x="262" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Files &amp; attachments</text>
+<text x="262" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">a folder per chat</text>
+<rect x="416" y="548" width="276" height="54" rx="9" class="chip"/>
+<text x="554" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Turn undo</text>
+<text x="554" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">backups before edits</text>
+<rect x="708" y="548" width="276" height="54" rx="9" class="chip"/>
+<text x="846" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Web Push</text>
+<text x="846" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">VAPID, RFC 8291</text>
+<rect x="1000" y="548" width="276" height="54" rx="9" class="chip"/>
+<text x="1138" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Stores</text>
+<text x="1138" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">data/*.json, atomic writes</text>
+<rect x="124" y="614" width="276" height="54" rx="9" class="chip" stroke="#4f8cff" stroke-opacity="0.75"/>
+<text x="262" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#4f8cff">opencode adapter</text>
+<text x="262" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/proxy.js · REST + events</text>
+<rect x="416" y="614" width="276" height="54" rx="9" class="chip" stroke="#a78bfa" stroke-opacity="0.75"/>
+<text x="554" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#a78bfa">KB cache</text>
+<text x="554" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/kb-cache.js · vault snapshot</text>
+<rect x="708" y="614" width="276" height="54" rx="9" class="chip" stroke="#e07a52" stroke-opacity="0.75"/>
+<text x="846" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#e07a52">Claude runner</text>
+<text x="846" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/claude.js · a process per turn</text>
+<rect x="1000" y="614" width="276" height="54" rx="9" class="chip" stroke="#2dd4bf" stroke-opacity="0.75"/>
+<text x="1138" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#2dd4bf">Voice service</text>
+<text x="1138" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/voice.js · queue, quotas</text>
+<text x="1300" y="760" class="m h" font-size="13" font-weight="700" text-anchor="end">2 · HARNESS — what makes a CLI more than a model</text>
+<g filter="url(#shadow)"><rect x="100" y="774" width="580" height="320" rx="14" fill="#161a24" stroke="#4f8cff" stroke-opacity="0.75" stroke-width="1.4"/></g>
+<rect x="100" y="774" width="580" height="44" rx="14" fill="#4f8cff" fill-opacity="0.16"/>
+<rect x="100" y="804" width="580" height="14" fill="#4f8cff" fill-opacity="0.16"/>
+<text x="122" y="803" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#4f8cff">opencode serve</text>
+<text x="658" y="803" class="t mono" font-size="13" font-weight="400" text-anchor="end">any provider</text>
+<text x="124" y="846" class="m" font-size="13">• <tspan class="t" font-weight="600">oh-my-opencode-slim:</tspan> orchestrator → explorer, oracle, fixer, designer</text>
+<text x="124" y="876" class="m" font-size="13">• <tspan class="t" font-weight="600">agents:</tspan> Hephaestus (deep worker), Sandbox (tenants)</text>
+<text x="124" y="906" class="m" font-size="13">• <tspan class="t" font-weight="600">vault-cache.ts plugin:</tspan> knowledge-base snapshot in context,</text>
+<text x="124" y="936" class="m" font-size="13">•    turn digest to Obsidian, tenant bash → jail, undo backups</text>
+<text x="124" y="966" class="m" font-size="13">• <tspan class="t" font-weight="600">skills:</tspan> docx / pdf / pptx / xlsx / html / images, openspec</text>
+<text x="124" y="996" class="m" font-size="13">• <tspan class="t" font-weight="600">MCP:</tspan> playwright, marketplace</text>
+<text x="124" y="1026" class="m" font-size="13">• <tspan class="t" font-weight="600">providers:</tspan> Z.ai, OpenAI, Google, Anthropic, local…</text>
+<g filter="url(#shadow)"><rect x="720" y="774" width="580" height="320" rx="14" fill="#161a24" stroke="#e07a52" stroke-opacity="0.75" stroke-width="1.4"/></g>
+<rect x="720" y="774" width="580" height="44" rx="14" fill="#e07a52" fill-opacity="0.16"/>
+<rect x="720" y="804" width="580" height="14" fill="#e07a52" fill-opacity="0.16"/>
+<text x="742" y="803" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#e07a52">claude CLI (Claude Code)</text>
+<text x="1278" y="803" class="t mono" font-size="13" font-weight="400" text-anchor="end">stream-json</text>
+<text x="744" y="846" class="m" font-size="13">• <tspan class="t" font-weight="600">a process per turn:</tspan> claude -p --output-format stream-json</text>
+<text x="744" y="876" class="m" font-size="13">• <tspan class="t" font-weight="600">profiles:</tspan> admin — full, tenant — restricted</text>
+<text x="744" y="906" class="m" font-size="13">• <tspan class="t" font-weight="600">PreToolUse hooks:</tspan> jail hook (Bash → sandbox),</text>
+<text x="744" y="936" class="m" font-size="13">•    turn-undo hook (file copy before edit)</text>
+<text x="744" y="966" class="m" font-size="13">• <tspan class="t" font-weight="600">agents &amp; plugins:</tspan> subagents, agent-skills, any plugin</text>
+<text x="744" y="996" class="m" font-size="13">• <tspan class="t" font-weight="600">MCP:</tspan> playwright, per-tenant set</text>
+<text x="744" y="1026" class="m" font-size="13">• <tspan class="t" font-weight="600">context:</tspan> knowledge-base snapshot from KB cache</text>
+<path d="M262,668 L262,770" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
+<text x="272" y="735" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#4f8cff">HTTP + SSE</text>
+<path d="M846,668 L846,770" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#a_orange)"/>
+<text x="856" y="735" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#e07a52">spawn · stream-json</text>
+<text x="1300" y="1150" class="m h" font-size="13" font-weight="700" text-anchor="end">3 · LOCAL SERVICES</text>
+<g filter="url(#shadow)"><rect x="100" y="1164" width="340" height="236" rx="14" fill="#161a24" stroke="#f5b942" stroke-opacity="0.7" stroke-width="1.4"/></g>
+<rect x="100" y="1164" width="340" height="44" rx="14" fill="#f5b942" fill-opacity="0.16"/>
+<rect x="100" y="1194" width="340" height="14" fill="#f5b942" fill-opacity="0.16"/>
+<text x="122" y="1193" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#f5b942">Tenant sandbox</text>
+<text x="124" y="1236" class="m" font-size="13">• <tspan class="t" font-weight="600">zai-jail.exe</tspan> — Windows AppContainer</text>
+<text x="124" y="1264" class="m" font-size="13">• shell + isolated Python</text>
+<text x="124" y="1292" class="m" font-size="13">• access to own folder only</text>
+<text x="124" y="1320" class="m" font-size="13">• <tspan class="t" font-weight="600">document rendering:</tspan> LibreOffice,</text>
+<text x="124" y="1348" class="m" font-size="13">•    html2pdf (Playwright)</text>
+<g filter="url(#shadow)"><rect x="480" y="1164" width="440" height="236" rx="14" fill="#161a24" stroke="#a78bfa" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="480" y="1164" width="440" height="44" rx="14" fill="#a78bfa" fill-opacity="0.16"/>
+<rect x="480" y="1194" width="440" height="14" fill="#a78bfa" fill-opacity="0.16"/>
+<text x="502" y="1193" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#a78bfa">Obsidian · active cache</text>
+<text x="898" y="1193" class="t mono" font-size="13" font-weight="400" text-anchor="end">markdown</text>
+<text x="504" y="1236" class="m" font-size="13">• <tspan class="t" font-weight="600">agents/_index.md</tspan> — rules for agents</text>
+<text x="504" y="1264" class="m" font-size="13">• <tspan class="t" font-weight="600">lessons/, decisions/, tasks/</tspan> — notes</text>
+<text x="504" y="1292" class="m" font-size="13">• <tspan class="t" font-weight="600">sessions/</tspan> — turn digests (vault-cache)</text>
+<text x="504" y="1320" class="m" font-size="13">• <tspan class="t" font-weight="600">tenants/&lt;name&gt;/</tspan> — isolated tenant zone</text>
+<text x="504" y="1348" class="m" font-size="13">• agents read and write notes themselves</text>
+<g filter="url(#shadow)"><rect x="960" y="1164" width="340" height="236" rx="14" fill="#161a24" stroke="#2dd4bf" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="960" y="1164" width="340" height="44" rx="14" fill="#2dd4bf" fill-opacity="0.16"/>
+<rect x="960" y="1194" width="340" height="14" fill="#2dd4bf" fill-opacity="0.16"/>
+<text x="982" y="1193" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#2dd4bf">Voice · voice-worker.py</text>
+<text x="984" y="1236" class="m" font-size="13">• <tspan class="t" font-weight="600">TTS:</tspan> Piper voices</text>
+<text x="984" y="1264" class="m" font-size="13">• <tspan class="t" font-weight="600">STT:</tspan> GigaAM v2 (sherpa-onnx)</text>
+<text x="984" y="1292" class="m" font-size="13">• <tspan class="t" font-weight="600">text normalizer:</tspan> numbers, dates, stress</text>
+<text x="984" y="1320" class="m" font-size="13">• JSON lines over stdin / stdout</text>
+<text x="984" y="1348" class="m" font-size="13">• local, CPU only, no cloud</text>
+<path d="M270,1094 L270,1160" fill="none" stroke="#f5b942" stroke-width="2.2" marker-end="url(#a_yellow)"/>
+<text x="280" y="1130" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#f5b942">bash → jail</text>
+<path d="M780,1094 L780,1122 L400,1122 L400,1160" fill="none" stroke="#f5b942" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_yellow)"/>
+<path d="M600,1094 L600,1160" fill="none" stroke="#a78bfa" stroke-width="2.2" marker-end="url(#a_purple)"/>
+<text x="520" y="1146" class="t" font-size="12.5" font-weight="600" text-anchor="end" fill="#a78bfa">read / write</text>
+<path d="M820,1094 L820,1160" fill="none" stroke="#a78bfa" stroke-width="2.2" marker-end="url(#a_purple)"/>
+<path d="M554,668 L554,748 L700,748 L700,1160" fill="none" stroke="#a78bfa" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_purple)"/>
+<text x="710" y="1146" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#a78bfa">snapshot</text>
+<path d="M1276,641 L1340,641 L1340,1280 L1304,1280" fill="none" stroke="#2dd4bf" stroke-width="2.2" marker-end="url(#a_teal)"/>
+<text x="1334" y="1000" font-size="12.5" font-weight="600" fill="#2dd4bf" text-anchor="middle" transform="rotate(-90 1334 1000)">JSON lines</text>
+<rect x="40" y="1468" width="1320" height="182" rx="20" fill="none" stroke="#596173" stroke-width="1.3" stroke-dasharray="7 6"/>
+<text x="62" y="1494" class="d h" font-size="12.5" font-weight="700" text-anchor="start">MODEL PROVIDERS — inference only, files and tools stay on your server</text>
+<g filter="url(#shadow)"><rect x="100" y="1510" width="540" height="116" rx="14" fill="#161a24" stroke="#4f8cff" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="124" y="1548" class="t" font-size="18" font-weight="700" text-anchor="start">Any provider opencode supports</text>
+<text x="124" y="1576" class="m" font-size="13" font-weight="400" text-anchor="start">Z.ai GLM · OpenAI · Google Gemini · Anthropic · OpenRouter · local</text>
+<text x="124" y="1600" class="d" font-size="13" font-weight="400" text-anchor="start">keys live in opencode (opencode auth login)</text>
+<g filter="url(#shadow)"><rect x="760" y="1510" width="540" height="116" rx="14" fill="#161a24" stroke="#e07a52" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="784" y="1548" class="t" font-size="18" font-weight="700" text-anchor="start">Anthropic · Claude subscription</text>
+<text x="1276" y="1548" class="m mono" font-size="13" font-weight="400" text-anchor="end">api.anthropic.com</text>
+<text x="784" y="1576" class="m" font-size="13" font-weight="400" text-anchor="start">Opus · Sonnet · Haiku through Claude Code</text>
+<text x="784" y="1600" class="d" font-size="13" font-weight="400" text-anchor="start">token: CLAUDE_CODE_OAUTH_TOKEN</text>
+<path d="M100,930 L66,930 L66,1568 L96,1568" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
+<path d="M1300,930 L1362,930 L1362,1568 L1304,1568" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#a_orange)"/>
+<text x="60" y="1250" font-size="12.5" font-weight="600" fill="#4f8cff" text-anchor="middle" transform="rotate(-90 60 1250)">HTTPS to provider APIs</text>
+<text x="1357" y="1140" font-size="12.5" font-weight="600" fill="#e07a52" text-anchor="middle" transform="rotate(-90 1357 1140)">HTTPS to Anthropic API</text>
+<line x1="100" y1="1690" x2="134" y2="1690" stroke="#4f8cff" stroke-width="3"/>
+<text x="144" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">opencode path</text>
+<line x1="330" y1="1690" x2="364" y2="1690" stroke="#e07a52" stroke-width="3"/>
+<text x="374" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">Claude Code path</text>
+<line x1="560" y1="1690" x2="594" y2="1690" stroke="#a78bfa" stroke-width="3"/>
+<text x="604" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">knowledge base</text>
+<line x1="790" y1="1690" x2="824" y2="1690" stroke="#2dd4bf" stroke-width="3"/>
+<text x="834" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">voice</text>
+<line x1="1020" y1="1690" x2="1054" y2="1690" stroke="#f5b942" stroke-width="3"/>
+<text x="1064" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">sandbox</text>
+</svg>

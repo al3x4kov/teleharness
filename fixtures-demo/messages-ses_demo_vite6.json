@@ -1,0 +1,95 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_vite6_001",
+   "sessionID": "ses_demo_vite6",
+   "role": "user",
+   "time": {
+    "created": 1794130200000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-5-5"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_vite6_002",
+    "sessionID": "ses_demo_vite6",
+    "messageID": "msg_demo_vite6_001",
+    "type": "text",
+    "text": "Any breaking changes going from Vite 5 to 6 for a simple static site?"
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_vite6_003",
+   "sessionID": "ses_demo_vite6",
+   "role": "assistant",
+   "time": {
+    "created": 1794130201200,
+    "completed": 1794130205400
+   },
+   "parentID": "msg_demo_vite6_001",
+   "modelID": "claude-sonnet-5-5",
+   "providerID": "anthropic",
+   "path": {
+    "cwd": "/home/dev/projects/landing",
+    "root": "/home/dev/projects/landing"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 9500,
+    "input": 7600,
+    "output": 1140,
+    "reasoning": 760,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   },
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_demo_vite6_004",
+    "sessionID": "ses_demo_vite6",
+    "messageID": "msg_demo_vite6_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_vite6_005",
+    "sessionID": "ses_demo_vite6",
+    "messageID": "msg_demo_vite6_003",
+    "type": "text",
+    "text": "For a static site, almost nothing. Check three places:\n\n- **Node 18 is not supported** — you need 20.19+ or 22.12+.\n- **`resolve.conditions`** — if you overrode it, you now have to include the default conditions explicitly.\n- **Sass** — the modern API is the default; older plugins can use `css.preprocessorOptions.scss.api: \"legacy\"`.\n\nTo upgrade: `npm install -D vite@6`, then `npm run build` and check the preview.",
+    "time": {
+     "start": 1794130201200,
+     "end": 1794130205200
+    }
+   },
+   {
+    "id": "prt_demo_vite6_006",
+    "sessionID": "ses_demo_vite6",
+    "messageID": "msg_demo_vite6_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 9500,
+     "input": 7600,
+     "output": 1140,
+     "reasoning": 760,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

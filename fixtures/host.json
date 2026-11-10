@@ -1,0 +1,9 @@
+{
+  "cpu": { "loadPct": 12, "cores": 16 },
+  "ram": { "usedGb": 21.4, "totalGb": 64 },
+  "disks": [
+    { "drive": "C:", "usedPct": 42, "usedGb": 45.3, "totalGb": 100.5 },
+    { "drive": "D:", "usedPct": 12, "usedGb": 49.1, "totalGb": 376.1 }
+  ],
+  "tempC": 27.9
+}

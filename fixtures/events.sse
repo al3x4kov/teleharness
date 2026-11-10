@@ -1,0 +1,12 @@
+data: {"id":"evt_18e961f5d001Bhn2ft3xPBPatU","type":"server.connected","properties":{}}
+
+data: {"id":"evt_18e961f6f001Ssssn6sAqTzYQ4","type":"message.part.updated","properties":{"sessionID":"ses_e716b4cb4ffeb52hh3FvyHcD2S","part":{"type":"tool","tool":"bash","callID":"call_426dc4a6b3924beda25d7902","state":{"metadata":{"output":"sse status: 200 text/event-stream\n"},"status":"running","input":{"command":"node C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\zai-record-sse.mjs","timeout":70000,"workdir":"D:\\Portal\\zai"},"time":{"start":1793393565265}},"id":"prt_18e961e48001m7tc7BMaikwvsr","sessionID":"ses_e716b4cb4ffeb52hh3FvyHcD2S","messageID":"msg_18e960079001fE2cSmCam87qwB"},"time":1793393565550}}
+
+data: {"id":"evt_18e9646700019E8BlN6vmvr6eY","type":"server.heartbeat","properties":{}}
+
+data: {"id":"evt_18e966da3001KstTSq3Y6GzyMs","type":"server.heartbeat","properties":{}}
+
+data: {"id":"evt_18e9694b60011H031CNl4Pn4kw","type":"server.heartbeat","properties":{}}
+
+data: {"id":"evt_18e96bbca001q9BbbgGBqrP4s8","type":"server.heartbeat","properties":{}}
+

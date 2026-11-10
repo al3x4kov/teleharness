@@ -1,0 +1,48 @@
+{
+  "$schema": "https://unpkg.com/oh-my-opencode-slim@3.0.7/oh-my-opencode-slim.schema.json",
+  "setDefaultAgent": true,
+  "autoUpdate": false,
+  "image_routing": "auto",
+  "disabled_agents": [],
+  "fallback": {
+    "enabled": true,
+    "maxRetries": 1
+  },
+  "agents": {
+    "orchestrator": {
+      "model": [
+        { "id": "zai-coding-plan/glm-5.3-flash", "variant": "max" },
+        { "id": "zai-coding-plan/glm-5.3", "variant": "high" }
+      ]
+    },
+    "explorer": {
+      "model": [
+        { "id": "zai-coding-plan/glm-5.3-flash", "variant": "low" },
+        { "id": "zai-coding-plan/glm-5.3", "variant": "low" }
+      ]
+    },
+    "oracle": {
+      "model": [
+        { "id": "zai-coding-plan/glm-5.3", "variant": "max" },
+        { "id": "zai-coding-plan/glm-5.3-flash", "variant": "max" }
+      ]
+    },
+    "designer": {
+      "model": [
+        { "id": "zai-coding-plan/glm-5.3-flash", "variant": "max" },
+        { "id": "zai-coding-plan/glm-5.3", "variant": "high" }
+      ]
+    },
+    "fixer": {
+      "model": [
+        { "id": "zai-coding-plan/glm-5.3-flash", "variant": "high" },
+        { "id": "zai-coding-plan/glm-5.3", "variant": "high" }
+      ]
+    },
+    "observer": {
+      "model": [
+        { "id": "zai-coding-plan/glm-5.3-flash", "variant": "low" }
+      ]
+    }
+  }
+}

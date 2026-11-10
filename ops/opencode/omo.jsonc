@@ -1,0 +1,85 @@
+// OMO configuration — профиль «только GLM Coding Plan» (zai-coding-plan).
+// Встроенные цепочки моделей OmO рассчитаны на Claude/GPT/Gemini/Kimi; без этого файла
+// explore/librarian/oracle/Prometheus/Metis/Momus уходили на недоступный anthropic.
+// Здесь каждый агент и категория явно привязаны к моделям подписки:
+//   glm-5.3        — флагман: оркестрация, планирование, ревью, сложный код;
+//   glm-5.3-flash  — быстрый и мультимодальный: поиск, справки, картинки, мелкие задачи,
+//                    и запасная для glm-5.3 при 429/5xx (квота Flash ≈ 3× больше).
+// BUG-180 (2026-11-06): glm-5.2 в models.dev — deprecated, opencode 1.19.5 убрал её из каталога
+// (ProviderModelNotFoundError) — в цепочках только модели из `opencode models zai-coding-plan`;
+// проверяет ops/opencode/tests/glm-config.test.mjs.
+// Портал по умолчанию открывает чаты на glm-5.3-flash + Sisyphus (FEAT-03.1) и сам задаёт
+// variant (ZAI_GLM_VARIANT, по умолчанию max) — reasoning ниже действует, когда модель
+// выбирает OmO (субагенты, категории, агент без явной модели).
+// glm-5.3-highspeed в тариф не входит — не использовать (скрыта whitelist в opencode.json).
+// Primary-агенты (sisyphus, prometheus, atlas): цепочка glm-5.3 → flash → glm-5.3. OmO считает текущей моделью
+// models[0], а портал запускает их на Flash; третья запись — настоящая запасная для Flash-чата (BUG-180).
+// models: [основная, ...запасные]; reasoning у GLM в opencode: low | high | max.
+// Проверка: node ~/.cache/opencode/packages/oh-my-openagent@<ver>/node_modules/oh-my-openagent/bin/oh-my-opencode.js doctor
+//           opencode debug config   (поле agent.*.model / variant)
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",
+
+  "agents": {
+    // Главный оркестратор: думает, делегирует, проверяет.
+    "sisyphus": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}]},
+    // hephaestus не настраивается: OmO пускает его только на GPT (isHephaestusSupportedModel).
+    // Аналог на GLM — агент «Hephaestus - deep worker» в ~/.config/opencode/opencode.json.
+    // Консультант по архитектуре и тяжёлой отладке: максимум рассуждений, вызывается редко.
+    "oracle": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "max"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "max"}]},
+    // Планирование: Prometheus строит план, Metis ищет пробелы, Momus критикует.
+    "prometheus": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}]},
+    "metis": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}]},
+    "momus": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "max"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "max"}]},
+    // Исполнение плана и делегированные подзадачи.
+    "atlas": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}]},
+    "sisyphus-junior": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}]},
+    // Массовые параллельные поисковики: быстро и дёшево.
+    "explore": {"models": [{"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}]},
+    "librarian": {"models": [{"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}]},
+    // Единственная модель подписки со зрением (image/video/pdf).
+    "multimodal-looker": {"models": [{"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}]}
+  },
+
+  "categories": {
+    "ultrabrain": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "max"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "max"}]},
+    "deep-high": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}]},
+    "deep-low": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}]},
+    "unspecified-high": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}]},
+    "unspecified-low": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}]},
+    // UI/вёрстка по скриншотам: нужна модель со зрением (glm-5.3 — только текст).
+    "visual-engineering": {"models": [{"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "max"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}]},
+    "artistry": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "high"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "high"}]},
+    "writing": {"models": [{"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}]},
+    "quick": {"models": [{"model": "zai-coding-plan/glm-5.3-flash", "reasoning": "low"}, {"model": "zai-coding-plan/glm-5.3", "reasoning": "low"}]}
+  },
+
+  // Ключи плагина под opencode.
+  "[opencode]": {
+    "model_fallback": true,
+    // Версия плагина закреплена (прод opencode serve :4096) — обновлять вручную после проверки на стенде.
+    "auto_update": false,
+    "telemetry": false,
+    // При лимитах/сбоях провайдера переключаться на запасную модель, а не ронять ход.
+    "runtime_fallback": {
+      "enabled": true,
+      "retry_on_errors": [429, 500, 502, 503, 504, 529],
+      "max_fallback_attempts": 2,
+      // BUG-180: 0, not 60 — OmO puts the agent-config model (glm-5.3) in cooldown when a portal Flash chat
+      // fails, so the only real fallback was blocked and the turn ended empty (stand 2026-11-06: 10 min, no answer).
+      "cooldown_seconds": 0,
+      "notify_on_fallback": true,
+      "restore_primary_after_cooldown": true
+    },
+    // У Coding Plan ограничена параллельность: не устраиваем шторм 429 фоновыми агентами.
+    "background_task": {
+      "defaultConcurrency": 3,
+      "providerConcurrency": { "zai-coding-plan": 4 }
+    }
+  },
+
+  "_migrations": [
+    "2026-07-opencode-config-unification",
+    "2026-08-reasoning-unification"
+  ]
+}

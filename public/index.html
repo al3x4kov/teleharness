@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- interactive-widget=resizes-content: Android Chrome 108+ resizes the
+       layout viewport when the keyboard opens (iOS ignores it — the shell
+       tracks visualViewport in JS instead). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Teleharness</title>
+  <meta name="description" content="Teleharness — a mobile-first web client for coding agents." />
+  <meta name="apple-mobile-web-app-title" content="Teleharness" />
+  <meta name="application-name" content="Teleharness" />
+  <meta name="theme-color" content="#262624" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+  <script>
+    // Set color-scheme AND the stored theme override before first paint
+    // (zai.theme is written by the Settings screen; without this a reloaded
+    // tab flashed the system theme until the app booted).
+    function setThemeColor(light) {
+      var m = document.querySelector('meta[name="theme-color"]');
+      if (!m) {
+        m = document.createElement("meta");
+        m.name = "theme-color";
+        document.head.appendChild(m);
+      }
+      m.content = light ? "#f8f8f6" : "#262624";
+    }
+    // UI language (src/lib/i18n.js): set <html lang> before first paint.
+    try {
+      var l = localStorage.getItem("zai.lang");
+      if (l !== "en" && l !== "ru") l = /^ru/i.test(navigator.language || "") ? "ru" : "en";
+      document.documentElement.lang = l;
+    } catch (e) {}
+    try {
+      var t = localStorage.getItem("zai.theme");
+      if (t === "dark" || t === "light") {
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+        setThemeColor(t === "light");
+      } else {
+        var light = matchMedia("(prefers-color-scheme: light)").matches;
+        document.documentElement.style.colorScheme = light ? "light" : "dark";
+        setThemeColor(light);
+      }
+    } catch (e) {
+      var light = matchMedia("(prefers-color-scheme: light)").matches;
+      document.documentElement.style.colorScheme = light ? "light" : "dark";
+      setThemeColor(light);
+    }
+  </script>
+  <link rel="stylesheet" href="fonts.css" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="root"></div>
+  <noscript>Teleharness needs JavaScript to run.</noscript>
+  <script src="app.js"></script>
+</body>
+</html>

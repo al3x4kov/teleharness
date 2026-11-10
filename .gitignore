@@ -1,0 +1,54 @@
+# Секреты и данные пользователей — НИКОГДА не коммитить
+data/
+secrets/
+ops/certs/
+
+# Инструменты (генерируемые артефакты)
+graphify-out/
+
+# Зависимости и сборка
+node_modules/
+public/app.js
+public/app.css
+.verify-err.log
+.verify-out.log
+
+# Логи и сессионный мусор
+*.log
+hub-err.txt
+hub-out.txt
+dogfood-output/
+.taste-skill/
+.omo/
+fixtures/_captured.jsonl
+ops/*.png
+
+# OS
+Thumbs.db
+
+# QA-скриншоты прогонов (доказательства — в qa-manage/runs, бинарники не храним)
+shots/
+
+# agent worktrees (Claude Code)
+.claude/worktrees/
+
+# zai-jail.exe собирается ops/sandbox/build.ps1 (FEAT-04.9)
+ops/sandbox/*.exe
+ops/sandbox/*.new
+
+__pycache__/
+*.pyc
+
+# --- публичный репозиторий: секреты и локальные файлы ---
+.env
+.env.*
+!.env.example
+config/opencode/service.json
+config/claude/settings.local.json
+**/auth.json
+**/.credentials.json
+*.pem
+*.key
+*.pfx
+ops/*.exe
+.playwright-mcp/

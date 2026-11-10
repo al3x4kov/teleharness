@@ -1,0 +1,389 @@
+[
+ {
+  "id": "ses_demo_landing_dark_theme",
+  "slug": "calm-nebula",
+  "projectID": "global",
+  "directory": "/home/dev/projects/landing",
+  "summary": {
+   "additions": 64,
+   "deletions": 11,
+   "files": 3
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 62080,
+   "output": 9312,
+   "reasoning": 6208,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Dark theme for the landing page",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794300120000,
+   "updated": 1794302880000
+  }
+ },
+ {
+  "id": "ses_demo_auth_refactor",
+  "slug": "steady-falcon",
+  "projectID": "global",
+  "directory": "/home/dev/projects/api-server",
+  "summary": {
+   "additions": 48,
+   "deletions": 71,
+   "files": 2
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 59840,
+   "output": 8976,
+   "reasoning": 5984,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Refactor the auth module",
+  "model": {
+   "id": "claude-opus-5-5",
+   "providerID": "anthropic"
+  },
+  "zai": {
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-opus-5-5"
+   },
+   "agent": null,
+   "prompted": true
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794292200000,
+   "updated": 1794294600000
+  }
+ },
+ {
+  "id": "ses_demo_nginx_logs",
+  "slug": "quiet-harbor",
+  "projectID": "global",
+  "directory": "/home/dev/infra",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 19520,
+   "output": 2928,
+   "reasoning": 1952,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Analyze nginx logs",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794285000000,
+   "updated": 1794286800000
+  }
+ },
+ {
+  "id": "ses_demo_pg_backup",
+  "slug": "brave-otter",
+  "projectID": "global",
+  "directory": "/home/dev/infra",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 7600,
+   "output": 1140,
+   "reasoning": 760,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Postgres backup script",
+  "model": {
+   "id": "claude-sonnet-5-5",
+   "providerID": "anthropic"
+  },
+  "zai": {
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-5-5"
+   },
+   "agent": null,
+   "prompted": true
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794209400000,
+   "updated": 1794210600000
+  }
+ },
+ {
+  "id": "ses_demo_ci_node22",
+  "slug": "rapid-comet",
+  "projectID": "global",
+  "directory": "/home/dev/projects/api-server",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 14000,
+   "output": 2100,
+   "reasoning": 1400,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Why CI fails on Node 22",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3-flash",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794205800000,
+   "updated": 1794206400000
+  }
+ },
+ {
+  "id": "ses_demo_vite6",
+  "slug": "silver-orbit",
+  "projectID": "global",
+  "directory": "/home/dev/projects/landing",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 7600,
+   "output": 1140,
+   "reasoning": 760,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Migrate the landing page to Vite 6",
+  "model": {
+   "id": "claude-sonnet-5-5",
+   "providerID": "anthropic"
+  },
+  "zai": {
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-5-5"
+   },
+   "agent": null,
+   "prompted": true
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794130200000,
+   "updated": 1794131700000
+  }
+ },
+ {
+  "id": "ses_demo_compose_stand",
+  "slug": "lucky-meadow",
+  "projectID": "global",
+  "directory": "/home/dev/infra",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 7600,
+   "output": 1140,
+   "reasoning": 760,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Docker Compose for a test stack",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794043800000,
+   "updated": 1794045600000
+  }
+ },
+ {
+  "id": "ses_demo_phone_regex",
+  "slug": "tiny-pebble",
+  "projectID": "global",
+  "directory": "/home/dev",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 7600,
+   "output": 1140,
+   "reasoning": 760,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Regex for phone number validation",
+  "model": {
+   "id": "claude-haiku-4-5",
+   "providerID": "anthropic"
+  },
+  "zai": {
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-haiku-4-5"
+   },
+   "agent": null,
+   "prompted": true
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1793957400000,
+   "updated": 1793957700000
+  }
+ },
+ {
+  "id": "ses_demo_slow_join",
+  "slug": "gentle-river",
+  "projectID": "global",
+  "directory": "/home/dev/projects/api-server",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 14000,
+   "output": 2100,
+   "reasoning": 1400,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "SQL: slow JOIN query",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1793784600000,
+   "updated": 1793785800000
+  }
+ },
+ {
+  "id": "ses_demo_readme_ideas",
+  "slug": "bright-lantern",
+  "projectID": "global",
+  "directory": "/home/dev",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 7600,
+   "output": 1140,
+   "reasoning": 760,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "README ideas for the project",
+  "model": {
+   "id": "claude-opus-5-5",
+   "providerID": "anthropic"
+  },
+  "zai": {
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-opus-5-5"
+   },
+   "agent": null,
+   "prompted": true
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1793525400000,
+   "updated": 1793526300000
+  }
+ },
+ {
+  "id": "ses_demo_precommit",
+  "slug": "swift-maple",
+  "projectID": "global",
+  "directory": "/home/dev/projects/api-server",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 7600,
+   "output": 1140,
+   "reasoning": 760,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Set up pre-commit hooks",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3-flash",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1793266200000,
+   "updated": 1793266800000
+  }
+ }
+]

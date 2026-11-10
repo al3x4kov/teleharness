@@ -1,0 +1,11 @@
+[
+ {
+  "id": "global",
+  "worktree": "/",
+  "time": {
+   "created": 1791711000000,
+   "updated": 1794302880000
+  },
+  "sandboxes": []
+ }
+]

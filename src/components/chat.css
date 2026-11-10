@@ -1,0 +1,2324 @@
+/* ============================================================
+   zai chat screen: layout / messages / markdown / reasoning /
+   tool rows / attachments / composer / file viewer / agents.
+   Direction «data-terminal»: инструменты — свёрнутые человечьи
+   строки без коробок; статус = маленький глиф + 1px «живая
+   линия» слева (running — акцент, error — negative); цифры mono
+   tabular; команды/вывод/exit видны только в раскрытии.
+   Pulls in the base tokens first (app.css is not imported by
+   main.jsx, so this import is what gets it into the js css
+   graph); loads after it in the merged bundle.
+   ============================================================ */
+@import "../app.css";
+
+:root {
+  --bubble-user: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --syn-key: var(--accent);
+  --syn-str: var(--success);
+  --syn-num: color-mix(in srgb, var(--accent) 45%, var(--text));
+  --syn-fn: color-mix(in srgb, var(--accent) 30%, var(--text));
+  --syn-com: var(--text-2);
+  --wire-inset: -12px; /* «живая линия» в gutter чата (padding 16px) */
+}
+
+/* == chat frame == */
+.chat {
+  /* Fill the scrollable .view exactly: the frame's own header/messages/composer
+     flex handles the rest. The shell keeps the tab bar in flow below the view,
+     so the composer always sits directly above it (iOS Safari included). */
+  height: 100%;
+  min-height: 0;
+  /* v2 (CHALLENGE M3): the header and the bottom stack are absolute overlays
+     inside this frame; geometry flows through the --chat-head-h /
+     --chat-bottom-h vars that ChatView's ResizeObserver keeps in sync. */
+  position: relative;
+}
+
+/* Bottom overlay stack (notice / stall / DialogBar / composer): the feed
+   scrolls underneath; the scroller reserves its height via
+   --chat-bottom-h. In flow terms it stays inside .view, so the in-flow
+   tab bar still carries the single env(safe-area-inset-bottom). */
+.chat-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  /* BUG-011: only the composer pill was glass — the model/agent pill row
+     (1.6.0) and the composer padding were transparent, so the feed text ran
+     between and under them. Short fade on top, opaque page color below. */
+  background: linear-gradient(to bottom, transparent 0, var(--bg) 14px);
+  padding-top: 14px;
+}
+
+/* ISSUE-001: the heading is clipped to its grid column — a long title must
+   ellipsize, never widen the page or cover «Назад» / «Стоп». The title and
+   the subline are single lines capped at the column width. */
+.chat-heading {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.chat-heading > .chat-title,
+.chat-heading > .chat-sub {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The header buttons stay above the heading so nothing can intercept them. */
+.chat-header > .icon-btn {
+  position: relative;
+  z-index: 1;
+}
+
+.chat-sub {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-2);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.chat-messages {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Top/bottom reserve the glass overlays (header / .chat-bottom stack);
+     the vars are live-measured by ChatView's ResizeObserver. */
+  padding: calc(var(--chat-head-h, 57px) + 8px) 16px calc(var(--chat-bottom-h, 0px) + 10px);
+  scrollbar-width: thin;
+}
+
+.chat-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-empty {
+  flex: 1;
+  display: flex;
+  /* Column: hero, hint and CTA stack centered (BUG-008 — as a row the hero
+     squeezed into two lines with the hint beside it on a phone). */
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  /* the absolute bottom stack must not cover the hero */
+  padding-bottom: calc(var(--chat-bottom-h, 0px) + 24px);
+}
+
+.chat-empty .hint {
+  max-width: 340px;
+}
+
+/* History loading: bubble-shaped shimmer placeholders instead of a bare
+   «Загрузка истории…» line (audit 2026-11-01 — preloader upgrade). */
+.chat-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: var(--chat-w);
+}
+
+.chat-skeleton .sk-user {
+  height: 38px;
+  width: 55%;
+  align-self: flex-end;
+  border-radius: 16px 16px 6px 16px;
+}
+
+.chat-skeleton .sk-assistant {
+  height: 64px;
+  width: 100%;
+  border-radius: var(--r-md);
+}
+
+.chat-skeleton .sk-short {
+  width: 38%;
+}
+
+.chat-skeleton .sk-long {
+  height: 96px;
+}
+
+.load-more {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  margin: 0 auto 14px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  transition: color var(--t), background var(--t);
+}
+
+.load-more:disabled {
+  opacity: 0.5;
+}
+
+/* BUG-08.8: the indicator while an older page loads, and the top of history. */
+div.load-more {
+  gap: 8px;
+}
+
+.history-start {
+  align-self: center;
+  margin: 0 auto 14px;
+  color: var(--text-3, var(--text-2));
+  font-size: 12px;
+}
+
+.jump-latest {
+  position: absolute;
+  right: 18px;
+  bottom: calc(var(--chat-bottom-h, 0px) + 14px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  box-shadow: var(--shadow-1);
+  transition: color var(--t);
+}
+
+/* == messages == */
+.msg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.msg-user {
+  align-items: flex-end;
+}
+
+.bubble-user {
+  max-width: 78%;
+  background: var(--bubble-user);
+  border-radius: var(--r-lg) var(--r-lg) 6px var(--r-lg);
+  padding: 9px 14px;
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.bubble-text {
+  white-space: pre-wrap;
+}
+
+.msg-user {
+  gap: 4px;
+}
+
+/* Failed prompt (POST error): the optimistic bubble stays for context; the
+   reason and a 44px «Повторить» sit in a row UNDER it (R-11). */
+.bubble-user.is-failed {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--error) 55%, transparent);
+}
+
+.fail-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
+  font-size: 13px;
+  color: var(--error);
+}
+
+.retry-btn {
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid color-mix(in srgb, var(--error) 45%, transparent);
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--error);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Queued follow-up (R-13): dashed, quieter bubble + «В очереди» under it. */
+.bubble-user.is-queued {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+  outline: 1px dashed var(--text-3);
+  outline-offset: -1px;
+  color: var(--text-2);
+}
+
+.msg-under {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.queue-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.queue-tag svg {
+  color: var(--text-3);
+}
+
+/* «Контекст из базы знаний»: a quiet service line at the start of the
+   agent's turn (FEAT-01.32 / U-3) — never inside the user's bubble.
+   Expandable for admin only; members see the fact, not the snapshot. */
+.msg-turnctx {
+  align-items: flex-start;
+}
+
+.turn-ctx summary,
+.turn-ctx.is-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  list-style: none;
+}
+
+.turn-ctx summary {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.turn-ctx summary::after {
+  content: "";
+  position: absolute;
+  inset: -6px -8px;
+}
+
+.turn-ctx summary::-webkit-details-marker {
+  display: none;
+}
+
+.turn-ctx[open] summary {
+  color: var(--text-2);
+}
+
+.turn-ctx .ctx-body {
+  margin-top: 6px;
+  border-radius: var(--r-sm);
+}
+
+/* «Живая линия» стрима: 1px акцентная линия по левому краю сообщения,
+   пока агент отвечает. Тот же приём, что у бегущего инструмента. */
+.msg-assistant.is-streaming::before {
+  content: "";
+  position: absolute;
+  left: var(--wire-inset);
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--accent);
+}
+
+/* Raw snapshot body (admin-only expansion of «Контекст из базы знаний»). */
+.ctx-body {
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 12px;
+  line-height: 1.45;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  background: var(--input);
+  border-radius: 0 var(--r-sm) var(--r-sm) var(--r-sm);
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.msg-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+/* Visible copy control (I4: a gesture needs a button alternative).
+   Sits right of the agent name; 28px visual with a 44px hit-zone (::after). */
+.icon-btn-sm {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-2);
+  transition: background var(--t), color var(--t);
+}
+
+.icon-btn-sm::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+/* Действия сообщения (копирование ответа) — ПОД содержимым, которое они
+   копируют: в строке автора иконка читалась как «копировать имя агента»
+   (репорт 2026-11-02: «копировать что?»). */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Точка автора — приглушённая в покое, акцент только у живого стрима:
+   цветbudget стиля держится на «живых линиях». */
+.msg-avatar {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+}
+
+.is-streaming .msg-avatar {
+  background: var(--accent);
+}
+
+/* Claude chats: the author is the Claude model (R-08) — brand dot. */
+.msg-avatar.is-claude {
+  background: #d97757;
+}
+
+/* One «Копировать ответ» + the turn meta under the turn's last step (R-02,
+   R-03): visible label, 32px pill with a 44px hit zone. */
+.turn-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+}
+
+.turn-foot .msg-meta {
+  margin-top: 0;
+}
+
+.copy-turn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--text-2);
+  font: 500 12.5px var(--font-ui);
+  cursor: pointer;
+  transition: color var(--t), border-color var(--t), background var(--t);
+}
+
+.copy-turn::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+
+.copy-turn.is-done {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+
+/* Result pictures right in the message (FV-01/BUG-05.9). */
+.result-imgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* Every card hid itself (guessed names that do not exist, ISSUE-003). */
+.result-imgs:empty {
+  display: none;
+}
+
+.result-img {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  max-width: min(440px, 100%);
+  min-width: 0;
+}
+
+.result-img-btn {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--input);
+  cursor: zoom-in;
+}
+
+.result-img-btn img {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.result-img.is-broken .result-img-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(320px, 80vw);
+  aspect-ratio: 16 / 9;
+  padding: 12px;
+  color: var(--text-3);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.result-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font: 12px var(--font-mono);
+  color: var(--text-2);
+}
+
+.rc-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-size {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-2);
+  font: 500 12.5px var(--font-ui);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.mini-btn::after {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}
+
+.result-cap .rc-dl {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.msg-agent {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.msg-meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Orchestration directive ([SYSTEM DIRECTIVE …]): NOT the human's words —
+   muted left-aligned card, content collapsed. Machine text must never read
+   as a user bubble (user feedback 2026-10-31). */
+.msg-system {
+  align-items: flex-start;
+}
+
+.sys-card {
+  max-width: 100%;
+}
+
+.sys-details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.sys-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.sys-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: var(--r-pill);
+  background: var(--input);
+  color: var(--text-2);
+}
+
+.sys-body {
+  margin: 6px 0 0;
+  max-height: 220px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--input);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Typing indicator: three dots pulsing while the model warms up. Pure
+   opacity motion (transform-free), killed by prefers-reduced-motion. */
+.msg-typing {
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.typing-dots {
+  display: inline-flex;
+  gap: 5px;
+  padding: 10px 14px;
+  border-radius: 14px 14px 14px 6px;
+  background: var(--surface);
+}
+
+.typing-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-2);
+  animation: typing-pulse 1.2s ease-in-out infinite;
+}
+
+.typing-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.copy-flash {
+  margin-top: 4px;
+  align-self: flex-end;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  animation: view-in var(--t) backwards;
+}
+
+/* Шаги агента: только подпись, без линеек-декора (тонкие линейки — телл;
+   последовательность читается по тексту «Шаг N»). */
+.step-label {
+  margin: 2px 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Unknown future part: quiet one-liner. Никакого JSON-payload — содержимое
+   служебных частей не должно попадать в интерфейс (аудит утечек 2026-11-01). */
+.part-unknown {
+  margin: 2px 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* == reasoning == */
+.reasoning {
+  margin: 2px 0;
+}
+
+.reasoning-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 5px 0;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.reasoning-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+}
+
+.reasoning-head.is-streaming .reasoning-dot {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.reasoning-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  color: var(--text-2);
+  transition: transform var(--t);
+}
+
+.reasoning-head[aria-expanded="true"] .reasoning-chevron {
+  transform: rotate(180deg);
+}
+
+.reasoning-body {
+  margin: 2px 0 4px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--input);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 44vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* == tool rows ==
+   Свёрнутый инструмент — одна тихая строка (без коробки): глиф статуса,
+   человечья подпись, mono-время справа. «Живая линия» слева: running —
+   акцент, error — negative. Команда, полный путь, вывод и exit-код —
+   только в раскрытии (аудит утечек: сырые команды сервера не читаются
+   «не разворачивая»). */
+.tool-card {
+  position: relative;
+  margin: 2px 0;
+  font-size: 13px;
+  padding-left: 12px;
+}
+
+.tool-card::before {
+  content: "";
+  position: absolute;
+  left: var(--wire-inset);
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: transparent;
+}
+
+.tool-card.st-running::before {
+  background: var(--accent);
+}
+
+.tool-card.st-error::before {
+  background: var(--error);
+}
+
+.tool-card details {
+  border: none;
+  background: none;
+}
+
+.tool-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 3px 0;
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+  border-radius: var(--r-sm);
+}
+
+.tool-head::-webkit-details-marker {
+  display: none;
+}
+
+.tool-status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--text-2);
+}
+
+.tool-status svg {
+  display: block;
+}
+
+.tool-status.s-completed {
+  color: var(--success);
+  opacity: 0.9;
+}
+
+.tool-status.s-error {
+  color: var(--error);
+}
+
+.tool-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.tool-card.st-pending .tool-name {
+  color: var(--text-2);
+}
+
+.tool-desc {
+  color: var(--text-2);
+}
+
+/* Parked on a permission request (R-15): amber line, glyph and a label. */
+.tool-card.st-waiting::before {
+  background: var(--warning);
+}
+
+.tool-status.s-waiting {
+  color: var(--warning);
+}
+
+.tool-wait {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--warning);
+  white-space: nowrap;
+}
+
+.tool-env {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.tool-elapsed {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+/* ×N on collapsed identical tool runs — the visible loop alarm: amber, a
+   warning, not an error (R-16). */
+.tool-repeat {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.tool-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-2);
+  transition: transform var(--t);
+}
+
+.tool-card details[open] .tool-chevron {
+  transform: rotate(180deg);
+}
+
+.tool-body {
+  margin: 2px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-cmdline,
+.tool-output {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--input);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.tool-cmdline {
+  max-height: 160px;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-2);
+}
+
+.tool-output {
+  max-height: 240px;
+}
+
+.tool-exit {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.tool-exit.is-bad {
+  color: var(--error);
+}
+
+/* Мини-спиннер бегущего инструмента (вместо эмодзи-глифа ◔). */
+.tool-spin {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: rot 0.9s linear infinite;
+}
+
+/* == attachments == */
+.attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  min-height: 36px;
+  padding: 5px 8px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  text-align: left;
+}
+
+/* In-flight upload with unknown progress / image processing: the chip pulses
+   (motion respects reduced-motion). Known progress draws a bar instead. */
+.attach.is-uploading {
+  animation: chip-pulse 1.2s ease-in-out infinite;
+}
+
+.attach.is-uploading,
+.attach.is-progress,
+.attach.is-failed {
+  position: relative;
+  overflow: hidden;
+}
+
+.attach.is-failed {
+  border-color: color-mix(in srgb, var(--error) 55%, var(--border));
+}
+
+.attach.is-failed .attach-state {
+  color: var(--error);
+}
+
+.attach-prog {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+.attach-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.attach-state {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Type badge on file chips (R-06/FV-17). */
+.file-kind {
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--input);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-2);
+  text-transform: lowercase;
+}
+
+@keyframes chip-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Artifact/upload chip as a button (opens the FileViewer). */
+button.attach.is-link {
+  position: relative;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+
+/* BUG-162: the 36px chip gets a 44px hit area (same trick as .copy-turn). */
+button.attach.is-link::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
+.attach-img-btn {
+  display: inline-block;
+  border: none;
+  background: none;
+  padding: 0;
+  border-radius: var(--r-md);
+}
+
+.attach-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  display: block;
+}
+
+.attach-img {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-md);
+  object-fit: cover;
+}
+
+.attach-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--text-2);
+}
+
+.attach-name {
+  min-width: 0;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attach-x {
+  flex-shrink: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* ISSUE-009: the button itself is the 44×44 tap target (a pseudo-element
+     hit zone was clipped by the scrolling chip row); negative margins keep
+     the chip compact. */
+  width: 44px;
+  height: 44px;
+  margin: -12px -12px -12px -8px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-2);
+  line-height: 1;
+  transition: background var(--t), color var(--t);
+}
+
+/* == markdown == */
+.md {
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.md > :first-child,
+.md > :first-child > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child,
+.md > :last-child > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0.5em 0;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 1em 0 0.45em;
+  line-height: 1.3;
+  font-weight: 650;
+}
+
+.md h1 {
+  font-size: 1.35em;
+}
+
+.md h2 {
+  font-size: 1.2em;
+}
+
+.md h3 {
+  font-size: 1.08em;
+}
+
+.md h4,
+.md h5,
+.md h6 {
+  font-size: 1em;
+}
+
+.md ul,
+.md ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.md ul {
+  list-style: disc;
+}
+
+.md ol {
+  list-style: decimal;
+}
+
+.md li {
+  margin: 0.25em 0;
+}
+
+.md li > ul,
+.md li > ol {
+  margin: 0.25em 0;
+}
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--input);
+  border-radius: 5px;
+  padding: 0.15em 0.4em;
+}
+
+.md a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md blockquote {
+  margin: 0.6em 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--accent);
+  color: var(--text-2);
+}
+
+.md hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+.md table {
+  display: block;
+  max-width: 100%;
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  font-size: 0.92em;
+  text-align: left;
+}
+
+.md th {
+  background: var(--input);
+  font-weight: 600;
+}
+
+.md img {
+  max-width: 100%;
+  border-radius: var(--r-md);
+}
+
+.md-code {
+  margin: 0.7em 0;
+  border-radius: var(--r-md);
+  background: var(--input);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.md-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+}
+
+/* Code copy (R-17): icon + visible label, 32px tall, 44px hit zone. The icon
+   is a CSS mask — the markdown sanitizer does not allow inline svg. */
+.md-copy {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  margin: -4px -4px -4px 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+
+.md-copy::before {
+  content: "";
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.md-copy.is-done {
+  color: var(--success);
+}
+
+.md-copy::after {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}
+
+.md-code pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.md-code code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+  background: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* hljs subset, derived from chat tokens */
+.hljs-comment,
+.hljs-quote {
+  color: var(--syn-com);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type,
+.hljs-doctag,
+.hljs-name {
+  color: var(--syn-key);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--syn-str);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-attr,
+.hljs-attribute {
+  color: var(--syn-num);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-function,
+.hljs-built_in {
+  color: var(--syn-fn);
+}
+
+.md-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+/* == composer == */
+.composer-pill {
+  align-items: flex-end;
+}
+
+.composer-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ISSUE-009: 20 chips used to grow the composer to 1000px over the header —
+   the row is capped and scrolls inside itself. */
+.composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 4px 0;
+  max-height: min(28dvh, 156px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.composer-ta {
+  width: 100%;
+  border: none;
+  background: none;
+  resize: none;
+  font-family: var(--font-ui);
+  /* 16px minimum: iOS Safari zooms the page when a smaller field gets focus
+     (BUG-01.39/R-01). Every other input in the app is already ≥16px. */
+  font-size: 16px;
+  line-height: 22px;
+  padding: 11px 4px;
+  max-height: 154px; /* 6 lines + vertical padding, keep in sync with MAX_H */
+  color: var(--text);
+  scrollbar-width: thin;
+}
+
+.composer-ta::placeholder {
+  color: var(--text-2);
+}
+
+/* Visible queue hint while the agent is busy and something is typed (R-13). */
+.composer-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.composer-hint svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.composer-error {
+  padding: 6px 18px 0;
+  font-size: 12.5px;
+  color: var(--error);
+}
+
+/* Portal-wide transient notice (failed dialog reply etc.) — slim warning bar
+   above the composer area, auto-expires via store timer. */
+.notice-bar {
+  padding: 8px 18px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  border-top: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+}
+
+/* Model-without-vision warning while an image chip is attached (warning tone,
+   informational, never blocks sending). */
+.composer-vision {
+  margin: 6px 14px 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--warning);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.send-btn .stop-square {
+  border-radius: 2px;
+}
+
+.spin {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  animation: rot 0.7s linear infinite;
+}
+
+.stop-btn {
+  color: var(--accent);
+}
+
+/* == file viewer (artifact preview/download) == */
+.file-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45; /* topmost overlay (permission requests render inline above the composer) */
+  display: flex;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: fade-in var(--t) backwards;
+}
+
+.file-panel {
+  flex: 1;
+  /* Explicit height: guards the flex column against iOS viewport-height
+     churn (toolbar collapse mid-gesture) collapsing the body to 0. */
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg);
+  animation: modal-in var(--t) backwards;
+}
+
+.file-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* FV-12: name (middle-ellipsized in JS, extension always visible) + a
+   «тип · размер» line. */
+.file-head-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 4px;
+}
+
+.file-title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-sub {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* FV-20: iOS shows only page 1 of a framed PDF — the full open sits in the
+   header, visible at once. */
+.file-head-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* FV-05: on wide screens the viewer is a centered window, not a 2500px
+   stretch of a PDF frame. */
+@media (min-width: 900px) {
+  .file-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .file-panel {
+    flex: 0 1 860px;
+    height: auto;
+    max-height: calc(100dvh - 48px);
+    min-height: min(520px, calc(100dvh - 48px));
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+  }
+
+  .file-panel.is-wide {
+    flex-basis: 960px;
+    height: calc(100dvh - 48px);
+  }
+
+  .file-head {
+    padding-top: 8px;
+  }
+}
+
+/* FV-09: skeleton for every kind while loading. */
+.file-sk-wrap {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.file-sk {
+  width: 100%;
+  height: 160px;
+  animation: sk-breathe 1.4s ease-in-out infinite;
+}
+
+.file-sk.is-media {
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-width: 720px;
+}
+
+.file-sk-line {
+  height: 14px;
+  width: 80%;
+  animation: sk-breathe 1.4s ease-in-out infinite;
+}
+
+.file-sk-line.is-short {
+  width: 45%;
+}
+
+.file-img.is-pending {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-bin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.file-bin-actions:empty {
+  display: none;
+}
+
+.file-bin-actions .btn-primary {
+  width: 100%;
+}
+
+.file-note--left {
+  text-align: left;
+  margin-top: 8px;
+}
+
+/* xlsx sheet tabs. */
+.file-office {
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--border);
+}
+
+.file-tab {
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-2);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.file-tab[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* docx text: reads like the chat markdown, bounded measure. */
+.file-docx {
+  align-self: stretch;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  white-space: pre-wrap;
+}
+
+.file-docx .file-table-wrap {
+  margin: 0.7em 0;
+  white-space: normal;
+}
+
+.file-office .file-table-wrap {
+  align-self: flex-start;
+}
+
+.file-head-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--text-2);
+  transition: background var(--t), color var(--t);
+}
+
+.file-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Contain the gesture: when the inner scroll hits its edge, iOS chains the
+     drag to the chat list behind the overlay (overflow:hidden on body is
+     ignored by iOS) — the page behind scrolled, fixed layers jittered. */
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  /* safe centering: auto-margin pseudo-elements center short content, long
+     content keeps its top. */
+  justify-content: flex-start;
+}
+
+.file-body::before,
+.file-body::after {
+  content: "";
+  margin: auto;
+}
+
+/* Reading content (documents, tables, text) starts at the top; only media
+   and status cards are centered. */
+.file-body:has(> .file-docx, > .file-office, > .file-md, > .file-pre, > .file-table-wrap)::before,
+.file-body:has(> .file-docx, > .file-office, > .file-md, > .file-pre, > .file-table-wrap)::after {
+  display: none;
+}
+
+.file-img {
+  max-width: 100%;
+  max-height: calc(100dvh - 140px);
+  object-fit: contain;
+  border-radius: var(--r-md);
+}
+
+.file-frame {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.file-frame--html {
+  background: #ffffff; /* generated html assumes a light canvas */
+}
+
+.file-pre {
+  align-self: stretch;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--input);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.file-md {
+  align-self: stretch;
+  max-width: 720px;
+  /* BUG-103: без width auto-поля во flex-колонке сжимали блок по тексту
+     и ставили короткий документ по центру панели. */
+  width: 100%;
+  margin: 0 auto;
+  padding: 4px 2px;
+}
+
+/* FV-06: tables keep their columns (no per-character breaking on a phone),
+   scroll sideways, numbers right-aligned, the first column pinned. */
+.file-table-wrap {
+  align-self: center;
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.file-csv {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-csv th,
+.file-csv td {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  max-width: 28em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--bg);
+}
+
+.file-csv td.num {
+  text-align: right;
+}
+
+.file-csv th {
+  background: var(--input);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.file-csv th:first-child,
+.file-csv td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.file-csv th:first-child {
+  z-index: 2;
+  background: var(--input);
+}
+
+.file-media {
+  max-width: 100%;
+  max-height: calc(100dvh - 140px);
+  border-radius: var(--r-md);
+  background: #000;
+}
+
+.file-audio {
+  width: min(480px, 100%);
+}
+
+.file-bin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.file-bin-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.file-bin-dl {
+  margin-top: 6px;
+  width: 100%;
+  color: var(--on-accent);
+  text-decoration: none;
+}
+
+.file-note {
+  font-size: 12.5px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+.file-note a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.file-empty {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* == agent cards (multi-agent runs) ==
+   Тихая карточка на --surface: тонировка акцентом не нужна — статус несёт
+   глиф и живая линия не используется (карточка не «выполняется» сама). */
+.agent-card {
+  position: relative;
+  margin: 2px 0;
+  font-size: 13px;
+  padding-left: 12px;
+}
+
+.agent-card::before {
+  content: "";
+  position: absolute;
+  left: var(--wire-inset);
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: transparent;
+}
+
+.agent-card.is-live::before {
+  background: var(--accent);
+}
+
+.agent-card.st-error::before {
+  background: var(--error);
+}
+
+.agent-card details {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.agent-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-height: 44px;
+  padding: 9px 11px;
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+
+.agent-head::-webkit-details-marker {
+  display: none;
+}
+
+.agent-status {
+  flex-shrink: 0;
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2px;
+  color: var(--success);
+}
+
+.agent-status svg {
+  display: block;
+}
+
+.agent-status.is-live {
+  color: var(--accent);
+}
+
+.agent-live-dot {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.agent-card.st-error .agent-status {
+  color: var(--error);
+}
+
+.agent-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-name {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* «фоном» — нейтральная метка режима: 12px, muted на --input (контраст
+   починен: было 2.5:1 терракотой на 10px). */
+.agent-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--r-pill);
+  background: var(--input);
+  color: var(--text-2);
+}
+
+.agent-badge.is-warn {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  color: var(--warning);
+  font-family: var(--font-mono);
+}
+
+.agent-elapsed.is-live {
+  color: var(--accent);
+}
+
+.agent-badge.is-err {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+  font-family: var(--font-mono);
+}
+
+.agent-desc {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Pinned right column: metrics never clip, wrap below on narrow screens. */
+.agent-metrics {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.agent-elapsed {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.agent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 11px 11px;
+}
+
+.agent-block-label {
+  display: block;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+
+.agent-prompt {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-output {
+  margin: 0;
+  padding: 10px;
+  border-radius: var(--r-sm);
+  background: var(--input);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.agent-link {
+  align-self: flex-start;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* == chat animations == */
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes rot {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* == stall banner: busy but silent too long (hung turn) ================= ==
+   Shown between the message list and the composer; the exit is an explicit
+   abort, never an auto-kill (long silent tool runs are legitimate). */
+.stall-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--error) 10%, var(--surface));
+}
+
+.stall-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+
+.stall-btn {
+  flex: none;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--error) 55%, var(--border));
+  background: transparent;
+  color: var(--error);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* == hover (точный указатель) — консолидировано из секций выше (CHALLENGE M8) == */
+@media (hover: hover) and (pointer: fine) {
+  .load-more:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--input);
+  }
+
+  .jump-latest:hover {
+    color: var(--text);
+  }
+
+  .icon-btn-sm:hover {
+    background: var(--input);
+    color: var(--text);
+  }
+
+  .reasoning-head:hover {
+    color: var(--text);
+  }
+
+  button.attach.is-link:hover {
+    border-color: var(--text-2);
+    background: var(--input);
+  }
+
+  .attach-x:hover {
+    background: var(--input);
+    color: var(--text);
+  }
+
+  .md-copy:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .copy-turn:hover:not(.is-done) {
+    color: var(--text);
+    background: var(--input);
+  }
+
+  .retry-btn:hover {
+    background: color-mix(in srgb, var(--error) 10%, transparent);
+  }
+
+  .result-img-btn:hover {
+    border-color: var(--text-2);
+  }
+
+  .file-tab:hover {
+    color: var(--text);
+  }
+
+  .file-head-link:hover {
+    background: var(--input);
+  }
+
+  .stop-btn:hover:not(:disabled) {
+    color: var(--accent-press);
+  }
+
+  .file-head-btn:hover {
+    background: var(--input);
+    color: var(--text);
+  }
+}
+
+.stall-btn:active {
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+/* ---- 1.7.0: overlay geometry on short screens (G7 finding 1a) ----------
+   scrollIntoView (keyboard focus, find-in-page, automation) must stop BELOW
+   the glass header and ABOVE the bottom stack, not under them. */
+.chat-messages {
+  scroll-padding-top: calc(var(--chat-head-h, 57px) + 8px);
+  scroll-padding-bottom: calc(var(--chat-bottom-h, 0px) + 10px);
+}
+
+/* Low desktop (1280×720 at 200 %, landscape tablets): with an open dialog
+   the bottom stack (DialogBar + pills + composer) took 51 % of the height.
+   Compact the stack so it stays ≤ 50 % and the feed keeps a readable band.
+   `.chat-bottom` prefix: dialogs.css loads after this file.
+   Phones up to 900px tall (390×844 phone-sm: the stack was exactly 50 %)
+   get the same compact stack. */
+@media (max-height: 760px), (max-width: 480px) and (max-height: 900px) {
+  .chat-bottom {
+    padding-top: 8px;
+  }
+  .chat-bottom .dlg-card {
+    max-height: 30dvh;
+    padding: 8px 12px;
+  }
+  .chat-bottom .dlg-cmd code {
+    max-height: 64px;
+  }
+  .chat-bottom .dlg-options {
+    max-height: 120px;
+  }
+  .chat-bottom .model-bar {
+    padding-bottom: 4px;
+  }
+  /* BUG-102: высоту пилюль здесь не опускаем (было 28 px) — тап-цель
+     40 px видимой высоты + хит-зона 44 (claude-look.css .model-pill::after). */
+  .chat-bottom .composer-ta {
+    max-height: 88px; /* 3 lines + padding on short screens */
+    padding: 8px 4px;
+  }
+  .chat-bottom .stall-bar {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
+/* ---- FEAT-03.19: прелоадер хода v3 — файлы владельца preloader-v3-light/dark.svg (замена 2026-11-04).
+   SVG показывается как <img>: его стили и анимации изолированы (в нём свои .turn-preloader/.tp-*).
+   Тема: тёмный вариант по умолчанию (как claude-look.css), светлый — при data-theme="light" или
+   «Системной» в светлой ОС. Движение: в <img> браузер не передаёт prefers-reduced-motion, поэтому
+   при reduce показывается статичная копия (корневой класс tp-static из самого SVG). ---- */
+.msg-preloader { padding: 4px 0 8px; }
+.turn-preloader { display: block; width: 200px; max-width: 100%; }
+.turn-preloader .tp-img { display: block; width: 200px; max-width: 100%; height: auto; aspect-ratio: 200 / 160; }
+.turn-preloader .tp-theme-light { display: none; }
+.turn-preloader .tp-theme-dark { display: block; }
+:root[data-theme="light"] .turn-preloader .tp-theme-light { display: block; }
+:root[data-theme="light"] .turn-preloader .tp-theme-dark { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .turn-preloader .tp-theme-light { display: block; }
+  :root:not([data-theme]) .turn-preloader .tp-theme-dark { display: none; }
+}
+.turn-preloader .tp-still { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .turn-preloader .tp-anim { display: none; }
+  .turn-preloader .tp-still { display: block; }
+}

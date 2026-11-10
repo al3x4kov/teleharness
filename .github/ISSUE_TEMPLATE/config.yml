@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea for discussion
+    url: https://github.com/al3x4kov/teleharness/discussions
+    about: Ask questions and share setups in Discussions.
+  - name: Security issue
+    url: https://github.com/al3x4kov/teleharness/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.

@@ -1,0 +1,32 @@
+schema: spec-driven
+
+context: |
+  Портал zai — мобильный web-клиент opencode (прод в D:\Portal\zai, сервер 127.0.0.1:4170,
+  наружу https://192.168.0.10/zai/ и https://zai.home.example.net/zai/).
+  Все артефакты (спеки, proposal, tasks) писать по-русски.
+  Контракт opencode ЗАПИННЕН на версии 1.19.5 (v2 меняет API на /api/* с другим конвертом) —
+  не проектировать под v2. Backend zero-dep Node (server.js + lib/), фронт preact + signals,
+  сборка esbuild (node build.mjs → public/app.js + app.css), тесты node --test (tests/),
+  QA-харнесс Playwright в D:\Portal\zai-qa (msedge). Секреты (data/, ops/certs/) в git не попадают.
+  Управление работой: tracker/ (бэклог EPIC/FEAT/TASK/BUG, корпус пользовательских требований),
+  qa-manage/ (тест-планы/кейсы/прогоны), design/ (макеты). Граф кода: graphify (graphify-out/).
+
+rules:
+  spec:
+    - Каждая capability-спека отражает ФАКТИЧЕСКИ реализованное поведение; желаемое — только в changes/
+    - В каждом Requirement минимум один Scenario (GIVEN/WHEN/THEN)
+  tasks:
+    - Каждый таск ссылается на источник требования (tracker/corpus/... и U-номер)
+    - "Граф (TASK-15.5, REQ-X4006): первый таск — impact-анализ по графу (`graphify query`/`graphify explain` по затронутым узлам); последний блок tasks.md — «Граф»: после правок кода `graphify update .`, затем `npm run graph:fresh` → exit 0 (граф не старше исходников server.js/lib/src/shared/ops)"
+    - "Выкат (TASK-15.2): задачи идут в порядке стенд → dogfood стенда → прод отложенным рестартом (S4U, лог с VERDICT) → dogfood прода; регламент — README.md «Цикл изменения и выката»"
+  proposal:
+    - Всегда указывать out of scope
+operations:
+  apply:
+    guidance:
+      - 'После правок кода: сборка в стенд (ZAI_OUT_DIR=D:\zai-stage\public node build.mjs; без ZAI_OUT_DIR/ZAI_BUILD_PROD=1 build.mjs откажется), npm test, при UI-правках npm run qa:smoke / qa-матрица D:\Portal\zai-qa'
+      - После правок кода — graphify update . и npm run graph:fresh (exit 0)
+  archive:
+    guidance:
+      - Перед архивацией сверить чекбоксы tasks.md и прогнать юнит-тесты
+      - Перед архивацией npm run graph:fresh → exit 0 (иначе graphify update .)

@@ -1,0 +1,23 @@
+{
+  "name": "Teleharness",
+  "short_name": "Teleharness",
+  "start_url": "/zai/",
+  "scope": "/zai/",
+  "display": "standalone",
+  "background_color": "#262624",
+  "theme_color": "#262624",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

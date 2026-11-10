@@ -1,0 +1,149 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "zai-coding-plan/glm-5.3",
+  "small_model": "zai-coding-plan/glm-5.3-flash",
+  "default_agent": "orchestrator",
+  "enabled_providers": [
+    "zai-coding-plan"
+  ],
+  "autoupdate": false,
+  "share": "disabled",
+  "snapshot": false,
+  "instructions": [
+    "D:\\Obsidian\\agents\\_index.md",
+    "C:\\Users\\USER\\.config\\opencode\\prompts\\glm-rules.md"
+  ],
+  "plugin": [
+    "oh-my-opencode-slim@3.0.7",
+    "./vault-cache.ts"
+  ],
+  "provider": {
+    "zai-coding-plan": {
+      "whitelist": [
+        "glm-5.3",
+        "glm-5.3-flash"
+      ],
+      "options": {
+        "timeout": 600000
+      },
+      "models": {
+        "glm-5.3-flash": {
+          "limit": {
+            "context": 262144,
+            "output": 131072
+          }
+        }
+      }
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true
+  },
+  "agent": {
+    "Hephaestus - deep worker": {
+      "description": "Автономный глубокий исполнитель на GLM: сам исследует код, планирует, реализует и доказывает результат проверками. Замена OmO-Hephaestus, который работает только на GPT.",
+      "mode": "primary",
+      "model": "zai-coding-plan/glm-5.3",
+      "variant": "high",
+      "color": "#d97706",
+      "prompt": "{file:./prompts/hephaestus.md}"
+    },
+    "Sandbox": {
+      "description": "Агент пользовательских (tenant) чатов портала: файлы своей папки, cmd.exe и Python в песочнице AppContainer, скиллы документов zai-*, поиск по маркетплейсам, без субагентов.",
+      "mode": "primary",
+      "model": "zai-coding-plan/glm-5.3",
+      "variant": "high",
+      "prompt": "{file:./prompts/sandbox.md}",
+      "permission": {
+        "*": "deny",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "allow",
+        "todowrite": "allow",
+        "todoread": "allow",
+        "question": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "codesearch": "allow",
+        "context7_*": "allow",
+        "grep_app_*": "allow",
+        "marketplace_*": "allow",
+        "skill": {
+          "*": "deny",
+          "zai-*": "allow"
+        },
+        "external_directory": {
+          "*": "deny",
+          "D:\\Obsidian\\tenants\\*": "allow"
+        },
+        "bash": "allow",
+        "task": "deny"
+      }
+    }
+  },
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@0.0.84"
+      ],
+      "enabled": true
+    },
+    "marketplace": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\USER\\AppData\\Local\\ru-marketplace-mcp\\Scripts\\python.exe",
+        "-m",
+        "marketplace_connector"
+      ],
+      "enabled": true,
+      "environment": {
+        "MARKETPLACE_SOURCES": "wildberries,ozon,yandex_market,compare"
+      }
+    }
+  },
+  "watcher": {
+    "ignore": [
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**",
+      "**/graphify-out/**",
+      "**/dogfood-output/**",
+      "**/shots/**"
+    ]
+  },
+  "permission": {
+    "edit": "allow",
+    "webfetch": "allow",
+    "doom_loop": "ask",
+    "bash": {
+      "*": "allow",
+      "rm -rf *": "ask",
+      "rm -fr *": "ask",
+      "rm -r *": "ask",
+      "rmdir /s*": "ask",
+      "rd /s*": "ask",
+      "del /s*": "ask",
+      "Remove-Item*-Recurse*": "ask",
+      "git push*--force*": "ask",
+      "git push -f*": "ask",
+      "git reset --hard*": "ask",
+      "git clean -*": "ask",
+      "git checkout -- *": "ask",
+      "git branch -D*": "ask",
+      "format *": "ask",
+      "diskpart*": "ask",
+      "shutdown*": "ask",
+      "Stop-Computer*": "ask",
+      "Restart-Computer*": "ask",
+      "taskkill*opencode*": "ask",
+      "schtasks*": "ask",
+      "reg delete*": "ask"
+    }
+  }
+}

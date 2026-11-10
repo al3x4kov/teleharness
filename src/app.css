@@ -1,0 +1,801 @@
+/* ============================================================
+   zai — app shell & tokens
+   Direction: «data-terminal» (design-taste-frontend, seed
+   1668247114), переработано под двутемный продукт.
+   Ход стиля: выбор = 1px акцентная линия по ближайшему краю;
+   цвет живёт только на данных и статусах (<3%); поверхности без
+   теней, разделение тоном или 1px линией; цифры — mono tabular.
+   Сигнатура: «живая линия» — всё, что сейчас работает (вкладка,
+   стрим ответа, инструмент), отмечено одной 1px линией.
+   Sections: tokens / base / shell / views / chat
+   ============================================================ */
+
+/* == tokens == */
+:root {
+  --bg: #171719;            /* грунт (dealt ground) */
+  --surface: #131217;       /* карточки темнее грунта (dealt) */
+  --input: #1d1c20;         /* поля ввода, код, вывод инструментов */
+  --border: #26262b;        /* 1px границы */
+  --text: #f4f4f5;
+  --text-2: #9a9ca3;
+  --text-3: rgba(244, 244, 245, 0.55);
+  --accent: #45b8a8;        /* фосфорный тил — мир терминала opencode */
+  --accent-press: #5fcabb;
+  --accent-ink: #0d2622;    /* текст на заливке акцентом (dark) */
+  --accent-wash: color-mix(in srgb, #45b8a8 12%, transparent);
+  --success: #5cb98d;
+  --error: #e5566f;
+  --warning: #d9a441;
+  --on-accent: #0d2622;
+  --r-lg: 16px;             /* баблы, модалки */
+  --r-md: 8px;              /* карточки, кнопки (dealt radius-card 6→8) */
+  --r-sm: 6px;
+  --r-pill: 999px;
+  /* Тени только у настоящих оверлеев (меню, диалоги, плавающие пилюли). */
+  --shadow-1: 0 12px 28px rgba(0, 0, 0, 0.4);
+  --t: 160ms ease-out;
+  --font-ui: "Golos Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --content-w: 768px;
+  --chat-w: 720px;
+  --rail-w: 100px; /* подписи рейла ≥16px от края экрана (inspect edge-text) */
+  color-scheme: dark;
+}
+
+/* Light theme. The manual toggle (data-theme) wins over the system setting;
+   both blocks define the full token set. Та же дисциплина «data-terminal»:
+   холодный бледный грунт, карточки светлее грунта, те же 1px линии. */
+:root[data-theme="light"] {
+  --bg: #f2f2f1;
+  --surface: #ffffff;
+  --input: #f6f6f5;
+  --border: #d9dbd9;
+  --text: #191b1a;
+  --text-2: #5d615f;
+  --text-3: rgba(25, 27, 26, 0.55);
+  --accent: #0e7265;        /* текст-грейд: 5.9:1 на белом */
+  --accent-press: #0a5c51;
+  --accent-ink: #ffffff;
+  --accent-wash: color-mix(in srgb, #0e7265 10%, transparent);
+  --success: #2e7d5c;
+  --error: #c53d57;
+  --warning: #9a7420;
+  --shadow-1: 0 12px 28px rgba(20, 24, 22, 0.18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f2f2f1;
+    --surface: #ffffff;
+    --input: #f6f6f5;
+    --border: #d9dbd9;
+    --text: #191b1a;
+    --text-2: #5d615f;
+    --text-3: rgba(25, 27, 26, 0.55);
+    --accent: #0e7265;
+    --accent-press: #0a5c51;
+    --accent-ink: #ffffff;
+    --accent-wash: color-mix(in srgb, #0e7265 10%, transparent);
+    --success: #2e7d5c;
+    --error: #c53d57;
+    --warning: #9a7420;
+    --shadow-1: 0 12px 28px rgba(20, 24, 22, 0.18);
+    color-scheme: light;
+  }
+}
+
+/* == base == */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Document lock (BUG-003, 2026-11-02): when the iOS keyboard opens, Safari
+   pans/offsets the viewport to reveal the focused input. A scrollable
+   document gives it something to pan — the app ended up shifted above the
+   screen with void below. The app shell is position:fixed and the ONLY
+   scrollers are inner containers (.view, .file-body, ...), so there is no
+   document scroll for WebKit to fight with. overscroll-behavior kills
+   rubber-band chaining into the (locked) document. */
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+p,
+ul {
+  margin: 0;
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Платформенный пол тача (mockups-v2 CHALLENGE M8): без задержки двойного
+   тапа и системной подсветки на iOS/Android. Точечные оверрайды сильнее
+   элементного селектора: .send-btn держит touch-action:none (hold-to-talk),
+   .swipe-content — pan-y (свайп-строки). */
+button,
+[role="button"],
+a,
+input,
+textarea,
+select {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent-wash);
+}
+
+/* Themed scrollbars: Windows/Chromium ships light-gray 17px bars that glow
+   in dark theme and fight the palette in light. Thin + token-colored. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* == shell == */
+/* Flex-flow app frame: [view (scrolls internally)] + [tabbar (in flow)].
+   The composer can never slide under the tab bar, and every engine lays
+   this out identically. */
+.shell {
+  /* Pin to the VISUAL viewport (BUG-003, device report 2026-11-02):
+     - --vvh tracks window.visualViewport.height — the shell never extends
+       under the keyboard;
+     - --vv-top tracks visualViewport.offsetTop — when the keyboard opens,
+       iOS Safari does NOT resize the layout viewport, it SHIFTS the visual
+       viewport down the document (offsetTop > 0 while scrollY stays 0), so
+       a statically anchored shell appears pushed above the screen with
+       void below. position:fixed + top: offset keeps the shell glued to
+       what the user actually sees. Fallbacks cover first paint. */
+  position: fixed;
+  top: var(--vv-top, 0px);
+  left: 0;
+  right: 0;
+  height: var(--vvh, 100dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.view {
+  position: relative; /* anchor for the global notice overlay */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.view > * {
+  animation: view-in var(--t) both;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Bottom tab bar (mobile). IN FLOW (last flex child of .shell) — see the
+   shell comment. Solid bg + hairline. «Живая линия»: активная вкладка
+   отмечена 1px акцентной линией по верхнему краю — ход стиля data-terminal
+   («selection = 1px accent line on the nearest existing edge»). */
+.tabbar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Keyboard open (.kb, set by the AppShell viewport hook): iOS reports
+   visualViewport.height WITHOUT the bottom safe-area inset once the keyboard
+   covers the home indicator — without this the shell ends ~34px above the
+   keyboard and the body background shows through as a dead strip. Growing the
+   shell by the inset re-attaches it to the keyboard edge (if the device
+   already counts the inset, the strip just tucks under the keyboard — same
+   visual result). The tab bar keeps its env padding: it is exactly this
+   strip's filler and keeps the labels clear of the keyboard either way. */
+.kb .shell {
+  height: calc(var(--vvh, 100dvh) + env(safe-area-inset-bottom));
+}
+
+/* BUG-177 (записи с iPhone 2026-11-06): на фокусе/потере фокуса шелл берёт
+   предсказанную высоту СРАЗУ, а клавиатура выезжает ~0,3 с — прыжок обгонял её
+   (поле ввода улетало вверх, под ним пусто). На время перехода (.kb-move, AppShell)
+   высота едет вместе с клавиатурой, кривая близка к анимации клавиатуры iOS. */
+.kb-move .shell {
+  transition: height 300ms cubic-bezier(0.38, 0.7, 0.125, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .kb-move .shell {
+    transition: none;
+  }
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding-top: 9px;
+  padding-bottom: 5px;
+  min-height: 56px;
+  color: var(--text-2);
+  transition: color var(--t);
+}
+
+.tab.active {
+  color: var(--accent);
+}
+
+.tab.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 30%;
+  height: 1px;
+  background: var(--accent);
+}
+
+.tab-label {
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.tab-dot {
+  display: none; /* заменена «живой линией» по верхнему краю */
+}
+
+/* Left rail (desktop >=900px) replaces the bottom bar. Актив — 1px
+   акцентная линия на левом крае рейла (полноширинная полоса у границы,
+   вариант из листа стиля). */
+.rail {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--rail-w);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+  }
+
+  .rail .tab {
+    width: calc(100% - 16px);
+    min-height: 56px;
+    border-radius: var(--r-md);
+    gap: 4px;
+    padding: 8px 0;
+  }
+
+  .rail .tab.active::before {
+    top: 10px;
+    bottom: 10px;
+    left: -8px; /* линия на границе рейла */
+    right: auto;
+    width: 1px;
+    height: auto;
+  }
+
+  .tabbar {
+    display: none;
+  }
+
+  .shell {
+    padding-left: var(--rail-w);
+  }
+}
+
+/* == views == */
+.page {
+  max-width: var(--content-w);
+  margin: 0 auto;
+  padding: calc(8px + env(safe-area-inset-top)) 20px 24px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 4px 14px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+}
+
+/* Действие экрана в шапке (замена FAB: плавающая кнопка перекрывала
+   последнюю строку списка; действие в строке заголовка — паттерн
+   app-screens «primary action in the title row»). */
+.page-action {
+  color: var(--accent);
+}
+
+.hint {
+  color: var(--text-2);
+  font-size: 14px;
+  padding: 16px 4px;
+}
+
+.search {
+  width: 100%;
+  height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: 16px;
+}
+
+.search::placeholder {
+  color: var(--text-2);
+}
+
+.group {
+  margin-top: 8px;
+}
+
+.group-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-2);
+  padding: 10px 14px 4px;
+}
+
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  transition: background var(--t);
+}
+
+.session-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.session-title {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Числовые бейджи (токены) — голые mono-цифры без пилюли: цвет и хром
+   не нужны там, где говорит само число (data-terminal: figures in mono). */
+.badge {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  line-height: 1;
+  color: var(--text-2);
+}
+
+/* «⏸ разрешение» — session parks on an unanswered permission/question dialog.
+   Единственная пилюля в списке: это состояние-действие, а не метрика. */
+.badge-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+
+.btn {
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: 14px;
+  transition: background var(--t), opacity var(--t);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.card-list {
+  display: grid;
+  gap: 10px;
+  /* minmax(0,1fr): grid items default to min-width:auto, so a long nowrap
+     title inside a card blew the column past the viewport (project screen
+     scrolled sideways on phones instead of ellipsizing, 2026-10-31 QA). */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+
+.row-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.project-path {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* == chat == */
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: var(--chat-w);
+  margin: 0 auto;
+}
+
+.chat-header {
+  /* v2 (CHALLENGE M3): absolute overlay, not sticky — the message list flows
+     UNDER the bar and the glass blur has real content behind it. Height is
+     measured by ChatView's ResizeObserver into --chat-head-h, which the
+     scroller uses as its top padding. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  /* ISSUE-001: minmax(0, 1fr) — a plain 1fr track has an auto minimum and
+     grew with an 85-char title past the viewport. Symmetric 44px side
+     columns keep the title centered with or without the stop button. */
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  padding: calc(6px + env(safe-area-inset-top)) 10px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-title {
+  max-width: 100%;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--text-2);
+  transition: background var(--t), color var(--t);
+}
+
+.chat-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.hero {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--text);
+}
+
+.composer {
+  /* No safe-area-inset-bottom here: the tab bar is IN FLOW right below and
+     carries the inset itself — doubling it left a ~46px dead strip between
+     the pill and the menu (field report 2026-11-01). */
+  padding: 12px 16px 10px;
+}
+
+.composer-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  /* v2 glass (CHALLENGE M3/M6): the feed scrolls behind the pill. */
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: border-color var(--t);
+}
+
+/* No layered blur: opaque chrome, exactly the pre-v2 face. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .chat-header {
+    background: var(--bg);
+  }
+
+  .composer-pill {
+    background: var(--surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .chat-header {
+    background: var(--bg);
+  }
+
+  .composer-pill {
+    background: var(--surface);
+  }
+}
+
+/* «Живая линия» на композере: фокус = 1px акцентная рамка. */
+.composer-pill:focus-within {
+  border-color: var(--accent);
+}
+
+.composer-pill.is-disabled {
+  opacity: 0.75;
+}
+
+.send-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  transition: background var(--t), opacity var(--t);
+  /* hold-to-talk: the finger must not pan the chat or pop the iOS callout */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+}
+
+/* voice recording state: red + breathing ring while the finger holds */
+.send-btn.is-recording {
+  background: var(--error);
+  color: #fff;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--error) 22%, transparent);
+  }
+}
+
+.voice-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 18px 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.voice-hint.is-cancel {
+  color: var(--error);
+}
+
+.voice-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--error);
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+/* == skeletons (loading placeholders) ==
+   Плоское дыхание прозрачности на --input: никакого градиентного shimmer
+   (градиенты — телл; движение честное и дешёвое). a11y: prefers-reduced-motion
+   глушит пульс, оставляя статичные блоки «здесь появится контент». */
+.sk {
+  display: block;
+  background: var(--input);
+  border-radius: var(--r-md);
+  animation: sk-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes sk-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* == hover / touch feedback (CHALLENGE M8) ==
+   :hover только на точном указателе — на таче он залипает после тапа.
+   Отклик на таче дают :active-правила ниже. Точечные :hover-стили удалены
+   из мест объявления (app/chat/views/dialogs css). */
+@media (hover: hover) and (pointer: fine) {
+  .tab:hover {
+    color: var(--text);
+  }
+
+  .rail .tab:hover {
+    background: var(--surface);
+  }
+
+  .session-row:hover {
+    background: var(--surface);
+  }
+
+  .btn:hover:not(:disabled) {
+    background: var(--input);
+  }
+
+  .icon-btn:hover:not(:disabled) {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .send-btn:hover:not(:disabled) {
+    background: var(--accent-press);
+  }
+}
+
+.session-row:active {
+  background: var(--surface);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--input);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.tab:active {
+  color: var(--text);
+}
+
+/* == motion == */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Screen-reader-only live regions (BUG-01.38): announcements for the feed,
+   agent dialogs and copy results without a visual footprint. */
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
