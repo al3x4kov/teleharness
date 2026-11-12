@@ -51,26 +51,43 @@ const envMs = (name, def) => {
   return Number.isFinite(n) && n > 0 ? n : def;
 };
 
+const WINDOWS_ONLY_OPS_TESTS = new Set(["sandbox-core.test.mjs", "vault-cache-jail.test.mjs", "vault-cache-sandbox.test.mjs", "vault-cache-chatdir.test.mjs"]);
+
 // BUG-222: spawn + дедлайн вместо spawnSync без timeout; при срабатывании —
 // печатаем набор/партию и файлы, добиваем дерево, возвращаем 1.
 function run(files, { serial, timeoutMs, label }) {
   if (files.length === 0) return Promise.resolve(0);
   const args = ["--test", "--test-timeout=60000", ...(serial ? ["--test-concurrency=1"] : []), ...files];
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, args, { cwd: ROOT, stdio: "inherit", windowsHide: true });
+    // POSIX: the suite runs as its own process group, so a timeout kills the whole tree with one signal
+    const posix = process.platform !== "win32";
+    const child = spawn(process.execPath, args, { cwd: ROOT, stdio: "inherit", windowsHide: true, detached: posix });
     let done = false;
     let timedOut = false;
     const finish = (code) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      if (posix) for (const s of ["SIGINT", "SIGTERM"]) process.removeListener(s, onSignal);
       resolve(timedOut ? 1 : code ?? 1);
     };
     const killTree = () => {
       // по pid дочернего, никогда по имени: по имени убили бы и прод-процессы
       if (process.platform === "win32" && child.pid) spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
-      else child.kill("SIGKILL");
+      else {
+        try {
+          process.kill(-child.pid, "SIGKILL"); // the group: node --test, its test processes and their children
+        } catch {
+          child.kill("SIGKILL");
+        }
+      }
     };
+    // a detached group does not get the terminal's Ctrl+C — pass it on
+    const onSignal = () => {
+      killTree();
+      process.exit(130);
+    };
+    if (posix) for (const s of ["SIGINT", "SIGTERM"]) process.once(s, onSignal);
     const timer = setTimeout(() => {
       timedOut = true;
       console.error(`\n[run-tests] ТАЙМАУТ: ${label} — ${files.join(", ")}`);
@@ -113,6 +130,8 @@ async function main() {
   // раньше в npm test не входили — регрессии плагина ловились только живьём (BUG-193/194).
   const opsTests = readdirSync(path.join(ROOT, "ops", "opencode", "tests"))
     .filter((f) => f.endsWith(".test.mjs"))
+    // the tenant sandbox (AppContainer jail, NTFS junctions) exists on Windows only — so do its tests
+    .filter((f) => process.platform === "win32" || !WINDOWS_ONLY_OPS_TESTS.has(f))
     .map((f) => path.join("ops", "opencode", "tests", f));
   const all = [...list(""), ...list("components"), ...opsTests];
   const isServer = (f) => classifySuite(readFileSync(path.join(ROOT, f), "utf8")) === "server";

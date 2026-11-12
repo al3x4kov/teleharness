@@ -729,6 +729,10 @@ export function subscriptionNote(card) {
 // «14:32» — местный часовой пояс браузера, локаль языка интерфейса
 const timeOf = (ms) => (ms ? fmtClock(ms) || null : null);
 
+// The server labels a card with a short kind word in Russian; product names ("Coding Plan", "API") pass through.
+const BADGE_KEYS = { "подписка": "settings.subs.badge.subscription", "ключ API": "settings.subs.badge.apiKey", "баланс": "settings.subs.badge.balance", "провайдер": "settings.subs.badge.provider" };
+export const badgeText = (badge) => (BADGE_KEYS[badge] ? t(BADGE_KEYS[badge]) : badge);
+
 function SubscriptionCard({ card }) {
   const note = subscriptionNote(card);
   const plan = card.plan ? ` · ${String(card.plan)[0].toUpperCase() + String(card.plan).slice(1)}` : "";
@@ -740,7 +744,7 @@ function SubscriptionCard({ card }) {
         <div class="set-main">
           <div class="row-title sub-head">
             <span class="sub-name">{card.title}</span>
-            {card.badge ? <span class="sub-badge">{card.badge}{plan}</span> : null}
+            {card.badge ? <span class="sub-badge">{badgeText(card.badge)}{plan}</span> : null}
             {card.state === "ok" && card.fetchedAt ? <span class="sub-at">{t("settings.subs.updated", { time: timeOf(card.fetchedAt) ?? "" })}</span> : null}
           </div>
           {note ? <div class={"set-value is-wrap" + (card.state === "error" ? " is-error" : "")}>{note}</div> : null}

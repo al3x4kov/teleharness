@@ -456,12 +456,13 @@ test("BUG-04.6: account deletion removes its chats, disposes the instance, repor
   const holderReady = path.join(tdir, ".holder-ready");
   const holder = spawn(process.execPath, ["-e", "require('fs').writeFileSync(process.argv[1], '1'); setTimeout(() => {}, 120000)", holderReady], { cwd: tdir, stdio: "ignore", windowsHide: true });
   const holderExit = new Promise((r) => holder.once("exit", r));
+  await waitFor(() => existsSync(holderReady), { label: "holder-процесс стартовал (маркер записан)" });
   // POSIX: a file inside a read-only folder cannot be unlinked → rm fails (EACCES).
+  // (after the marker: the holder cannot write it into a read-only folder)
   if (posix) {
     writeFileSync(path.join(tdir, "held.txt"), "x");
     chmodSync(tdir, 0o555);
   }
-  await waitFor(() => existsSync(holderReady), { label: "holder-процесс стартовал (маркер записан)" });
   try {
     const r = await api(srv, "/zai/api/admin/users/gone1", { method: "DELETE" });
     assert.equal(r.status, 200);

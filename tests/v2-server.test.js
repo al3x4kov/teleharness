@@ -9,6 +9,9 @@
 // Run: node --test --test-concurrency=1 tests/v2-server.test.js
 import { test, after, before } from "node:test";
 import assert from "node:assert/strict";
+import { realpathSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { spawnPortal } from "./helpers/spawn-server.mjs";
 import { startFakeOpencodeV2 } from "./helpers/fake-opencode-v2.mjs";
 import { createOcClient } from "../lib/oc-client.js";
@@ -199,7 +202,8 @@ test("BUG-209: ход v2 — свой системный промпт польз
 });
 
 test("BUG-210: удаление последнего чата папки освобождает экземпляр opencode этой папки (папку можно удалить)", async () => {
-  const dir = DIR + "\\bug210-" + Date.now().toString(36);
+  // a folder the portal accepts on this OS (DIR is a Windows-shaped fixture path)
+  const dir = path.join(process.platform === "win32" ? DIR : path.join(realpathSync(os.tmpdir()), "zai-v2proj"), "bug210-" + Date.now().toString(36)); // realpath: macOS /var → /private/var
   let res = await api(`/zai/api/session?directory=${encodeURIComponent(dir)}`, { method: "POST", body: { model: FLASH, title: "на удаление" } });
   assert.equal(res.status, 200);
   const created = await res.json();
@@ -487,7 +491,7 @@ test("пароль v2 не появляется ни в access-логах, ни 
   const files = readdirSync(logsDir);
   assert.ok(files.length > 0, "access-лог включён и что-то пишет");
   for (const f of files) {
-    const text = readFileSync(`${logsDir}\\${f}`, "utf8");
+    const text = readFileSync(path.join(logsDir, f), "utf8");
     assert.ok(!text.includes(PW), `пароль v2 в access-логе ${f}`);
   }
   assert.ok(!srv.log.includes(PW), "пароль v2 в stdout/stderr сервера");
