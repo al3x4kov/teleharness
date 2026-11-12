@@ -16,7 +16,7 @@ import { t } from "./i18n.js";
 const claudeAgent = (a) => (isClaudeAgentId(a) ? a : null);
 
 export const ENGINE_LABEL = {
-  opencode: "z.ai · opencode",
+  opencode: "opencode",
   get claude() {
     return t("engine.label.claude");
   },

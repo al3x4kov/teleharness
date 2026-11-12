@@ -34,14 +34,14 @@ test("BUG-089: ownerless tenant folders — reported; only empty, chat-free, old
       if (file) writeFileSync(path.join(p, "sub", "f.txt"), "x");
       return p;
     };
-    const owned = mk("Julia");
+    const owned = mk("Alice");
     const empty = mk("kcprobe1");
     const withFile = mk("smokecheck", true);
     const withChat = mk("chatdir");
     const later = Date.now() + 2 * 3_600_000;
     const list = findOwnerlessTenantDirs({ home, isReferenced: (p) => p === owned, sessionDirs: [path.join(withChat, "sub")], now: later });
     const by = Object.fromEntries(list.map((x) => [path.basename(x.path), x]));
-    assert.equal(by.Julia, undefined);
+    assert.equal(by.Alice, undefined);
     assert.equal(by.kcprobe1.removable, true);
     assert.equal(by.smokecheck.removable, false);
     assert.equal(by.smokecheck.files, 1);

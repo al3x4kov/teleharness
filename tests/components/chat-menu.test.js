@@ -103,7 +103,7 @@ test("У1: «⋯» открывает меню из трёх пунктов; Esc
   const { root } = await openChat();
   t$.click(dots(root));
   assert.ok(menu(), "меню открыто");
-  assert.deepEqual($$(menu(), '[role="menuitem"] .chat-menu-label').map((e) => e.textContent), ["Закрепить", "Переименовать", "Удалить"]);
+  assert.deepEqual($$(menu(), '[role="menuitem"] .chat-menu-label').map((e) => e.textContent), ["Закрепить", "Переименовать", "Продолжить в другом движке", "Удалить"]); // FEAT-11.18: пункт передачи
   assert.ok(item("delete").classList.contains("is-danger"));
   assert.equal(dots(root).getAttribute("aria-expanded"), "true");
   assert.equal(document.activeElement, item("pin"), "фокус на первом пункте");

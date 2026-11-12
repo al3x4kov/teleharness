@@ -39,7 +39,15 @@ export const isOffline = () =>
 // Пункты меню для чата: что видно и что неактивно (чистая функция — тесты).
 //   pinned — чат закреплён; empty — ни одного сообщения (Н4); offline (Н9);
 //   pinning — закрепление этого чата в полёте (Н8).
-export function menuItems({ pinned = false, empty = false, offline = false, pinning = false } = {}) {
+// FEAT-11.18: значок передачи — две встречные стрелки
+const RelayIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 8h13M13 4l4 4-4 4" />
+    <path d="M20 16H7M11 12l-4 4 4 4" />
+  </svg>
+);
+
+export function menuItems({ pinned = false, empty = false, offline = false, pinning = false, relay = false, running = false } = {}) {
   const off = offline ? t("chatMenu.offline") : null;
   return [
     {
@@ -49,6 +57,8 @@ export function menuItems({ pinned = false, empty = false, offline = false, pinn
       disabled: offline || pinning || (empty && !pinned),
     },
     { id: "rename", label: t("common.rename"), note: off, disabled: offline || empty },
+    // FEAT-11.18: передача чата на другой движок или модель (в любой момент, пока ход не идёт)
+    ...(relay ? [{ id: "relay", label: t("relay.title"), note: off ?? (empty ? t("chatMenu.sendFirst") : running ? t("chatMenu.waitTurn") : null), disabled: offline || empty || running }] : []),
     { id: "delete", label: t("common.delete"), note: off, disabled: offline, danger: true },
   ];
 }
@@ -64,7 +74,7 @@ export function menuPlacement(rect, { vw, vh, width = 248, height = 168, gap = 6
   return { left, top, width: w };
 }
 
-export default function ChatMenu({ sessionId, busy = null, empty = false, variant = "header", onDeleted = null }) {
+export default function ChatMenu({ sessionId, busy = null, empty = false, variant = "header", onDeleted = null, onRelay = null }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [renaming, setRenaming] = useState(false);
@@ -76,7 +86,7 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
   const pinned = pins.value.includes(sessionId);
   const running = busy ?? !!busyMap.value[sessionId];
   const offline = isOffline();
-  const items = menuItems({ pinned, empty, offline, pinning: pinBusy.value === sessionId });
+  const items = menuItems({ pinned, empty, offline, pinning: pinBusy.value === sessionId, relay: typeof onRelay === "function", running });
 
   const close = (focusBtn = true) => {
     setOpen(false);
@@ -144,6 +154,7 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
     close(it.id === "pin");
     if (it.id === "pin") togglePin(sessionId);
     else if (it.id === "rename") setRenaming(true);
+    else if (it.id === "relay") onRelay?.(sessionId);
     else if (it.id === "delete") setDeleting("ask");
   };
 
@@ -195,7 +206,7 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
                 onClick={() => pick(it)}
               >
                 <span class="chat-menu-ico" aria-hidden="true">
-                  {it.id === "pin" ? <PinIcon off={pinned} size={20} /> : <Glyph name={it.id === "rename" ? "pencil" : "trash"} size={20} />}
+                  {it.id === "pin" ? <PinIcon off={pinned} size={20} /> : it.id === "relay" ? <RelayIcon /> : <Glyph name={it.id === "rename" ? "pencil" : "trash"} size={20} />}
                 </span>
                 <span class="chat-menu-text">
                   <span class="chat-menu-label">{it.label}</span>

@@ -146,3 +146,11 @@ test("«Свой ответ»: поле, «Отправить» заблокир
   await t$.waitFor(() => fetchCalls.length > 0);
   assert.deepEqual(fetchCalls[0].body, { answers: [["третий путь"]] });
 });
+
+test("BUG-01.75: поле «Свой ответ» названо для скринридера заголовком вопроса", () => {
+  const { root } = t$.mount(ui.DialogBar, { dialog: question(), queue: 0 });
+  t$.click(byText(root, "button", "Свой ответ"));
+  const field = $(root, "textarea.dlg-custom-input");
+  assert.ok(field, "поле открылось");
+  assert.equal(field.getAttribute("aria-label"), "Свой ответ: Какой вариант?");
+});

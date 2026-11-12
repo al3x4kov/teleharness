@@ -453,6 +453,9 @@ test("FEAT-03.22: a saved system prompt rides --append-system-prompt-file of the
   assert.equal((await put("")).status, 200);
   assert.equal((await promptEcho(created.id)).status, 204);
   argv = JSON.parse(textOf(await lastAnswer(created.id, 2)).replace(/ \(resumed\)/g, "")).argv;
-  assert.equal(argv.includes("--append-system-prompt-file"), false, "cleared: no user prompt");
+  // FEAT-05.29: файл остаётся — в нём только правило портала о файлах, инструкций пользователя нет
+  const kept = readFileSync(argv[argv.indexOf("--append-system-prompt-file") + 1], "utf8");
+  assert.equal(kept.includes("ПРОБА"), false, "cleared: no user prompt");
+  assert.match(kept, /Правило портала о файлах/);
   assert.equal(argv[argv.indexOf("--system-prompt-snapshot") + 1], "off", "the old recorded prompt is not replayed");
 });

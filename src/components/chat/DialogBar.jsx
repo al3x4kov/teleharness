@@ -174,6 +174,7 @@ function QuestionCard({ dialog, queue, sent, choose }) {
                 <div class="dlg-custom">
                   <textarea
                     class="dlg-custom-input" rows="2" placeholder={t("dialog.question.customPlaceholder")}
+                    aria-label={t("dialog.question.customAria", { question: q.header || q.question || t("dialog.question.fallback") })}
                     value={customs[qi]} onInput={(e) => setAt(setCustoms, qi, e.currentTarget.value)}
                   />
                   {oneTap && (

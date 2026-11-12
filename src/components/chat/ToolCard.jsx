@@ -7,7 +7,8 @@
 // «окружение» line — names only for members, values for admin (BUG-01.33).
 // A call parked on a permission request reads «ждёт разрешения» (R-15).
 // ×N (collapsed identical calls) is an amber loop signal, not an error (R-16).
-// Subagent runs (tool:"task") delegate to AgentCard.
+// Subagent runs (tool:"task"/"subagent") delegate to AgentRuns — the wiring
+// that resolves the run against the store's chatRuns (FEAT-01.77).
 import { useEffect, useRef } from "preact/hooks";
 import {
   fmtClock,
@@ -18,7 +19,7 @@ import {
   toolStepDesc,
 } from "../../lib/normalize.js";
 import { dialogs, me } from "../../lib/store.js";
-import AgentCard from "./AgentCard.jsx";
+import AgentRuns from "./AgentRuns.jsx";
 import { t } from "../../lib/i18n.js";
 
 const basename = (p) => String(p ?? "").split(/[\\/]/).pop() || p;
@@ -70,8 +71,11 @@ const ChevronIcon = () => (
 
 // repeat > 1: identical consecutive calls collapsed by collapseToolRuns —
 // the count badge is the visible loop alarm.
-export default function ToolCard({ part, repeat = 1 }) {
-  if (isAgentTool(part)) return <AgentCard part={part} repeat={repeat} />;
+// summary (FEAT-01.77): callIDs of the turn's top-level agent runs, passed by
+// MessageBubble only for the FIRST agent card of the turn — AgentRuns shows
+// the turn summary above it.
+export default function ToolCard({ part, repeat = 1, summary = null }) {
+  if (isAgentTool(part)) return <AgentRuns part={part} repeat={repeat} summary={summary} />;
   const tool = part.tool ?? "tool";
   const st = part.state ?? {};
   const outRef = useRef(null);

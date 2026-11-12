@@ -16,7 +16,7 @@
 // voice mode, a HOLD is still the dictation above (FEAT-06.1 unchanged).
 import { useEffect, useRef, useState } from "preact/hooks";
 import Attachment from "./Attachment.jsx";
-import { active, activeSessionDir, cancelEdit, deleteUpload, editing, loadDraft, prefs, providerCfg, saveDraft, sessions, uploadFile } from "../../lib/store.js";
+import { active, activeSessionDir, cancelEdit, deleteUpload, editing, failedBubbleWith, loadDraft, prefs, providerCfg, saveDraft, sessions, uploadFile } from "../../lib/store.js";
 import { bindingOf, queuedSendLabel } from "../../lib/engine.js";
 import { PencilIcon } from "./TurnActions.jsx";
 import { createRecognizer, speechSupported } from "../../lib/voice.js";
@@ -392,8 +392,23 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
       });
       return;
     }
+    // BUG-01.75: поле чистится сразу (как раньше), но набранное не выбрасывается,
+    // пока отправка не принята. Отказ без пузыря в ленте («чат ещё открывается
+    // или уже закрыт») возвращает текст, файлы и черновик; при отказе с пузырём
+    // «Не отправлено» текст уже живёт в нём и в черновике (ISSUE-015).
+    const keptText = text;
+    const keptFiles = files;
     setText("");
-    clearFiles(files);
+    setFiles([]);
+    Promise.resolve(sent).then((ok) => {
+      if (ok === false && !failedBubbleWith(sessionId, keptText.trim())) {
+        setText((cur) => (cur === "" ? keptText : cur));
+        setFiles((cur) => (cur.length === 0 ? keptFiles : cur));
+        saveDraft(sessionId, keptText);
+        return;
+      }
+      keptFiles.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
+    });
   }
 
   function onKeyDown(e) {

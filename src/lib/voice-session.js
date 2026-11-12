@@ -251,6 +251,9 @@ export function createVoiceSession({ sessionId, ctx = null, prefs = {}, info = n
       }
       capture.setEnabled(!machine.muted);
       if (sttMode === "none") machine.fail("stt");
+      // BUG-225: machine.start() фазу не меняет — распознавание браузера запускаем здесь,
+      // иначе сессия показывала «Слушаю…» с несозданным распознавателем
+      else syncBrowserStt();
     } catch (err) {
       capture = null;
       if (closed) return;

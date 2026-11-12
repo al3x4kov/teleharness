@@ -40,7 +40,8 @@ afterEach(() => {
 
 const ADMIN = { id: "admin", name: "admin", role: "admin" };
 const USER = { id: "u_n", name: "Carol", role: "user" };
-const ADMIN_TITLES = ["Подписка z.ai", "Компьютер", "Пользователи", "Активные ходы", "Администрирование"];
+// FEAT-11.18: «Подписки» видны всем пользователям (владелец 2026-11-12) — из admin-списка убраны
+const ADMIN_TITLES = ["Компьютер", "Пользователи", "Активные ходы", "Администрирование"];
 
 test("router: #/settings/<раздел> и #/settings/<раздел>/<глубже> — экран настроек", () => {
   assert.deepEqual(ui.match("/settings/models").params, { section: "models" });
@@ -59,7 +60,7 @@ test("resolveSettings: известный раздел, неизвестный, 
   assert.equal(ui.resolveSettings("models", "nope", { admin: true }), "unknown");
   assert.equal(ui.resolveSettings("voice", null, { voice: false }), "unknown");
   assert.equal(ui.resolveSettings(null, null), null);
-  assert.deepEqual(ui.ADMIN_SECTIONS.sort(), ["active", "computer", "subscription", "users"]);
+  assert.deepEqual(ui.ADMIN_SECTIONS.sort(), ["active", "computer", "users"]);
 });
 
 test("П32.У1 корень admin: группы «Чаты · Приложение · Возможности · Администрирование», строки ведут в разделы, детализация — переключатель в строке", async () => {
@@ -89,8 +90,10 @@ test("П32.Н2 пользователь: в корне нет admin-строк �
   await t$.flush(5);
   for (const t of ADMIN_TITLES) assert.equal(top.root.textContent.includes(t), false, `нет «${t}»`);
   assert.equal(/администратор/i.test(top.root.textContent), false);
+  const top0 = top.root.textContent;
   top.unmount();
-  for (const id of ["users", "computer", "subscription", "active"]) {
+  assert.ok(top0.includes("Подписки"), "FEAT-11.18: строка «Подписки» у обычного пользователя есть");
+  for (const id of ["users", "computer", "active"]) {
     location.hash = "#/settings/" + id;
     const h = t$.mount(ui.SettingsView, { section: id });
     assert.equal(h.root.querySelector(".settings-section"), null, `${id}: содержимое не рендерится ни на миг`);

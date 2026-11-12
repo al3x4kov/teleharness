@@ -41,20 +41,21 @@ test("TC-SET-005: тенант — нет admin-разделов и «Досту
   const { root } = t$.mount(ui.SettingsView);
   await t$.waitFor(() => ui.store.mcp.value?.length === 1 && /Не задан/.test(root.textContent));
   const t = titles(root);
-  for (const hidden of ["Компьютер", "Подписка z.ai", "Агент для новых чатов · Claude"]) assert.equal(t.some((x) => x.startsWith(hidden)), false, `тенант не видит «${hidden}»`);
+  assert.ok(t.some((x) => x.startsWith("Подписки")), "FEAT-11.18: «Подписки» видны всем");
+  for (const hidden of ["Компьютер", "Агент для новых чатов · Claude"]) assert.equal(t.some((x) => x.startsWith(hidden)), false, `тенант не видит «${hidden}»`);
   assert.ok(t.includes("Системный промпт") && t.includes("MCP-серверы"));
   assert.equal(root.textContent.includes("Доступно администратору"), false);
   assert.equal(root.querySelector(".access-section, [data-section='access']"), null);
 });
 
-test("TC-SET-005: admin — «Компьютер», «Подписка z.ai», MCP и «Системный промпт» на месте", async () => {
+test("TC-SET-005: admin — «Компьютер», «Подписки», MCP и «Системный промпт» на месте", async () => {
   installFetch();
   ui.store.me.value = { id: "admin", name: "owner", role: "admin" };
   const { root } = t$.mount(ui.SettingsView);
   await t$.waitFor(() => /Не задан/.test(root.textContent));
   const t = titles(root);
   for (const shown of ["Компьютер", "MCP-серверы", "Системный промпт"]) assert.ok(t.includes(shown), `admin видит «${shown}»`);
-  assert.ok(t.some((x) => x.startsWith("Подписка z.ai")));
+  assert.ok(t.some((x) => x.startsWith("Подписки")));
 });
 
 test("FEAT-03.22: шит — счётчик, лимит 4000 блокирует «Сохранить», сохранение уходит PUT и обновляет строку", async () => {

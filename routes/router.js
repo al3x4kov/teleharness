@@ -64,8 +64,10 @@ export async function dispatchRoute(table, { req, res, url, user, admin }, deps)
   }
   if (route.scope === "dirQuery") {
     const fallback = typeof route.dirDefault === "function" ? route.dirDefault(ctx) : null;
-    const dir = url.searchParams.get("directory") || fallback || "";
-    if (!fallback && !path.isAbsolute(dir)) {
+    const asked = url.searchParams.get("directory") || "";
+    const dir = asked || fallback || "";
+    // SRV-31: заданный ?directory= обязан быть абсолютным всегда; папка по умолчанию — только при пустом
+    if ((asked && !path.isAbsolute(asked)) || (!fallback && !path.isAbsolute(dir))) {
       deps.sendJson(res, 400, { error: "directory required" });
       return true;
     }

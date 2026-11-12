@@ -56,7 +56,7 @@ export default function ModelBar({ sessionId, hasMessages = false }) {
       {/* BUG-105: обе пилюли — одной строкой (на 402 px имя режется многоточием). */}
       <div class="model-pills">
         <button class="model-pill" type="button" onClick={() => setSheet("model")}
-          aria-label={t("modelBar.modelLabel", { name, engine: claude ? "Claude" : "z.ai · opencode" })}>
+          aria-label={t("modelBar.modelLabel", { name, engine: claude ? "Claude" : "opencode" })}>
           <span class={"engine-dot" + (claude ? " is-claude" : "")} aria-hidden="true" />
           <span class="pill-label">{name}</span>
           <span class="pill-chev"><Glyph name="chevron" size={14} /></span>

@@ -270,6 +270,30 @@ test("BUG-07.11: pollBusy finalizes a chat the server says is idle (missed sessi
   }
 });
 
+test("BUG-228: a stale cached /status right after session.idle does not flip the chat back to busy", async () => {
+  reset();
+  // сервер кэширует /status на 3 с: ответ сразу после конца хода ещё говорит «занят»
+  const f = stubFetch((c) => (c.path.endsWith("/status") ? ok({ [SES]: { type: "busy", since: Date.now() - 5000 } }) : ok([])));
+  try {
+    setActive({ status: "busy" });
+    // отметки занятости в busyMap нет: её стёр такой же устаревший опрос в начале хода
+    handleEvent({ type: "session.idle", properties: { sessionID: SES } });
+    assert.equal(active.value.status, "idle");
+    await store.pollBusy();
+    assert.equal(active.value.status, "idle", "устаревший ответ не возвращает «занят»");
+    assert.equal(busyMap.value[SES], undefined, "и не возвращает отметку занятости в список");
+    // окно прошло: тот же ответ — уже правда (ход начат с другого устройства)
+    store.idleSeenAt.set(SES, Date.now() - 60_000);
+    await store.pollBusy();
+    assert.equal(active.value.status, "busy", "после окна серверная правда снова применяется");
+    assert.ok(busyMap.value[SES]);
+  } finally {
+    f.restore();
+    store.idleSeenAt.clear();
+    reset();
+  }
+});
+
 test("BUG-07.11: offline face appears only after the grace, and «Связь восстановлена» follows", async () => {
   const { connection, onStreamStatus } = store;
   const f = stubFetch(() => ok({ user: { id: 1 } }));

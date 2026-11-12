@@ -38,8 +38,13 @@ export function adminRoutes(deps) {
       scope: "admin",
       handler: ({ req, res, match }) => {
         if (req.method !== "POST") return sendJson(res, 405, { error: "method not allowed" });
+        let uid;
         try {
-          const uid = decodeURIComponent(match[1]);
+          uid = decodeURIComponent(match[1]); // SRV-28: битый %-код — 400, как у соседнего маршрута
+        } catch {
+          return sendJson(res, 400, { error: "bad user id" });
+        }
+        try {
           const token = deps.regenerateToken(uid);
           deps.closeUserStreams(uid);
           return sendJson(res, 201, { token });

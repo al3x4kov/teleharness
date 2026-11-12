@@ -46,3 +46,25 @@ test("BUG-143: версии harness — OmO из plugin конфигурации
   assert.equal(parseClaudeVersion("2.1.316 (Claude Code)\n"), "2.1.316");
   assert.equal(parseClaudeVersion("garbage"), null);
 });
+
+test("BUG-190: opencode 2.x — версия из адаптера (/api/info), а не из HTML /global/health", async () => {
+  const host = await import("../lib/host.js");
+  // v2 отдаёт на /global/health HTML веб-интерфейса — версии там нет
+  const html = async () => ({ ok: true, json: async () => { throw new SyntaxError("Unexpected token <"); } });
+  host.setOpencodeInfoSource(async () => ({ version: "2.2.6", pid: 1 }));
+  try {
+    assert.equal(await host.opencodeVersion(html, 9_000_000_000), "2.2.6");
+  } finally {
+    host.setOpencodeInfoSource(null);
+  }
+});
+
+test("BUG-190: harness — slim из `plugins` (v2) и `plugin` (v1), OmO как раньше", async () => {
+  const { parseHarness } = await import("../lib/host.js");
+  assert.deepEqual(parseHarness({ plugins: ["oh-my-opencode-slim@3.0.7", "./plugin-v2"] }), { name: "slim", version: "3.0.7" });
+  assert.deepEqual(parseHarness({ plugin: ["oh-my-opencode-slim@3.0.7"] }), { name: "slim", version: "3.0.7" });
+  assert.deepEqual(parseHarness({ plugin: ["oh-my-openagent@5.1.60"] }), { name: "OmO", version: "5.1.60" });
+  assert.deepEqual(parseHarness({ plugins: [{ package: "oh-my-opencode-slim@3.0.8" }] }), { name: "slim", version: "3.0.8" });
+  assert.equal(parseHarness({ plugins: ["oh-my-opencode-slim"] }), null, "без пина версии — не выдумываем");
+  assert.equal(parseHarness(null), null);
+});

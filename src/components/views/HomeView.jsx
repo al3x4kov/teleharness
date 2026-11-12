@@ -9,7 +9,7 @@ import "../views.css";
 import {
   busyMap,
   createAndOpen,
-  deleteSessionById,
+  deleteChat,
   dialogs,
   explainApiError,
   firstTexts,
@@ -550,9 +550,14 @@ export default function HomeView() {
       )}
       {deleting && (
         <DeleteModal
-          session={deleting} onClose={() => setDeleting(null)}
+          session={deleting}
+          // BUG-216: занятость — тот же источник, что у бейджа «работает»
+          // (rowState → busyMap); deleteChat, как в меню чата, сначала
+          // останавливает ход и показывает то же предупреждение.
+          busy={!!busyMap.value[deleting.id]}
+          onClose={() => setDeleting(null)}
           onConfirm={() => {
-            deleteSessionById(deleting.id);
+            deleteChat(deleting.id, { stopFirst: !!busyMap.value[deleting.id] });
             setDeleting(null);
             setOpenId(null);
           }}

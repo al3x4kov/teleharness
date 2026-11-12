@@ -1,3 +1,4 @@
+// @suite: server — spawnSync server.js ×3 (BUG-222/QA-05: server-набор, а не параллельная unit-фаза)
 // Г1 unit + startup tests (2026-11-02): config validation (TASK-12.19), path
 // policy (BUG-12.11), tenant policy (BUG-12.5, BUG-12.10, FEAT-12.16), file
 // realpath + CSP (BUG-12.7), GC dry-run (TASK-12.22), fail-fast on a corrupt

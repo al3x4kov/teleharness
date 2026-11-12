@@ -5,6 +5,7 @@ import { handleEvent } from "./events.js";
 import { seedDialogs } from "./dialogs.js";
 import { mergeSessionList } from "../normalize.js";
 import { pollBusy, refreshMessages } from "./session.js";
+import { refreshChildFeeds } from "./childfeeds.js";
 
 // SSE errors shorter than this are normal reconnects — no offline bar.
 const OFFLINE_GRACE_MS = 3000;
@@ -142,6 +143,7 @@ async function doResync() {
     active.value ? refreshMessages(active.value.id) : Promise.resolve(),
   ]);
   await pollBusy(); // status truth both ways (missed session.idle)
+  refreshChildFeeds(); // ленты субагентов открытого чата — тоже живые данные (FEAT-01.77)
   // Stale-dialog guard (merge-only seed never drops): a dialog whose session
   // no longer exists can never be answered — it would keep the blocking
   // backdrop over the whole portal until a reload («страница темнее и ничего

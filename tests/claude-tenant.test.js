@@ -1,3 +1,4 @@
+// @suite: unit — spawnSync чистого hook-процесса stdin→JSON (явное исключение, BUG-222/QA-05)
 // FEAT-04.11: tenant kit of Claude chats — jail hook decisions, jail name parity
 // with the opencode plugin, chat folder → tenant jail, skills plugin copy.
 import { test } from "node:test";
