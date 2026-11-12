@@ -13,21 +13,23 @@ export function engineOf(providerID) {
 }
 
 // Claude models of the subscription, freshest Opus first (FEAT-11.10). The
-// lineup mirrors the account's live /v1/models list (checked 2026-11-02).
+// lineup and each context window mirror what claude CLI reports for the
+// account (modelUsage.contextWindow, CLI 2.1.322, probed 2026-11-10, FEAT-11.17).
 // The server may override it without a code change: data/claude-models.json
 // (see ClaudeRunner, loadClaudeCatalog) - same shape, an array of entries.
 export const CLAUDE_MODELS = Object.freeze([
-  { id: "claude-opus-5-5", name: "Claude Opus 5.5", context: 200_000 },
-  { id: "claude-opus-5", name: "Claude Opus 5", context: 200_000 },
-  { id: "claude-opus-4-8", name: "Claude Opus 4.8", context: 200_000 },
-  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5", context: 200_000 },
-  { id: "claude-sonnet-5", name: "Claude Sonnet 5", context: 200_000 },
+  { id: "claude-opus-5-5", name: "Claude Opus 5.5", context: 1_000_000 },
+  { id: "claude-opus-5", name: "Claude Opus 5", context: 1_000_000 },
+  { id: "claude-opus-4-8", name: "Claude Opus 4.8", context: 1_000_000 },
+  { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5", context: 1_000_000 },
+  { id: "claude-sonnet-5", name: "Claude Sonnet 5", context: 1_000_000 },
   { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", context: 200_000 },
   { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", context: 200_000 },
-  { id: "claude-haiku-5-5", name: "Claude Haiku 5.5", context: 200_000 },
+  { id: "claude-haiku-5-5", name: "Claude Haiku 5.5", context: 1_000_000 },
   { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", context: 200_000 },
-  { id: "claude-fable-5-1", name: "Claude Fable 5.1", context: 200_000 },
-  { id: "claude-fable-5", name: "Claude Fable 5", context: 200_000 },
+  { id: "claude-fable-5-2", name: "Claude Fable 5.2", context: 1_000_000 },
+  { id: "claude-fable-5-1", name: "Claude Fable 5.1", context: 1_000_000 },
+  { id: "claude-fable-5", name: "Claude Fable 5", context: 1_000_000 },
 ]);
 
 // Default for new claude chats and for claude-only chats without a recorded

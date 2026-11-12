@@ -66,7 +66,7 @@ before(async () => {
   // Сценарий 1: upstream-ход команды МЕДЛЕННЫЙ (синхронный /command отвечает
   // только после хода) — клиент обязан получить 204, не дожидаясь его.
   up.route("POST", "/session/ses_b188_1/command", async () => {
-    await sleep(1200);
+    await sleep(1200); // пауза по смыслу: upstream-ход специально медленный — 204 обязан прийти раньше него (BUG-188)
     return { json: { info: { id: "msg_cmd1", role: "assistant" }, parts: [{ type: "text", text: "готово" }] } };
   });
   srv = await spawnPortal({ upstream: up.url, env: { ZAI_ADMIN_TOKEN: ADMIN } });

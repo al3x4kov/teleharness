@@ -136,6 +136,47 @@ async function main(prompt) {
     if (prompt.includes("EMPTYONLY")) return exit(0);
     line({ type: "system", subtype: "init", session_id: sid });
   }
+  // FEAT-01.77: the subagent fixture sequence (claude-stream-subagent-2.1.322.jsonl).
+  // "SUBAGENT<ms>" → Agent call, task_started, the async tool_result, the answer
+  // and `result`; the subagent then works in the TAIL (steps after `result`,
+  // with a ~<ms> pause), task_updated + task_notification complete it, and the
+  // CLI runs one more round (init → answer → result) like the real one.
+  // "SUBAGENTSTOP" → the subagent stays running (no notification) for 30 s:
+  // the test stops the turn mid-work.
+  if (/SUBAGENT/.test(prompt)) {
+    const AG = "toolu_ag1";
+    line({ type: "stream_event", event: { type: "message_start", message: { id: "m1" } } });
+    line({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: AG, name: "Agent", input: {} } } });
+    line({ type: "assistant", message: { id: "m1", content: [{ type: "tool_use", id: AG, name: "Agent", input: { subagent_type: "explorer", description: "Список файлов", prompt: "Перечисли файлы." } }] } });
+    line({ type: "system", subtype: "background_tasks_changed", tasks: [{ task_id: "t1", task_type: "local_agent" }] });
+    line({ type: "system", subtype: "task_started", task_id: "t1", tool_use_id: AG, description: "Список файлов", is_backgrounded: true, task_type: "local_agent" });
+    line({ type: "user", message: { content: [{ tool_use_id: AG, type: "tool_result", content: "Async agent launched successfully." }] } });
+    const a1 = "Субагент запущен и работает в фоне.";
+    line({ type: "stream_event", event: { type: "message_start", message: { id: "m2" } } });
+    delta(a1);
+    line({ type: "assistant", message: { id: "m2", content: [{ type: "text", text: a1 }] } });
+    line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: a1, used_model: model });
+    // the subagent works in the tail: its traffic carries parent_tool_use_id
+    const pause = Math.max(150, /SUBAGENT(\d+)/.exec(prompt)?.[1] | 0);
+    await sleep(Math.round(pause * 0.4));
+    line({ type: "assistant", parent_tool_use_id: AG, message: { id: "s1", content: [{ type: "tool_use", id: "toolu_p1", name: "PowerShell", input: { command: "Get-ChildItem | Select-Object Name", description: "List all files" } }] } });
+    line({ type: "user", parent_tool_use_id: AG, message: { content: [{ tool_use_id: "toolu_p1", type: "tool_result", content: "a.txt\nb.txt", is_error: false }] } });
+    line({ type: "assistant", parent_tool_use_id: AG, message: { id: "s2", content: [{ type: "text", text: "Результаты: в папке a.txt и b.txt." }] } });
+    if (prompt.includes("SUBAGENTSTOP")) {
+      await sleep(30_000);
+      process.exit(0);
+    }
+    await sleep(Math.round(pause * 0.4));
+    line({ type: "system", subtype: "task_updated", task_id: "t1", patch: { status: "completed", end_time: Date.now() } });
+    line({ type: "system", subtype: "task_notification", task_id: "t1", tool_use_id: AG, status: "completed", summary: "Результаты: в папке a.txt и b.txt." });
+    line({ type: "system", subtype: "init", session_id: sid, model });
+    const a2 = "В папке два файла (a.txt и b.txt).";
+    line({ type: "stream_event", event: { type: "message_start", message: { id: "m9" } } });
+    delta(a2);
+    line({ type: "assistant", message: { id: "m9", content: [{ type: "text", text: a2 }] } });
+    line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: a2, used_model: model });
+    process.exit(0);
+  }
   if (prompt.includes("TOOLHANG")) {
     // FEAT-13.19: a command call that never returns (stop mid-call).
     line({ type: "stream_event", event: { type: "message_start", message: { id: "m1" } } });

@@ -2,9 +2,11 @@
 //
 // Тестовый сервер НИКОГДА не наследует переменные шелла (ZAI_MOCK, ZAI_UPSTREAM,
 // ZAI_COOKIE_NAME, ZAI_TENANT_*, ZAI_CLAUDE_BIN …): env собирается из белого
-// списка системных переменных + явно переданных значений. Прод-порты
-// (opencode :4096, портал :4170, edge :80/:443) и стенд (:4172, его opencode
-// :4097) запрещены как цели — assertSafeUrl() бросает до спавна.
+// списка системных переменных + явно переданных значений. Прод-порты (opencode
+// 1.x :4096 и 2.x :4196 (BUG-217), портал :4170, edge :80/:443) и стенд 1.x
+// (:4172, его opencode :4097) запрещены как цели — assertSafeUrl() бросает до
+// спавна. Стенд v2 (портал :4174, его opencode :4101) — законная цель
+// харнесса, в список не входит.
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,8 +20,10 @@ export const ENV_WHITELIST = [
   "TMPDIR", "HOME",
 ];
 
-// Порты, в которые тест/харнесс не имеет права ходить.
-export const FORBIDDEN_PORTS = new Set([80, 443, 4096, 4097, 4170, 4172]);
+// Порты, в которые тест/харнесс не имеет права ходить: прод (80/443 edge,
+// 4096 opencode 1.x, 4170 портал, 4196 opencode 2.x) и стенд 1.x (4097/4172).
+// Стенд v2 (:4174/:4101) сюда не входит — им харнесс пользуется (BUG-217).
+export const FORBIDDEN_PORTS = new Set([80, 443, 4096, 4097, 4170, 4172, 4196]);
 
 export function cleanEnv(extra = {}) {
   const env = {};

@@ -4,8 +4,8 @@
   "start_url": "/zai/",
   "scope": "/zai/",
   "display": "standalone",
-  "background_color": "#262624",
-  "theme_color": "#262624",
+  "background_color": "#1b1d2a",
+  "theme_color": "#1b1d2a",
   "icons": [
     {
       "src": "icons/icon.svg",

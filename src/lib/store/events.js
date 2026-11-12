@@ -10,9 +10,11 @@ import {
   pins,
   sessions,
   setBusyTracked,
+  noteIdle,
   setNotice,
 } from "./state.js";
 import { dropDialog, pushDialog } from "./dialogs.js";
+import { isChildOfActive, patchChildFeed } from "./childfeeds.js";
 import { chatGone } from "./pins.js";
 import { finalizeTurn, refreshMessages, refreshStall, releaseHeld, touchActive } from "./session.js";
 import { t } from "../i18n.js";
@@ -136,6 +138,28 @@ export function handleEvent(evt) {
   refreshStall();
 }
 
+// Чистое применение события к массиву сообщений ленты субагента (FEAT-01.77):
+// тот же набор правил, что у открытого чата, но без побочных эффектов стора
+// (turnError, held, pending и т.п. — у ленты их нет).
+export function applyFeedEvent(messages, evt) {
+  const type = evt?.type;
+  const p = evt?.properties ?? {};
+  switch (type) {
+    case "message.updated": {
+      const info = p.info ?? p;
+      return upsertIncoming(messages, info);
+    }
+    case "message.part.updated":
+      return withPartMessage(messages, p, (m) => upsertPart(m, p.part));
+    case "message.part.delta":
+      return withPartMessage(messages, p, (m) => applyDelta(m, { partID: p.partID, field: p.field, delta: p.delta }));
+    case "message.part.removed":
+      return messages.map((m) => (m.info.id === p.messageID ? { info: m.info, parts: m.parts.filter((x) => x.id !== p.partID) } : m));
+    default:
+      return messages;
+  }
+}
+
 function reduce(evt) {
   const type = evt?.type;
   if (typeof type !== "string") return;
@@ -145,6 +169,18 @@ function reduce(evt) {
     return;
   }
   const p = evt.properties ?? {};
+  // FEAT-01.77: события четырёх типов для дочерних сессий открытого чата
+  // маршрутятся в их ленты (карточки агентов) и активный чат не трогают.
+  if (
+    (type === "message.updated" || type === "message.part.updated" || type === "message.part.delta" || type === "message.part.removed") &&
+    active.value
+  ) {
+    const sid = type === "message.updated" ? p.sessionID ?? (p.info ?? p).sessionID : p.sessionID;
+    if (sid && isChildOfActive(sid)) {
+      patchChildFeed(sid, (messages) => applyFeedEvent(messages, evt));
+      return;
+    }
+  }
   switch (type) {
     case "session.updated":
     case "session.created": {
@@ -202,6 +238,7 @@ function reduce(evt) {
       // events kept the chat "busy" forever and only session.idle saved it.
       const st = typeof p.status === "string" ? p.status : p.status?.type;
       if (!st) return;
+      if (st === "idle") noteIdle(p.sessionID);
       setBusyTracked(p.sessionID, st !== "idle");
       patchActive(p.sessionID, (act) => ({ ...act, status: st === "idle" ? "idle" : act.status === "stopping" ? "stopping" : "busy" }));
       // The turn ended: a held follow-up (ISSUE-002) starts the next one.
@@ -209,6 +246,7 @@ function reduce(evt) {
       return;
     }
     case "session.idle": {
+      noteIdle(p.sessionID);
       setBusyTracked(p.sessionID, false);
       const before = active.value?.id === p.sessionID ? active.value : null;
       patchActive(p.sessionID, (act) => {
@@ -237,6 +275,7 @@ function reduce(evt) {
         if (err) setNotice(`${err.title}${err.detail ? ` — ${err.detail}` : ""}`, 10_000);
         return;
       }
+      noteIdle(p.sessionID);
       setBusyTracked(p.sessionID, false);
       patchActive(p.sessionID, (act) => ({ ...finalizeTurn(act), turnError: err ?? act.turnError ?? null }));
       releaseHeld(p.sessionID, { idle: true });

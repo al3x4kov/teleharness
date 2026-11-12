@@ -1,3 +1,4 @@
+// @suite: unit — spawnSync быстрого чистого скрипта graph-fresh.mjs (явное исключение, BUG-222/QA-05)
 // scripts/graph-fresh.mjs — проверка свежести графа graphify (TASK-15.5, REQ-X4006).
 import { test } from "node:test";
 import assert from "node:assert/strict";

@@ -315,3 +315,35 @@ test("vision guard: картинка + модель без imageInput → пре
     ui.store.providerCfg.value = null;
   }
 });
+
+// ---- BUG-01.75 (BUG-221): отказ отправки не теряет набранное ----------------
+
+test("BUG-01.75: отправка вернула false → текст снова в поле", async () => {
+  const sent = [];
+  const { root } = mountComposer({ onSend: (text) => (sent.push(text), Promise.resolve(false)) });
+  t$.typeInto(ta(root), "важный длинный текст");
+  t$.click(sendBtn(root));
+  assert.deepEqual(sent, ["важный длинный текст"]);
+  await t$.waitFor(() => ta(root).value === "важный длинный текст");
+  assert.equal(sendBtn(root).getAttribute("aria-label"), "Отправить", "можно повторить сразу");
+});
+
+test("BUG-01.75: отправка принята (true) → поле остаётся пустым", async () => {
+  const { root } = mountComposer({ onSend: () => Promise.resolve(true) });
+  t$.typeInto(ta(root), "обычное сообщение");
+  t$.click(sendBtn(root));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(ta(root).value, "");
+});
+
+test("BUG-01.75: после отказа новый набранный текст не затирается возвратом старого", async () => {
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const { root } = mountComposer({ onSend: () => gate });
+  t$.typeInto(ta(root), "первый");
+  t$.click(sendBtn(root));
+  t$.typeInto(ta(root), "второй");
+  release(false);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(ta(root).value, "второй");
+});

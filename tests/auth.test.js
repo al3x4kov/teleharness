@@ -10,6 +10,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { spawnPortal } from "./helpers/spawn-server.mjs";
+import { waitFor } from "./helpers/wait.mjs"; // BUG-222/QA-07: ждать условие, а не паузу
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -662,7 +663,7 @@ test("BUG-12.10: tenant upload per-file limit → 413 and no partial file", asyn
   const before = existsSync(path.join(T.dirs[0], ".zai-uploads")) ? readdirSync(path.join(T.dirs[0], ".zai-uploads")).length : 0;
   const big = await tenant("/zai/api/upload?name=big.bin", { method: "POST", headers: { "content-type": "application/octet-stream" }, body: Buffer.alloc(8192, 1) });
   assert.equal(big.status, 413);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 100)); // пауза по смыслу (QA-07): окно, за которое 413 не должен оставить частичный файл
   assert.equal(readdirSync(path.join(T.dirs[0], ".zai-uploads")).length, before, "nothing is left behind");
 });
 
@@ -742,8 +743,14 @@ test("TASK-12.20: /healthz is loopback-direct only; access log has no query stri
   assert.equal(viaOldEdge, 404, "a request relayed with the browser's Host gets 404 too");
 
   await tenant(`/zai/api/file?directory=${encodeURIComponent(T.dirs[0])}&path=secret-query-marker`);
-  await new Promise((r) => setTimeout(r, 200));
-  const logs = readdirSync(path.join(TMP, "logs")).map((f) => readFileSync(path.join(TMP, "logs", f), "utf8")).join("");
+  // QA-07: журнал пишется асинхронно — ждём строку, а не фиксированные 200 мс.
+  const logs = await waitFor(
+    () => {
+      const all = readdirSync(path.join(TMP, "logs")).map((f) => readFileSync(path.join(TMP, "logs", f), "utf8")).join("");
+      return all.includes('"path":"/zai/api/file"') ? all : null;
+    },
+    { label: "строка access-журнала о /zai/api/file" },
+  );
   assert.ok(logs.includes('"path":"/zai/api/file"'), "requests are journaled");
   assert.ok(!logs.includes("secret-query-marker"), "query strings are not journaled");
   assert.ok(!logs.includes(T.token) && !logs.includes(ADMIN_TOKEN), "tokens are never journaled");

@@ -10,6 +10,7 @@ import { test, after, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnPortal } from "./helpers/spawn-server.mjs";
 import { startFakeOpencode } from "./helpers/fake-opencode.mjs";
+import { waitFor } from "./helpers/wait.mjs"; // BUG-222/QA-07: ждать условие, а не паузу
 
 const ADMIN = "a".repeat(24) + "-bug186-" + "6".repeat(24);
 const FLASH = { providerID: "zai-coding-plan", modelID: "glm-5.3-flash" };
@@ -131,8 +132,12 @@ test("BUG-186: DELETE через портал снимает busy сразу —
   }
   assert.ok(gone, "удалённого чата больше нет в /zai/api/status");
 
-  // Событие, испущенное маршрутом, дошло до клиента с папкой чата.
-  await sleep(300);
+  // Событие, испущенное маршрутом, дошло до клиента с папкой чата (QA-07:
+  // ждём сам кадр, а не фиксированные 300 мс).
+  await waitFor(
+    () => frames.some((f) => f.type === "session.deleted" && f.properties?.sessionID === busyId),
+    { label: "session.deleted в SSE-потоке" },
+  );
   reader.cancel().catch(() => {});
   await pump.catch(() => {});
   const deleted = frames.filter((f) => f.type === "session.deleted" && f.properties?.sessionID === busyId);

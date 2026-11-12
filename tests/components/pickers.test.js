@@ -93,7 +93,7 @@ test("ModelPicker: две группы движков (z.ai первой), то�
   const { root } = t$.mount(ui.ModelPicker, { value: GLM, onPick() {} });
   assert.deepEqual(groupTitles(root).length, 2);
   const [zai, claude] = $$(root, "section");
-  assert.match(zai.getAttribute("aria-label"), /z\.ai/);
+  assert.match(zai.getAttribute("aria-label"), /^opencode/); // TASK-01.84
   assert.equal(!!$(claude, ".engine-dot.is-claude"), true, "вторая группа — Claude");
   assert.deepEqual(names(zai), ["GLM-5.3", "GLM-5.3 Flash", "GLM-5V-Turbo"], "план z.ai, затем vision-модель; без GLM-4.5 и Big Pickle");
   assert.deepEqual(names(claude), ["Claude Sonnet 5", "Claude Opus 5.5"], "дефолт Claude — первым");

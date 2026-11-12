@@ -201,7 +201,7 @@ test("BUG-13.14: a Claude chat gets an LLM title from the typed question (snapsh
   assert.equal(list.find((x) => x.id === s.id).title, "Тема Как настроить резервное", "the portal title overlays the upstream default");
   // Once per chat: a second turn does not retitle.
   await promptAndWait(s.id, "А ещё вопрос про что-то другое");
-  await sleep(400);
+  await sleep(400); // пауза по смыслу (QA-07): окно, за которое авто-титул НЕ должен сработать повторно
   assert.equal(patchesOf(up, s.id).length, 1);
 });
 
@@ -255,7 +255,7 @@ test("BUG-142: a Claude chat is titled and announced while its first turn is sti
   if (st && typeof st === "object" && st[s.id]) assert.equal(st[s.id].type, "busy");
   assert.equal(patchesOf(up, s.id).length, 1, "titled once");
   await api(srv, `/zai/api/session/${s.id}/abort`, { method: "POST" });
-  await sleep(300);
+  await sleep(300); // пауза по смыслу (QA-07): окно, за которым конец хода не ретайтлит
   assert.equal(patchesOf(up, s.id).length, 1, "the turn end does not retitle");
 });
 
@@ -271,7 +271,7 @@ test("BUG-13.16: after a Claude turn GET /session carries a fresh time.updated, 
   const t0 = Date.now();
   const bumpOf = (e) => e.type === "session.updated" && e.properties?.info?.id === s.id && !e.properties.info.title && e.properties.info.time?.updated >= t0;
   const startBump = sseUntil(srv, bumpOf);
-  await sleep(150); // the SSE stream is subscribed before the prompt
+  await startBump.ready; // QA-07: подписка SSE установлена (ответ сервера), а не фиксированные 150 мс
   const r = await api(srv, `/zai/api/session/${s.id}/prompt`, { method: "POST", body: { parts: [{ type: "text", text: "Сколько будет 2+2?" }] } });
   assert.equal(r.status, 204);
   const evt = await startBump;
@@ -302,7 +302,7 @@ test("BUG-13.14: a manual rename is never overwritten by the auto title", async 
   const r = await api(srv, `/zai/api/session/${s.id}`, { method: "PATCH", body: { title: "Моё название" } });
   assert.equal(r.status, 200);
   await promptAndWait(s.id, "Как дела у проекта?");
-  await sleep(600);
+  await sleep(600); // пауза по смыслу (QA-07): окно, за которое авто-титул не должен перезаписать ручное переименование
   const titles = patchesOf(up, s.id).map((p) => p.body.title);
   assert.deepEqual(titles, ["Моё название"], "only the user's own PATCH reached upstream");
   const list = await (await api(srv, "/zai/api/session")).json();
@@ -326,7 +326,7 @@ test("BUG-01.27: a snapshot-derived opencode title is replaced once; a sane one 
   assert.ok(!/zai\.zaichat|IPv6/.test(p.body.title));
   // The same event again: once per session.
   up.emit({ type: "session.updated", properties: { info: up.state.sessions.find((x) => x.id === "ses_oc1") } }, tmp.home);
-  await sleep(500);
+  await sleep(500); // пауза по смыслу (QA-07): повтор того же события не должен дать второй PATCH
   assert.equal(patchesOf(up, "ses_oc1").length, 1);
   assert.equal(patchesOf(up, "ses_oc2").length, 0, "a title about the question stays");
   assert.equal(patchesOf(up, "ses_oc3").length, before, "a user rename stays");
@@ -382,7 +382,7 @@ test("BUG-083 relay: a tenant's SSE carries zai.* frames and the auto-title sess
 
   // 2) the portal titler's session.updated (hub.emit) for the tenant's Claude chat.
   const titled = sseUntil(srv, (e) => e.type === "session.updated" && e.properties?.info?.id === s.id && e.properties.info.title && e.properties.info.title !== DEF_TITLE, { token: tok, timeoutMs: 15_000 });
-  await sleep(300);
+  await titled.ready; // QA-07: подписка SSE до промпта, а не фиксированные 300 мс
   const pr = await api(srv, `/zai/api/session/${s.id}/prompt`, { method: "POST", token: tok, body: { parts: [{ type: "text", text: "Как полить кактус зимой?" }] } });
   assert.equal(pr.status, 204);
   const evt = await titled;
@@ -395,13 +395,22 @@ test("BUG-11.13: an answer that completes with no content and no error becomes a
   const sid = "ses_empty1";
   up.state.sessions.push({ id: sid, directory: tmp.home, title: DEF_TITLE });
   const sse = sseUntil(srv, (e) => e.type === "session.error" && e.properties?.sessionID === sid);
-  await sleep(300); // the SSE client is attached
-  const t = Date.now();
-  up.emit({ type: "session.status", properties: { sessionID: sid, status: { type: "busy" } } }, tmp.home);
-  up.emit({ type: "message.updated", properties: { sessionID: sid, info: { id: "msg_a1", sessionID: sid, role: "assistant", time: { created: t } } } }, tmp.home);
-  up.emit({ type: "message.part.updated", properties: { sessionID: sid, part: { id: "p1", messageID: "msg_a1", type: "step-start" } } }, tmp.home);
-  up.emit({ type: "message.updated", properties: { sessionID: sid, info: { id: "msg_a1", sessionID: sid, role: "assistant", time: { created: t, completed: t + 5 } } } }, tmp.home);
-  up.emit({ type: "session.status", properties: { sessionID: sid, status: { type: "idle" } } }, tmp.home);
+  await sse.ready; // QA-07: SSE-клиент подключён (ответ сервера), а не фиксированные 300 мс
+  // QA-07: подписка не гарантирует доставку первого же кадра (loopback/Nagle
+  // может придержать запись фейка) — поэтому ход повторяем, пока кадр не
+  // придёт, вместо паузы «надеемся, что хватило». Как в BUG-083 relay выше.
+  const turn = () => {
+    const t = Date.now();
+    up.emit({ type: "session.status", properties: { sessionID: sid, status: { type: "busy" } } }, tmp.home);
+    up.emit({ type: "message.updated", properties: { sessionID: sid, info: { id: "msg_a1", sessionID: sid, role: "assistant", time: { created: t } } } }, tmp.home);
+    up.emit({ type: "message.part.updated", properties: { sessionID: sid, part: { id: "p1", messageID: "msg_a1", type: "step-start" } } }, tmp.home);
+    up.emit({ type: "message.updated", properties: { sessionID: sid, info: { id: "msg_a1", sessionID: sid, role: "assistant", time: { created: t, completed: t + 5 } } } }, tmp.home);
+    up.emit({ type: "session.status", properties: { sessionID: sid, status: { type: "idle" } } }, tmp.home);
+  };
+  for (let attempt = 0; attempt < 20; attempt++) {
+    turn();
+    if (await Promise.race([sse.then(() => true), new Promise((r) => setTimeout(() => r(false), 150))])) break;
+  }
   const evt = await sse;
   assert.equal(evt.properties.error.name, "EmptyTurnError");
   assert.equal(evt.properties.zai.emptyTurn, true);
@@ -409,7 +418,7 @@ test("BUG-11.13: an answer that completes with no content and no error becomes a
 
   up.state.messages[sid] = [
     { info: { id: "msg_u1", role: "user" }, parts: [{ type: "text", text: "q" }] },
-    { info: { id: "msg_a1", role: "assistant", time: { created: t, completed: t + 5 } }, parts: [{ type: "step-start" }, { type: "step-finish" }] },
+    { info: { id: "msg_a1", role: "assistant", time: { created: 1, completed: 6 } }, parts: [{ type: "step-start" }, { type: "step-finish" }] },
   ];
   const hist = await (await api(srv, `/zai/api/session/${sid}/message?limit=20`)).json();
   assert.equal(hist.at(-1).info.error?.name, "EmptyTurnError", "a reload still shows the error card");
@@ -419,14 +428,14 @@ test("BUG-11.13: a normal answer raises no empty-turn error", async () => {
   const sid = "ses_full1";
   let got = null;
   const sse = sseUntil(srv, (e) => (e.type === "session.error" && e.properties?.sessionID === sid ? ((got = e), true) : e.type === "zai.test.done"), { timeoutMs: 8000 });
-  await sleep(300);
+  await sse.ready; // QA-07: SSE-клиент подключён
   const t = Date.now();
   up.emit({ type: "session.status", properties: { sessionID: sid, status: { type: "busy" } } }, tmp.home);
   up.emit({ type: "message.updated", properties: { sessionID: sid, info: { id: "msg_b1", sessionID: sid, role: "assistant", time: { created: t } } } }, tmp.home);
   up.emit({ type: "message.part.delta", properties: { sessionID: sid, messageID: "msg_b1", partID: "p", field: "text", delta: "Рим" } }, tmp.home);
   up.emit({ type: "message.updated", properties: { sessionID: sid, info: { id: "msg_b1", sessionID: sid, role: "assistant", time: { created: t, completed: t + 5 } } } }, tmp.home);
   up.emit({ type: "session.status", properties: { sessionID: sid, status: { type: "idle" } } }, tmp.home);
-  await sleep(500);
+  await sleep(500); // пауза по смыслу (QA-07): окно, за которое empty-turn не должен ошибиться на нормальном ответе
   up.emit({ type: "zai.test.done", properties: {} }, tmp.home);
   await sse;
   assert.equal(got, null);
@@ -443,14 +452,16 @@ test("BUG-04.6: account deletion removes its chats, disposes the instance, repor
   assert.ok(existsSync(tdir) && existsSync(vdir));
   up.state.sessions.push({ id: "ses_g1", directory: tdir, title: "чат УЗ" }, { id: "ses_keep", directory: tmp.home, title: "чужой" });
   // A process sitting in the folder (like opencode serve) — Windows refuses to remove it.
-  const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 120000)"], { cwd: tdir, stdio: "ignore", windowsHide: true });
+  // QA-07: готовность ждём по маркеру, который процесс пишет при старте, а не 300 мс.
+  const holderReady = path.join(tdir, ".holder-ready");
+  const holder = spawn(process.execPath, ["-e", "require('fs').writeFileSync(process.argv[1], '1'); setTimeout(() => {}, 120000)", holderReady], { cwd: tdir, stdio: "ignore", windowsHide: true });
   const holderExit = new Promise((r) => holder.once("exit", r));
   // POSIX: a file inside a read-only folder cannot be unlinked → rm fails (EACCES).
   if (posix) {
     writeFileSync(path.join(tdir, "held.txt"), "x");
     chmodSync(tdir, 0o555);
   }
-  await sleep(300);
+  await waitFor(() => existsSync(holderReady), { label: "holder-процесс стартовал (маркер записан)" });
   try {
     const r = await api(srv, "/zai/api/admin/users/gone1", { method: "DELETE" });
     assert.equal(r.status, 200);
@@ -478,7 +489,7 @@ test("BUG-04.6: account deletion removes its chats, disposes the instance, repor
     await holderExit;
     if (posix && existsSync(tdir)) chmodSync(tdir, 0o755); // the deferred retry below must succeed
   }
-  await sleep(300);
+  await sleep(300); // пауза по смыслу (QA-07): даём ОС отпустить лок папки после смерти holder-процесса
   const sweep = await (await api(srv, "/zai/api/admin/gc", { method: "POST" })).json();
   assert.deepEqual(sweep.pendingRemovals, []);
   assert.ok(!existsSync(tdir), "the deferred retry removed the folder");

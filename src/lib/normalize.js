@@ -389,10 +389,87 @@ const UX_PATH_RE = new RegExp(`(?:^|[\\s("'‘“\`])((?:\\/(?:home|Users|tmp|mn
 // (lazy stop at the first artifact extension).
 const UPLOAD_PATH_RE = new RegExp(`(?:^|[\\s("'‘“\`])((?:\\.{1,2}[\\\\\\/])?\\.zai-uploads[\\\\\\/](?:[^()]|\\([^)]*\\))*?\\.(?:${ARTIFACT_EXT}))\\b`, "gi");
 
+// FEAT-05.29: файл, который агент ПОКАЗЫВАЕТ пользователю, — ссылка или картинка
+// markdown с локальным абсолютным путём: [имя](D:\\dir\\a.png), ![имя](<D:\\my dir\\a b.png>),
+// [имя](/home/u/a.pdf), [имя](file:///D:/dir/a.png). Такой файл становится карточкой
+// из исходного места (сервер сам проверяет, доступен ли он учётной записи).
+// Голый путь в тексте показом НЕ считается — упомянутые исходники и логи не карточки.
+const PRESENTED_RE = /!?\[([^\]\n]*)\]\(\s*(?:<([^>\n]+)>|([^)\n]+?))\s*\)/g;
+const CARD_CAP = 40; // владелец 2026-11-11: лимит 8 снят; потолок — от злоупотребления
+
+function localTarget(raw) {
+  let t = String(raw ?? "").trim();
+  if (/^file:\/\/\//i.test(t)) {
+    try {
+      t = decodeURIComponent(t.replace(/^file:\/\/\//i, ""));
+    } catch {
+      return null;
+    }
+    t = /^[A-Za-z]:/.test(t) ? t.replace(/\//g, "\\") : "/" + t;
+  }
+  const win = /^[A-Za-z]:[\\/]/.test(t);
+  if (!win && !(t.startsWith("/") && !t.startsWith("//"))) return null;
+  if (/[*?"<>|]/.test(win ? t.slice(2) : t)) return null; // маски и запрещённые в именах знаки
+  if (/(^|[\\/])\.\.([\\/]|$)/.test(t)) return null; // без «..»
+  const name = t.split(/[\\/]/).pop() ?? "";
+  if (!/\.[A-Za-z0-9]{1,8}$/.test(name)) return null; // у файла есть расширение; папка — не файл
+  return t;
+}
+
+// → [{ path, label }] в порядке появления, без повторов.
+export function extractPresentedFiles(text) {
+  const out = [];
+  const seen = new Set();
+  for (const m of String(text ?? "").matchAll(PRESENTED_RE)) {
+    const p = localTarget(m[2] ?? m[3]);
+    if (!p) continue;
+    const k = p.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ path: p, label: (m[1] ?? "").trim() });
+  }
+  return out;
+}
+
+// FEAT-05.29: текст ответа без путей сервера (пользователю чата они ни о чём не говорят).
+// Ссылка на локальный файл → её название (пустое → имя файла); полный путь файла,
+// у которого есть карточка, → имя файла. Обычные ссылки и чужие пути не трогаются.
+export function hideServerPaths(text, cardPaths = []) {
+  let s = String(text ?? "");
+  if (!s) return s;
+  // строка, в которой только ссылка на файл с карточкой (можно с маркером списка),
+  // убирается целиком: карточка уже показывает этот файл, имя под ней — повтор
+  const carded = new Set((cardPaths ?? []).map((p) => String(p).toLowerCase()));
+  if (carded.size > 0) {
+    s = s
+      .split("\n")
+      .filter((line) => {
+        const m = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?!?\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^)\n]+?))\s*\)[\s.,;]*$/.exec(line);
+        if (!m) return true;
+        const p = localTarget(m[1] ?? m[2]);
+        return !(p && carded.has(p.toLowerCase()));
+      })
+      .join("\n");
+  }
+  s = s.replace(PRESENTED_RE, (all, label, a, b) => {
+    const p = localTarget(a ?? b);
+    if (!p) return all;
+    return (label ?? "").trim() || p.split(/[\\/]/).pop();
+  });
+  for (const p of cardPaths ?? []) {
+    if (typeof p !== "string" || !p) continue;
+    const name = p.split(/[\\/]/).pop();
+    // путь в тексте может быть с любыми слэшами и в любом регистре
+    const re = new RegExp(p.split(/[\\/]+/).map((seg) => seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\\\/]+"), "gi");
+    s = s.replace(re, () => name);
+  }
+  return s;
+}
+
 // Unique artifact-ish paths in the order they appear, capped to keep the
 // chip row light. Used by MessageBubble; the FileViewer resolves each
 // against the session directory (the server re-checks containment).
-export function extractFilePaths(text, cap = 8) {
+export function extractFilePaths(text, cap = 40) {
   const out = [];
   const seen = new Set();
   const push = (s) => {
@@ -418,7 +495,7 @@ export function extractFilePaths(text, cap = 8) {
 // чипы получили только 2 write-овских). Оба источника жёстко скоупятся
 // папкой сессии: упомянутый D:\... вне сессии по-прежнему не чип (guard
 // аудита сохранён); неизвестная директория прячет всё (нельзя проверить).
-export function collectArtifacts(parts, texts, sessionDir, cap = 8) {
+export function collectArtifacts(parts, texts, sessionDir, cap = CARD_CAP) {
   return collectArtifactEntries(parts, texts, sessionDir, cap).map((e) => e.path);
 }
 
@@ -427,10 +504,21 @@ export function collectArtifacts(parts, texts, sessionDir, cap = 8) {
 // session folder — nobody checked that it exists, so a preview that fails to
 // load is hidden entirely instead of a «Картинка недоступна» card. Absolute
 // paths from the text and write/edit files keep the broken-card face.
-export function collectArtifactEntries(parts, texts, sessionDir, cap = 8) {
+export function collectArtifactEntries(parts, texts, sessionDir, cap = CARD_CAP) {
   const out = [];
   const entries = [];
   const seen = new Set();
+  // FEAT-05.29: показанные ссылкой файлы — первыми и БЕЗ привязки к папке чата
+  // (доступность проверяет сервер). presented: true — карточке нужна эта проверка.
+  for (const f of extractPresentedFiles((texts ?? []).join("\n"))) {
+    if (out.length >= cap) break;
+    if (isScratchPath(f.path)) continue;
+    const k = f.path.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(f.path);
+    entries.push({ path: f.path, guessed: false, presented: true });
+  }
   const add = (p, guessed = false) => {
     if (typeof p !== "string" || !p || out.length >= cap) return;
     if (/[*?]/.test(p)) return; // BUG-155: glob mask, not a file

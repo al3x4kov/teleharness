@@ -1,0 +1,462 @@
+{
+ "note": "Сырой поток GET /api/event opencode 2.2.6 (стенд v2) за один ход; записан probes/record-v2-turn-events.mjs. dtMs — мс от первого события.",
+ "recordedAt": "2026-11-11",
+ "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+ "events": [
+  {
+   "dtMs": 0,
+   "id": "evt_1c9014e20001hTBC36WjOSzdhc",
+   "type": "server.connected",
+   "data": {}
+  },
+  {
+   "dtMs": 3587,
+   "id": "evt_1c9015c230017UFHn9z4KvksRF",
+   "created": 1794373671971,
+   "type": "session.created",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "slug": "misty-eagle",
+    "version": "2.2.6",
+    "projectID": "d458af77dbae43fed7212a07b1fd470a31a6f983",
+    "location": {
+     "directory": "D:zai-stage\tmpw2-fixture"
+    },
+    "subpath": ""
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 0,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 3651,
+   "id": "evt_1c9015c5d001rFA0k6zKjUrLmz",
+   "created": 1794373672030,
+   "type": "session.model.selected",
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "model": {
+     "id": "glm-5.3-flash",
+     "providerID": "zai-coding-plan"
+    }
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 1,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 23629,
+   "id": "evt_1c901a9b3001Qi3qwJ5lWh29fT",
+   "created": 1794373691827,
+   "type": "session.inbox.enqueued",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "inboxID": "msg_1c9015d26001y4akuZp8hiV3YA",
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "item": {
+     "type": "user",
+     "payload": {
+      "text": "Ответь ровно одним словом: готово",
+      "metadata": {
+       "kbContext": "[obsidian-cache] (снимок базы знаний стенда вырезан из фикстуры)"
+      }
+     },
+     "delivery": "steer"
+    }
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 2,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 23644,
+   "id": "evt_1c901a9c4001WNXpl4B0uXbVE4",
+   "created": 1794373691844,
+   "type": "session.execution.started",
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg"
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 3,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 23644,
+   "id": "evt_1c901a9fa001rmHUCHMhL0xXXu",
+   "created": 1794373691898,
+   "metadata": {
+    "instructions": {
+     "initial": true
+    }
+   },
+   "type": "session.instructions.updated",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "delta": {
+     "core/codemode": "0565645fa59593bf75883048ee32f66a9553c15c7a388614f028840c728871eb",
+     "core/mcp-guidance": "ff5191008200231aac69bd2756272f733690890f2f4352a69865da829a63d77d",
+     "core/skill-guidance": "2e6c62d94502a9b9c348d179692289f1c24183f1c50fedf99311753ee3df0505",
+     "core/instructions": "2f3f058c15fb5a1cc86345d9d458d5426a38de606de32d90c739cf8bb15c878c",
+     "core/date": "8fda1d364fef8b5fbcccb039ef94b1ebe3705b3b3a6d558d6d10f92e84ff9e33",
+     "core/environment": "169f409c1ffe715b86687e0283d43605825a374eb93f86521e3605197f61b0f9"
+    }
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 4,
+    "version": 2
+   }
+  },
+  {
+   "dtMs": 23644,
+   "id": "evt_1c901aa02001l6QvyyZb61GcqC",
+   "created": 1794373691906,
+   "type": "session.inbox.delivered",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "inboxID": "msg_1c9015d26001y4akuZp8hiV3YA"
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 5,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 26042,
+   "id": "evt_1c901b3fe001tb9PJcQtYkwiCi",
+   "created": 1794373694462,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "cost": 0,
+    "tokens": {
+     "input": 453,
+     "output": 1,
+     "reasoning": 11,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  },
+  {
+   "dtMs": 26042,
+   "id": "evt_1c901b401001javOnM8q8RGBd4",
+   "created": 1794373694465,
+   "type": "session.renamed",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "title": "Однослоговый ответ \"готово\""
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 7,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 28090,
+   "id": "evt_1c901bbe4001edvvJpU8UWncVG",
+   "created": 1794373696484,
+   "type": "session.step.started",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "agent": "orchestrator",
+    "model": {
+     "id": "glm-5.3-flash",
+     "providerID": "zai-coding-plan",
+     "variant": "default"
+    },
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "started": 1794373692061
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 8,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 28090,
+   "id": "evt_1c901bbec0015zWmzgoSaateB9",
+   "created": 1794373696492,
+   "type": "session.reasoning.started",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "native": {
+     "reasoningField": "reasoning_content"
+    }
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 9,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 28178,
+   "id": "evt_1c901bc5a001skfOVkLiUHPUhO",
+   "created": 1794373696602,
+   "type": "session.reasoning.delta",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "delta": "The"
+   }
+  },
+  {
+   "dtMs": 28645,
+   "id": "evt_1c901be2c0011TJT8nW7B005Uc",
+   "created": 1794373697069,
+   "type": "session.reasoning.delta",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "delta": " user wants exactly one word:"
+   }
+  },
+  {
+   "dtMs": 28747,
+   "id": "evt_1c901be950014qhda7Gr11TuEd",
+   "created": 1794373697173,
+   "type": "session.reasoning.delta",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "delta": " готово."
+   }
+  },
+  {
+   "dtMs": 28855,
+   "id": "evt_1c901bf02001eXOAuk7k6UTGVv",
+   "created": 1794373697282,
+   "type": "session.reasoning.delta",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "delta": " No"
+   }
+  },
+  {
+   "dtMs": 28891,
+   "id": "evt_1c901bf190017C7cPpS4AOhmIx",
+   "created": 1794373697305,
+   "type": "session.reasoning.delta",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "delta": " tools needed."
+   }
+  },
+  {
+   "dtMs": 28891,
+   "id": "evt_1c901bf1b001RePUwzU00lL2Wc",
+   "created": 1794373697307,
+   "type": "session.text.started",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 10,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 29023,
+   "id": "evt_1c901bf61001HUE3phziqB600U",
+   "created": 1794373697377,
+   "type": "session.reasoning.ended",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "text": "The user wants exactly one word: готово. No tools needed.",
+    "native": {
+     "reasoningField": "reasoning_content"
+    }
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 11,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 29023,
+   "id": "evt_1c901bf68001A9kA5Zirob6XzL",
+   "created": 1794373697384,
+   "type": "session.text.delta",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "delta": "готово"
+   }
+  },
+  {
+   "dtMs": 29023,
+   "id": "evt_1c901bf68002LNdS0pTnPwW3Kn",
+   "created": 1794373697384,
+   "type": "session.text.ended",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "ordinal": 0,
+    "text": "готово"
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 12,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 29023,
+   "id": "evt_1c901bf6e001CThaiO35wFr2Xn",
+   "created": 1794373697390,
+   "type": "session.step.streamed",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD"
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 13,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 29023,
+   "id": "evt_1c901bf76001aj0HpN6c6kFd6k",
+   "created": 1794373697398,
+   "type": "session.step.ended",
+   "location": {
+    "directory": "D:\\zai-stage\\tmp\\w2-fixture-mwbnr32r"
+   },
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "assistantMessageID": "msg_1c901aa38001BQPguvINyhvaXD",
+    "finish": "stop",
+    "rawFinish": "stop",
+    "tokens": {
+     "input": 15418,
+     "output": 4,
+     "reasoning": 14,
+     "cache": {
+      "read": 64,
+      "write": 0
+     }
+    },
+    "cost": 0
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 14,
+    "version": 1
+   }
+  },
+  {
+   "dtMs": 29023,
+   "id": "evt_1c901bf7e001bAcdw7thbJ6DpK",
+   "created": 1794373697407,
+   "type": "session.usage.updated",
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "cost": 0,
+    "tokens": {
+     "input": 15871,
+     "output": 5,
+     "reasoning": 25,
+     "cache": {
+      "read": 64,
+      "write": 0
+     }
+    }
+   }
+  },
+  {
+   "dtMs": 29026,
+   "id": "evt_1c901bf85001MSAKRRH3f1vmBb",
+   "created": 1794373697414,
+   "type": "session.execution.succeeded",
+   "data": {
+    "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg"
+   },
+   "durable": {
+    "aggregateID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
+    "seq": 15,
+    "version": 1
+   }
+  }
+ ]
+}

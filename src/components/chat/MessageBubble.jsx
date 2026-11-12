@@ -37,6 +37,8 @@ import {
   buildTurns,
   collapseToolRuns,
   collectArtifactEntries,
+  hideServerPaths,
+  isAgentTool,
   isImageName,
   queuedUserIds,
   splitDirective,
@@ -230,6 +232,15 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
     if (ask.length > 0) requestProbe(sessionDir, ask);
     artifactEntries = artifactEntries.filter((e) => !e.guessed || !isImageName(e.path) || probeState(sessionDir, e.path) === true);
   }
+  // FEAT-05.29: показанный ссылкой файл может лежать вне папки чата — карточка
+  // появляется, когда сервер подтвердил доступ; отказ → строка «недоступен».
+  const presentedPaths = artifactEntries.filter((e) => e.presented).map((e) => e.path);
+  if (presentedPaths.length > 0) {
+    const ask = presentedPaths.filter((p) => probeState(sessionDir, p) === undefined);
+    if (ask.length > 0) requestProbe(sessionDir, ask);
+    artifactEntries = artifactEntries.filter((e) => !e.presented || probeState(sessionDir, e.path) !== undefined);
+  }
+  const cardPaths = artifactEntries.map((e) => e.path);
   // FEAT-05.17: every file of the answer is one card — media read by tools
   // first, then artifacts in the agent's order; pictures carry a thumbnail.
   const fileCards = media.length > 0 || artifactEntries.length > 0 ? (
@@ -237,15 +248,19 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
       {media.map((m, i) => (
         <FileCard key={`media-${i}`} name={m.name} thumb={m.url} onOpen={() => openData(m.url, m.name)} />
       ))}
-      {artifactEntries.map(({ path: p, guessed }) => (
-        <FileCard
-          key={`art-${p}`}
-          name={basename(p)}
-          thumb={isImageName(p) ? fileUrl(sessionDir, p) : null}
-          onOpen={() => openArtifact(p)}
-          hideIfBroken={guessed && isImageName(p)}
-        />
-      ))}
+      {artifactEntries.map(({ path: p, guessed, presented }) => {
+        const gone = presented && probeState(sessionDir, p) === false;
+        return (
+          <FileCard
+            key={`art-${p}`}
+            name={basename(p)}
+            thumb={!gone && isImageName(p) ? fileUrl(sessionDir, p) : null}
+            onOpen={() => openArtifact(p)}
+            hideIfBroken={guessed && isImageName(p)}
+            unavailable={gone}
+          />
+        );
+      })}
     </div>
   ) : null;
 
@@ -312,6 +327,32 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
   const revealParts = revealing ? parts.filter((p) => p.type === "text") : [];
   const revealOut = revealing ? revealSlices(answerTexts, shown) : [];
   let stepIdx = 0;
+  // FEAT-01.77: сводка хода — над первой карточкой агента хода, если в ходе
+  // не меньше двух запусков верхнего уровня. Считается по СТРУКТУРЕ частей
+  // (какие вызовы агентов в ходе, кто первый) — агентные сигналы здесь не
+  // читаются: их читает только связка AgentRuns (design §6).
+  let turnAgentCalls = null; // [callID] агентных запусков этого хода
+  let turnFirstAgentCall = null; // callID первой карточки хода
+  if (role === "assistant" && !compact) {
+    let i0 = -1;
+    let i1 = -1;
+    if (turn) {
+      for (let k = 0; k < feed.length; k += 1) {
+        if (feed[k]?.info?.id === turn.first) i0 = k;
+        if (feed[k]?.info?.id === turn.last) i1 = k;
+      }
+    }
+    const steps = i0 >= 0 && i1 >= i0 ? feed.slice(i0, i1 + 1) : [msg];
+    turnAgentCalls = [];
+    for (const s of steps) {
+      for (const p of s?.parts ?? []) {
+        if (!isAgentTool(p)) continue;
+        const cid = p.callID ?? p.id;
+        turnAgentCalls.push(cid);
+        if (turnFirstAgentCall == null) turnFirstAgentCall = cid;
+      }
+    }
+  }
   const renderPart = (p, i) => {
     if (compact && p.type !== "text" && p.type !== "file") return null;
     switch (p.type) {
@@ -321,12 +362,13 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
           const text = k >= 0 ? revealOut[k] : "";
           if (!text) return null;
           const next = k >= 0 && k + 1 < revealOut.length ? revealOut[k + 1] : "";
-          return <Markdown key={p.id ?? i} text={text} streaming caret={!next} />;
+          return <Markdown key={p.id ?? i} text={role === "assistant" ? hideServerPaths(text, cardPaths) : text} streaming caret={!next} />;
         }
         return (
           <Markdown
             key={p.id ?? i}
-            text={p.text ?? ""}
+            // FEAT-05.29: пути сервера в ответе заменены названиями файлов
+            text={role === "assistant" ? hideServerPaths(p.text ?? "", cardPaths) : (p.text ?? "")}
             streaming={streaming}
             caret={streaming && p.id === lastTextId && p.id === lastPartId}
           />
@@ -342,7 +384,15 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
           />
         );
       case "tool":
-        return <ToolCard key={p.id ?? i} part={p} repeat={p.__repeat} />;
+        return (
+          <ToolCard
+            key={p.id ?? i}
+            part={p}
+            repeat={p.__repeat}
+            // FEAT-01.77: сводку получает только первая карточка агента хода
+            summary={turnFirstAgentCall != null && (p.callID ?? p.id) === turnFirstAgentCall ? turnAgentCalls : null}
+          />
+        );
       case "file":
         return (
           <Attachment

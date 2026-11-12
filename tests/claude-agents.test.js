@@ -10,6 +10,10 @@ import { fileURLToPath } from "node:url";
 import { ClaudeAgentCatalog, compileAgentsJson, isClaudeAgentId, loadClaudeAgents, parseAgentFile } from "../lib/claude-agents.js";
 import { makeBinding, patchBinding, resolveBinding } from "../lib/binding.js";
 import { ClaudeRunner } from "../lib/claude.js";
+// BUG-230: argv-pins тестов не должны зависеть от машины — конфиг MCP в env
+// (ZAI_CLAUDE_MCP_CONFIG, задан на этой машине) добавляет CLI `--mcp-config`;
+// тесты пинят argv без него, переменную на время файла убираем.
+delete process.env.ZAI_CLAUDE_MCP_CONFIG;
 // FEAT-13.19: a Claude answer is several parts (steps, tools, text) — its text is every text part.
 const textOf = (m) => (m?.parts ?? []).filter((p) => p.type === "text").map((p) => p.text).join("\n\n");
 

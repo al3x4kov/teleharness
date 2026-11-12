@@ -7,15 +7,15 @@ import "../views.css";
 import "../voice.css";
 import {
   about, admin, agents, busyMap, claudeAgents, connection, effectivePrefs, host, staleModelText, hostError, init, mcp, mcpError, me, prefs, providerCfg,
-  refreshAbout, refreshHost, refreshMcp, refreshUsage, logout, sessions, setPrefs, usage, usageError, execDetailOn,
+  refreshAbout, refreshHost, refreshMcp, refreshUsage, refreshSubscriptions, logout, sessions, setPrefs, usage, usageError, subscriptions, subscriptionsError, execDetailOn,
   refreshVoice, voiceApi, voiceInfo, voicePrefs, VOICE_PAUSES, VOICE_RATES,
 } from "../../lib/store.js";
 import { browserTtsSupported, createPlayer, speakBrowser, unlockAudio } from "../../lib/voice-audio.js";
-import { displayTitle } from "../../lib/normalize.js";
+import { displayTitle, fmtClock } from "../../lib/normalize.js";
 import { AgentPicker, ClaudeAgentPicker, Glyph, ModelPicker, PickerSheet, pickDefaultModel } from "../Pickers.jsx";
 import { ENGINE_SHORT, claudeAgentName, engineOf, modelName } from "../../lib/engine.js";
 import { applyTheme, storedTheme } from "../../lib/theme.js";
-import { LANGS, lang, locale, setLang, t } from "../../lib/i18n.js";
+import { LANGS, fmtNumber, lang, locale, setLang, t } from "../../lib/i18n.js";
 import { VERSION } from "../../lib/version.js";
 import AccessSection from "./AccessSection.jsx";
 import NotificationsRow from "./NotificationsRow.jsx";
@@ -36,6 +36,7 @@ const THEMES = ["system", "dark", "light"].map((id) => ({
 // disabled server is not a broken one (S-6).
 const MCP_STATUS = {
   connected: { key: "settings.mcp.connected", tone: "on" },
+  pending: { key: "settings.mcp.pending", tone: "idle" }, // BUG-192: opencode 2.x — the server is still starting
   disabled: { key: "settings.mcp.disabled", tone: "idle" },
   failed: { key: "settings.mcp.failed", tone: "bad" },
   needs_auth: { key: "settings.mcp.needsAuth", tone: "warn" },
@@ -158,6 +159,9 @@ export function tempView(h) {
 // BUG-178 (2026-11-06: версия на проде не совпадала с ожидаемой): показываем версию
 // ПРИЛОЖЕНИЯ, которое реально запущено; фронт выкатывается без рестарта сервера,
 // поэтому отставание сервера пишем отдельно, а не выдаём за версию портала.
+// TASK-01.82: видимое название продукта.
+export const BRAND = "Teleharness";
+
 export function appVersionLabel(app, server) {
   return server && server !== app ? t("settings.about.versionServer", { app, server }) : t("settings.about.version", { app });
 }
@@ -166,8 +170,12 @@ export function aboutLine(version, host) {
   const str = (v) => (typeof v === "string" && v ? v : null);
   const appLabel = appVersionLabel(version, str(host?.version));
   const ocv = str(host?.opencodeVersion);
+  // BUG-190: обвязка с именем (slim / OmO); старый ответ — только omoVersion
+  const hv = str(host?.harness?.version);
+  const hn = hv ? str(host?.harness?.name) : null;
   const omo = str(host?.omoVersion);
-  const oc = ocv ? `opencode ${ocv}${omo ? ` (OmO ${omo})` : ""}` : "opencode";
+  const tag = hn ? `${hn} ${hv}` : omo ? `OmO ${omo}` : null;
+  const oc = ocv ? `opencode ${ocv}${tag ? ` (${tag})` : ""}` : "opencode";
   const cc = str(host?.claudeVersion) ? `Claude Code ${host.claudeVersion}` : "Claude Code";
   return `${appLabel} · ${oc} · ${cc}`;
 }
@@ -417,7 +425,7 @@ export const SECTIONS = [
   { id: "appearance", group: "app" },
   { id: "notifications", group: "app" },
   { id: "mcp", group: "features" },
-  { id: "subscription", group: "features", admin: true },
+  { id: "subscription", group: "features" },
   { id: "computer", group: "features", admin: true },
   { id: "users", group: "admin", admin: true },
   { id: "active", group: "admin", admin: true },
@@ -686,21 +694,99 @@ function McpSection() {
   );
 }
 
-function SubscriptionSection() {
-  const sub = usage.value;
-  if (sub == null) return usageError.value ? <SectionError onRetry={() => refreshUsage()} /> : <Skeleton label={t("settings.quota.loading")} />;
+// FEAT-11.18 (макет design/mockups-v2/relay.html, кадры 4–5): карточка на каждого
+// подключённого провайдера; вид зависит от того, что провайдер отдаёт.
+const CUR = { USD: "$", CNY: "¥", EUR: "€" };
+export function fmtMoney(n, currency = "USD") {
+  if (n == null || !Number.isFinite(Number(n))) return "—";
+  const v = fmtNumber(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return CUR[currency] ? `${CUR[currency]}${v}` : `${v}${NB}${currency}`;
+}
+// Периодичность сброса лимита ключа — ключи словаря («раз в день» …)
+const RESET_KEY = { daily: "settings.subs.reset.daily", weekly: "settings.subs.reset.weekly", monthly: "settings.subs.reset.monthly" };
+const resetWord = (interval) => (RESET_KEY[interval] ? t(RESET_KEY[interval]) : interval);
+// Текст карточки без данных — причина словами, без кодов и путей.
+export function subscriptionNote(card) {
+  switch (card?.state) {
+    case "no-api":
+      if (card.hint === "claude-subscription") return t("settings.subs.note.claude");
+      if (card.hint === "management-key") return t("settings.subs.note.managementKey");
+      if (card.hint === "console-only") return t("settings.subs.note.consoleOnly");
+      return t("settings.subs.note.noApi");
+    case "no-key":
+      return t("settings.subs.note.noKey");
+    case "need-admin-key":
+      return t("settings.subs.note.needAdminKey");
+    case "error":
+      if (card.reason === "401" || card.reason === "403") return t("settings.subs.note.errKey", { reason: card.reason });
+      if (card.reason === "network") return t("settings.subs.note.errNetwork");
+      if (card.reason === "no-key") return t("settings.subs.note.noKey");
+      return t("settings.subs.note.errOther");
+    default:
+      return null;
+  }
+}
+// «14:32» — местный часовой пояс браузера, локаль языка интерфейса
+const timeOf = (ms) => (ms ? fmtClock(ms) || null : null);
+
+function SubscriptionCard({ card }) {
+  const note = subscriptionNote(card);
+  const plan = card.plan ? ` · ${String(card.plan)[0].toUpperCase() + String(card.plan).slice(1)}` : "";
+  const m = card.money;
+  const usedPct = m && m.limit > 0 && m.remaining != null ? Math.max(0, Math.min(100, Math.round(((m.limit - m.remaining) / m.limit) * 100))) : null;
   return (
-    <ul class="card-list">
-      <li class="card">
-        <div class="set-row is-host">
-          <div class="set-main">
-            <div class="row-title">
-              {t("settings.section.subscription")}
-              {sub?.ok && sub.plan ? ` · ${String(sub.plan)[0].toUpperCase() + String(sub.plan).slice(1)}` : null}
+    <li class={"card sub-card is-" + card.state} data-provider={card.id}>
+      <div class="set-row is-host">
+        <div class="set-main">
+          <div class="row-title sub-head">
+            <span class="sub-name">{card.title}</span>
+            {card.badge ? <span class="sub-badge">{card.badge}{plan}</span> : null}
+            {card.state === "ok" && card.fetchedAt ? <span class="sub-at">{t("settings.subs.updated", { time: timeOf(card.fetchedAt) ?? "" })}</span> : null}
+          </div>
+          {note ? <div class={"set-value is-wrap" + (card.state === "error" ? " is-error" : "")}>{note}</div> : null}
+          {card.state === "ok" && Array.isArray(card.windows) ? <QuotaWindows sub={card} /> : null}
+          {card.state === "ok" && m ? (
+            <div class="sub-money">
+              {m.limit != null ? (
+                <>
+                  <div class="sub-big"><b>{fmtMoney(m.remaining, m.currency)}</b><span>{t("settings.subs.leftOf", { limit: fmtMoney(m.limit, m.currency) })}{m.resetInterval ? ` · ${t("settings.subs.resets", { interval: resetWord(m.resetInterval) })}` : ""}</span></div>
+                  {usedPct != null ? <span class="quota-bar" aria-hidden="true"><span class={"host-bar-fill" + (usedPct >= 90 ? " is-high" : "")} style={`width: ${usedPct}%`} /></span> : null}
+                </>
+              ) : (
+                <div class="sub-big"><b>{fmtMoney(m.spent?.month, m.currency)}</b><span>{t("settings.subs.spentMonthNoLimit")}</span></div>
+              )}
+              <p class="host-note">{t("settings.subs.spend", { day: fmtMoney(m.spent?.day, m.currency), week: fmtMoney(m.spent?.week, m.currency), month: fmtMoney(m.spent?.month, m.currency) })}</p>
             </div>
-            {!sub.ok ? (
-              <div class="set-value is-wrap">{usageUnavailableText(sub)}</div>
-            ) : (
+          ) : null}
+          {card.state === "ok" && Array.isArray(card.balances) ? (
+            <div class="sub-money">
+              {card.balances.map((b) => (
+                <div class="sub-big" key={b.currency}><b>{fmtMoney(b.total, b.currency)}</b><span>{b.granted ? t("settings.subs.granted", { amount: fmtMoney(b.granted, b.currency) }) : t("settings.subs.balance")}</span></div>
+              ))}
+              {card.available === false ? <p class="host-note is-error">{t("settings.subs.insufficient")}</p> : null}
+            </div>
+          ) : null}
+          {card.state === "ok" && card.spend ? (
+            <div class="sub-money">
+              <div class="sub-big"><b>{fmtMoney(card.spend.amount, card.spend.currency)}</b><span>{t("settings.subs.spentDays", { count: card.spend.days })}</span></div>
+              <p class="host-note">{t("settings.subs.spendOnly")}</p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function SubscriptionSection() {
+  const list = subscriptions.value;
+  if (list == null) return subscriptionsError.value ? <SectionError onRetry={() => refreshSubscriptions()} /> : <Skeleton label={t("settings.subs.loading")} />;
+  if (list.length === 0) return <ul class="card-list"><li class="card"><div class="set-row"><div class="set-main"><div class="set-value is-wrap">{t("settings.subs.none")}</div></div></div></li></ul>;
+  return <ul class="card-list">{list.map((c) => <SubscriptionCard key={c.id} card={c} />)}</ul>;
+}
+
+function QuotaWindows({ sub }) {
+  return (
               <div class="host-list">
                 {sub.windows.map((w) => {
                   const high = (w.percent ?? 0) >= 90;
@@ -728,15 +814,10 @@ function SubscriptionSection() {
                     </div>
                   );
                 })}
-                {sub.windows.some((w) => w.type !== "TOKENS_LIMIT") && (
+                {sub.id === "zai" && sub.windows.some((w) => w.type !== "TOKENS_LIMIT") && (
                   <p class="host-note">{t("settings.quota.creditsNote")}</p>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      </li>
-    </ul>
   );
 }
 
@@ -844,13 +925,15 @@ export default function SettingsView({ section = null, sub = null } = {}) {
     // «Подписка z.ai»: server caches for 60s, so polling faster is pointless;
     // the small tick only redraws the «через N мин» countdown.
     if (admin) refreshUsage();
-    const usageTick = admin ? setInterval(() => { if (!document.hidden) refreshUsage(); }, 60_000) : null;
+    refreshSubscriptions(); // FEAT-11.18: раздел «Подписки» виден всем
+    const usageTick = setInterval(() => { if (!document.hidden) { if (admin) refreshUsage(); refreshSubscriptions(); } }, 60_000);
     const countdownTick = setInterval(() => setTick((x) => x + 1), 30_000);
     const onVisible = () => {
       if (!document.hidden && admin) {
         refreshHost();
         refreshUsage();
       }
+      if (!document.hidden) refreshSubscriptions();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -943,8 +1026,10 @@ export default function SettingsView({ section = null, sub = null } = {}) {
   const voiceName = voices.find((x) => x.id === v.voice)?.name ?? voices.find((x) => x.id === voiceInfo.value?.defaultVoice)?.name ?? (voice ? t("settings.voice.defaultName") : "");
   const ps = promptState.value;
   const mcpList = mcp.value;
-  const sub0 = usage.value;
-  const maxPct = sub0?.ok ? Math.max(0, ...(sub0.windows ?? []).map((w) => w.percent ?? 0)) : null;
+  // FEAT-11.18: значение строки «Подписки» — из карточек провайдеров (их видят все пользователи)
+  const subs = subscriptions.value;
+  const sub0 = subs?.find((c) => c.id === "zai" && c.state === "ok") ?? null;
+  const maxPct = sub0 ? Math.max(0, ...(sub0.windows ?? []).map((w) => w.percent ?? 0)) : null;
   const busyN = Object.keys(busyMap.value ?? {}).length;
   const values = {
     models: defModel ? modelName(providerCfg.value, defModel) : "",
@@ -953,7 +1038,7 @@ export default function SettingsView({ section = null, sub = null } = {}) {
     appearance: THEMES.find((th) => th.id === theme)?.label ?? "",
     notifications: notif ? t(`settings.notif.${NOTIF_SHORT[notif] ?? "off"}`) : "",
     mcp: mcpList ? (mcpList.length ? t("settings.mcp.connectedCount", { n: mcpList.filter((x) => x.status === "connected").length }) : t("settings.mcp.none")) : mcpError.value ? "—" : "",
-    subscription: sub0 ? (sub0.ok ? `${sub0.plan ? String(sub0.plan)[0].toUpperCase() + String(sub0.plan).slice(1) + " · " : ""}${maxPct}${NB}%` : "—") : usageError.value ? "—" : "",
+    subscription: sub0 ? `${sub0.plan ? String(sub0.plan)[0].toUpperCase() + String(sub0.plan).slice(1) + " · " : ""}${maxPct}${NB}%` : subs ? (subs.length ? t("settings.subs.count", { n: subs.length }) : "—") : subscriptionsError.value ? "—" : "",
     computer: host.value ? (host.value.cpu?.loadPct != null ? `CPU ${host.value.cpu.loadPct}${NB}%` : "") : hostError.value ? "—" : "",
     active: busyN ? String(busyN) : "",
     users: "",

@@ -1,7 +1,7 @@
 # Карта API opencode: 1.19.5 → 2.2.6 (для миграции портала)
 
-Обновлено: 2026-11-07.
-Метод: инвентаризация вызовов opencode 1.x в коде портала (`server.js`, `lib/*.js`, `routes/*.js`) + живые проверки на изолированном opencode 2.2.6 `http://127.0.0.1:4099` (Basic: `opencode:***`). Правила: каждое утверждение о v2 — либо живая проверка (команда + фрагмент ответа), либо ссылка на источник. Непроверенное помечено «не проверено».
+Обновлено: 2026-11-08.
+Метод: инвентаризация вызовов opencode 1.x в коде портала (`server.js`, `lib/*.js`, `routes/*.js`) + живые проверки на изолированном opencode 2.2.6 `http://127.0.0.1:4099` (Basic: `opencode:***`) и рабочем стенде `http://127.0.0.1:4100` (`oc2-exp.ps1`, Basic: `opencode:***`; раздел «Команды», FEAT-16.3). Правила: каждое утверждение о v2 — либо живая проверка (команда + фрагмент ответа), либо ссылка на источник. Непроверенное помечено «не проверено».
 
 Источники:
 
@@ -60,8 +60,9 @@
 | 24 | `GET /config/providers?directory=` | lib/instance-health.js:41,68 (прогрев папки) | **нет** (`GET /api/config/providers` → 404 живьём) | заменяется парой `GET /api/provider` + `GET /api/model?location[directory]=…` (для прогрева папки — любой «дорогой» instance-запрос, например `/api/mcp`) | **нет аналога** (функциональная замена есть, маршрута нет) |
 | 25 | `GET /project?…` | routes/catalog.js:165-167 | `GET /api/project` | параметры `?archived=`; ответ — массив `Project` без конверта: `[{"id":"…","canonical":"D:\\Portal\\zai","vcs":"git","time":{…},"sandboxes":[]}]` (живьём); проект определяется по `canonical`, не по `worktree` 1.x | **есть аналог** (форма другая; фильтр по папке — сравнением `canonical`) |
 | 26 | `GET /global/health` | lib/host.js:125 (версия для «О приложении») | `GET /api/info` | `{version, pid, hostname, urls, paths:{tmp}, capabilities}`; живой фрагмент: `{"version":"2.2.6","pid":2632,…}` | **есть аналог** |
+| 27 | `GET /command` + `POST /session/:id/command` (BUG-188: server.js:246 список, server.js:1353 ход) | lib/oc-client.js listCommands/runCommand | `GET /api/command` + `POST /api/session/{sessionID}/command` | список: deepObject-location, конверт `{location, data:[{name, description}]}` (живьём); ход: тело **`{name, text}`** (не `{command, arguments}` 1.x), ответ **204 сразу**, execution в фоне; 404 `{_tag:"CommandNotFoundError"}` на неизвестную команду (живьём). Подробно — раздел «Команды» | **есть аналог (тело переводит адаптер; ход асинхронный — не как в 1.x)** |
 
-**Итог: 26 эндпоинтов 1.x. Есть аналог — 19, есть аналог с другой семантикой — 6 (№ 10, 11, 15, 17, 18, 23), нет аналога — 1 (№ 24).**
+**Итог: 27 эндпоинтов 1.x. Есть аналог — 20, есть аналог с другой семантикой — 6 (№ 10, 11, 15, 17, 18, 23), нет аналога — 1 (№ 24).**
 
 ### Дополнительно: смена модели/агента чата (аналог PATCH-binding портала)
 
@@ -69,6 +70,53 @@
 - `POST /api/session/{sessionID}/agent` — тело `{agent}` (спека, не проверено живьём).
 - `POST /api/session/{sessionID}/fork` — `{messageID?}` → `Session.Info` (спека).
 - `GET /api/session/{sessionID}/context`, `GET /api/session/{sessionID}/inbox` (живьём: `{"data":[]}`) — контекст и «входящие» ходы сессии.
+
+---
+
+## 1а. Команды (слэш, BUG-188) — живой эксперимент на :4100
+
+РЕГРЕССИЯ ЗАКРЫТА: `/command` в v2 ЕСТЬ (в спеке :4099 — те же 139 путей, `command.list` и `session.command`; ранее в api-map записано «нет» — пути искали по строке `/command`, а эндпоинт называется `/api/command`).
+
+**Где v2 берёт команды** ([docs → commands](https://opencode.ai/docs/commands); всё, кроме последнего пункта, подтверждено живьём на :4100):
+
+1. Глобально: `~/.config/opencode/commands/*.md` (на стенде — `XDG_CONFIG_HOME\opencode\commands\as-test.md`, у процессу задан через env);
+2. Проектно: `.opencode/commands/<name>.md` (доки; на стенде проект-конфиг отключён `OPENCODE_DISABLE_PROJECT_CONFIG=1` — не проверено);
+3. `commands`-map в любом opencode.json: `{template (обязателен), description, agent, model: "provider/model#variant", subagent}` — живьём: команда `as-json` из конфига видна в списке и выполняется;
+4. Формат md: YAML-frontmatter (`description`, `agent`, `model`) + тело = шаблон; `$ARGUMENTS` — вся строка аргументов (живьём: подставилось); позиционные `$1`/`$2` и shell-блоки — по докам, живьём не проверено;
+5. Вложенные каталоги → имя команды со слэшем: живьём получено случайно (копирование каталога внутрь себя) — в списке появились `commands/as-agent`, `commands/as-test`;
+6. Hot-reload по докам («reloads command files … automatically») на стенде НЕ подтвердился: md-файл, добавленный после старта, в `GET /api/command` в течение секунд не появился; после рестарта есть. Для портала: команды кладутся при выкате, до старта serve.
+
+**Список**: `GET /api/command?location[directory]=…` → `{location, data:[{name, description}]}` — живой фрагмент:
+
+```json
+{"location":{"directory":"D:\\…\\ws-cmd"},"data":[
+  {"name":"init","description":"guided AGENTS.md setup"},
+  {"name":"review","description":"review changes [commit|branch|pr], defaults to uncommitted"},
+  {"name":"goal","description":"keep working until an objective is met [pause|resume|clear]"},
+  {"name":"as-json","description":"Команда из commands-map конфига (эксперимент FEAT-16.3)"},
+  {"name":"as-agent","description":"Пробная команда с привязкой агента и модели (FEAT-16.3)"},
+  {"name":"as-test","description":"Пробная команда стенда (эксперимент FEAT-16.3)"}]}
+```
+
+Без `location` — дефолтная папка процесса. Нюанс: **сразу после старта на неинициализированной локации `data` может прийти пустым** (на стенде пустой список до прогрева, полный — после) — перед чтением грейте локацию любым instance-запросом (`/api/location`, `/api/mcp`), как в warmup (BUG-183).
+
+**Выполнение**: `POST /api/session/{sessionID}/command`, тело `{name (обязателен), text (обязателен), files?, agents?, skills?, delivery?}` → **204 за 16–31 мс**, execution идёт в фоне (`/api/session/active` показывает `running` сразу после ответа; события/история — как у обычного хода). Это НЕ синхронный ход 1.x: v1 держал запрос весь ход (BUG-183), v2 отвечает сразу — fire-and-forget портала валиден без изменений, ход обрывается через `/interrupt` как обычный.
+
+**Раскрытие и ход команды** (живьём, команда `as-test`, шаблон «Ответь словом КОМАНДА-ОК и повтори аргументы: $ARGUMENTS», вызов `{name:"as-test", text:"арг один два"}`):
+
+- user-сообщение в истории — **раскрытый шаблон**: `"Ответь словом КОМАНДА-ОК и повтори аргументы: арг один два"`; запись плоская `{id, time, text, type:"user"}` — флага `expanded` в v2 нет (в 1.x был);
+- ответ модели: `"КОМАНДА-ОК. Аргументы: арг один два"`, маркер `idle {outcome:"succeeded"}`.
+
+**Привязка агента/модели** (в теле вызова НЕТ полей agent/model — в отличие от 1.x `commandBody`):
+
+- frontmatter команды применяется к ходу: команда с `agent: orchestrator, model: zai-coding-plan/glm-5.3-flash` дала assistant-запись `agent:"orchestrator"`, `model:{…,"variant":"default"}` (живьём);
+- без frontmatter — **модель сессии**: после `POST /api/session/{sid}/model {"model":{"providerID":"zai-coding-plan","id":"glm-5.3","variant":"high"}}` ход команды шёл на `glm-5.3/high` — в истории `model-switched` и `model` в assistant-записи (живьём). Для портала: привязка чата в v2 — через `setSessionModel`/`setSessionAgent` перед ходом (тот же механизм, что для prompt, tasks 3.5); поля model/variant тела 1.x адаптер v2 отбрасывает.
+
+**Обычный prompt НЕ раскрывает команды** (вопрос 3): `POST /api/session/{sid}/prompt {"text":"/as-test прямой тест"}` — payload остался сырым (`"text":"/as-test прямой тест"`), модель ответила, что команда не определена и «сообщение дошло как обычный текст». Раскрытие — только через `/command`. Семантика BUG-188 сохраняется: портал обязан сам перехватывать «/имя аргументы» и звать runCommand (gate в server.js:241 для v2 теперь можно снимать — адаптер v2 реализует listCommands/runCommand).
+
+**Ошибки** (живьём + спека): неизвестная команда → `404 {"_tag":"CommandNotFoundError","command":"no-such-cmd","message":"Command not found: no-such-cmd"}`; спека 404 также допускает `SessionNotFoundError`/`LocationNotFoundError`, 500 — `CommandExecutionError`. Ответы 4xx/5xx адаптер возвращает вызывателю как `{status, json, text}` (не бросок) — различение «400/404» портала работает и в v2.
+
+**Не проверено живьём**: `files/agents/skills/delivery` в теле, subagent-команды (фоновые), позиционные `$1`/`$2`, shell-блоки шаблона, legacy-каталог `command/` (доки: дисковерится), project-зона `.opencode/commands/`.
 
 ---
 
@@ -303,7 +351,9 @@ glm-5.3 | variants: low,high,max
 
 ## 12. Не проверено / риски миграции (сводка)
 
-**Не проверено живьём** (только спека или доки): `GET /api/session/{sid}/diff` (параметры from/to), `revert/commit` с реальными правками файлов (без правок files пуст), `POST /api/session/{sid}/agent`, формы questions (создание/ответ/отмена), tool-часть в истории сообщений (нужен ход с edit/write), `POST /api/location/reload`, `PATCH /api/experimental/config`, `PUT /api/experimental/mcp/*`, фильтр `?types=` в реальном стриме (перечень типов из спеки), `decision:"always"` в permission reply, `delivery:"queue"` (ход во время другого хода), `POST /api/session/{sid}/fork`, поле `snapshots` конфига.
+**Не проверено живьём** (только спека или доки): `GET /api/session/{sid}/diff` (параметры from/to), `revert/commit` с реальными правками файлов (без правок files пуст), `POST /api/session/{sid}/agent`, формы questions (создание/ответ/отмена), tool-часть в истории сообщений (нужен ход с edit/write), `POST /api/location/reload`, `PATCH /api/experimental/config`, `PUT /api/experimental/mcp/*`, фильтр `?types=` в реальном стриме (перечень типов из спеки), `decision:"always"` в permission reply, `delivery:"queue"` (ход во время другого хода), `POST /api/session/{sid}/fork`, поле `snapshots` конфига, `files/agents/skills/delivery` в теле `/api/session/:id/command`, subagent-команды и позиционные `$1`/`$2` (раздел 1а).
+
+**files[] в теле prompt — форма 2.2.6 (v2fix3, 2026-11-08)**: `PromptInput.FileAttachment = {uri (обязателен), name?, description?, source?}` (schema/prompt-input.ts anomalyco/opencode; приложение шлёт `{uri: data:URL, name}`). Поля `mime` в теле нет — upstream синтезирует mime из data: URL; `filename`/`url` из частей 1.x в v2-форме не существуют (upstream: 400 `Missing key at ["files"][0]["uri"]`, поймано на стенде :4174 батареей vision). Адаптер (lib/oc-client.js) переводит: `url → uri` (data:/file:/http(s) как есть, голый абсолютный путь → file:// URI — вложения .zai-uploads, BUG-140/163), `filename → name`; часть без источника uri не шлётся.
 
 **Риски, обнаруженные при проверках**:
 
@@ -316,5 +366,6 @@ glm-5.3 | variants: low,high,max
 7. **Hub**: одно соединение вместо пула per-directory; фильтрация тенантов — по `event.location.directory`; часть событий приходит без `location`.
 8. **204-ответы** мутаций — подтверждения только через GET/события; логика «PATCH вернул объект» в портале переписывается.
 9. **Вопросы (question) исчезли как отдельная сущность** — модальное окно портала должно уметь `Form.Info` с типизированными полями (string/number/integer/boolean/multiselect/select и др.).
+10. **Слэш-команды в v2** (раздел 1а): hot-reload файлов команд на стенде не подтвердился (кладётся до старта serve); `GET /api/command` на неинициализированной локации может вернуть пустой список (грейте локацию); ход команды асинхронный — ошибки execution не видны в ответе вызова, портал узнаёт о них из событий/истории, как о ходе prompt; привязка модели чата — `setSessionModel` до хода (commandBody-поля model/variant адаптер v2 отбрасывает).
 
 **Другой конфиг для будущих проверок** (только описание, не применялось): изолированный serve с конфигом, приближенным к продовому портала — `opencode.json` с заполненными `model`, `default_agent`, `snapshots:false`, настроенным MCP и заранее заполненной credential-таблицей; отдельный data-каталог, чтобы не смешивать с текущим инстансом на :4099. Цели: проверить слоёный конфиг (раздел 11), поведение `snapshots:false` при реверте и необходимость прогрева (риск № 2).

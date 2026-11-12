@@ -7,14 +7,19 @@
 // live ({since, lastAction, lastActivityAt} | null, from ChatView): while a
 // turn runs, a slim line under the feed says how long it has been working
 // and what it did last — «is it alive?» from a phone (BUG-13.3 / R-21).
+import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import MessageBubble from "./MessageBubble.jsx";
+import { RelayMark } from "./Relay.jsx";
+import { placeRelayMarks } from "../../lib/relay.js";
 import { RevertedRow } from "./TurnActions.jsx";
 import { livenessLine } from "../../lib/turn.js";
 import { loadTurnFiles } from "../../lib/turn-files.js";
-import { activeSessionDir, execDetailOn, prefs } from "../../lib/store.js";
+import { activeSessionDir, execDetailOn, prefs, sessions } from "../../lib/store.js";
 import { compactFeed, revealTarget } from "../../lib/exec-detail.js";
-import TurnPreloader from "./TurnPreloader.jsx";
+// FEAT-01.77: прелоадер компактной ленты переехал в связку AgentRuns — там
+// подписки на агентов, чтобы лента не читала их сама.
+import { TurnAgentsPreloader } from "./AgentRuns.jsx";
 import { t } from "../../lib/i18n.js";
 
 // FEAT-03.19: with «Детализация выполнения» off (the default) the running turn
@@ -202,6 +207,8 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
   const revealId = revealRef.current;
   const all = compact ? compact.messages : messages;
   const visible = all.length > windowSize ? all.slice(all.length - windowSize) : all;
+  // FEAT-11.18: отметки передачи чата между движками — из записи чата, по времени
+  const relayMarks = placeRelayMarks(visible, sessions.value.find((s) => s.id === sessionId)?.zai?.relays ?? null);
   const hasMore = all.length > visible.length || (older.has && !exhausted);
   // The top of a long paged history is reached: say so instead of a button.
   const historyStart = !hasMore && older.paged;
@@ -268,9 +275,11 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
             const id = m.info?.id ?? String(i);
             const streaming = id === streamingId;
             const prev = visible[i - 1];
+            const marks = relayMarks.before.get(id);
             return (
+              <Fragment key={id}>
+              {marks ? marks.map((mk) => <RelayMark key={"relay-" + mk.at} mark={mk} />) : null}
               <MessageBubble
-                key={id}
                 msg={m}
                 streaming={streaming}
                 showRole={i === 0 || prev?.info?.role !== "assistant"}
@@ -278,8 +287,10 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
                 reveal={id === revealId}
                 onRevealed={onRevealed}
               />
+              </Fragment>
             );
           })}
+          {relayMarks.tail.map((mk) => <RelayMark key={"relay-" + mk.at} mark={mk} />)}
           {reverted && <RevertedRow sid={sessionId} />}
           {typing && (
             <div class="msg msg-assistant msg-typing" role="status" aria-label={t("chat.typing")}>
@@ -290,7 +301,9 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
               </div>
             </div>
           )}
-          {compact?.preloader && <TurnPreloader />}
+          {/* FEAT-01.77: компактная лента — прелоадер держится, пока busy или
+              работают агенты; подпись с именами — у работающих агентов */}
+          {compact && <TurnAgentsPreloader busy={busy} />}
           {live && detail && <div class="turn-live">{livenessLine(live)}</div>}
         </div>
       </div>

@@ -105,7 +105,7 @@ test("real CLI 2.1.316 recording: steps, thinking summary, read/bash cards, fail
   assert.ok(tr.text().includes(result.result.trim().slice(0, 20)), "answer text = what the CLI reported");
 });
 
-test("subagent traffic (parent_tool_use_id) never becomes parts; the Task call is one agent card (FEAT-13.19 в)", () => {
+test("subagent traffic (parent_tool_use_id) never becomes separate parts; the Task call is one agent card (FEAT-13.19 в, FEAT-01.77)", () => {
   const tr = make();
   const ops = [
     { type: "stream_event", event: { type: "message_start", message: { id: "m1" } } },
@@ -124,7 +124,13 @@ test("subagent traffic (parent_tool_use_id) never becomes parts; the Task call i
   assert.equal(task.state.title, "Найти тесты");
   assert.equal(task.state.input.subagent_type, "Explore");
   assert.equal(task.state.output, "Нашёл 3 файла");
-  assert.equal(JSON.stringify(parts).includes("SUB"), false);
+  // FEAT-01.77: трафик субагента достраивает zaiRun части Task (шаги, ответ),
+  // но отдельными частями и в тексте основной беседы не появляется
+  const z = task.state.metadata.zaiRun;
+  assert.deepEqual(z.steps.map((s) => [s.tool, s.status]), [["grep", "done"]]);
+  assert.equal(z.output, "SUBAGENT");
+  assert.equal(JSON.stringify(parts.filter((p) => p.type !== "tool")).includes("SUB"), false, "текст субагента не становится частью ответа");
+  assert.equal(tr.text().includes("SUBAGENT"), false);
 });
 
 test("finish(): open tool → error, open reasoning closed (stop mid-call, FEAT-13.19 е)", () => {

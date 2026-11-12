@@ -1239,9 +1239,9 @@
 
 .login-word {
   font-family: var(--font-serif);
-  font-size: 40px;
+  font-size: 32px; /* TASK-01.82: «Teleharness» длиннее «zai», влезает в 320 px */
   font-weight: 500;
-  letter-spacing: -0.8px;
+  letter-spacing: -0.6px;
   line-height: 1;
   color: var(--text);
 }
@@ -2545,3 +2545,14 @@
   .settings-root .set-link .set-row-value { grid-column: 2; grid-row: 2; max-width: none; font-size: 13px; }
   .settings-root .set-link .set-chevron { grid-column: 3; grid-row: 1 / span 2; }
 }
+
+/* == FEAT-11.18: «Подписки» — карточки провайдеров (макет relay.html, кадры 4–5) == */
+.sub-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sub-name { font-weight: 650; }
+.sub-badge { font-size: 12.5px; font-weight: 500; color: var(--text-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; line-height: 20px; }
+.sub-at { margin-left: auto; font-size: 12.5px; font-weight: 400; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.sub-money { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.sub-big { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.sub-big b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sub-big span { font-size: 13.5px; color: var(--text-2); }
+.sub-card .set-value.is-error, .sub-card .host-note.is-error { color: var(--error); }

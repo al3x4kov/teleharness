@@ -23,16 +23,16 @@ function Svg({ children, size = 22 }) {
   );
 }
 
-// Знак zai: восьмилучевая «искра» — роль и цвет знака Claude, но своя форма
-// (товарный знак Anthropic не копируется, FEAT-09.20 «Решения» п.1).
+// Знак Teleharness (TASK-01.82, выбор владельца 2026-11-11 — форма А): «>» терминала
+// и две дуги связи, цвет --brand (индиго). Прежняя «искра» повторяла знак Claude.
+// Имя компонента и класс .zai-mark — внутренние, не переименованы.
 export function ZaiMark({ size = 40 }) {
-  const rays = [0, 45, 90, 135, 180, 225, 270, 315];
   return (
-    <svg class="zai-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true">
-      {rays.map((a, i) => (
-        <rect key={a} x="18.6" y={i % 2 ? 5 : 2} width="2.8" height={i % 2 ? 13 : 16} rx="1.4"
-          transform={`rotate(${a} 20 20)`} fill="currentColor" />
-      ))}
+    <svg class="zai-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true"
+      fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 10.5 L15.5 20 L6 29.5" stroke-width="4.2" />
+      <path d="M21 14 a8.5 8.5 0 0 1 0 12" stroke-width="3.8" />
+      <path d="M27 8.5 a16 16 0 0 1 0 23" stroke-width="3.8" opacity="0.55" />
     </svg>
   );
 }

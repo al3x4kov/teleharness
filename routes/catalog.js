@@ -9,41 +9,69 @@
 //         hostStats, opencodeVersion, version }
 import { tenantMcpView } from "../lib/policy.js";
 
-export function catalogRoutes(deps) {
-  const { sendJson } = deps;
-  // BUG-183: MCP statuses of ONE opencode instance (`dir`). The timeout is the
-  // warm-up one (120 s), never opencode's own MCP connect timeout (30 s): aborting
-  // during the MCP init would poison the folder (lib/instance-health.js). A 499/503
-  // = poisoned → heal (dispose the instance when idle) and ask again.
-  // null = upstream still failing.
-  async function fetchMcp(dir) {
-    const health = deps.instanceHealth;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt) await new Promise((r) => setTimeout(r, 500));
-      try {
+// BUG-183: MCP statuses of ONE opencode instance (`dir`). The timeout is the
+// warm-up one (120 s), never opencode's own MCP connect timeout (30 s): aborting
+// during the MCP init would poison the folder (lib/instance-health.js). A 499/503
+// = poisoned → heal (dispose the instance when idle) and ask again.
+// null = upstream still failing.
+// TASK-12.31 (SRV-29): общий бюджет на оба захода (по умолчанию 130 с вместо ~240):
+// попытка получает min(warm, остаток); на вторую идём, только если остатка хватает
+// на полноценную попытку (не короче MCP connect timeout + запас) — иначе null.
+export async function fetchMcpStatus(deps, dir) {
+  const health = deps.instanceHealth;
+  const oc = deps.oc;
+  const warm = health?.warmTimeoutMs ?? 120_000;
+  const budget = deps.mcpBudgetMs ?? 130_000;
+  const minAttempt = deps.mcpMinAttemptMs ?? 45_000;
+  const started = Date.now();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, deps.mcpRetryDelayMs ?? 500));
+    const left = budget - (Date.now() - started);
+    if (attempt && left < minAttempt) break;
+    const timeoutMs = Math.max(1, Math.min(warm, left));
+    try {
+      let data = null;
+      let status = 0;
+      if (oc) {
+        try {
+          data = await oc.mcpStatus({ directory: dir, timeoutMs });
+        } catch (err) {
+          status = err?.status ?? 0;
+        }
+      } else {
         const r = await fetch(`${deps.upstream}/mcp?directory=${encodeURIComponent(dir)}`, {
           headers: { accept: "application/json" },
-          signal: AbortSignal.timeout(health?.warmTimeoutMs ?? 120_000),
+          signal: AbortSignal.timeout(timeoutMs),
         });
-        if ((r.status === 499 || r.status === 503) && health && attempt === 0) {
-          await r.text().catch(() => "");
-          await health.heal(dir);
-          continue;
-        }
+        status = r.status;
         const text = r.ok ? await r.text() : "";
         if (text.trim()) {
-          const data = JSON.parse(text);
-          if (data && typeof data === "object" && !Array.isArray(data)) return data;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            data = null;
+          }
         }
-        deps.errLog?.("mcp", new Error(`upstream /mcp ${r.status}${text.trim() ? "" : " (empty)"} for ${dir}`));
-      } catch (err) {
-        deps.errLog?.("mcp", err);
       }
+      if ((status === 499 || status === 503) && health && attempt === 0) {
+        await health.heal(dir);
+        continue;
+      }
+      if (data && typeof data === "object" && !Array.isArray(data)) return data;
+      deps.errLog?.("mcp", new Error(`upstream /mcp ${status || "пустой ответ"} for ${dir}`));
+    } catch (err) {
+      deps.errLog?.("mcp", err);
     }
-    return null;
   }
+  return null;
+}
+
+export function catalogRoutes(deps) {
+  const { sendJson } = deps;
+  const fetchMcp = (dir) => fetchMcpStatus(deps, dir);
   // RAW merged run status, cached STATUS_TTL_MS (was module state in server.js).
   let statusCache = { at: 0, data: {} };
+  let statusPending = null; // SRV-30: один пересчёт на всех, кто пришёл с истёкшим кэшем
   return [
     // Authoritative per-session run status (busy/idle/retry), fanned out per
     // hub-subscribed directory and merged; RAW merge cached, tenant filtering
@@ -59,21 +87,34 @@ export function catalogRoutes(deps) {
         res.setHeader("x-zai-epoch", hub.epoch);
         const now = Date.now();
         if (now - statusCache.at >= deps.statusTtlMs) {
+         statusPending ??= (async () => {
           const dirs = hub.directories();
-          const maps = await Promise.all(
-            dirs.map(async (d) => {
-              try {
-                const u = new URL("/session/status", deps.upstream);
-                u.searchParams.set("directory", d);
-                const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
-                if (!r.ok) return null;
-                return await r.json();
-              } catch (err) {
-                deps.errLog("status.fanout", err);
-                return null;
-              }
-            }),
-          );
+          const oc = deps.oc;
+          // FEAT-16.3: с клиентом — busyMap адаптера; v2 карта глобальна —
+          // один вызов вместо веера по папкам (tasks 3.2).
+          const maps = oc
+            ? await (async () => {
+                try {
+                  return [await oc.busyMap({ timeoutMs: 8000 })];
+                } catch (err) {
+                  deps.errLog("status.fanout", err);
+                  return [null];
+                }
+              })()
+            : await Promise.all(
+                dirs.map(async (d) => {
+                  try {
+                    const u = new URL("/session/status", deps.upstream);
+                    u.searchParams.set("directory", d);
+                    const r = await fetch(u, { signal: AbortSignal.timeout(8000) });
+                    if (!r.ok) return null;
+                    return await r.json();
+                  } catch (err) {
+                    deps.errLog("status.fanout", err);
+                    return null;
+                  }
+                }),
+              );
           const data = {};
           for (const mm of maps) if (mm && typeof mm === "object") Object.assign(data, mm);
           for (const [sid, pending] of Object.entries(hub.stalledSnapshot())) {
@@ -88,6 +129,10 @@ export function catalogRoutes(deps) {
             data[sid] = { ...(data[sid] ?? { type: "busy" }), since: data[sid]?.since ?? live.startedAt, live };
           }
           statusCache = { at: now, data };
+         })().finally(() => {
+           statusPending = null;
+         });
+         await statusPending;
         }
         if (admin) return sendJson(res, 200, statusCache.data);
         const index = await deps.fetchSessionIndex();
@@ -119,8 +164,12 @@ export function catalogRoutes(deps) {
       scope: "user",
       handler: async ({ req, res, user, admin }) => {
         const { claude, upstream } = deps;
-        if (admin) return claude.handleProvider(req, res, upstream);
-        const captured = await deps.captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, upstream));
+        // v2fix2: в v2-режиме источником тела каталога служит готовая функция
+        // из server.js (deps.providerCatalog — клиент адаптера + модели);
+        // без неё handleProvider читает ${upstream}/provider как в v1.
+        const catalogSource = deps.oc ? deps.providerCatalog ?? null : null;
+        if (admin) return claude.handleProvider(req, res, upstream, { catalog: catalogSource });
+        const captured = await deps.captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, upstream, { catalog: catalogSource }));
         if (captured.status !== 200) return sendJson(res, captured.status === 304 ? 502 : captured.status, { error: "provider unavailable" });
         let catalog;
         try {
@@ -147,11 +196,21 @@ export function catalogRoutes(deps) {
       path: "/zai/api/agent",
       scope: "user",
       handler: async ({ req, res, url, admin }) => {
-        if (admin)
+        if (admin) {
+          if (deps.oc) {
+            // FEAT-16.3: v2 /api/agent (№21) — тело как у v1 /agent; ETag-кэш
+            // proxyRequest в v2 не строится (см. отчёт шага).
+            try {
+              return sendJson(res, 200, await deps.oc.listAgents({ timeoutMs: deps.defaultOpts.timeoutMs }));
+            } catch (err) {
+              return deps.ocUpstreamError(res, err, "agent");
+            }
+          }
           return deps.proxyRequest(req, res, deps.withQuery("/agent", url.search), {
             ...deps.defaultOpts,
             cacheKey: "agent", // 60s in-memory cache + ETag
           });
+        }
         // Tenants: only agents without delegation/outside files (shell is jailed, FEAT-04.9), without prompts/permission rules.
         return sendJson(res, 200, deps.tenantAgents(await deps.agentList()).map(deps.publicAgent));
       },
@@ -162,14 +221,28 @@ export function catalogRoutes(deps) {
       scope: "user",
       handler: async ({ req, res, url, user, admin }) => {
         const q = url.search;
-        if (admin) return deps.proxyRequest(req, res, deps.withQuery("/project", q), deps.defaultOpts);
+        if (admin) {
+          if (deps.oc) {
+            try {
+              return sendJson(res, 200, await deps.oc.listProjects({ timeoutMs: deps.defaultOpts.timeoutMs })); // №25: голый массив
+            } catch (err) {
+              return deps.ocUpstreamError(res, err, "project");
+            }
+          }
+          return deps.proxyRequest(req, res, deps.withQuery("/project", q), deps.defaultOpts);
+        }
         try {
-          const r = await fetch(`${deps.upstream}/project${q}`, {
-            headers: { accept: "application/json" },
-            signal: AbortSignal.timeout(deps.defaultOpts.timeoutMs),
-          });
-          if (!r.ok) return sendJson(res, 502, { error: `upstream: ${r.status}` });
-          const list = await r.json();
+          let list;
+          if (deps.oc) {
+            list = await deps.oc.listProjects({ timeoutMs: deps.defaultOpts.timeoutMs });
+          } else {
+            const r = await fetch(`${deps.upstream}/project${q}`, {
+              headers: { accept: "application/json" },
+              signal: AbortSignal.timeout(deps.defaultOpts.timeoutMs),
+            });
+            if (!r.ok) return sendJson(res, 502, { error: `upstream: ${r.status}` });
+            list = await r.json();
+          }
           if (!Array.isArray(list)) return sendJson(res, 200, []);
           return sendJson(res, 200, list.filter((pr) => deps.dirAllowed(user, pr?.worktree ?? pr?.directory ?? pr?.path)));
         } catch (err) {
@@ -222,7 +295,31 @@ export function catalogRoutes(deps) {
         try {
           harness = (await deps.harnessVersions?.()) ?? {};
         } catch {}
-        return sendJson(res, 200, { version: deps.version, opencodeVersion: oc, omoVersion: harness.omoVersion ?? null, claudeVersion: harness.claudeVersion ?? null });
+        return sendJson(res, 200, { version: deps.version, opencodeVersion: oc, omoVersion: harness.omoVersion ?? null, harness: harness.harness ?? null, claudeVersion: harness.claudeVersion ?? null });
+      },
+    },
+    // FEAT-11.18 (шаг А): расход подписок по подключённым провайдерам — всем пользователям
+    // (расход подписок не секретен). Тенант видит
+    // карточки только тех провайдеров, чьи модели ему доступны. Ключей в ответе нет.
+    {
+      method: "GET",
+      path: "/zai/api/subscriptions",
+      scope: "user",
+      handler: async ({ res, user, admin }) => {
+        try {
+          const captured = await deps.captureResponse((shim) => deps.claude.handleProvider({ headers: {} }, shim, deps.upstream, { catalog: deps.oc ? deps.providerCatalog ?? null : null }));
+          let catalog = null;
+          try {
+            catalog = captured.status === 200 ? JSON.parse(captured.body) : null;
+          } catch {}
+          if (!catalog) return sendJson(res, 503, { error: "subscriptions unavailable" });
+          const visible = admin ? catalog : deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude") });
+          const connected = Array.isArray(visible?.connected) ? visible.connected : [];
+          return sendJson(res, 200, { providers: await deps.subscriptionCards({ connected, zai: deps.usageStats }) });
+        } catch (err) {
+          deps.errLog("subscriptions", err);
+          return sendJson(res, 503, { error: "subscriptions unavailable" });
+        }
       },
     },
     // z.ai Coding Plan usage: the OWNER's subscription — admin only.

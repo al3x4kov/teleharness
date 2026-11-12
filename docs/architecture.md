@@ -1,9 +1,9 @@
 ---
 type: architecture
-updated: 2026-11-03
-version: zai 1.7.0 (src/lib/version.js, package.json → /zai/api/healthz); коммит f4a9afe + незакоммиченные правки 1.7.0 (полное ревью, группы Г1–Г8, интеграция, финальные фиксы); на стенде D:\zai-stage — 1.7.0, на проде — до выката 1.6.1-сборка; upstream opencode 1.19.5; claude CLI 2.1.x
+updated: 2026-11-11
+version: zai 1.16.5 (src/lib/version.js, package.json → /zai/api/healthz); прод = рабочее дерево D:\Portal\zai (задача zai-web, действие ops\web-v2.cmd); upstream opencode serve 2.2.6 :4196 (задача zai-opencode-v2, с 1.16.0 = 2026-11-08); claude CLI 2.1.322; стенд v2 — D:\zai-stage\stand-v2.ps1 (:4174/:4101); до 2026-11-08 — opencode 1.19.5 :4096, выведен
 graph: graphify (update 2026-11-03 после финальных фиксов) — весь граф 3554 узла / 5803 ребра / 304 сообщества; god-узлы handleApi() 89, EventHub 69, ClaudeRunner 36, reduce() 24. Цифры §2.1 — снимок 2026-11-02 (1.6.1), оставлены для сравнения
-source: server.js, lib/*.js, shared/engine.js, ops/portal-server.js, ops/watchdog-zai.ps1, D:\Portal\watchdog.ps1, D:\zai-stage\stand.cmd/stand.ps1, build.mjs, src/lib/*.js, src/lib/store/*.js, ключевые .jsx; ревью и реализация docs/reviews/2026-11-02/* (impl-G1…G8, integration.md, final-fixes.md); docs/ops-runbook.md
+source: server.js, lib/*.js, shared/engine.js, ops/portal-server.js, ops/watchdog-zai.ps1, D:\Portal\watchdog.ps1, ops/web-v2.cmd, ops/opencode/serve-v2.cmd, ops/deploy/oc2-install.ps1, D:\zai-stage/stand-v2.ps1, D:\zai-stage/deploy-1.16.x.ps1 (шапки), build.mjs, src/lib/*.js, src/lib/store/*.js, ключевые .jsx; ревью и реализация docs/reviews/2026-11-02/* (impl-G1…G8, integration.md, final-fixes.md), docs/reviews/2026-11-10/ops.md; docs/ops-runbook.md
 supersedes: редакция «UI 1.6.1» того же файла (2026-11-02)
 ---
 
@@ -69,8 +69,8 @@ flowchart LR
     BS["BindingStore (lib/binding.js)"]
     STA["lib/static.js → public/"]
   end
-  OC["opencode serve<br/>127.0.0.1:4096<br/>задача zai-opencode-serve"]
-  OCS["opencode serve стенда<br/>127.0.0.1:4097<br/>D:\zai-stage\opencode"]
+  OC["opencode serve 2.2.6<br/>127.0.0.1:4196<br/>задача zai-opencode-v2<br/>зона D:\Portal\zai-oc2"]
+  OCS["opencode serve стенда v2<br/>127.0.0.1:4101<br/>D:\zai-stage\oc2"]
   CLI["claude.exe -p …<br/>stream-json, cwd = каталог чата"]
   ZAI["api.z.ai<br/>квота Coding Plan"]
   TV["TV API 127.0.0.1:8099"]
@@ -88,8 +88,8 @@ flowchart LR
   API --> POL
   API --> LOG
   CFG -.-> API
-  API -- REST-прокси, ?directory= --> OC
-  HUB -- "N × SSE /event?directory=" --> OC
+  API -- "адаптер lib/oc-client.js (ZAI_OC_API=v2, Basic)" --> OC
+  HUB -- "поток событий opencode (адаптер)" --> OC
   API -- "SSE /zai/api/event" --> HUB
   API -- prompt (engine=claude) --> CR
   CR -- spawn --> CLI
@@ -101,7 +101,7 @@ flowchart LR
   BS --> DATA
   CR --> DATA
   STAND -- "тот же код, свой data/public,<br/>свой upstream (1.7.0, ADR-003)" --> OCS
-  WD -. "порты 80/443/4170/4096" .-> Edge
+  WD -. "порты 80/443/4170/4196" .-> Edge
   WD -.-> Portal
   WD -.-> OC
 ```
@@ -112,16 +112,17 @@ flowchart LR
 |---|---|---|
 | LAN/Интернет → edge :80/:443 | любой клиент без авторизации | edge: `/zai*` по http — 308 на https; статика — allow-list `D:\Portal\tv`; отказ путям с `:`, `~`, управляющими символами и хвостовыми точками/пробелами; try/catch вокруг маршрутизации (§6.2) |
 | edge → server.js :4170 | только 127.0.0.1 | server.js слушает `127.0.0.1`; авторизация — sid-кука/Bearer в каждом `/zai/api/*`, кроме `auth/login|logout|me` и `healthz` (только прямой loopback); мутирующие запросы с `Sec-Fetch-Site: cross-site` или чужим `Origin` → 403 (1.7.0); edge перезаписывает `x-forwarded-*` (ADR-009) |
-| server.js → opencode :4096 | доверенный локальный сервис | все session-вызовы пинят `?directory=` (`withDir`, `scopedQuery`); у тенанта и у admin-промпта каталог берётся из серверного индекса сессий, а не из запроса (1.7.0); кука и `authorization` портала в opencode не уходят |
+| server.js → opencode :4196 | доверенный локальный сервис, Basic `opencode:<пароль из data\oc2-password.txt>` | все вызовы идут через адаптер `lib/oc-client.js` (`ZAI_OC_API=v2`); каталог сессии — из серверного индекса, а не из запроса; кука и `authorization` портала в opencode не уходят |
 | server.js → claude.exe | процесс с правами владельца | 1.7.0: промпт через stdin, окружение по allow-list без `ZAI_*`; профиль прав по роли — admin `bypassPermissions` + `--add-dir`, tenant `--restricted --strict-mcp-config` (ADR-004). OS-изоляции нет: тенанту Claude закрыт, пока admin не включит `engines` |
 | server.js → api.z.ai | внешний HTTPS | ключ владельца из `~/.local/share/opencode/auth.json`, только для admin |
-| Стенд :4172 → opencode стенда :4097 | свой upstream (1.7.0) | `ZAI_UPSTREAM=http://127.0.0.1:4097`; guard: экземпляр с `ZAI_ENV≠prod` (кроме мока) и upstream :4096 не стартует (ADR-003). До 1.7.0 стенд работал с прод-upstream |
+| Стенд v2 :4174 → opencode стенда :4101 | свой upstream | `ZAI_UPSTREAM=http://127.0.0.1:4101`, `ZAI_OC_API=v2` (stand-v2.ps1); guard: экземпляр с `ZAI_ENV≠prod` (кроме мока) и upstream :4096 не стартует (ADR-003; guard смотрит только :4096 — см. server.js). До 1.7.0 стенд работал с прод-upstream |
 
 ### 1.3. Внешние зависимости
 
 - npm runtime: нет. `package.json` содержит только devDependencies (esbuild,
   preact, @preact/signals, marked, dompurify, highlight.js).
-- Внешние процессы: `opencode serve` 1.19.5 (контракт зафиксирован в
+- Внешние процессы: `opencode serve` 2.2.6 на `:4196` (портал ходит через
+  адаптер `lib/oc-client.js`; контракт 1.19.5 зафиксирован в
   `fixtures/`), `claude.exe` (по умолчанию
   `C:\Users\USER\.local\bin\claude.exe`), PowerShell CIM (lib/host.js).
 - Внешние сервисы: `api.z.ai` (квота), подписка Anthropic (через CLI).
@@ -221,8 +222,9 @@ store-фасад (integration.md §1); `globalThis.__zaiActiveId` удалён. 
 | `/session` | GET | все | список upstream; у тенанта — фильтр `dirAllowed`; сессии из TEMP скрыты (`ZAI_HIDE_TEMP_SESSIONS`); поле `zai` (привязка + source) |
 | `/session` | POST | все | `dirProblem`/`driveProblem` (400 с `code`) → `dirAllowed` → гейт движка/агента тенанта (403 `engine not allowed`/`agent not allowed`) → `mkdirSync` → upstream; агент тенанта по умолчанию — `defaultTenantAgent` |
 | `/session/:id/binding` | PATCH | все (тенант — в скоупе) | смена модели/агента; гейт тенанта; 409 «engine locked» после первого сообщения |
+| `/session/:id/binding` c `{relay:true, model, agent?, reason?}` | PATCH | все (тенант — в скоупе) | передача чата на другую модель или движок (FEAT-11.18, 1.19.0): 409 во время хода, 400 для пустого чата и той же модели; журнал пишется принудительно, отметка — в `relays.json`, лента сообщений сливается из обоих движков по времени; первый запрос после передачи получает скрытую (synthetic) часть с ходами, которых у движка нет (BUG-232, 1.19.2: до 8000 знаков, обрезка названа, остальное — в журнале) |
 | `/session/:id/message` | GET | все | пагинация `limit`/`before` (`x-zai-has-more`, `x-zai-next-before`); Claude-история → `mergedMessages`; для не-admin tool-части редактируются (`redactMessages`) |
-| `/session/:id/prompt` | POST | все | гейт тенанта до любых побочных эффектов; квота тела тенанта (8 МБ) и rate limit; `materializeFileParts` → привязка → Claude (`dispatch({access})`, 204; при занятом ходе — в очередь, 409 только при переполнении) или `hub.prepareForPrompt` + `prompt_async` (600 с); admin-каталог — из индекса сессий |
+| `/session/:id/prompt` | POST | все | гейт тенанта до любых побочных эффектов; квота тела тенанта (8 МБ) и rate limit; `materializeFileParts` → привязка → Claude (`dispatch({access})`, 204; при занятом ходе — в очередь, 409 только при переполнении) или `hub.prepareForPrompt` + промпт opencode через адаптер `lib/oc-client.js` (600 с); admin-каталог — из индекса сессий |
 | `/session/:id/abort` | POST | все | живой Claude-ход → kill + отмена очереди; иначе upstream abort |
 | `/session/:id` | PATCH/DELETE | все | переименование/удаление; DELETE: скоуп → upstream 2xx → `claude.forget`/`bindings.forget` (ADR-001 шаг 1, BUG-12.6) |
 | `/status` | GET | все | fan-out `/session/status` + `stalledSnapshot()` + Claude `liveness()` (`live`, `since`); заголовок `x-zai-epoch`; кэш 3 с; фильтр тенанта |
@@ -321,7 +323,7 @@ sequenceDiagram
   participant E as edge :443
   participant S as server.js handleApi
   participant B as BindingStore
-  participant O as opencode :4096
+  participant O as opencode :4196 (oc-client)
   participant H as EventHub
   C->>E: POST /zai/api/session/:id/prompt?directory=…
   E->>S: тот же путь (+куки)
@@ -329,16 +331,16 @@ sequenceDiagram
   S->>S: readBody ≤64 МБ; materializeFileParts → <dir>/.zai-uploads
   S->>B: bindingFor(id) (stored → upstream → claude → null)
   S->>B: set({…binding, prompted:true}); applyBinding(body)
-  S->>O: POST /session/:id/prompt_async?directory=<dir> (таймаут 600 с)
+  S->>O: POST /api/session/:id/prompt (адаптер lib/oc-client.js, Basic; таймаут 600 с)
   O-->>S: 204
   S-->>C: 204
-  O-->>H: SSE /event?directory=<dir>: message.part.delta/updated, session.status
+  O-->>H: поток событий v2 через адаптер: дельты сообщений, статусы сессии
   H->>H: #noteEvent (busy/pending/dialogs) → ring (seq) → broadcast с visible(dir)
   H-->>C: SSE /zai/api/event → reduce() → сигналы
   Note over H,O: watchdog: stall-abort 900 с, dialog-timeout выкл. (1.7.0), replay 180 с (≤2, счётчик на диске), цикл ≥8 одинаковых tool-вызовов → abort
 ```
 
-С 1.7.0 перед `prompt_async` вызывается `hub.prepareForPrompt(id, dir)`: если
+С 1.7.0 перед промптом opencode вызывается `hub.prepareForPrompt(id, dir)`: если
 ход busy, молчит ≥ `ZAI_PROMPT_UNSTICK_MS` (120 с) и не ждёт диалога, хаб
 делает abort, и новый промпт стартует свежий ход (BUG-07.10).
 
@@ -388,7 +390,7 @@ keepalive подделывался событием `busy`, запись ист�
 
 | Аспект | opencode | claude |
 |---|---|---|
-| Где идёт ход | upstream `prompt_async` | дочерний процесс на каждый ход |
+| Где идёт ход | в opencode serve (:4196, через адаптер) | дочерний процесс на каждый ход |
 | История | upstream | `claude-sessions.json` (слияние с upstream при чтении) |
 | Занятый чат | очередь upstream | серверная FIFO-очередь до 5 (1.7.0; было 409) |
 | Агенты | да (тенанту — только shell-free) | нет (agent всегда null, BUG-11.2) |
@@ -470,6 +472,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `sessions.json` | lib/auth.js | **1.7.0**: `sha256(sid) → {userId, createdAt}` | при логине/отзыве | — | малый |
 | `admin-token.txt` | lib/auth.js | открытый bootstrap-токен admin | один раз при первом старте | — | 65 Б; **удалить после ротации (BUG-12.3)** |
 | `session-bindings.json` | lib/binding.js | `{version:1, sessions:{sid:{engine,model,agent,prompted,at}}}` | `writeJsonAtomic`, ошибки в лог | карантин `.corrupt-<ts>`, старт с пустого | 1,1 КБ |
+| `relays.json` | lib/relay.js | `{sid:[{at, from:{engine,providerID,modelID}, to:{…}, reason}]}` (до 50 отметок на чат) | `writeJsonAtomic`, ошибки в лог | карантин, старт с пустого; отметки пропадут из ленты, сами ходы целы |
 | `claude-sessions.json` | lib/claude.js | `{version:1, sessions:{sid:{directory,claudeSid,messages:[{info,parts}]}}}` | 1.7.0: `writeJsonAtomic` (tmp+rename), картинки — ссылки на `.zai-uploads/…` | карантин `.corrupt-<ts>`, старт с пустого без затирания (до 1.7.0 — потеря всей истории, R11) | растёт; файл-на-сессию (S6) не сделан |
 | `claude-runs.json` | lib/claude.js | **1.7.0**: живые ходы `{pid, image, spawnedAt, claudeSid, userMsgId, modelID}` | атомарно | — | малый |
 | `claude-models.json` | lib/claude.js | **1.7.0**: необязательное переопределение каталога Claude-моделей | вручную | неизвестная модель → 400 | — |
@@ -496,11 +499,16 @@ keepalive подделывался событием `busy`, запись ист�
 эффективная конфигурация с источником каждого значения и `***` у секретов.
 До 1.7.0 env читался в 10 файлах без проверки, и `NaN` тихо выключал защиту (R19).
 
-### 5.1. server.js и lib/* (схема `lib/config.js`, 30 переменных)
+### 5.1. server.js и lib/* (схема `lib/config.js`, 61 переменных)
+
+Таблица сверяется тестом `tests/docs-env-schema.test.js` со схемой `lib/config.js` (TASK-15.9):
+каждое имя схемы должно быть в таблице, дефолт — равен `def` из схемы (секреты и вычисляемые
+значения — только наличие строки).
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `PORT` | `4170` | порт (слушает только 127.0.0.1) |
+| `PORT` | `4170` | порт портала (слушает `ZAI_LISTEN_HOST`) |
+| `ZAI_LISTEN_HOST` | `127.0.0.1` | адрес прослушивания; в контейнере — `0.0.0.0` (наружу публикует только edge; TASK-17.1) |
 | `ZAI_MOCK` | `false` | фикстуры вместо upstream, авторизация не проверяется |
 | `ZAI_UPSTREAM` | `http://127.0.0.1:4096` | opencode serve (стенд — `:4097`) |
 | `ZAI_ENV` | `prod` | `prod\|stand\|test`; не-prod (кроме мока) с upstream :4096 не стартует (ADR-003) |
@@ -523,13 +531,64 @@ keepalive подделывался событием `busy`, запись ист�
 | `ZAI_TENANT_PROMPT_LIMIT` / `…_UPLOAD_LIMIT` / `…_UPLOAD_QUOTA` / `…_RATE_PER_MIN` | 8 МБ / 25 МБ / 500 МБ / 120 | квоты тенанта (413/429) |
 | `ZAI_CLAUDE_BIN` | пусто → `~/.local/bin/claude(.exe)`, если есть, иначе `claude` из PATH | бинарник CLI |
 | `ZAI_CLAUDE_TIMEOUT_MS` | `0` | жёсткий таймаут хода; 0 — без таймаута |
-| `ZAI_CLAUDE_IDLE_MS` | `1800000` | таймаут по бездействию Claude-хода; 0 — выкл. |
+| `ZAI_CLAUDE_IDLE_MS` | `0` | таймаут по бездействию Claude-хода; 0 — выкл. Решение владельца 2026-11-02: ходы живут до завершения, idle-kill только явно (комментарий в `lib/config.js`) |
+| `ZAI_CLAUDE_BIN` | пусто | бинарник CLI; пусто → `%USERPROFILE%\.local\bin\claude.exe` |
+| `ZAI_CLAUDE_MCP_CONFIG` | пусто | `--mcp-config` admin-ходов Claude; пусто — нет; битый файл игнорируется с логом (FEAT-13.10) |
+| `ZAI_KB_ROOT` | `D:\Obsidian\agents` | база знаний admin для снапшота первого хода Claude-чата; `off` — выкл. (FEAT-13.11) |
+| `ZAI_GC_EMPTY_MIN` | `30` | пустые чаты старше N минут удаляет gc; 0 — выкл. (BUG-01.48) |
+| `ZAI_INSTANCE_IDLE_MIN` | `30` | opencode-экземпляр папки чата освобождается после N минут простоя; 0 — никогда; HOME/каталог владельца не освобождаются (BUG-195) |
+| `ZAI_INSTANCE_SWEEP_MS` | `300000` | период обхода простаивающих экземпляров |
+| `ZAI_GC_INTERVAL_MS` | `600000` | период gc (пустые чаты + остатки папок тенантов, BUG-04.6) |
+| `ZAI_TURN_UNDO_ROOT` | = `ZAI_DATA_DIR\turn-undo` | бэкапы файлов последнего хода (Claude — PreToolUse hook; opencode — vault-cache; вычисляемое) |
+| `ZAI_TITLE_LLM` | `true` | автотайтлы коротким вызовом claude CLI; `false`/`0` — только эвристика (BUG-13.14) |
+| `ZAI_TITLE_MODEL` | `claude-haiku-4-5` | модель автотайтла |
+| `ZAI_TITLE_TIMEOUT_MS` | `20000` | таймаут вызова автотайтла |
+| `ZAI_VOICE` | `true` | голосовой режим (Piper TTS + GigaAM STT); нет python/моделей → `/voice` недоступен, UI скрывает |
+| `ZAI_VOICE_PYTHON` | `D:\Voice\venv\Scripts\python.exe` | python голосового воркера |
+| `ZAI_VOICE_MODELS` | `D:\Voice\models` | модели голосового воркера |
+| `ZAI_VOICE_WORKER` | пусто | скрипт воркера; пусто → `ops/voice/voice-worker.py` |
+| `ZAI_VOICE_TENANT_TTS_CHARS` | `40000` | дневная квота TTS на тенанта; 0 — без лимита; admin не ограничен |
+| `ZAI_VOICE_TENANT_STT_SEC` | `1800` | дневная квота STT (секунд) на тенанта |
+| `ZAI_DEFAULT_MODEL` | пусто | модель промпта без модели в чате без привязки (`provider/model`); пусто → upstream `/config`, затем дефолт `/provider` (BUG-11.13) |
+| `ZAI_PUSH` | `true` | Web Push; `0` — маршруты отвечают 503 (FEAT-07.20) |
+| `ZAI_PUSH_SUBJECT` | `https://zai.home.example.net/zai/` | VAPID `sub` (RFC 8292) |
+| `ZAI_PUSH_EXTRA_ORIGINS` | пусто | дополнительные origins push-сервисов через `;` (тесты/проверки с локальным фейком) |
+| `ZAI_PUSH_DEBOUNCE_MS` | `20000` | дебаунс отправки push |
+| `ZAI_PUSH_MAX_PER_USER` | `10` | максимум push на пользователя в сутки-окно |
 | `ZAI_ADMIN_TOKEN` | пусто (секрет) | bootstrap-токен admin; **только** если нет `users.json` |
-| `CLAUDE_CODE_OAUTH_TOKEN` | пусто (секрет) | с 1.7.0 подставляется дочернему `claude`, если его нет в env (нужен для tenant-профиля `--restricted`) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | пусто (секрет) | подставляется дочернему `claude`, если его нет в env (нужен для tenant-профиля `--restricted`) |
+| `ZAI_OC_API` | `v1` | версия API адаптера `lib/oc-client.js`: `v1` (1.19.5) \| `v2` (2.x: `/api/*`, Basic); прод с 1.16.0 задаёт `v2` (`ops\web-v2.cmd`) (FEAT-16.3) |
+| `ZAI_OC_PASSWORD` | пусто (секрет) | пароль Basic-авторизации opencode 2.x; в логах маскируется (файл — `data\oc2-password.txt`) |
+| `ZAI_MEM_WARN_MB` | `1500` | порог памяти процесса (rss, МБ): выше — healthz отдаёт `degraded: true`; 0 — контроль выключен (TASK-12.29) |
+| `ZAI_LEGACY_COOKIE_UNTIL` | `2026-12-02` | дата, до которой включительно принимается старая кука с сырым токеном (ADR-009 п. 4, TASK-04.15) |
+| `ZAI_PLUGIN_GATE_TTL_MS` | `15000` | кэш позитива гейта `plugin.list` («закрыто при отказе», FEAT-16.3) |
+| `ZAI_PLUGIN_GATE_TTL_NEG_MS` | `3000` | кэш негатива гейта — короткий, чтобы ходы пошли сразу после загрузки плагина |
 
 С 2026-11-04 в схеме: `ZAI_CLAUDE_MCP_CONFIG` (`--mcp-config`, только admin; битый файл игнорируется с логом, образец ops/claude/mcp-playwright.json — FEAT-13.10) и `ZAI_KB_ROOT` (по умолчанию `off` — выкл.; путь к папке Obsidian agents включает; снапшот базы знаний первого хода Claude-чата — FEAT-13.11, lib/kb-cache.js). Голос: `ZAI_VOICE_PYTHON` / `ZAI_VOICE_MODELS` по умолчанию `~/.zai/voice/venv/(Scripts/python.exe | bin/python3)` / `~/.zai/voice/models` (нет файлов — голос скрыт). macOS/Linux: песочницы тенантов нет — их командная строка (Bash/`zai-render`) отклоняется с причиной (fail-closed). Читаются вне схемы: `ZAI_CLAUDE_ADMIN_MODE` (по умолчанию `bypassPermissions`), `ZAI_CLAUDE_ADD_DIRS` (через `;`, по умолчанию корень портала) — lib/claude.js; `ZAI_PUBLIC_DIR` (static.js), `ZAI_FIXTURES` (mock.js), `ZAI_QUOTA_BASE`, `ZAI_AUTH_FILE` (usage.js); `ZAI_UPSTREAM` ещё читают proxy.js и host.js напрямую (перенос на `config` — остаток ADR-006).
 
-Константы в коде: индекс сессий 10 с, кэш `/status` 3 с, тела 2 МБ / промпт 64 МБ / загрузка 100 МБ, дедлайн прокси 30 с до заголовков + idle-таймаут, prompt_async 600 с, ring 1000, keepalive хаба 15 с, опрос каталогов 20 с, backoff 1–30 с, кука на год, буфер SSE 16 МБ, 8 потоков на пользователя, очередь Claude 5. Каталог Claude-моделей и дефолт — один раз, в `shared/engine.js` (было продублировано в binding.js и claude.js).
+| Переменная | Читает | Назначение |
+|---|---|---|
+| `ZAI_JAIL_EXE` | `server.js` → `lib/claude-tenant.js` | бинарник песочницы (jail) тенанта; пусто → `D:/Portal/zai/ops/sandbox/zai-jail.exe` |
+| `ZAI_SANDBOX_PY` | `server.js` → `lib/claude-tenant.js` | python песочницы тенанта; пусто → `D:/zai-sandbox/python` |
+| `ZAI_OC_CONFIG_FILE` | `lib/host.js` | конфиг opencode для «О приложении» (версия slim/claude); прод и стенд v2 задают конфиг зоны v2 (`ops\web-v2.cmd`, BUG-190) |
+| `ZAI_PUBLIC_DIR` | `lib/static.js` | каталог статики; пусто → `<repo>\public` (стенд v2 — `D:\zai-stage\public`) |
+| `ZAI_FIXTURES` | `lib/mock.js` | каталог фикстур мока; пусто → `<repo>\fixtures` |
+| `ZAI_QUOTA_BASE` | `lib/usage.js` | база API квот z.ai; пусто → `https://api.z.ai` |
+| `ZAI_AUTH_FILE` | `lib/usage.js` | `auth.json` для ключа провайдера (usage); пусто → `%USERPROFILE%\.local\share\opencode\auth.json` |
+| `ZAI_OPENAI_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора организации OpenAI — траты в разделе «Подписки»; пусто → карточка «нужен ключ администратора» |
+| `ZAI_ANTHROPIC_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора Anthropic API — карточка трат «Anthropic API»; пусто → карточки нет |
+| `ZAI_JOURNAL_DEBOUNCE_MS` | `server.js` | пауза перед пересборкой журнала чата после конца хода; пусто → 3000 |
+| `ZAI_JOURNAL_DEBUG` | `server.js`, `lib/chat-journal.js` | непусто → причины пропуска журнала чата пишутся в stderr |
+| `ZAI_CLAUDE_ADMIN_MODE` | `lib/claude.js` | permission-mode admin-хода Claude; пусто → `bypassPermissions` |
+| `ZAI_CLAUDE_ADD_DIRS` | `lib/claude.js` | extra `--add-dir` через `;`; пусто → корень портала |
+
+Схему читает только `lib/config.js` (`loadConfig`); `ZAI_UPSTREAM` ещё читают напрямую
+`lib/proxy.js` и `lib/host.js` (перенос на `config` — остаток ADR-006). Плагины opencode
+(sandbox-core, vault-cache) читают свой env (`ZAI_USERS_FILE`, `VAULT_CACHE_*`, `OPENCODE_*`) —
+его задаёт не сервер, а задачи запуска: `ops\web-v2.cmd`, `ops\opencode\serve-v2.cmd`,
+`D:\zai-stage\stand-v2.ps1`.
+
+Константы в коде: индекс сессий 10 с, кэш `/status` 3 с, тела 2 МБ / промпт 64 МБ / загрузка 100 МБ, дедлайн прокси 30 с до заголовков + idle-таймаут, таймаут промпта opencode 600 с (oc-client), ring 1000, keepalive хаба 15 с, опрос каталогов 20 с, backoff 1–30 с, кука на год, буфер SSE 16 МБ, 8 потоков на пользователя, очередь Claude 5. Каталог Claude-моделей и дефолт — один раз, в `shared/engine.js` (было продублировано в binding.js и claude.js).
 
 ### 5.2. build.mjs
 
@@ -611,13 +670,13 @@ Edge валидирует свои env сам (без импорта `lib/`). Х
 impl-G1, impl-G3). Код на диске консистентен; плановый выкат 1.7.0 всё равно
 нужен (сборка `public/`, рестарт `zai-web` и `zai-portal`).
 
-### 6.3. Стенд (1.7.0, ADR-003)
+### 6.3. Стенд v2 (stand-v2.ps1, FEAT-16.3)
 
-| Параметр | Значение (`D:\zai-stage\stand.cmd` → `stand.ps1`) |
+| Параметр | Значение (`D:\zai-stage\stand-v2.ps1`) |
 |---|---|
-| Код | тот же `D:\Portal\zai\server.js` |
-| Порт | 4172 (127.0.0.1), `ZAI_ENV=stand` |
-| Данные | `ZAI_DATA_DIR=D:\zai-stage\stand-data` |
+| Код | тот же `D:\Portal\zai\server.js` (рабочее дерево) |
+| Порт | 4174 (127.0.0.1), `ZAI_ENV=stand`, `ZAI_OC_API=v2` |
+| Данные | `ZAI_DATA_DIR=D:\zai-stage\stand2-data` |
 | Статика | `ZAI_PUBLIC_DIR=D:\zai-stage\public` (сборка с `ZAI_OUT_DIR`) |
 | Кука | `ZAI_COOKIE_NAME=zai_t_stage` |
 | Тенанты | `D:\zai-stage\tenants\{home,vault}`; QA-тенант `qa` |
@@ -627,9 +686,8 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 | Кандидаты в прод | `opencode\config\opencode\vault-cache.ts` (изоляция тенанта, BUG-12.14), `home\.omo\omo.jsonc` (`multimodal-looker` → `glm-5.3-flash`) — переносит владелец по runbook п.8 |
 | Откаты | `D:\zai-stage\rollback\{1.5.2,1.6.0}`, `archive\` |
 
-`D:\Portal\zai-stage` очищен (остался README «перенесено») и подлежит
-удалению владельцем. До 1.7.0 стенд жил в web-root и работал с прод-upstream
-:4096 (R18, SEC-10).
+Стенд 1.x (`stand.cmd`/`stand.ps1`, :4172/:4097) выведен 2026-11-08. До 1.7.0
+стенд жил в web-root `D:\Portal` и работал с прод-upstream :4096 (R18, SEC-10).
 
 ---
 
@@ -646,7 +704,7 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 | Лог хаба `[zai-hub]` (auto-abort, replay, loop, ошибки) | lib/hub.js, stdout задачи |
 | Отчёт активных ходов | `GET /zai/api/admin/sessions`, карточка «Активные ходы» в Настройках |
 | Лог watchdog | `D:\Portal\watchdog.log` |
-| Лог стенда | `D:\zai-stage\logs\*` |
+| Лог стенда | `D:\zai-stage\oc2\logs\*` (стенд v2; выведенный 1.x писал в `D:\zai-stage\logs`) |
 
 Чего ещё нет (остаток R20/ADR-007):
 
@@ -679,8 +737,8 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 проверок (RUN-2026-11-03-full-review). Запуск: `npm test` (`tests/run-tests.mjs`:
 `unit` параллельно, `server` с `--test-concurrency=1`, `--batch=N`),
 `npm run test:components`, `npm run qa:smoke` / `qa:matrix`. Тесты не
-трогают прод: `assertSafeUrl` запрещает :80/:443/:4096/:4097/:4170/:4172
-(`tests/no-prod.test.js`). До 1.7.0: 21 файл, 226 тестов, L2 и L3e не было.
+трогают прод: `assertSafeUrl` запрещает :80/:443/:4096/:4097/:4170/:4172/:4196
+(`tests/no-prod.test.js`; стенд v2 :4174/:4101 — законная цель, BUG-217). До 1.7.0: 21 файл, 226 тестов, L2 и L3e не было.
 
 ---
 
@@ -829,3 +887,4 @@ P2 — плановое; P3 — по случаю.
 | 2026-11-02 (вечер) | 1.6.1 → 1.7.0 | Группа Г8: пути стенда заменены на `D:\zai-stage` (10 вхождений) |
 | 2026-11-03 | 1.7.0 | Актуализация по реализации полного ревью (impl-G1…G8, integration.md, final-fixes.md; TASK-15.4): шапка «Что изменилось в 1.7.0»; диаграмма компонентов (config/policy/accesslog, стенд на своём opencode :4097); границы доверия (sid-кука, CSRF, профили прав Claude, guard стенда); таблица модулей бэкенда с новыми `lib/config.js`, `lib/policy.js`, `lib/accesslog.js`, `lib/gc.js`, `lib/json-store.js`, расширенным `lib/paths.js` и `shared/engine.js`; фронтенд — `src/lib/store/{state,session,events,stream,dialogs,catalog}.js`, `turn.js`, `office.js`, `clipboard.js`; маршруты `/auth/token`, `/admin/sessions`, `/admin/gc`, `/healthz`, `/about`, `/dircheck`, `DELETE /upload`, admin-only `/mcp`/`/host`; потоки входа (серверные сессии), промпта opencode (`prepareForPrompt`, детектор цикла) и Claude (stdin, очередь, idle, рестарт); SSE (эпоха, resync, backpressure); хранилища (`sessions.json`, `claude-runs.json`, `claude-models.json`, `hub-pending.json`, `logs/`); env по схеме `lib/config.js` (30 переменных) + edge; стенд 1.7.0; наблюдаемость; тестовые уровни (L2/L3e появились, цифры прогонов); статус ADR (§9.0) и рисков (§10.0). Цифры графа обновлены во frontmatter (3554/5803/304), таблица §2.1 оставлена как снимок 1.6.1 |
 | 2026-11-04 | 1.9.0 | §2.5: таблица маршрутов `routes/*`, гейт `?directory=`, kb-cache/kbContext, vision-фолбэк, ранний заголовок Claude, MCP, постраничная история; ADR-001 — шаги 1–3 (закрытие FEAT-09.6, openspec closure-2026-11-04) |
+| 2026-11-11 | 1.16.5 | TASK-15.9 (ревью 2026-11-10, OPS-01/OPS-03): документы сведены к факту opencode 2.x — frontmatter, §1.1–§1.3 (диаграмма, границы доверия, внешние процессы: `zai-opencode-v2` :4196, адаптер `lib/oc-client.js`), §3.3 (промпт `POST /api/session/:id/prompt`), §5.1 (61 переменных схемы `lib/config.js` + таблица «вне схемы», тест `tests/docs-env-schema.test.js`), §6.1/§6.3 (прод-задачи, стенд v2 `stand-v2.ps1` :4174/:4101), §7–§8 (логи стенда, запрещённые порты тестов +:4196). Упоминания 1.x оставлены только как история |

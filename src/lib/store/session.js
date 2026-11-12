@@ -8,6 +8,8 @@ import {
   active,
   busyMap,
   editing,
+  idleSeenAt,
+  STATUS_STALE_MS,
   effectivePrefs,
   engineOfSession,
   loadDraft,
@@ -24,6 +26,7 @@ import {
   staleModelText,
 } from "./state.js";
 import { freshSessionList } from "./catalog.js";
+import { abortBusyChildren, resetChildFeeds } from "./childfeeds.js";
 import { setPinsNavigate } from "./pins.js";
 import { t } from "../i18n.js";
 
@@ -67,12 +70,15 @@ export function finalizeTurn(act) {
 // start, busy→idle when it slept through the end.
 export async function pollBusy() {
   try {
+    const askedAt = Date.now();
     const st = (await api.getSessionStatus()) ?? {};
     const prev = busyMap.value;
     const m = {};
     const pm = {};
     for (const [id, v] of Object.entries(st)) {
-      if (v && v.type !== "idle") m[id] = prev[id] ?? (typeof v.since === "number" ? v.since : Date.now());
+      // BUG-228: «занят» из кэша сервера для хода, конец которого мы только что видели
+      const stale = !prev[id] && idleSeenAt.has(id) && askedAt - idleSeenAt.get(id) < STATUS_STALE_MS;
+      if (v && v.type !== "idle" && !stale) m[id] = prev[id] ?? (typeof v.since === "number" ? v.since : Date.now());
       if (v?.pending) pm[id] = v.pending;
     }
     busyMap.value = m;
@@ -188,6 +194,8 @@ export async function openSession(id) {
   // inside a chat): that chat is left here — an untouched fresh one is
   // cleaned up exactly as on «Назад» (BUG-009).
   const left = active.value && active.value.id !== id ? active.value : null;
+  // Ленты субагентов принадлежат открытому чату: сменили чат — сброшены (FEAT-01.77).
+  if (left) resetChildFeeds();
   // The chat becomes active IMMEDIATELY (loading=true): a message typed while
   // history loads goes to THIS chat, never into a void or the previous one.
   // loading=true separates «история ещё едет» from «чат действительно пустой»;
@@ -256,6 +264,7 @@ export function closeSession(id) {
   openGen++; // any in-flight openSession is now stale
   const act = active.value;
   active.value = null;
+  resetChildFeeds(); // ленты субагентов живут, пока открыт их чат (FEAT-01.77)
   leaveFresh(act);
 }
 
@@ -475,6 +484,14 @@ function draftTextOf(parts) {
     .trim();
 }
 
+// BUG-01.75: есть ли в открытом чате пузырь «Не отправлено» с этим текстом
+// (тогда композеру возвращать текст не нужно — он в пузыре с «Повторить»).
+export function failedBubbleWith(sid, text) {
+  const act = active.value;
+  if (!act || act.id !== sid) return false;
+  return act.messages.some((m) => isTmp(m) && m.info.failed && draftTextOf(m.parts) === String(text ?? "").trim());
+}
+
 function patchMessage(sessionID, msgId, fn) {
   patchActive(sessionID, (a) => ({ ...a, messages: a.messages.map((m) => (m.info?.id === msgId ? fn(m) : m)) }));
 }
@@ -639,6 +656,7 @@ export function stop() {
   if (!act || act.status === "stopping") return;
   active.value = { ...act, status: "stopping" };
   cancelHeld(act.id);
+  abortBusyChildren(act.id); // фоновые субагенты молча работали бы дальше (FEAT-01.77)
   api.abort(act.id, { directory: sessionDir(act.id) })
     .then(() => {
       // Belt-and-braces when SSE is dead (otherwise session.idle finalizes):
@@ -743,6 +761,33 @@ export async function deleteChat(id, { stopFirst = false } = {}) {
 // Change the open chat's own model/agent (ModelBar pills). Optimistic, with a
 // rollback + notice when the server refuses (409 = engine locked because the
 // chat already has messages; anything else = transient failure).
+// FEAT-11.18 (шаг В): передать чат на другой движок или модель. resume — после передачи
+// сразу попросить новый движок продолжить (плашка лимита): ход, оборванный лимитом, не ждёт
+// нового сообщения пользователя. → true/false; при отказе — понятное уведомление.
+// Текст уходит новому движку и виден в ленте как сообщение пользователя — на языке
+// интерфейса, как store.turn.continuePrompt (функция: язык переключается на лету).
+export const relayResumeText = () => t("store.relay.resumePrompt");
+export async function relayChat(id, model, { reason = null, resume = false } = {}) {
+  try {
+    const r = await api.patchBinding(id, { relay: true, model, ...(reason ? { reason } : {}) }, { directory: sessionDir(id) });
+    if (r?.zai) sessions.value = upsertSession(sessions.value, { id, zai: r.zai });
+    patchActive(id, (a) => ({ ...a, turnError: null, incomplete: null }));
+  } catch (err) {
+    setNotice(
+      err?.status === 409
+        ? t("store.relay.busy")
+        : err?.status === 403
+          ? t("store.relay.forbidden")
+          : err?.status === 400
+            ? t("store.relay.same")
+            : t("store.relay.failed"),
+    );
+    return false;
+  }
+  if (resume) await send({ text: relayResumeText(), sessionId: id });
+  return true;
+}
+
 export async function setSessionBinding(id, patch) {
   const s = sessions.value.find((x) => x.id === id);
   if (!s) return false;

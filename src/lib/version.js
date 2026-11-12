@@ -1,5 +1,36 @@
 // Single source of truth for the UI version shown in Настройки → «О приложении».
 // Bump together with the project-note status entry in the vault.
+// 1.19.2 (2026-11-12, FEAT-11.18 step C): Relay — a chat continues on another engine or model (Claude Code <-> opencode): «Продолжить в …» on the limit banner, «Продолжить в другом движке» in the chat menu, a relay mark in the feed, one merged feed of both engines, the new engine is pointed at the chat journal; a «quota is running out» strip where the remainder is known (z.ai, under 15%).
+// 1.18.1 (2026-11-12, FEAT-11.18 step B): the chat journal — the portal writes the full history of every chat (both engines) to the knowledge base (journal/<date>-<chat>.md) after each turn; the agent gets one system-prompt line with the path and reads it on demand.
+// 1.18.0 (2026-11-12, FEAT-11.18 step A): Settings → «Подписки» for every user — a card per connected model provider (z.ai quota windows; OpenRouter key limit; DeepSeek / Moonshot / SiliconFlow balance; OpenAI and Anthropic API spend with an org admin key; an honest «no official API» card otherwise). Official documented endpoints only; keys never reach the client.
+// 1.17.7 (2026-11-12, TASK-01.82): the visible product name is «Teleharness» (drawer, login, tab title, installed app name, push title, About); new mark «>» with link arcs and a new app icon; brand accent is indigo in both themes (the orange Claude engine mark stays). Internal ids (/zai/, cookie, storage keys) are unchanged — nobody is logged out.
+// 1.17.6 (2026-11-12, TASK-12.31): server low findings of the 2026-11-10 review — capped command cache, turn undo never overwrites a file changed after the plan, 400 on a broken %-code in admin token route, /mcp answers within a time budget, one status recount for parallel requests, relative ?directory= refused, push presence reset on subscription takeover.
+// 1.17.5 (2026-11-12): BUG-223 the open «Чаты» list learns about a chat created or renamed in another tab (opencode 2.x session events carried no id — the adapter adds id, folder, time and the parent of subagent sessions); BUG-225 voice mode with browser speech recognition starts recognition as soon as the session opens.
+// 1.17.4 (2026-11-12, BUG-229): a Claude agent run without a task status is no longer shown as working forever — runs without zaiRun count as working only in the live turn tail, finished turns render them done (times from state.time) or stopped; the server stamps a definite outcome on parts without a status when a turn is cut (stopRuns) and restart recovery stops stale running zaiRuns in stored history. Server changed — zai-web restart required.
+// 1.17.3 (2026-11-11, FEAT-05.29): a file the user asked for is always shown in the chat — the agent presents it as [name](absolute path), the portal shows a file card straight from where the file lies (no copy; access is checked by the server), server paths are removed from the answer text, an inaccessible file is a «Файл недоступен в этом чате» row; the 8 cards per message limit is lifted (cap 40). Both engines get the portal rule in the system prompt.
+// 1.17.2 (2026-11-11, TASK-01.81): subagent cards closer to the mockup — tokens line for both engines, a folder read is «Список файлов», agent answer headings in body size, «фоном» pill only for real background runs in Claude chats, no background bar duplicating the «Работают агенты» indicator when detail is off.
+// 1.17.1 (2026-11-11): review wave 3 — BUG-17.14 path comparisons by platform in one place (lib/paths.js: tenant folder removal guard, vault zone, file roots; lowercase keys on win32 only; binary defaults by platform), BUG-01.75 the composer keeps the typed text when a send is refused, «Свой ответ» has an accessible name; BUG-228 a stale cached /status no longer flips a finished chat back to busy.
+// 1.17.0 front-only update (2026-11-11, TASK-01.79): subagent cards brought to the approved mockup — «Работают агенты» indicator as a sign + two lines, steps grouped with result notes, agent answer rendered as markdown without wrapper tags, file names visible in Claude steps (BUG-227). No version bump: healthz reads the version at server start.
+// 1.17.0 (2026-11-11): FEAT-01.77 — subagents inside the chat: agent cards with live steps and a «now» line, a per-turn summary, the preloader waits for subagents when «Детализация выполнения» is off (with agent names), a «Фоном работает агент» bar above the composer; opencode 2.x (tool `subagent`, child session feeds) and Claude (Agent tool: task_* events and parent_tool_use_id traffic land in the tool part); tool input is visible while a tool runs.
+// 1.16.6 (2026-11-11): review wave 2 (reliability) — BUG-218 per-chat lock for binding/prompt mark/revert, exclusive upload file creation, dispose race logged; BUG-224 stand guard knows :4196; TASK-13.27 claude store written deferred + flushed on shutdown; TASK-16.31 v2 stall contract (internal message.updated from the adapter, hub keeps them off clients); TASK-12.29 healthz mem/errors/degraded/lastCrashAt + push after an unclean restart; TASK-04.15 session sweep, lastSeenAt, login limits (429/413/400), legacy cookie deadline.
+// 1.16.5 (2026-11-10): review wave 1 — BUG-212 empty-chat gc on opencode 2.x, BUG-213 hub keeps a dialog/busy record until the engine confirms, BUG-214 v2 event stream backoff reset + bounded rewriter maps, BUG-215 claude turn: unsaved attachment note, 400 on a broken body, BUG-216 deleting a running chat from the lists stops the turn, BUG-217 test guard knows :4196.
+// 1.16.4 (2026-11-10): FEAT-11.17 — Claude Fable 5.2 in the catalog, context windows as claude CLI reports
+// them (1M for 4.8/5.x, 200k for Sonnet 4.6/4.5, Haiku 4.5); claude CLI 2.1.322. Also ships TASK-17.1
+// (c5ecc7d, POSIX branches; Windows behaviour unchanged).
+// 1.16.3 (2026-11-08): TASK-16.7 wave 2 on opencode 2.x — stability: BUG-195 opencode instances per chat folder
+// released when idle and no longer re-created by the hub's dialog poll (prod had ~200 MCP processes);
+// tenants: BUG-196 own turn events, BUG-197 unknown v2 events not leaked, BUG-198 zai-* skills, BUG-199 chat
+// folder, BUG-200 turn undo backups, BUG-201 reject-only permissions; chat: BUG-202 stop ≠ error, BUG-203/204
+// agent questions (forms), BUG-205 permission card, BUG-206 «Вернуть», BUG-207 image after reload, BUG-208
+// attachment chip, BUG-209 user system prompt reaches the model on every step, BUG-210 deleted chat folder.
+// 1.16.2 (2026-11-08): TASK-16.7 wave 1 on opencode 2.x — BUG-191 history limit > 200 (upstream cap 200),
+// BUG-192 MCP status shape (+ «подключается»), BUG-193 voice hint hidden from the user bubble,
+// BUG-194 the model sees the KB snapshot again (plugin-v2 context hook on the real 2.2.6 message shape).
+// 1.16.1 (2026-11-08): BUG-189 — opencode 1.x chat history migrated into the 2.x db
+// (ops/opencode/oc2-migrate-v1.mjs) and the v2 chat list walks the cursor (was capped at 50);
+// BUG-190 — «О приложении» shows the opencode 2.x version (/api/info) and the slim harness.
+// 1.16.0 (2026-11-08): FEAT-16.3 — z.ai chats on opencode 2.2.6 (adapter lib/oc-client.js, ZAI_OC_API=v2,
+// tenant sandbox plugin-v2 with a fail-closed plugin gate); opencode 1.19.5 stays installed for rollback.
 // 1.15.1 (2026-11-07): BUG-188 — slash commands of admin GLM chats expand via opencode /command
 // (slim has no auto-slash hook); BUG-186 — a chat deleted mid-turn no longer stays busy in the hub.
 // 1.15.0 (2026-11-07): FEAT-16.2 — z.ai chats on oh-my-opencode-slim (orchestrator) instead of OmO;
@@ -172,4 +203,4 @@
 // 1.3.0 (2026-10-31): artifacts preview/download, orchestration-directive cards,
 // typing indicator, multi-agent AgentCard, theme boot fix, overlay fill-mode
 // hardening, home junk filter, subscription credit units.
-export const VERSION = "1.15.1";
+export const VERSION = "1.19.2";

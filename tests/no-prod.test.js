@@ -14,7 +14,7 @@ const src = Object.fromEntries(files.map((f) => [f, readFileSync(path.join(TESTS
 const spawnsServer = (s) => /spawn\([^)]*server\.js/.test(s.replace(/\s+/g, " ")) || /path\.join\(ROOT, "server\.js"\)/.test(s);
 
 test("assertSafeUrl: прод/стенд-порты запрещены, эфемерные — нет", () => {
-  for (const u of ["http://127.0.0.1:4096", "http://127.0.0.1:4170", "http://localhost:4172", "http://127.0.0.1:4097", "http://192.168.0.10/", "https://192.168.0.10/zai/"]) {
+  for (const u of ["http://127.0.0.1:4096", "http://127.0.0.1:4170", "http://localhost:4172", "http://127.0.0.1:4097", "http://127.0.0.1:4196", "http://192.168.0.10/", "https://192.168.0.10/zai/"]) {
     assert.throws(() => assertSafeUrl(u), /прод|стенд/, u);
   }
   assert.equal(assertSafeUrl("http://127.0.0.1:53123"), "http://127.0.0.1:53123");
@@ -67,7 +67,7 @@ test("каждый тест, спавнящий server.js, задаёт явны
     const upstreamOk = viaHelper || /ZAI_UPSTREAM\s*:/.test(s);
     const dataOk = viaHelper || /ZAI_DATA_DIR\s*:/.test(s);
     if (!upstreamOk || !dataOk) bad.push(`${f}: upstream=${upstreamOk} data=${dataOk}`);
-    assert.doesNotMatch(s, /ZAI_UPSTREAM\s*:\s*["'`]http:\/\/127\.0\.0\.1:(4096|4097|4170|4172)/, f);
+    assert.doesNotMatch(s, /ZAI_UPSTREAM\s*:\s*["'`]http:\/\/127\.0\.0\.1:(4096|4097|4170|4172|4196)/, f);
   }
   assert.deepEqual(bad, []);
 });

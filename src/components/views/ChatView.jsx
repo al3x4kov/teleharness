@@ -35,6 +35,10 @@ import Composer from "../chat/Composer.jsx";
 import ModelBar from "../chat/ModelBar.jsx";
 import DialogBar from "../chat/DialogBar.jsx";
 import VoiceModeView from "../chat/VoiceModeView.jsx";
+// FEAT-01.77: полоса фоновых агентов — связка BgAgentsGate (подписки на
+// агентов живут в AgentRuns.jsx, ChatView сам их не читает).
+import { BgAgentsGate } from "../chat/AgentRuns.jsx";
+import { QuotaStrip, RelayActions, RelaySheet } from "../chat/Relay.jsx";
 import ChatMenu from "../ChatMenu.jsx";
 import { micSupported, unlockAudio } from "../../lib/voice-audio.js";
 import { greetingText, MenuButton, ZaiMark } from "../Menu.jsx";
@@ -49,7 +53,7 @@ const SVG = (props) => (
 
 // Turn-error banner (BUG-07.14 / R-07): what broke, in Russian, plus the
 // way out. Never a silent end of the turn.
-function TurnErrorBar({ err, id }) {
+function TurnErrorBar({ err, id, onRelayPick = null }) {
   const act = (a) => {
     if (a === "retry") return <button key={a} class="stall-btn" type="button" onClick={() => resendLast(id)}>{t("common.retry")}</button>;
     if (a === "continue") return <button key={a} class="stall-btn" type="button" onClick={() => continueTurn(id)}>{t("chat.continue")}</button>;
@@ -69,6 +73,8 @@ function TurnErrorBar({ err, id }) {
         )}
       </span>
       <span class="turn-error-actions">
+        {/* FEAT-11.18: лимит подписки — главное действие «продолжить в другом движке» (кадр 1) */}
+        {err.kind === "limit" ? <RelayActions sessionId={id} onPickOther={onRelayPick} /> : null}
         {(err.actions ?? []).map(act)}
         <button class="turn-error-close" type="button" aria-label={t("chat.dismiss")} onClick={() => dismissTurnError(id)}>×</button>
       </span>
@@ -94,6 +100,8 @@ export default function ChatView({ id }) {
   const bottomRef = useRef(null);
   // FEAT-06.2: the open voice mode ({ctx} — the AudioContext unlocked by the tap).
   const [voiceMode, setVoiceMode] = useState(null);
+  // FEAT-11.18: лист «Продолжить в другом движке» — {reason, resume} | null
+  const [relaySheet, setRelaySheet] = useState(null);
   useEffect(() => {
     refreshVoice(); // once per page: does the server have the voice mode?
   }, []);
@@ -246,6 +254,7 @@ export default function ChatView({ id }) {
               busy={busy}
               empty={!hasMessages && !reverted && !(mine?.loading)}
               onDeleted={() => navigate(backTarget, { replace: true })}
+              onRelay={() => setRelaySheet({ reason: null, resume: false })}
             />
           ) : null}
         </div>
@@ -304,7 +313,9 @@ export default function ChatView({ id }) {
       <div class="chat-bottom" ref={bottomRef}>
         {/* FEAT-07.22: no client «Ответа долго нет» banner — the «Работает ·
             последнее действие · N назад» line shows silence, ■ stops the turn. */}
-        {turnError && !busy && !activeDialog ? <TurnErrorBar err={turnError} id={id} /> : null}
+        {turnError && !busy && !activeDialog ? <TurnErrorBar err={turnError} id={id} onRelayPick={() => setRelaySheet({ reason: "limit", resume: true })} /> : null}
+        {/* FEAT-11.18: остаток подписки на исходе (кадр 6) — пока ход не идёт и нет плашки ошибки */}
+        <QuotaStrip sessionId={id} hidden={busy || Boolean(turnError) || Boolean(activeDialog)} onPickOther={() => setRelaySheet({ reason: "low-quota", resume: false })} />
         {incomplete && !activeDialog ? (
           <div class="stall-bar" role="status">
             <span class="stall-text">
@@ -333,6 +344,12 @@ export default function ChatView({ id }) {
             </div>
           )
         ) : null}
+        {/* FEAT-01.77: полоса фоновых агентов (кадр 5 макета subagents.html) —
+            когда ход основного агента НЕ идёт, а запуски работают; стоит в
+            .chat-bottom рядом с DialogBar, высоту резервирует --chat-bottom-h,
+            поэтому ленту не перекрывает. У «не найденного» чата её места нет. */}
+        {/* открытый диалог (разрешение/вопрос) важнее: полоса уступает место, нижний стек не растёт (qa-matrix: ≤ 50 % высоты) */}
+        {notFound ? null : <BgAgentsGate hidden={busy || Boolean(activeDialog)} />}
         {activeDialog && (
           <DialogBar key={activeDialog.id} dialog={activeDialog} queue={queuedDialogs.length} />
         )}
@@ -353,6 +370,7 @@ export default function ChatView({ id }) {
         )}
       </div>
       {voiceMode && <VoiceModeView sessionId={id} ctx={voiceMode.ctx} onClose={() => setVoiceMode(null)} />}
+      {relaySheet && <RelaySheet sessionId={id} reason={relaySheet.reason} resume={relaySheet.resume} onClose={() => setRelaySheet(null)} />}
     </div>
   );
 }

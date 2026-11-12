@@ -97,3 +97,70 @@ test("ready(dir): waits for an in-flight warm-up, but not longer than the cap", 
   release();
   await h.warm(DIR);
 });
+
+// ---- BUG-218 (SRV-14, design §3): dispose-гонки ------------------------------
+// Занятость, появившаяся во время dispose, видна в логе как конфликт; повторная
+// проверка занятости непосредственно перед dispose не даёт убить начавшийся ход.
+
+test("BUG-218 heal: занятость, появившаяся во время dispose, фиксируется («dispose raced a starting turn»)", async () => {
+  let disposed = false;
+  const up = fakeUpstream({
+    "GET /config/providers": { status: 503, body: "" },
+    "POST /instance/dispose": () => ((disposed = true), { status: 200, body: "true" }),
+    // busy=false до dispose (ход ещё не начался), busy=true после — ход стартовал в окне
+    "GET /session/status": () => ({ status: 200, body: disposed ? JSON.stringify({ ses_race: { type: "busy" } }) : "{}" }),
+  });
+  const logs = [];
+  const h = createInstanceHealth({ upstream: "http://oc", fetchImpl: up.fetchImpl, log: (m) => logs.push(m) });
+  assert.equal(await h.heal(DIR), true, "dispose выполнен (отменить начатый нельзя)");
+  assert.ok(logs.some((l) => l.includes("dispose raced a starting turn") && l.includes(DIR)), logs.join("\n"));
+});
+
+test("BUG-218 heal: тихий dispose без гонки — записи о гонке нет", async () => {
+  const up = fakeUpstream({
+    "GET /config/providers": { status: 503, body: "" },
+    "GET /session/status": { status: 200, body: "{}" },
+  });
+  const logs = [];
+  const h = createInstanceHealth({ upstream: "http://oc", fetchImpl: up.fetchImpl, log: (m) => logs.push(m) });
+  assert.equal(await h.heal(DIR), true);
+  assert.equal(logs.some((l) => l.includes("dispose raced a starting turn")), false, logs.join("\n"));
+});
+
+// Тот же контракт SRV-14 для реапера (lib/instance-reaper.js): busy, возникший
+// между проверкой и dispose, отменяет dispose; busy после dispose — лог гонки.
+import { createInstanceReaper } from "../lib/instance-reaper.js";
+
+test("BUG-218 reaper: занятость перед dispose — dispose отменён (даже если первая проверка была пустой)", async () => {
+  let checked = 0;
+  const disposed = [];
+  const logs = [];
+  const r = createInstanceReaper({
+    idleMs: 60_000,
+    isBusy: async () => (checked++ === 0 ? false : true), // 1-я проверка пусто, 2-я (перед dispose) — ход
+    dispose: async (d) => disposed.push(d),
+    log: (m) => logs.push(m),
+  });
+  r.touch("C:\\x", 0);
+  const out = await r.sweep(61_000);
+  assert.deepEqual(disposed, [], "dispose не вызван");
+  assert.equal(out.busy, 1);
+  assert.equal(out.disposed, 0);
+});
+
+test("BUG-218 reaper: занятость, появившаяся во время dispose, фиксируется в логе", async () => {
+  let disposed = false;
+  const logs = [];
+  const r = createInstanceReaper({
+    idleMs: 60_000,
+    isBusy: async () => disposed, // до dispose пусто, после dispose — ход уже идёт
+    dispose: async () => {
+      disposed = true;
+    },
+    log: (m) => logs.push(m),
+  });
+  r.touch("C:\\y", 0);
+  const out = await r.sweep(61_000);
+  assert.equal(out.disposed, 1, "dispose выполнен");
+  assert.ok(logs.some((l) => l.includes("dispose raced a starting turn") && l.includes("C:\\y")), logs.join("\n"));
+});

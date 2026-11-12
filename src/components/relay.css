@@ -1,0 +1,73 @@
+/* FEAT-11.18 (шаг В): Relay — макет design/mockups-v2/relay.html */
+
+/* отметка передачи в ленте (кадр 2): линия — пилюля — линия */
+.relay-mark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.relay-mark::before,
+.relay-mark::after {
+  content: "";
+  flex: 1;
+  min-width: 12px;
+  height: 1px;
+  background: var(--border);
+}
+
+.relay-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.relay-pill b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.relay-pill .engine-dot {
+  flex: none;
+}
+
+.relay-at {
+  font-variant-numeric: tabular-nums;
+}
+
+/* главное действие на плашке лимита (кадр 1) */
+.stall-btn.relay-primary {
+  background: var(--brand);
+  border-color: transparent;
+  color: #fff;
+}
+
+.stall-btn.relay-primary:disabled {
+  opacity: 0.7;
+}
+
+/* плашка с несколькими действиями: кнопки переносятся, тап-цель не меньше 40 px */
+.turn-error .turn-error-actions,
+.quota-strip .turn-error-actions {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.relay-sub {
+  margin: 0 4px 8px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}

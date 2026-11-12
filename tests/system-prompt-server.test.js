@@ -10,6 +10,7 @@ import path from "node:path";
 
 // an admin chat folder outside the tenants (absolute on every OS)
 const ADMIN_DIR = path.join(os.tmpdir(), "zai-test-admin");
+import { PORTAL_FILE_RULE } from "../lib/user-prompt.js";
 
 const ADMIN = "a".repeat(24) + "-system-prompt-" + "3".repeat(24);
 const CATALOG = {
@@ -96,7 +97,8 @@ test("FEAT-03.22: too long → 400 in Russian, the stored prompt is unchanged; b
 test("FEAT-03.22: opencode turns carry the user's prompt in `system`; a tenant cannot inject its own; others unaffected", async () => {
   let r = await api("/zai/api/session/ses_a/prompt", { method: "POST", token: alice.token, body: { parts: [{ type: "text", text: "hi" }], system: "SNEAKY" } });
   assert.ok(r.status < 300, `alice prompt ${r.status}`);
-  assert.equal(lastPrompt("ses_a").body.system, "Начинай ответ со слова ПРОБА");
+  // FEAT-05.29: перед инструкциями пользователя — правило портала о файлах
+  assert.equal(lastPrompt("ses_a").body.system, PORTAL_FILE_RULE + "\n\nНачинай ответ со слова ПРОБА");
   // the same text rides the turn as a hidden synthetic part (agents with long prompts follow it in existing chats)
   const rem = lastPrompt("ses_a").body.parts.filter((p) => p.synthetic && /<system-reminder>/.test(p.text));
   assert.equal(rem.length, 1);
@@ -104,14 +106,15 @@ test("FEAT-03.22: opencode turns carry the user's prompt in `system`; a tenant c
 
   r = await api("/zai/api/session/ses_b/prompt", { method: "POST", token: bob.token, body: { parts: [{ type: "text", text: "hi" }], system: "SNEAKY" } });
   assert.ok(r.status < 300, `bob prompt ${r.status}`);
-  assert.equal("system" in lastPrompt("ses_b").body, false, "bob: no prompt of his own, alice's never leaks, his injected one is dropped");
+  assert.equal(lastPrompt("ses_b").body.system, PORTAL_FILE_RULE, "bob: only the portal rule (FEAT-05.29) — no prompt of his own, alice's never leaks, his injected one is dropped");
   assert.equal(JSON.stringify(lastPrompt("ses_b").body).includes("ПРОБА"), false, "no reminder of alice's prompt in bob's turn");
 
   // cleared → the next turn goes with the built-in prompt only
   r = await api("/zai/api/me/system-prompt", { method: "PUT", token: alice.token, body: { text: "" } });
   assert.equal((await r.json()).text, "");
   await api("/zai/api/session/ses_a/prompt", { method: "POST", token: alice.token, body: { parts: [{ type: "text", text: "hi" }] } });
-  assert.equal("system" in lastPrompt("ses_a").body, false);
+  assert.equal(lastPrompt("ses_a").body.system, PORTAL_FILE_RULE, "cleared: only the portal rule stays");
+  assert.equal(lastPrompt("ses_a").body.parts.some((p) => p.synthetic), false, "no hidden part without a user prompt");
 });
 
 test("FEAT-03.22: admin turns carry the admin's prompt", async () => {
@@ -121,7 +124,7 @@ test("FEAT-03.22: admin turns carry the admin's prompt", async () => {
     body: { parts: [{ type: "text", text: "hi" }], model: { providerID: "zai-coding-plan", modelID: "glm-5.3" } },
   });
   assert.ok(r.status < 300, `admin prompt ${r.status}`);
-  assert.equal(lastPrompt("ses_adm").body.system, "ADMIN PROMPT");
+  assert.equal(lastPrompt("ses_adm").body.system, PORTAL_FILE_RULE + "\n\nADMIN PROMPT");
 });
 
 test("FEAT-03.21: /mcp — tenant gets its whitelisted servers with status only; admin gets everything", async () => {

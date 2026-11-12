@@ -230,7 +230,7 @@ test("Model picker data: two engine groups, z.ai first, only working models", ()
   cfg.models.push(...claudeModels);
   cfg.connected = [...cfg.connected, "anthropic"];
   const groups = M.pickers.modelGroups(cfg);
-  assert.deepEqual(groups.map((g) => g.title), ["z.ai · opencode", "Claude · подписка"]);
+  assert.deepEqual(groups.map((g) => g.title), ["opencode", "Claude · подписка"]);
   const zai = groups[0].models.map((m) => `${m.providerID}/${m.id}`);
   assert.ok(zai.includes("zai-coding-plan/glm-5.3-flash"));
   assert.ok(zai.includes("zai/glm-5v-turbo"));
@@ -266,7 +266,8 @@ test("Model picker: catalog failure → «Не удалось получить �
   byText(el, "button", "Повторить").click();
   await flush();
   assert.match(el.textContent, /GLM-5\.3/);
-  assert.match(el.textContent, /z\.ai · opencode/);
+  assert.match(el.textContent, /opencode/);
+  assert.ok(!/z\.ai · opencode/.test(el.textContent)); // TASK-01.84
   assert.ok(el.querySelector(".picker-row[aria-pressed]"));
   unmount(el);
 });
@@ -281,6 +282,12 @@ test("MCP status: Russian words, raw error only as a short reason, tone per stat
   assert.equal(M.settings.mcpView({ status: "needs_auth" }).text, "нужна авторизация");
   assert.match(M.settings.mcpView({ status: "failed" }).why, /перезапуск opencode serve/);
   assert.equal(M.settings.mcpView({ status: "weird" }).text, "состояние неизвестно");
+});
+
+test("BUG-192: MCP «pending» (opencode 2.x сразу после старта) — «подключается», не «неизвестно»", () => {
+  const p = M.settings.mcpView({ status: "pending" });
+  assert.equal(p.text, "подключается");
+  assert.equal(p.tone, "idle");
 });
 
 test("Subscription reset: lower-case pieces, NBSP inside every number+unit pair", () => {
@@ -414,6 +421,13 @@ test("BUG-143: «О приложении» — версия zai с сервер�
   // сервер ещё не ответил — константа фронта, неизвестное без цифр
   assert.equal(M.settings.aboutLine("1.9.1", null), "Teleharness 1.9.1 · opencode · Claude Code");
   assert.equal(M.settings.aboutLine("1.9.1", { opencodeVersion: "1.19.5" }), "Teleharness 1.9.1 · opencode 1.19.5 · Claude Code");
+});
+
+test("BUG-190: «О приложении» на opencode 2.x — версия opencode и slim", () => {
+  const info = { version: "1.16.1", opencodeVersion: "2.2.6", harness: { name: "slim", version: "3.0.7" }, claudeVersion: "2.1.316" };
+  assert.equal(M.settings.aboutLine("1.16.1", info), "Teleharness 1.16.1 · opencode 2.2.6 (slim 3.0.7) · Claude Code 2.1.316");
+  // старый ответ сервера (только omoVersion) — как раньше
+  assert.equal(M.settings.aboutLine("1.16.1", { opencodeVersion: "1.19.5", omoVersion: "5.1.60" }), "Teleharness 1.16.1 · opencode 1.19.5 (OmO 5.1.60) · Claude Code");
 });
 
 test("BUG-143: константа версии фронта совпадает с package.json", () => {

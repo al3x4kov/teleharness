@@ -8,19 +8,25 @@ import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, st
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, configErrors, configSources, describeConfig } from "./lib/config.js";
+import { config, configErrors, configSources, describeConfig, PROD_UPSTREAM_PORTS } from "./lib/config.js"; // BUG-224
 import { mockHandler } from "./lib/mock.js";
 import { pageParams, paginateMessages, proxyRequest } from "./lib/proxy.js";
-import { serveStatic } from "./lib/static.js";
+import { applySecurityHeaders, serveStatic } from "./lib/static.js";
+import { setCapped } from "./lib/capped-map.js";
 import { EventHub } from "./lib/hub.js";
-import { hostStats, opencodeVersion, harnessVersions } from "./lib/host.js";
+import { createOcClient } from "./lib/oc-client.js"; // FEAT-16.3 (3.3): клиент для хаба
+import { hostStats, opencodeVersion, harnessVersions, setOpencodeInfoSource } from "./lib/host.js";
 import { usageStats } from "./lib/usage.js";
-import { materializeFileParts, modelAcceptsImages, pickUniqueName, sanitizeFilename, UPLOAD_DIR, visionSibling } from "./lib/attach.js";
+import { subscriptionCards } from "./lib/subscriptions.js";
+import { JournalWriter, isJournalAccess, journalRule } from "./lib/chat-journal.js";
+import { RelayStore, marksForJournal, mergeFeeds, missedTurns, planRelay, relayMark, relayRule, withCatchUp } from "./lib/relay.js";
+import { materializeFileParts, modelAcceptsImages, openUnique, sanitizeFilename, UPLOAD_DIR, visionSibling } from "./lib/attach.js";
 import { serveWorkspaceFile, workspaceFileExists } from "./lib/file.js";
 import { parseWindows, turnFiles } from "./lib/turn-files.js";
-import { dirProblem, dirProblemText, driveProblem, isUnderAny } from "./lib/paths.js";
-import { accessLogger, clientIp, errLog, requestId } from "./lib/accesslog.js";
-import { adminAgentFor, adminDefaultAgent, agentAllowedForTenant, defaultTenantAgent, modelInCatalog, parseModelRef, pickDefaultModel, providerForUser, publicAgent, redactMessages, redactPart, setTenantVaultRoots, tenantAgents } from "./lib/policy.js";
+import { dirProblem, dirProblemText, driveProblem, isUnderAny, pathInside } from "./lib/paths.js";
+import { accessLogger, clientIp, errLog, requestId, upstreamErrors5m } from "./lib/accesslog.js"; // TASK-12.29
+import { markClean, markStarted, readPrevious } from "./lib/run-state.js"; // TASK-12.29
+import { adminAgentFor, adminDefaultAgent, agentAllowedForTenant, defaultTenantAgent, modelInCatalog, parseModelRef, pickDefaultModel, providerForUser, publicAgent, redactMessages, redactPart, setTenantVaultRoots, tenantAgents, tenantEvent, tenantMustReject } from "./lib/policy.js";
 import { PendingRemovals, findOwnerlessTenantDirs, planGc, runEmptyChatGc, sweepOwnerlessTenantDirs, sweepTurnUndo } from "./lib/gc.js";
 import { TurnUndo, isInside, physicalDir } from "./lib/turn-undo.js";
 import { AutoTitler, TitleStore, makeClaudeTitler } from "./lib/title.js";
@@ -31,11 +37,13 @@ import { dispatchRoute, validateTable } from "./routes/router.js";
 import { fileRoutes } from "./routes/files.js";
 import { catalogRoutes } from "./routes/catalog.js";
 import { adminRoutes } from "./routes/admin.js";
-import { SYSTEM_PROMPT_MAX, cleanSystemPrompt, withUserSystemBody } from "./lib/user-prompt.js";
-import { withGlmVariantBody } from "./lib/glm-variant.js";
+import { PORTAL_FILE_RULE, SYSTEM_PROMPT_MAX, cleanSystemPrompt, withUserSystem, withUserSystemBody } from "./lib/user-prompt.js";
+import { withGlmVariant, withGlmVariantBody } from "./lib/glm-variant.js";
 import { commandBody, parseSlash } from "./lib/slash.js";
 import { createInstanceHealth } from "./lib/instance-health.js";
+import { createInstanceReaper } from "./lib/instance-reaper.js";
 import { sessionRoutes } from "./routes/session.js";
+import { clearReverting, isReverting, markReverting, withSessionLock } from "./lib/session-lock.js"; // BUG-218 (design §1)
 import { pushRoutes } from "./routes/push.js";
 import { PushNotifier, PushStore, loadOrCreateVapid, vapidKeyObject } from "./lib/push.js";
 import {
@@ -71,6 +79,12 @@ import {
   normDir,
   ApiError,
   DATA_DIR,
+  // TASK-04.15: hourly session sweep + healthz inactivity counter + login limits
+  sweepSessions,
+  authSessionsStale90d,
+  loginThrottled,
+  loginFailure,
+  loginSuccess,
 } from "./lib/auth.js";
 import { ClaudeRunner, DEFAULT_BIN as CLAUDE_DEFAULT_BIN, checkMcpConfig } from "./lib/claude.js";
 import { ClaudeAgentCatalog, isClaudeAgentId } from "./lib/claude-agents.js";
@@ -91,20 +105,87 @@ console.log(`[zai-config] ${describeConfig(config, configSources)}`);
 const PORT = config.PORT;
 const MOCK = config.ZAI_MOCK;
 const UPSTREAM = config.ZAI_UPSTREAM;
+// FEAT-16.3 (tasks 3.2): ОДИН клиент opencode на процесс — его получают хаб,
+// instance-health и все маршруты. api: "v1" (1.19.5, по умолчанию) | "v2";
+// пароль v2 живёт только в Authorization клиента (lib/oc-client.js).
+const OC = createOcClient({
+  api: config.ZAI_OC_API === "v2" ? "v2" : "v1",
+  base: UPSTREAM,
+  ...(config.ZAI_OC_PASSWORD ? { password: config.ZAI_OC_PASSWORD } : {}),
+});
+// BUG-190: версия opencode 2.x — из /api/info через адаптер (на /global/health у v2 HTML)
+if (OC.api === "v2") setOpencodeInfoSource(() => OC.healthInfo({ timeoutMs: 2000 }));
+// Защита «закрыто при отказе» (FEAT-16.3, v2fix1 2026-11-08): opencode 2.x при
+// непогрузке плагина пишет только WARN в свой лог и продолжает работать БЕЗ
+// песочницы. Портал в v2-режиме не пускает ходы тенантов (403 с понятным
+// текстом), пока serve не подтвердит плагин через plugin.list — GET /api/plugin
+// («Retrieve enabled server plugins and their current status»); админ-ходы не
+// затронуты. Форма ответа не нормализуется — ищем id плагина в теле.
+// Fail-closed: сетевая ошибка / не-2xx / нет id — ход закрыт. Кэш короткий:
+// позитив 15 с, негатив 3 с (плагин мог загрузиться между попытками).
+const SANDBOX_PLUGIN_ID = "zai-tenant-v2";
+let pluginGate = { ok: false, until: 0 };
+async function sandboxPluginConfirmed() {
+  const now = Date.now();
+  if (now < pluginGate.until) return pluginGate.ok;
+  let ok = false;
+  try {
+    const out = await OC.pluginList({ timeoutMs: 5_000 });
+    // Claude review: the plugin must be listed AND active — a plugin that failed to load may still
+    // be listed with another status; a bare substring match would confirm it (open on failure).
+    // Live 2.2.6 shape: {data:[{id, source, state:{status:"active"}}]}.
+    let json = out?.json;
+    if (json == null && typeof out?.text === "string") try { json = JSON.parse(out.text); } catch {}
+    const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    ok = list.some((p) => p?.id === SANDBOX_PLUGIN_ID && p?.state?.status === "active");
+    if (!ok) errLog("pluginGate", new Error(`serve не подтвердил активный плагин ${SANDBOX_PLUGIN_ID} — тенантские ходы закрыты`));
+  } catch (err) {
+    errLog("pluginGate", err);
+  }
+  pluginGate = { ok, until: now + (ok ? config.ZAI_PLUGIN_GATE_TTL_MS : config.ZAI_PLUGIN_GATE_TTL_NEG_MS) };
+  return ok;
+}
 // BUG-183: poisoned opencode per-folder services (lib/instance-health.js) — warm-up and self-heal.
-const instanceHealth = createInstanceHealth({ upstream: UPSTREAM, log: (m) => console.log(m) });
+const instanceHealth = createInstanceHealth({ upstream: UPSTREAM, oc: OC, log: (m) => console.log(m) });
+// BUG-195: opencode держит экземпляр (+ MCP-процессы) каждой папки, к которой
+// обращался портал, до рестарта serve. Реапер освобождает папки после простоя
+// ZAI_INSTANCE_IDLE_MIN минут, если там не идёт ход; HOME/папка чатов — никогда.
+// Активность = прогрев/лечение перед ходом и созданием чата (обёртка warm/ready
+// ниже) и чтение истории (sessionMessagesRoute).
+const instanceReaper = createInstanceReaper({
+  idleMs: Math.max(1, config.ZAI_INSTANCE_IDLE_MIN) * 60_000,
+  isProtected: (d) => {
+    const n = normDir(d);
+    return !n || n === normDir(HOME_DIR) || n === normDir(CHAT_DIR);
+  },
+  isBusy: (d) => instanceHealth.busy(d),
+  dispose: async (d) => {
+    if (!(await disposeInstance(d))) throw new Error("dispose failed");
+    instanceHealth.forget(d);
+  },
+  log: (m) => console.log(m),
+});
+for (const m of ["warm", "ready"]) {
+  const orig = instanceHealth[m];
+  instanceHealth[m] = (dir, ...rest) => {
+    instanceReaper.touch(dir);
+    return orig(dir, ...rest);
+  };
+}
 // BUG-171: Sandbox may reach the tenants' knowledge-base root (each tenant its own zone — plugin guard).
 setTenantVaultRoots([config.ZAI_TENANT_VAULT]);
 // ADR-003 п.2 (Г8): a stand/test instance never talks to the prod opencode —
 // the stand used to see, prompt and delete every prod session (BUG-12.8).
+// BUG-224: prod upstream ports are ONE list (lib/config.js) — 1.x :4096 AND
+// 2.x :4196 (the v2 prod serve; the guard used to know only :4096).
 if (config.ZAI_ENV !== "prod" && !MOCK) {
   let upPort = "";
   try {
     const u = new URL(UPSTREAM);
     upPort = u.port || (u.protocol === "https:" ? "443" : "80");
   } catch {}
-  if (upPort === "4096") {
-    console.error(`[zai-config] ZAI_ENV=${config.ZAI_ENV} отказывается работать с прод-upstream :4096 (${UPSTREAM})`);
+  if (PROD_UPSTREAM_PORTS.includes(Number(upPort))) {
+    console.error(`[zai-config] ZAI_ENV=${config.ZAI_ENV} отказывается работать с прод-upstream :${upPort} (${UPSTREAM})`);
     process.exit(1);
   }
 }
@@ -138,6 +219,11 @@ const VERSION = (() => {
 // A stray rejected promise is logged and the process keeps serving.
 process.on("uncaughtException", (err) => {
   console.error(`[zai-fatal] uncaughtException: ${err?.stack ?? err}`);
+  // TASK-13.27: last chance to land the deferred claude store write before
+  // the watchdog restart takes over.
+  try {
+    claude?.flushNow();
+  } catch {}
   process.exit(1);
 });
 process.on("unhandledRejection", (err) => {
@@ -164,21 +250,16 @@ let sessionIndex = { at: 0, byId: new Map(), recById: new Map() };
 async function fetchSessionIndex(force = false) {
   if (!force && Date.now() - sessionIndex.at < INDEX_TTL_MS) return sessionIndex.byId;
   try {
-    const r = await fetch(`${UPSTREAM}/session`, { signal: AbortSignal.timeout(8000) });
-    if (r.ok) {
-      const list = await r.json();
+    const list = await OC.listSessions({}, { timeoutMs: 8000 }); // v2: /api/session → записи с directory
+    if (Array.isArray(list)) {
       const byId = new Map();
       const recById = new Map();
-      if (Array.isArray(list)) {
-        for (const s of list) {
-          if (typeof s?.id !== "string") continue;
-          byId.set(s.id, s.directory ?? null);
-          recById.set(s.id, s);
-        }
+      for (const s of list) {
+        if (typeof s?.id !== "string") continue;
+        byId.set(s.id, s.directory ?? null);
+        recById.set(s.id, s);
       }
       sessionIndex = { at: Date.now(), byId, recById };
-    } else {
-      errLog("fetchSessionIndex", new Error(`upstream ${r.status}`));
     }
   } catch (err) {
     errLog("fetchSessionIndex", err); // upstream down: keep serving the last known index
@@ -217,35 +298,30 @@ let agentCache = { at: 0, list: null };
 async function agentList() {
   if (agentCache.list && Date.now() - agentCache.at < 60_000) return agentCache.list;
   try {
-    const r = await fetch(`${UPSTREAM}/agent`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-    if (r.ok) {
-      const list = await r.json();
-      if (Array.isArray(list)) agentCache = { at: Date.now(), list };
-    }
+    const list = await OC.listAgents({ timeoutMs: 10_000 }); // v2: /api/agent с mode/permissions (api-map №21)
+    if (Array.isArray(list)) agentCache = { at: Date.now(), list };
   } catch (err) {
     errLog("agentList", err);
   }
   return agentCache.list ?? [];
 }
 
-// BUG-188: names of the slash commands of a chat folder (GET /command?directory=…),
-// 60 s cache per folder — the same TTL as the agent catalog. On upstream
-// failure the stale set lives on; nothing known → empty set → the text goes
-// as a plain prompt (a command never blocks a turn).
+// BUG-188: names of the slash commands of a chat folder (v1 GET /command,
+// v2 GET /api/command — api-map «Команды», tasks 3.8), 60 s cache per folder —
+// the same TTL as the agent catalog. On upstream failure the stale set lives
+// on; nothing known → empty set → the text goes as a plain prompt (a command
+// never blocks a turn).
 const commandCache = new Map(); // dir → {at, names:Set}
 async function commandNames(dir) {
   const key = dir ?? "";
   const hit = commandCache.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.names;
   try {
-    const r = await fetch(`${UPSTREAM}/command${scopedQuery("", dir)}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-    if (r.ok) {
-      const list = await r.json();
-      if (Array.isArray(list)) {
-        const names = new Set(list.map((c) => (typeof c?.name === "string" ? c.name : "")).filter(Boolean));
-        commandCache.set(key, { at: Date.now(), names });
-        return names;
-      }
+    const list = await OC.listCommands({ directory: dir, timeoutMs: 10_000 }); // v2 отдаёт тот же язык 1.x (адаптер разворачивает конверт)
+    if (Array.isArray(list)) {
+      const names = new Set(list.map((c) => (typeof c?.name === "string" ? c.name : "")).filter(Boolean));
+      setCapped(commandCache, key, { at: Date.now(), names }, 500); // SRV-23: без потолка кэш рос с каждой новой папкой
+      return names;
     }
   } catch (err) {
     errLog("commandNames", err);
@@ -284,6 +360,30 @@ function upstreamError(res, err, place) {
   return sendJson(res, 502, { error: "Сервер агента недоступен", rid: res.zaiRid ?? null });
 }
 
+// ---- FEAT-16.3 (tasks 3.2/3.4): общий faces для веток OC --------------------
+// Определённый отказ upstream (OcError.status ≥ 400) — читаемый статус и тело
+// {_tag}; сеть/таймаут — прежний 502 «Сервер агента недоступен».
+function ocUpstreamError(res, err, place) {
+  if ((err?.status ?? 0) >= 400) return sendJson(res, err.status, err.body && typeof err.body === "object" ? err.body : { error: `upstream: ${err.status}` });
+  return upstreamError(res, err, place);
+}
+
+// Вся история чата через адаптер (для reverт-логики и полного просмотра —
+// там, где v1 забирал список целиком).
+async function ocWholeMessages(id, dir) {
+  const out = await OC.listMessages(id, { directory: dir ?? null, all: true });
+  return Array.isArray(out.messages) ? out.messages : null;
+}
+
+// Страница из listMessages адаптера (уже нарезана) с теми же заголовками
+// x-zai-has-more / x-zai-next-before, что у sendPaged (BUG-08.8).
+function sendOcPage(res, out, mapList = null) {
+  const page = mapList && Array.isArray(out.messages) ? mapList(out.messages) : out.messages;
+  res.setHeader("x-zai-has-more", out.hasMore ? "1" : "0");
+  if (out.nextBefore) res.setHeader("x-zai-next-before", out.nextBefore);
+  return sendJson(res, 200, page);
+}
+
 // The edge sets x-forwarded-proto from its listener (ADR-009); this server
 // listens on loopback only, so the header is trusted.
 function isHttps(req) {
@@ -294,14 +394,40 @@ function isHttps(req) {
 // match mints a random session id cookie (TASK-12.21) — the raw token never
 // sits in the cookie jar. JSON only (BUG-12.9: a text/plain form could log a
 // victim into the attacker's account).
+// TASK-04.15 (SRV-21): >10 failed attempts per address per minute → 429
+// before any token check; a success resets the address (lib/auth.js keeps
+// the windowed counter). SRV-22: oversize body → 413, broken JSON → 400 —
+// readJsonBody conflates both into null, so the body is read here directly;
+// its other callers stay unchanged.
 async function handleLogin(req, res) {
+  const ip = clientIp(req);
+  if (loginThrottled(ip)) {
+    req.resume();
+    return sendJson(res, 429, { error: "too many attempts" });
+  }
   if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
     req.resume();
+    loginFailure(ip);
     return sendJson(res, 415, { error: "ожидается application/json" });
   }
-  const body = await readJsonBody(req, 16 * 1024);
+  const raw = await readBody(req, 16 * 1024);
+  if (raw === null) {
+    loginFailure(ip);
+    return sendJson(res, 413, { error: "тело больше лимита" });
+  }
+  let body = null;
+  try {
+    body = JSON.parse(raw.toString("utf8"));
+  } catch {
+    loginFailure(ip);
+    return sendJson(res, 400, { error: "тело не является JSON" });
+  }
   const user = typeof body?.token === "string" ? userByToken(body.token) : null;
-  if (!user) return sendJson(res, 401, { error: "invalid token" });
+  if (!user) {
+    loginFailure(ip);
+    return sendJson(res, 401, { error: "invalid token" });
+  }
+  loginSuccess(ip);
   setAuthCookie(res, createSession(user), isHttps(req));
   return sendJson(res, 200, { user: await meFace(user) });
 }
@@ -350,22 +476,14 @@ const hub = new EventHub({
   pendingStatePath: path.join(DATA_DIR, "hub-pending.json"), // BUG-07.12: replay counters survive restarts
   loopAbortCount: config.ZAI_LOOP_ABORT_COUNT, // BUG-07.7 (0 disables)
   promptUnstickMs: config.ZAI_PROMPT_UNSTICK_MS, // BUG-07.10
+  // FEAT-16.3 (tasks 3.3): все обращения хаба к opencode — через общий
+  // клиент OC (ZAI_OC_API, пароль — только Authorization).
+  oc: OC,
 });
 
-// FEAT-12.16: tenants never see raw tool input/output in the live stream
-// either — the same redaction /message applies, as an SSE transform.
-function redactEventForTenant(data) {
-  if (!data.includes('"message.part.updated"')) return data;
-  let ev;
-  try {
-    ev = JSON.parse(data);
-  } catch {
-    return data;
-  }
-  const part = ev?.properties?.part;
-  if (ev?.type !== "message.part.updated" || !part || (part.type !== "tool" && part.type !== "patch")) return data;
-  return JSON.stringify({ ...ev, properties: { ...ev.properties, part: redactPart(part) } });
-}
+// FEAT-12.16 + BUG-197: tenants never see raw tool input/output in the live
+// stream, and only the event types the client understands reach them —
+// tenantEvent (lib/policy.js) is the SSE transform of a tenant connection.
 
 // BUG-01.28: smoke/QA probes create chats under the system temp tree
 // (%TEMP%\zai-claude-smoke, Temp\oc_*); those never belong in «Чаты».
@@ -420,6 +538,7 @@ const claude = new ClaudeRunner({
   // FEAT-04.11: tenants' Claude chats get the same kit as opencode tenants
   // (jailed cmd/Python, zai-* skills, marketplace).
   tenantKit: tenantKit({ dataDir: DATA_DIR, jailExe: process.env.ZAI_JAIL_EXE, sandboxPy: process.env.ZAI_SANDBOX_PY }),
+  portalRule: PORTAL_FILE_RULE, // FEAT-05.29
   // FEAT-13.11: knowledge-base snapshot of a chat's first turn (only when the
   // zone folder exists: a missing vault means no cache, not an empty one).
   kbSnapshot: ({ dir, sid, zone }) => (zone?.root && existsSync(zone.root) ? buildKbSnapshot({ dir, sid, zone }) : null),
@@ -427,20 +546,75 @@ const claude = new ClaudeRunner({
 
 // A bound Claude agent vanished from the catalog (file removed/disabled):
 // the turn already runs without it; the binding drops it and the chat says
-// so (FEAT-13.17, mockup model-binding frame 14).
+// so (FEAT-13.17, mockup model-binding frame 14). BUG-218: the store update
+// runs under the chat lock and reads the record afresh — a parallel PATCH
+// must not be clobbered by a stale copy.
 function claudeAgentGone({ sid, dir, name }) {
-  const cur = bindings.get(sid);
-  if (cur?.engine === "claude" && cur.agent) {
-    const next = { ...cur, agent: null };
-    bindings.set(sid, next);
-    hub.emit({ type: "session.updated", properties: { sessionID: sid, info: { id: sid, zai: { ...makeBinding(next, { prompted: next.prompted }), source: "stored" } } } }, dir ?? null);
-  }
+  void withSessionLock(sid, () => {
+    const cur = bindings.get(sid);
+    if (cur?.engine === "claude" && cur.agent) {
+      const next = { ...cur, agent: null };
+      bindings.set(sid, next);
+      hub.emit({ type: "session.updated", properties: { sessionID: sid, info: { id: sid, zai: { ...makeBinding(next, { prompted: next.prompted }), source: "stored" } } } }, dir ?? null);
+    }
+  });
   hub.emit({ type: "zai.notice", properties: { sessionID: sid, text: `Агент «${name}» больше недоступен — ответ без агента.` } }, dir ?? null);
+}
+
+// BUG-218 (design §1): the turn-start write under the chat lock — it re-reads
+// the stored record and flips ONLY prompted, so a parallel PATCH (its own
+// lock section) is never overwritten by the prompt's stale copy. A turn
+// starting while a revert is under way is refused: 409 revert in progress.
+async function markPrompted(id, binding) {
+  return withSessionLock(id, () => {
+    if (isReverting(id)) return "revert in progress";
+    const cur = bindings.get(id) ?? binding;
+    bindings.set(id, { ...cur, prompted: true });
+    // FEAT-11.18: журнал чата пересобирается и при приёме хода — событие конца прошлого хода
+    // изредка не доходит, и журнал отставал бы на ход
+    journal.schedule(id);
+    return null;
+  });
 }
 
 // Chat binding (engine + model + agent per chat, lib/binding.js): the ONLY
 // thing that decides where a prompt goes.
 const bindings = new BindingStore({ storePath: path.join(DATA_DIR, "session-bindings.json") });
+// FEAT-11.18 (шаг В): отметки передачи чата между движками и моделями.
+const relays = new RelayStore(MOCK ? null : path.join(DATA_DIR, "relays.json"));
+// Какой движок ведёт чат СЕЙЧАС: после передачи история Claude у чата остаётся, но ведёт его
+// тот движок, что записан в привязке. Без записи — прежнее правило «есть история Claude».
+function engineOfChat(id, binding = null) {
+  return (binding ?? bindings.get(id))?.engine ?? (claude.has(id) ? "claude" : "opencode");
+}
+// Вся лента чата: у чата с передачами — истории обоих движков, слитые по времени.
+async function wholeChatMessages(id, dir) {
+  const own = claude.has(id) ? claude.messages(id) ?? [] : [];
+  const live = claude.has(id) ? claude.liveAnswer(id) : null;
+  if (live && !own.some((m) => m.info?.id === live.info.id)) own.push(live);
+  let oc = [];
+  try {
+    oc = (await ocWholeMessages(id, dir)) ?? [];
+  } catch {} // движок недоступен: история Claude всё равно показывается
+  return mergeFeeds(oc, own);
+}
+// BUG-232: ходы, сделанные в другом движке и неизвестные нынешнему, вкладываются в запрос скрытой
+// частью (lib/relay.js). Разово само собой: после своего хода пропущенных не остаётся.
+async function withRelayCatchUp(id, dir, body, binding) {
+  try {
+    const mine = claude.has(id) ? claude.messages(id) ?? [] : [];
+    let oc = [];
+    try {
+      oc = (await ocWholeMessages(id, dir)) ?? [];
+    } catch {} // движок недоступен: остаются журнал и строка системного промпта
+    const isClaude = engineOfChat(id, binding) === "claude";
+    const missed = missedTurns(isClaude ? mine : oc, isClaude ? oc : mine);
+    return withCatchUp(body, missed, { journalFile: journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null) });
+  } catch (err) {
+    errLog("relay.catchUp", err);
+    return body;
+  }
+}
 
 // Auto titles (BUG-13.14 claude chats, BUG-01.27 snapshot-derived opencode
 // titles). The generator is a short claude CLI call (cheapest model) with a
@@ -462,6 +636,74 @@ titler = new AutoTitler({
       : null,
 });
 if (!MOCK) hub.onEvent((data, dir) => titler.noteEvent(data, dir));
+
+// FEAT-11.18 (шаг Б): журнал чата в базе знаний владельца чата — полная история обоих
+// движков, пересобирается по концу каждого хода (lib/chat-journal.js).
+// Зона: тенант, которому принадлежит папка чата, → его зона; иначе зона администратора.
+function kbZoneOfDir(dir) {
+  const owner = dir ? listUsers().find((u) => u.role !== "admin" && !u.disabled && dirAllowed(u, dir)) : null;
+  return owner
+    ? kbZoneForUser(owner, { admin: false, adminRoot: config.ZAI_KB_ROOT, tenantVault: config.ZAI_TENANT_VAULT })
+    : kbZoneForUser(null, { admin: true, adminRoot: config.ZAI_KB_ROOT, tenantVault: config.ZAI_TENANT_VAULT, home: HOME_DIR });
+}
+const journal = new JournalWriter({
+  debounceMs: Number(process.env.ZAI_JOURNAL_DEBOUNCE_MS) > 0 ? Number(process.env.ZAI_JOURNAL_DEBOUNCE_MS) : 3000,
+  log: (m) => console.error(m),
+  resolve: async (sid) => {
+    let rec = await sessionRecord(sid, true);
+    if (!rec && !claude.has(sid)) { await fetchSessionIndex(true); rec = sessionIndex.recById.get(sid) ?? null; }
+    const jdbg = process.env.ZAI_JOURNAL_DEBUG ? (m) => console.error(`[zai/journal] ${sid}: ${m}`) : () => {};
+    if (rec?.parentID) return null; // дочерняя сессия субагента — её работа видна в журнале родителя
+    const isClaude = claude.has(sid);
+    const dir = (isClaude ? claude.dirOf(sid) : null) ?? (await resolveSessionDir(sid));
+    if (dir == null) { jdbg(`нет папки чата (запись: ${rec ? "есть" : "нет"})`); return rec ? null : { retry: true }; }
+    const zone = kbZoneOfDir(dir);
+    if (!zone?.root) { jdbg(`нет зоны базы знаний для ${dir} (тенант: ${zone?.tenant ?? "—"})`); return null; }
+    const marks = relays.get(sid);
+    const messages = marks.length ? await wholeChatMessages(sid, dir) : isClaude ? await claude.mergedMessages(sid, dir ?? HOME_DIR, UPSTREAM) : await ocWholeMessages(sid, dir);
+    return { zoneRoot: zone.root, title: rec?.title ?? "", dir, messages: messages ?? [], relays: marksForJournal(marks) };
+  },
+});
+if (!MOCK) hub.onEvent((data) => journal.note(data));
+// Агент открывает журнал чата (он лежит в базе знаний, вне папки чата) — движок спрашивает
+// доступ к папке. На папку журналов зоны ЭТОГО чата портал отвечает сам, один раз на запрос.
+if (!MOCK)
+  hub.onEvent((data, evtDir) => {
+    if (typeof data !== "string" || !data.includes('"permission.asked"')) return;
+    let evt;
+    try {
+      evt = JSON.parse(data);
+    } catch {
+      return;
+    }
+    const p = evt?.type === "permission.asked" ? evt.properties : null;
+    const requestID = p?.id ?? p?.requestID;
+    if (!p?.sessionID || typeof requestID !== "string") return;
+    (async () => {
+      const dir = evtDir ?? (await resolveSessionDir(p.sessionID));
+      if (!dir || !isJournalAccess(p, kbZoneOfDir(dir)?.root ?? null)) return;
+      await OC.replyPermission({ directory: dir, sessionID: p.sessionID, requestID, reply: "once", timeoutMs: DEFAULT_OPTS.timeoutMs });
+    })().catch((err) => errLog("journal.permission", err));
+  });
+// Чат удалён — его журнал в базе знаний уходит вместе с ним.
+function dropJournal(id, dir) {
+  try {
+    const file = journal.fileOf(id, dir ? kbZoneOfDir(dir)?.root ?? null : null);
+    journal.forget(id);
+    relays.forget(id);
+    if (file) unlinkSync(file);
+  } catch (err) {
+    if (err?.code !== "ENOENT") errLog("journal.drop", err);
+  }
+}
+// Правила портала для хода: показ файлов + (когда журнал уже есть) где лежит журнал чата.
+function portalRulesFor(sid, dir) {
+  let file = null;
+  try {
+    file = journal.fileOf(sid, kbZoneOfDir(dir)?.root ?? null);
+  } catch {}
+  return [PORTAL_FILE_RULE, file ? journalRule(file) : "", relayRule(relays.get(sid), file)].filter(Boolean).join("\n\n");
+}
 
 // FEAT-07.20: Web Push. Keys and subscriptions live in <data>/push/ (secrets,
 // not in git). Recipients of a chat = the tenants whose scope holds its folder;
@@ -493,7 +735,7 @@ if (config.ZAI_PUSH) {
       subject: config.ZAI_PUSH_SUBJECT,
       recipients: pushRecipients,
       chatInfo: pushChatInfo,
-      isManaged: (sid) => claude.has(sid),
+      isManaged: (sid) => engineOfChat(sid) === "claude",
       debounceMs: config.ZAI_PUSH_DEBOUNCE_MS,
       log: (m) => console.log(m),
     });
@@ -507,20 +749,17 @@ if (config.ZAI_PUSH) {
 async function deleteSessionEverywhere(id, dir) {
   let ok = false;
   try {
-    const r = await fetch(`${UPSTREAM}${withDir(`/session/${encodeURIComponent(id)}`, dir ? scopedQuery("", dir) : "")}`, {
-      method: "DELETE",
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
-    });
-    await r.text().catch(() => "");
-    ok = r.ok || r.status === 404;
+    await OC.deleteSession(id, { directory: dir ?? undefined, timeoutMs: DEFAULT_OPTS.timeoutMs }); // v2: DELETE /api/session/:id (204)
+    ok = true;
   } catch (err) {
-    errLog("session.deleteEverywhere", err);
+    if ((err?.status ?? 0) === 404) ok = true; // уже нет upstream — считаем удалённым, как раньше
+    else errLog("session.deleteEverywhere", err);
   }
   if (ok) {
     claude.forget(id);
     bindings.forget(id);
     titler.forget(id);
+    dropJournal(id, dir); // FEAT-11.18
     dropPinEverywhere(id); // FEAT-01.69: no «ghost» pins of a deleted chat
   }
   return ok;
@@ -555,11 +794,8 @@ async function disposeInstance(dir) {
   const n = normDir(dir);
   if (!n || n === normDir(HOME_DIR) || n === normDir(CHAT_DIR)) return false;
   try {
-    const u = new URL("/instance/dispose", UPSTREAM);
-    u.searchParams.set("directory", dir);
-    const r = await fetch(u, { method: "POST", headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-    await r.text().catch(() => "");
-    return r.ok;
+    await OC.disposeInstance({ directory: dir, timeoutMs: 10_000 }); // v1 POST /instance/dispose; v2 DELETE /api/debug/location
+    return true;
   } catch (err) {
     errLog("instance.dispose", err);
     return false;
@@ -572,7 +808,7 @@ const pendingRemovals = new PendingRemovals(path.join(DATA_DIR, "pending-removal
 const underTenantHome = (p) => {
   const n = normDir(p);
   const root = normDir(config.ZAI_TENANT_HOME);
-  return Boolean(n && root && n.startsWith(root + path.sep));
+  return Boolean(n && root && pathInside(n, root)); // BUG-17.14: по платформе
 };
 // BUG-089: tenant-home subfolders no account owns (same rule for GET and POST).
 function ownerlessTenantDirs(sessions) {
@@ -596,14 +832,24 @@ let defaultAgentCache = { at: 0, name: null };
 async function upstreamDefaultAgent() {
   if (defaultAgentCache.name && Date.now() - defaultAgentCache.at < 60_000) return defaultAgentCache.name;
   try {
-    const r = await fetch(`${UPSTREAM}/config`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-    const name = r.ok ? (await r.json())?.default_agent ?? null : null;
+    const cfg = await OC.configGet({ timeoutMs: 10_000 }); // v2: слои /api/config + /api/model/default (Э1, Э3)
+    const name = cfg?.default_agent ?? null;
     if (typeof name === "string" && name) defaultAgentCache = { at: Date.now(), name };
   } catch (err) {
     errLog("defaultAgent.config", err);
   }
   return defaultAgentCache.name;
 }
+
+// v2fix2 (лейн A, FEAT-16.3): источник каталога моделей в v2-режиме для
+// claude.handleProvider ({catalog}). opencode 2.x не имеет v1-пути /provider,
+// поэтому upstream-часть даёт клиент адаптера: OC.listProviders() собирает
+// форму 1.x {all, default, connected} и сам доклеивает модели из /api/model
+// в элементы all (см. lib/oc-client.js — Provider.Info v2 моделей не несёт).
+// Ошибка источника — исключение: handleProvider отдаст 502/устаревший кэш
+// как в v1. В v1-режиме источник null — handleProvider читает
+// ${upstream}/provider как раньше, бит в бит.
+const providerCatalog = OC.api === "v2" ? () => OC.listProviders({ timeoutMs: 10_000 }) : null;
 
 // BUG-11.13 / BUG-082: model for a prompt without one in an unbound chat.
 let defaultModelCache = { at: 0, model: null };
@@ -616,12 +862,12 @@ async function defaultModel() {
     if (m) return m;
   }
   try {
-    const r = await fetch(`${UPSTREAM}/config`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-    if (r.ok) configModel = (await r.json())?.model ?? null;
+    const cfg = await OC.configGet({ timeoutMs: 10_000 });
+    configModel = cfg?.model ?? null; // v2: {providerID, id[, variant]} — cleanModel понимает `id`
   } catch (err) {
     errLog("defaultModel.config", err);
   }
-  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM));
+  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status === 200) {
     try {
       catalog = JSON.parse(captured.body);
@@ -642,7 +888,7 @@ async function imagesInline(binding, parsed) {
   if (binding?.engine === "claude") return true;
   const model = binding?.model ?? cleanModel(parsed?.model);
   if (!model || engineOf(model.providerID) === "claude") return true;
-  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM));
+  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status !== 200) return true;
   try {
     return modelAcceptsImages(JSON.parse(captured.body), model) !== false;
@@ -661,7 +907,7 @@ async function tenantVisionModel(user, binding, parsed) {
   if (!parts.some((x) => x?.type === "file" && String(x.mime ?? "").startsWith("image/"))) return null;
   const model = binding?.model ?? cleanModel(parsed?.model);
   if (!model || engineOf(model.providerID) === "claude") return null;
-  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM));
+  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status !== 200) return null;
   try {
     const catalog = JSON.parse(captured.body);
@@ -681,7 +927,7 @@ async function tenantVisionModel(user, binding, parsed) {
 // let it pass (the empty-turn detector stays the safety net).
 async function tenantModelProblem(user, model) {
   if (!model || isAdmin(user)) return null;
-  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM));
+  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status !== 200) return null;
   let catalog = null;
   try {
@@ -716,7 +962,7 @@ function withBinding(s) {
   const out = { ...s };
   if (rv) out.revert = rv;
   else delete out.revert;
-  if (b) out.zai = b;
+  if (b) out.zai = relays.has(s.id) ? { ...b, relays: relays.get(s.id) } : b;
   return out;
 }
 
@@ -872,9 +1118,19 @@ function handleUpload(req, res, url, dir, limit = UPLOAD_LIMIT) {
     req.resume();
     return sendJson(res, 400, { error: "bad directory" });
   }
-  const stored = pickUniqueName(dirAbs, sanitizeFilename(url.searchParams.get("name")));
-  const target = path.join(dirAbs, stored);
-  const ws = createWriteStream(target);
+  // BUG-218 (SRV-05, design §2): the file is created EXCLUSIVELY (flag "wx")
+  // — the old pick-by-existsSync then open pair raced parallel uploads of the
+  // same name onto one path and clobbered each other.
+  let stored, target, ws;
+  try {
+    const opened = openUnique(dirAbs, sanitizeFilename(url.searchParams.get("name")));
+    stored = opened.name;
+    target = opened.path;
+    ws = createWriteStream(target, { fd: opened.fd });
+  } catch {
+    req.resume();
+    return sendJson(res, 500, { error: "disk write error" });
+  }
   let size = 0;
   let done = false;
   const cleanup = () => {
@@ -923,7 +1179,7 @@ async function adminSessionDir(id, url) {
 // Permission kinds whose approval would let a tenant's agent leave its
 // folder or run a shell with the owner's rights (BUG-12.5): a tenant can
 // only reject those.
-const TENANT_REJECT_ONLY = new Set(["bash", "external_directory", "doom_loop"]);
+// BUG-201: tenant reject-only permissions — tenantMustReject (lib/policy.js, v1 permission / v2 action)
 
 // BUG-141: the dirProblem codes that are never a legitimate directory, even
 // to read (see handleApi). Every ?directory= value is checked (duplicates too).
@@ -947,10 +1203,18 @@ const API_ROUTES = validateTable([
     tenantUploadBytes, uploadLimit: UPLOAD_LIMIT, sanitizeFilename, uploadDir: UPLOAD_DIR, unlinkSync,
   }),
   ...catalogRoutes({
-    sendJson, errLog, usageStats, hub, claude, claudeAgents, upstream: UPSTREAM, statusTtlMs: STATUS_TTL_MS,
+    sendJson, errLog, usageStats, subscriptionCards, hub, claude, claudeAgents, upstream: UPSTREAM, statusTtlMs: STATUS_TTL_MS,
     fetchSessionIndex, dirAllowed, captureResponse, providerForUser, engineAllowed, proxyRequest, withQuery,
     defaultOpts: DEFAULT_OPTS, tenantAgents, agentList, publicAgent, upstreamError, hostStats, opencodeVersion, harnessVersions,
     version: VERSION, defaultDir, chatDir: CHAT_DIR, instanceHealth,
+    // FEAT-16.3 (tasks 3.2): каталог идёт через клиент только в v2-режиме —
+    // v1 сохраняет прежние raw-вызовы бит в бит (веер /session/status с
+    // явным ?directory=, ETag-кэш /agent и /project).
+    oc: OC.api === "v2" ? OC : null,
+    // v2fix2 (лейн A): источник каталога /zai/api/provider для v2 (форма 1.x
+    // собирается в OC.listProviders, см. провайдер выше); null в v1 — прежний путь бит в бит.
+    providerCatalog,
+    ocUpstreamError,
   }),
   ...adminRoutes({
     sendJson, apiError, readJsonBody, bodyLimit: DEFAULT_OPTS.bodyLimit, listUsers, createUser, regenerateToken, updateUser,
@@ -1029,18 +1293,49 @@ async function sessionBindingRoute({ req, res, url, user, admin, match }) {
   }
   const body = await readJsonBody(req, DEFAULT_OPTS.bodyLimit);
   if (body === null) return sendJson(res, 400, { error: "bad json body" });
-  const current = bindingFor(id, await sessionRecord(id));
-  // FEAT-13.17: Claude agents are admin-only and must exist in the catalog.
-  const r = patchBinding(current, body, { claudeAgentOk: (a) => admin && claudeAgents.has(a) });
-  if (r.error) return sendJson(res, r.status, { error: r.error, zai: current });
-  // ADR-004 / BUG-12.5: the engine and the agent are policy-checked.
-  if (!engineAllowed(user, r.binding.engine)) return sendJson(res, 403, { error: "engine not allowed" });
-  const modelProblem = await tenantModelProblem(user, r.binding.model);
-  if (modelProblem) return sendJson(res, modelProblem.status, { error: modelProblem.error, zai: current });
-  if (!admin && r.binding.engine === "opencode" && r.binding.agent && !agentAllowedForTenant(r.binding.agent, await agentList()))
-    return sendJson(res, 403, { error: "agent not allowed" });
-  bindings.set(id, r.binding);
-  return sendJson(res, 200, { id, zai: { ...r.binding, source: "stored" } });
+  // BUG-218 (SRV-06, design §1): the read, every check and the store write run
+  // under the chat lock — between the old read and the write there were awaits
+  // (model/agent catalogs), and a parallel prompt mark or agent reset was lost.
+  return withSessionLock(id, async () => {
+    const current = bindingFor(id, await sessionRecord(id));
+    // FEAT-11.18 (шаг В): {relay: true, model, agent?} — передача чата на другой движок или модель.
+    // Единственный разрешённый способ сменить движок у чата с сообщениями.
+    if (body.relay === true) {
+      const busy = Boolean(hub.busySnapshot()[id] || claude.busySnapshot()[id]);
+      const plan = planRelay({ current, target: { model: body.model, ...(Object.prototype.hasOwnProperty.call(body, "agent") ? { agent: body.agent } : {}) }, busy, claudeAgentOk: (a) => admin && claudeAgents.has(a) });
+      if (plan.error) return sendJson(res, plan.status, { error: plan.error, zai: current });
+      if (!engineAllowed(user, plan.binding.engine)) return sendJson(res, 403, { error: "engine not allowed" });
+      const problem = await tenantModelProblem(user, plan.binding.model);
+      if (problem) return sendJson(res, problem.status, { error: problem.error, zai: current });
+      if (!admin && plan.binding.engine === "opencode" && plan.binding.agent && !agentAllowedForTenant(plan.binding.agent, await agentList()))
+        return sendJson(res, 403, { error: "agent not allowed" });
+      const rdir = dir ?? claude.dirOf(id) ?? null;
+      // журнал — до смены привязки: новый движок должен найти в нём всё сделанное
+      try {
+        await journal.flush(id);
+      } catch (err) {
+        errLog("relay.journal", err);
+      }
+      const marks = relays.add(id, relayMark(current, plan.binding, { reason: typeof body.reason === "string" ? body.reason : null }));
+      bindings.set(id, plan.binding);
+      if (plan.binding.engine !== "claude") hub.unmarkManaged(id);
+      const zai = { ...plan.binding, source: "stored", relays: marks };
+      hub.emit({ type: "session.updated", properties: { sessionID: id, info: { id, zai } } }, rdir);
+      journal.schedule(id); // отметка передачи попадает в журнал
+      return sendJson(res, 200, { id, zai, relay: marks.at(-1) });
+    }
+    // FEAT-13.17: Claude agents are admin-only and must exist in the catalog.
+    const r = patchBinding(current, body, { claudeAgentOk: (a) => admin && claudeAgents.has(a) });
+    if (r.error) return sendJson(res, r.status, { error: r.error, zai: current });
+    // ADR-004 / BUG-12.5: the engine and the agent are policy-checked.
+    if (!engineAllowed(user, r.binding.engine)) return sendJson(res, 403, { error: "engine not allowed" });
+    const modelProblem = await tenantModelProblem(user, r.binding.model);
+    if (modelProblem) return sendJson(res, modelProblem.status, { error: modelProblem.error, zai: current });
+    if (!admin && r.binding.engine === "opencode" && r.binding.agent && !agentAllowedForTenant(r.binding.agent, await agentList()))
+      return sendJson(res, 403, { error: "agent not allowed" });
+    bindings.set(id, r.binding);
+    return sendJson(res, 200, { id, zai: { ...r.binding, source: "stored" } });
+  });
 }
 
 async function sessionActionRoute({ req, res, url, user, admin, match }) {
@@ -1063,6 +1358,16 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     // 400 on `before`, so the slice is cut here (lib/proxy.js contract).
     const pp = pageParams(`/x${q}`);
     if (pp?.error) return sendJson(res, 400, { error: pp.error });
+    if (relays.has(id)) {
+      // FEAT-11.18: чат с передачами — истории обоих движков одной лентой
+      const rdir = claude.dirOf(id) ?? (await resolveSessionDir(id));
+      if (!admin) {
+        if (rdir == null) return sendJson(res, 404, { error: "session not found" });
+        if (!dirAllowed(user, rdir)) return sendJson(res, 403, { error: "outside your scope" });
+      }
+      const merged = await wholeChatMessages(id, rdir);
+      return sendPaged(res, admin ? merged : redactMessages(merged), pp);
+    }
     if (claude.has(id)) {
       const cdir = claude.dirOf(id);
       if (!admin) {
@@ -1071,6 +1376,23 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       }
       const merged = await claude.mergedMessages(id, cdir ?? HOME_DIR, UPSTREAM);
       return sendPaged(res, admin ? merged : redactMessages(merged), pp);
+    }
+    if (OC.api === "v2") {
+      // История через адаптер: нарезка limit/below — в listMessages (та же
+      // математика paginateMessages), лицо и x-zai-* — прежние (3.4).
+      try {
+        const dirHint = admin ? (url.searchParams.get("directory") ?? null) : tenantDir;
+        instanceReaper.touch(sessionIndex.recById.get(id)?.directory ?? dirHint); // BUG-195: чтение истории поднимает экземпляр папки
+        if (pp) {
+          const out = await OC.listMessages(id, { directory: dirHint, limit: pp.limit ?? null, before: pp.before ?? null, timeoutMs: PROMPT_OPTS.timeoutMs });
+          return sendOcPage(res, out, admin ? markEmptyTail : (list) => markEmptyTail(redactMessages(list)));
+        }
+        const whole = await ocWholeMessages(id, dirHint); // без limit/before — вся история, как раньше
+        if (!whole) return sendJson(res, 502, { error: "upstream error" });
+        return sendPaged(res, admin ? markEmptyTail(whole) : markEmptyTail(redactMessages(whole)), null);
+      } catch (err) {
+        return ocUpstreamError(res, err, "message");
+      }
     }
     if (admin) return proxyRequest(req, res, withDir(`/session/${id}/message`, q), { ...DEFAULT_OPTS, paginate: true, mapList: markEmptyTail });
     // FEAT-12.16: tenants never receive raw commands / server paths. The
@@ -1093,6 +1415,15 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     const limit = admin ? PROMPT_OPTS.bodyLimit : config.ZAI_TENANT_PROMPT_LIMIT || PROMPT_OPTS.bodyLimit;
     const raw = await readBody(req, limit);
     if (raw === null) return sendJson(res, 413, { error: "body too large" });
+    // Защита «закрыто при отказе» — ДО любых побочных эффектов (binding,
+    // материалзация файлов, dial upstream, spawn claude): без подтверждённого
+    // плагина песочницы тенантский ход не начинается.
+    if (!admin && OC.api === "v2" && !(await sandboxPluginConfirmed()))
+      return sendJson(res, 403, { error: "sandbox plugin not confirmed: tenant turns are disabled until the sandbox plugin is loaded on the opencode serve" });
+    // BUG-218 (SRV-07): a turn never starts during a revert — refused before
+    // any side effect. The authoritative re-check sits under the chat lock in
+    // markPrompted (a revert may start right after this line).
+    if (isReverting(id)) return sendJson(res, 409, { error: "revert in progress" });
     const dir = admin ? await adminSessionDir(id, url) : tenantDir;
     if (admin) upQ = scopedQuery(q, dir);
     let parsed = null;
@@ -1168,7 +1499,8 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       // hub needs no further accounting: busy/pending tracking is event-driven
       // over the same SSE stream, ocUndo backups are written upstream-side by
       // the vault-cache plugin (BUG-146) — both work for a command turn as-is.
-      bindings.set(id, { ...binding, prompted: true });
+      const race = await markPrompted(id, binding); // BUG-218: под локом чата
+      if (race) return sendJson(res, 409, { error: race });
       try {
         await hub.prepareForPrompt(id, dir);
       } catch (err) {
@@ -1181,7 +1513,16 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       } catch (err) {
         errLog("instanceHealth", err);
       }
-      fireCommandTurn({ id, dir, query: upQ, name: slash.name, body: commandBody({ command: slash.name, arguments: slash.arguments, agent: binding.agent ?? null, model: binding.model, variantSetting: config.ZAI_GLM_VARIANT }) });
+      // tasks 3.8 (BUG-188 на v2): v2-тело команды {name, text} не принимает
+      // agent/model — привязка чата ставится на сессию той же per-session
+      // очередью «модель → ход», что у обычного v2-хода (3.5). v1 — тело из
+      // commandBody, синхронный upstream-ход (BUG-183): без await в обоих
+      // режимах клиент получает 204 сразу.
+      if (OC.api === "v2") {
+        fireCommandTurnV2({ id, dir, name: slash.name, text: slash.arguments, agent: binding.agent ?? null, model: binding.model });
+      } else {
+        fireCommandTurn({ id, dir, query: upQ, name: slash.name, body: commandBody({ command: slash.name, arguments: slash.arguments, agent: binding.agent ?? null, model: binding.model, variantSetting: config.ZAI_GLM_VARIANT }) });
+      }
       res.writeHead(204); // the same face a prompt shows the client
       res.end();
       return;
@@ -1202,8 +1543,9 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
         mat = JSON.parse((Buffer.isBuffer(out) ? out : Buffer.from(String(out))).toString("utf8"));
       } catch {}
       if (mat) {
-        bindings.set(id, { ...binding, prompted: true });
-        const turn = applyBinding(mat, binding);
+        const race = await markPrompted(id, binding); // BUG-218: под локом чата
+        if (race) return sendJson(res, 409, { error: race });
+        const turn = applyBinding(relays.has(id) ? await withRelayCatchUp(id, dir, mat, binding) : mat, binding);
         if (vision) turn.model = { providerID: vision.providerID, modelID: vision.modelID };
         out = Buffer.from(JSON.stringify(turn), "utf8");
       }
@@ -1221,6 +1563,8 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
         jail: admin ? null : tenantJailFor(dir, config.ZAI_TENANT_HOME),
         // FEAT-03.22: the user's own system prompt (added to the built-in one).
         systemPrompt: getSystemPrompt(user.id),
+        // FEAT-11.18: где лежит журнал этого чата (если он уже есть)
+        portalNote: [journalRule(journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null)), relayRule(relays.get(id), journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null))].filter(Boolean).join("\n\n"),
         // FEAT-04.12 stage B: a tenant chat with its own subfolder runs the CLI there.
         workDir: admin ? null : existingChatFolder(dir, id),
       });
@@ -1242,13 +1586,56 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     }
     // FEAT-03.22: the user's own system prompt rides `system` of every turn
     // (opencode adds it to the agent's prompt); a tenant cannot send its own.
-    out = withUserSystemBody(out, getSystemPrompt(user.id), admin);
     // BUG-180: a GLM-5.3 turn without a variant runs on ZAI_GLM_VARIANT (default max).
+    if (OC.api === "v2") {
+      // FEAT-16.3 (tasks 3.5): модель/агент/вариант в v2 — состояние сессии
+      // (POST /model, /agent ПЕРЕД ходом), system — плагин-мост (4.4, пока
+      // не едет). Очередь на сессию: смена модели чужого хода не перетирается
+      // параллельным ходом/replay (design §116).
+      let turn = null;
+      try {
+        turn = JSON.parse((Buffer.isBuffer(out) ? out : Buffer.from(String(out))).toString("utf8"));
+      } catch {}
+      // BUG-209: свой системный промпт (FEAT-03.22) — в metadata.system хода (плагин-мост
+      // plugin-v2: prompt-хук → context на каждом шаге хода); напоминание — synthetic-частью
+      // (адаптер → metadata.zaiHidden, BUG-193). Раньше в v2 не ехал вовсе.
+      if (turn && typeof turn === "object" && !Array.isArray(turn)) turn = withUserSystem(turn, getSystemPrompt(user.id), { admin, portal: portalRulesFor(id, dir) }); // FEAT-05.29, FEAT-11.18
+      const sysMeta = typeof turn?.system === "string" && turn.system ? { system: turn.system } : null;
+      const model = cleanModel(turn?.model);
+      const agent = typeof turn?.agent === "string" && turn.agent ? turn.agent : null;
+      // BUG-180 в языке v2: вариант едет в POST /model (design §115), а не в
+      // тело хода — тот же withGlmVariant, только к паре модель+вариант.
+      const variant = turn?.variant ?? (model ? withGlmVariant({ model }, config.ZAI_GLM_VARIANT).variant ?? null : null);
+      const parts = Array.isArray(turn?.parts) ? turn.parts : [{ type: "text", text: String(out) }];
+      try {
+        await OC.enqueueTurn(id, async () => {
+          if (model) {
+            await OC.setSessionModel(id, { model: { providerID: model.providerID, modelID: model.modelID, ...(variant ? { variant } : {}) }, timeoutMs: DEFAULT_OPTS.timeoutMs });
+          }
+          if (agent) await OC.setSessionAgent(id, { agent, timeoutMs: DEFAULT_OPTS.timeoutMs });
+          await OC.prompt({ directory: dir ?? null, sessionID: id, parts, ...(sysMeta ? { metadata: sysMeta } : {}), timeoutMs: PROMPT_OPTS.timeoutMs });
+        });
+        res.writeHead(204); // тот же ход, что v1 показывал после приёма prompt_async
+        res.end();
+      } catch (err) {
+        return ocUpstreamError(res, err, "prompt");
+      }
+      return;
+    }
+    out = withUserSystemBody(out, getSystemPrompt(user.id), admin, portalRulesFor(id, dir)); // FEAT-05.29, FEAT-11.18
     out = withGlmVariantBody(out, config.ZAI_GLM_VARIANT);
     return proxyRequest(req, res, withDir(`/session/${id}/prompt_async`, upQ), { ...PROMPT_OPTS, body: Buffer.isBuffer(out) ? out : Buffer.from(String(out)) });
   }
   if (action === "abort" && req.method === "POST") {
     if (claude.abort(id)) return sendJson(res, 200, { ok: true });
+    if (OC.api === "v2") {
+      try {
+        await OC.abort(id, { directory: (admin ? null : tenantDir) ?? null }); // №8: POST /interrupt
+        return sendJson(res, 200, { ok: true });
+      } catch (err) {
+        return ocUpstreamError(res, err, "abort");
+      }
+    }
     return proxyRequest(req, res, withDir(`/session/${id}/abort`, admin ? q : upQ), DEFAULT_OPTS);
   }
   return sendJson(res, 405, { error: "method not allowed" });
@@ -1264,23 +1651,51 @@ const COMMAND_TURN_BACKSTOP_MS = 6 * 3600_000;
 function fireCommandTurn({ id, dir, query, name, body }) {
   void (async () => {
     try {
-      const r = await fetch(`${UPSTREAM}${withDir(`/session/${encodeURIComponent(id)}/command`, query)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify(body),
-        // NOT the prompt deadline: /command holds the request for the WHOLE turn, and
-        // in opencode 1.19.5 an aborted request is a ClientAbort that interrupts the
-        // turn's fiber (BUG-183 mechanism). Only a backstop far beyond any real turn;
-        // «Стоп» goes through /abort as for any turn.
-        signal: AbortSignal.timeout(COMMAND_TURN_BACKSTOP_MS),
-      });
-      if (!r.ok) {
-        const detail = (await r.text().catch(() => "")).slice(0, 300);
-        errLog("commandTurn", new Error(`upstream ${r.status} for /${name} in ${id}: ${detail}`));
-        hub.emit({ type: "zai.notice", properties: { sessionID: id, text: `Команда «/${name}» не выполнена (upstream ${r.status}).` } }, dir ?? null);
+      // NOT the prompt deadline: /command holds the request for the WHOLE turn, and
+      // in opencode 1.19.5 an aborted request is a ClientAbort that interrupts the
+      // turn's fiber (BUG-183 mechanism). Only a backstop far beyond any real turn;
+      // «Стоп» goes through /abort as for any turn. v1-only: v2 идёт через
+      // fireCommandTurnV2 (ход команды v2 асинхронный — api-map «Команды»).
+      const out = await OC.runCommand(id, { directory: dir ?? undefined, body, timeoutMs: COMMAND_TURN_BACKSTOP_MS });
+      if (out.status >= 400) {
+        const detail = String(out.text ?? "").slice(0, 300);
+        errLog("commandTurn", new Error(`upstream ${out.status} for /${name} in ${id}: ${detail}`));
+        hub.emit({ type: "zai.notice", properties: { sessionID: id, text: `Команда «/${name}» не выполнена (upstream ${out.status}).` } }, dir ?? null);
         return;
       }
-      await r.arrayBuffer().catch(() => {}); // drain: the response carries the finished turn
+    } catch (err) {
+      errLog("commandTurn", err);
+      hub.emit({ type: "zai.notice", properties: { sessionID: id, text: `Команда «/${name}» не отправлена: ${err?.cause?.code || err?.name || "ошибка сети"}.` } }, dir ?? null);
+    }
+  })();
+}
+
+// tasks 3.8 (BUG-188 на v2): the same fire-and-forget face over v2
+// POST /api/session/:id/command {name, text} — v2 answers 204 immediately and
+// runs the turn in background (api-map «Команды»), so the backstop only caps a
+// stuck call. The v2 command body has NO agent/model: the chat binding lands
+// on the session first (POST /model, /agent — with the variant rule of a v2
+// prompt, BUG-180) under the SAME per-session queue «модель → ход» as a v2
+// prompt (3.5, design §116) — a parallel prompt/replay can't interleave and
+// switch the model under the command turn. A failure (upstream 4xx/5xx,
+// transport) is logged and announced via zai.notice, like v1.
+function fireCommandTurnV2({ id, dir, name, text, agent, model }) {
+  void (async () => {
+    try {
+      await OC.enqueueTurn(id, async () => {
+        const m = cleanModel(model);
+        const variant = m ? withGlmVariant({ model: m }, config.ZAI_GLM_VARIANT).variant ?? null : null;
+        if (m) {
+          await OC.setSessionModel(id, { model: { providerID: m.providerID, modelID: m.modelID, ...(variant ? { variant } : {}) }, timeoutMs: DEFAULT_OPTS.timeoutMs });
+        }
+        if (agent) await OC.setSessionAgent(id, { agent, timeoutMs: DEFAULT_OPTS.timeoutMs });
+        const out = await OC.runCommand(id, { directory: dir ?? undefined, body: { name, text }, timeoutMs: COMMAND_TURN_BACKSTOP_MS });
+        if (out.status >= 400) {
+          const detail = String(out.text ?? "").slice(0, 300);
+          errLog("commandTurn", new Error(`upstream ${out.status} for /${name} in ${id}: ${detail}`));
+          hub.emit({ type: "zai.notice", properties: { sessionID: id, text: `Команда «/${name}» не выполнена (upstream ${out.status}).` } }, dir ?? null);
+        }
+      });
     } catch (err) {
       errLog("commandTurn", err);
       hub.emit({ type: "zai.notice", properties: { sessionID: id, text: `Команда «/${name}» не отправлена: ${err?.cause?.code || err?.name || "ошибка сети"}.` } }, dir ?? null);
@@ -1319,9 +1734,7 @@ function gitWorkTreeOf(dir) {
 // any error or other answer → false (the git-dir block stays).
 async function upstreamSnapshotOff(dir) {
   try {
-    const r = await fetch(`${UPSTREAM}${withDir("/config", scopedQuery("", dir))}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-    if (!r.ok) return false;
-    const cfg = await r.json();
+    const cfg = await OC.configGet({ directory: dir ?? undefined, timeoutMs: 10_000 }); // v2: snapshots:false в слоях конфига (Э1)
     return cfg?.snapshot === false;
   } catch {
     return false;
@@ -1342,12 +1755,7 @@ function revertPathFace(p, dir) {
 
 // The opencode history of a chat (directory-pinned) or null.
 async function upstreamMessages(id, dir) {
-  const u = new URL(`/session/${encodeURIComponent(id)}/message`, UPSTREAM);
-  if (dir) u.searchParams.set("directory", dir);
-  const r = await fetch(u, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(PROMPT_OPTS.timeoutMs) });
-  if (!r.ok) return null;
-  const list = await r.json();
-  return Array.isArray(list) ? list : null;
+  return ocWholeMessages(id, dir); // v2: курсорные страницы до конца (tasks 3.4)
 }
 
 const lastUserId = (list) => {
@@ -1373,16 +1781,10 @@ async function opencodeRevertFiles(id, dir, messageID, list, within = null) {
     return [...files.values()];
   }
   try {
-    const u = new URL(`/session/${encodeURIComponent(id)}/diff`, UPSTREAM);
-    if (dir) u.searchParams.set("directory", dir);
-    u.searchParams.set("messageID", messageID);
-    const r = await fetch(u, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs) });
-    if (r.ok) {
-      const diff = await r.json();
-      for (const d of Array.isArray(diff) ? diff : []) {
-        const p = typeof d?.file === "string" ? d.file : typeof d?.path === "string" ? d.path : null;
-        if (p) files.set(p.toLowerCase(), { path: p, action: d.status === "added" ? "delete" : "restore" });
-      }
+    const diff = await OC.sessionDiff(id, { directory: dir ?? undefined, messageID, timeoutMs: DEFAULT_OPTS.timeoutMs }); // v2: ?from= (№10)
+    for (const d of Array.isArray(diff) ? diff : []) {
+      const p = typeof d?.file === "string" ? d.file : typeof d?.path === "string" ? d.path : null;
+      if (p) files.set(p.toLowerCase(), { path: p, action: d.status === "added" ? "delete" : "restore" });
     }
   } catch (err) {
     errLog("revert.diff", err);
@@ -1423,8 +1825,7 @@ function turnToolFiles(list, messageID) {
 // The upstream record of one session (GET /session/:id, directory-pinned).
 async function upstreamRecord(id, dir) {
   try {
-    const r = await fetch(`${UPSTREAM}${withDir(`/session/${encodeURIComponent(id)}`, scopedQuery("", dir))}`, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs) });
-    return r.ok ? await r.json() : null;
+    return (await OC.getSession(id, { directory: dir ?? undefined, timeoutMs: DEFAULT_OPTS.timeoutMs })) ?? null;
   } catch {
     return null;
   }
@@ -1436,7 +1837,7 @@ async function sessionRevertRoute({ req, res, url, user, admin, match }) {
   if (op === "unrevert" && req.method !== "POST") return sendJson(res, 405, { error: "method not allowed" });
   const record = await sessionRecord(id, true);
   const binding = bindingFor(id, record);
-  const isClaude = binding?.engine === "claude" || claude.has(id);
+  const isClaude = relays.has(id) ? engineOfChat(id, binding) === "claude" : binding?.engine === "claude" || claude.has(id);
   // Scope: the prompt's rules (tenant → its own folders, engine grant).
   const dir = isClaude ? claude.dirOf(id) ?? (await resolveSessionDir(id)) : await resolveSessionDir(id);
   if (dir == null && !isClaude) return sendJson(res, 404, { error: "session not found" });
@@ -1467,95 +1868,127 @@ async function sessionRevertRoute({ req, res, url, user, admin, match }) {
   }
 
   // opencode
-  if (liveSessionIds().has(id)) return sendJson(res, 409, { error: "turn in progress" });
-  // BUG-145: opencode revert/unrevert inside a git work tree rolled back
-  // uncommitted edits that were NOT made by the turn (stand, 2026-11-04;
-  // mechanism unknown). Until it is understood, file rollback is off there:
-  // the preview says why, revert/unrevert answer 409 "git-dir".
-  // Mechanism (stand, 2026-11-04, throwaway repo): opencode's unrevert restores
-  // its whole snapshot tree, and for files outside the chat folder that tree
-  // holds the repo's INDEX state — a dirty tracked file went back to HEAD.
-  // With `"snapshot": false` in the opencode config (ops/opencode/opencode.json)
-  // opencode touches no file at all; the portal rolls back only the turn's
-  // files from the plugin's backups (BUG-146), as outside git. The block
-  // stays whenever upstream does not report snapshot:false.
-  const gitRoot = gitWorkTreeOf(dir);
-  if (gitRoot && !(await upstreamSnapshotOff(dir))) {
-    if (req.method === "GET" && op === "revert") return sendJson(res, 200, { engine: "opencode", files: [], shell: false, blocked: "git-dir" });
-    return sendJson(res, 409, { error: "git-dir" });
-  }
-  const upQ = scopedQuery("", dir);
-  // BUG-146: a tenant's list and rollback stay inside its chat folder.
-  const within = admin ? null : (p) => Boolean(dir) && isInside(p, dir);
+  // BUG-218 (SRV-07, design §1): «ход не идёт» и флаг «идёт откат» ставятся
+  // под блокировкой чата; флаг снимается в finally, старт хода видит его и
+  // отвечает 409 (см. sessionActionRoute). Окно подготовки (история, план)
+  // пере-проверяется занятостью непосредственно перед изменениями файлов.
+  const gate = await withSessionLock(id, () => {
+    if (liveSessionIds().has(id)) return { status: 409, error: "turn in progress" };
+    markReverting(id);
+    return null;
+  });
+  if (gate) return sendJson(res, gate.status, { error: gate.error });
   try {
-    if (op === "unrevert") {
-      const fresh = await upstreamRecord(id, dir);
-      const reverted = fresh ? fresh.revert ?? null : record?.revert ?? null;
-      if (!reverted) return sendJson(res, 409, { error: "nothing to restore" });
-      const r = await fetch(`${UPSTREAM}${withDir(`/session/${id}/unrevert`, upQ)}`, { method: "POST", headers: { accept: "application/json" }, signal: AbortSignal.timeout(PROMPT_OPTS.timeoutMs) });
-      await r.text().catch(() => "");
-      if (!r.ok) return sendJson(res, r.status >= 500 ? 502 : r.status, { error: "upstream error" });
-      fetchSessionIndex(true).catch(() => {});
-      // «Вернуть»: the turn's result goes back into the files it rolled back.
-      let files = [];
-      try {
-        if (reverted.messageID) files = ocUndo.unrevert(id, reverted.messageID).files;
-      } catch (err) {
-        errLog("revert.redo", err);
-      }
-      return sendJson(res, 200, { ok: true, files: files.map((f) => ({ ...f, path: revertPathFace(f.path, dir) })) });
+    // BUG-145: opencode revert/unrevert inside a git work tree rolled back
+    // uncommitted edits that were NOT made by the turn (stand, 2026-11-04;
+    // mechanism unknown). Until it is understood, file rollback is off there:
+    // the preview says why, revert/unrevert answer 409 "git-dir".
+    // Mechanism (stand, 2026-11-04, throwaway repo): opencode's unrevert restores
+    // its whole snapshot tree, and for files outside the chat folder that tree
+    // holds the repo's INDEX state — a dirty tracked file went back to HEAD.
+    // With `"snapshot": false` in the opencode config (ops/opencode/opencode.json)
+    // opencode touches no file at all; the portal rolls back only the turn's
+    // files from the plugin's backups (BUG-146), as outside git. The block
+    // stays whenever upstream does not report snapshot:false.
+    const gitRoot = gitWorkTreeOf(dir);
+    if (gitRoot && !(await upstreamSnapshotOff(dir))) {
+      if (req.method === "GET" && op === "revert") return sendJson(res, 200, { engine: "opencode", files: [], shell: false, blocked: "git-dir" });
+      return sendJson(res, 409, { error: "git-dir" });
     }
-    const list = await upstreamMessages(id, dir);
-    if (!list) return sendJson(res, 502, { error: "upstream error" });
-    const current = (await upstreamRecord(id, dir))?.revert ?? null;
-    if (current?.messageID && req.method === "POST") {
-      if (current.messageID === messageID) return sendJson(res, 200, { ok: true, revert: { messageID }, files: [], skipped: [] });
-      return sendJson(res, 409, { error: "already reverted" });
-    }
-    if (lastUserId(list) !== messageID) return sendJson(res, 409, { error: "not the last turn" });
-    const face = (arr) => arr.map((f) => ({ ...f, path: revertPathFace(f.path, dir) }));
-    const planned = await opencodeRevertFiles(id, dir, messageID, list, within);
-    if (req.method === "GET") return sendJson(res, 200, { engine: "opencode", files: face(planned), shell: false });
-    // BUG-146: the portal rolls the turn's files back from the plugin's
-    // backups first; the upstream revert then only hides the messages
-    // (outside git opencode has no snapshot and touches no file).
-    const backed = ocUndo.records(id, messageID).length > 0;
-    let undone = null;
-    if (backed) {
-      try {
-        undone = ocUndo.revert(id, messageID, { within });
-      } catch (err) {
-        errLog("revert.undo", err);
-        undone = { files: [], skipped: [] };
-      }
-    }
-    let r;
+    const upQ = scopedQuery("", dir);
+    // BUG-146: a tenant's list and rollback stay inside its chat folder.
+    const within = admin ? null : (p) => Boolean(dir) && isInside(p, dir);
     try {
-      r = await fetch(`${UPSTREAM}${withDir(`/session/${id}/revert`, upQ)}`, {
-        method: "POST",
-        headers: { accept: "application/json", "content-type": "application/json" },
-        body: JSON.stringify({ messageID }),
-        signal: AbortSignal.timeout(PROMPT_OPTS.timeoutMs),
-      });
-      await r.text().catch(() => "");
+      if (op === "unrevert") {
+        const fresh = await upstreamRecord(id, dir);
+        const reverted = fresh ? fresh.revert ?? null : record?.revert ?? null;
+        if (!reverted) return sendJson(res, 409, { error: "nothing to restore" });
+        // BUG-218: повторная проверка занятости непосредственно перед изменениями —
+        // ход, стартовавший в окне подготовки, откат не получает
+        if (liveSessionIds().has(id)) return sendJson(res, 409, { error: "turn in progress" });
+        try {
+          await OC.unrevert(id, { directory: dir, timeoutMs: PROMPT_OPTS.timeoutMs }); // v2: DELETE /api/session/:id/revert (№12)
+        } catch (err) {
+          return ocUpstreamError(res, err, "session.unrevert");
+        }
+        fetchSessionIndex(true).catch(() => {});
+        // «Вернуть»: the turn's result goes back into the files it rolled back.
+        let files = [];
+        try {
+          if (reverted.messageID) files = ocUndo.unrevert(id, reverted.messageID).files;
+        } catch (err) {
+          errLog("revert.redo", err);
+        }
+        return sendJson(res, 200, { ok: true, files: files.map((f) => ({ ...f, path: revertPathFace(f.path, dir) })) });
+      }
+      const list = await upstreamMessages(id, dir);
+      if (!list) return sendJson(res, 502, { error: "upstream error" });
+      const current = (await upstreamRecord(id, dir))?.revert ?? null;
+      if (current?.messageID && req.method === "POST") {
+        if (current.messageID === messageID) return sendJson(res, 200, { ok: true, revert: { messageID }, files: [], skipped: [] });
+        return sendJson(res, 409, { error: "already reverted" });
+      }
+      if (lastUserId(list) !== messageID) return sendJson(res, 409, { error: "not the last turn" });
+      const face = (arr) => arr.map((f) => ({ ...f, path: revertPathFace(f.path, dir) }));
+      const planned = await opencodeRevertFiles(id, dir, messageID, list, within);
+      if (req.method === "GET") return sendJson(res, 200, { engine: "opencode", files: face(planned), shell: false });
+      // BUG-218: повторная проверка занятости непосредственно перед откатом
+      // файлов (ocUndo.revert ниже) — окно подготовки закрыто 409-ом
+      if (liveSessionIds().has(id)) return sendJson(res, 409, { error: "turn in progress" });
+      // BUG-146: the portal rolls the turn's files back from the plugin's
+      // backups first; the upstream revert then only hides the messages
+      // (outside git opencode has no snapshot and touches no file).
+      const backed = ocUndo.records(id, messageID).length > 0;
+      let undone = null;
+      if (backed) {
+        try {
+          undone = ocUndo.revert(id, messageID, { within });
+        } catch (err) {
+          errLog("revert.undo", err);
+          undone = { files: [], skipped: [] };
+        }
+      }
+      let r;
+      try {
+        if (OC.api === "v2") {
+          // №11: двухфазный revert (stage → commit); превью портала — ответ stage
+          await OC.revert(id, { directory: dir, messageID, timeoutMs: PROMPT_OPTS.timeoutMs });
+          r = { ok: true };
+        } else {
+          r = await fetch(`${UPSTREAM}${withDir(`/session/${id}/revert`, upQ)}`, {
+            method: "POST",
+            headers: { accept: "application/json", "content-type": "application/json" },
+            body: JSON.stringify({ messageID }),
+            signal: AbortSignal.timeout(PROMPT_OPTS.timeoutMs),
+          });
+          await r.text().catch(() => "");
+        }
+      } catch (err) {
+        // определённый отказ upstream (4xx/5xx) — как !r.ok ниже; сеть — наверх
+        if (OC.api === "v2" && (err?.status ?? 0) >= 400) {
+          r = { ok: false, status: err.status };
+        } else {
+          r = null;
+          if (undone) ocUndo.unrevert(id, messageID); // the turn stays: so do its files
+          throw err;
+        }
+      }
+      if (r && !r.ok) {
+        if (undone) ocUndo.unrevert(id, messageID);
+        return sendJson(res, (r.status ?? 502) >= 500 ? 502 : r.status ?? 502, { error: "upstream error" });
+      }
+      fetchSessionIndex(true).catch(() => {});
+      if (undone) {
+        // files the turn's tools named without a backup: still «не откатится»
+        const noSnap = planned.filter((f) => f.skipped === "no-snapshot");
+        return sendJson(res, 200, { ok: true, revert: { messageID }, files: face(undone.files), skipped: face([...undone.skipped, ...noSnap]) });
+      }
+      return sendJson(res, 200, { ok: true, revert: { messageID }, files: face(planned.filter((f) => !f.skipped)), skipped: face(planned.filter((f) => f.skipped)) });
     } catch (err) {
-      r = null;
-      if (undone) ocUndo.unrevert(id, messageID); // the turn stays: so do its files
-      throw err;
+      return upstreamError(res, err, `session.${op}`);
     }
-    if (!r.ok) {
-      if (undone) ocUndo.unrevert(id, messageID);
-      return sendJson(res, r.status >= 500 ? 502 : r.status, { error: "upstream error" });
-    }
-    fetchSessionIndex(true).catch(() => {});
-    if (undone) {
-      // files the turn's tools named without a backup: still «не откатится»
-      const noSnap = planned.filter((f) => f.skipped === "no-snapshot");
-      return sendJson(res, 200, { ok: true, revert: { messageID }, files: face(undone.files), skipped: face([...undone.skipped, ...noSnap]) });
-    }
-    return sendJson(res, 200, { ok: true, revert: { messageID }, files: face(planned.filter((f) => !f.skipped)), skipped: face(planned.filter((f) => f.skipped)) });
-  } catch (err) {
-    return upstreamError(res, err, `session.${op}`);
+  } finally {
+    clearReverting(id); // BUG-218: конец отката (успех или отказ) — флаг снят
   }
 }
 
@@ -1585,21 +2018,53 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
       titler.userRenamed(id, body.title.trim(), { claudeChat: bindingFor(id, await sessionRecord(id))?.engine === "claude" });
     // A claude-only chat unknown upstream: the claude store is its home.
     if (claude.titleInfo(id) && typeof body?.title === "string" && !(await resolveSessionDir(id))) return sendJson(res, 200, { id, title: body.title.trim() });
+    if (OC.api === "v2") {
+      // №4: PATCH отвечает 204 — подтверждение повторным GET, лицо прежнее
+      try {
+        const updated = await OC.patchSession(id, {
+          directory: (admin ? null : scopeDir) ?? undefined,
+          ...(typeof body?.title === "string" ? { title: body.title } : {}),
+          ...(body && typeof body === "object" && Array.isArray(body?.parts) ? { parts: body.parts } : {}),
+          timeoutMs: DEFAULT_OPTS.timeoutMs,
+        });
+        return sendJson(res, 200, updated ?? { id, title: body?.title ?? null });
+      } catch (err) {
+        return ocUpstreamError(res, err, "session.patch");
+      }
+    }
     return proxyRequest(req, res, withDir(`/session/${id}`, upQ), { ...DEFAULT_OPTS, body: raw });
   }
   // DELETE: local data (binding, claude history, live claude run) dies only
   // after the upstream confirmed the delete with a 2xx — a 5xx leaves the
   // session intact everywhere. A claude-only chat unknown upstream (404)
   // is still forgotten locally.
+  // BUG-210: папка чата — ДО удаления (после него upstream сессию уже не знает)
+  const preDir = admin ? await resolveSessionDir(id).catch(() => null) : scopeDir;
   try {
-    const r = await fetch(`${UPSTREAM}${withDir(`/session/${id}`, upQ)}`, {
-      method: "DELETE",
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
-    });
-    const text = await r.text();
-    const localOnly = r.status === 404 && (claude.has(id) || bindings.get(id));
-    if (r.ok || localOnly) {
+    let status = 0;
+    let text = "";
+    let faceType = "application/json";
+    if (OC.api === "v2") {
+      try {
+        await OC.deleteSession(id, { directory: (admin ? null : scopeDir) ?? undefined, timeoutMs: DEFAULT_OPTS.timeoutMs }); // №5: 204, дочерние вместе
+        status = 200;
+      } catch (err) {
+        status = err?.status ?? 0;
+        text = JSON.stringify(err?.body ?? { error: `upstream: ${status}` });
+        if (status === 0) return upstreamError(res, err, "session.delete");
+      }
+    } else {
+      const r = await fetch(`${UPSTREAM}${withDir(`/session/${id}`, upQ)}`, {
+        method: "DELETE",
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
+      });
+      status = r.status;
+      faceType = r.headers.get("content-type") ?? "application/json";
+      text = await r.text();
+    }
+    const localOnly = status === 404 && (claude.has(id) || bindings.get(id));
+    if (status >= 200 && status < 300 || localOnly) {
       claude.forget(id);
       ocUndo.forget(id); // BUG-146: the opencode turn backups go with the chat
       bindings.forget(id);
@@ -1612,12 +2077,33 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
       // deploy waited for a quiet window that never came. The portal KNOWS
       // the delete succeeded — tell the hub the same way gcSweep does, so the
       // exact session.deleted cleanup runs (busy, dialogs, pending, clients).
-      const delDir = admin ? await resolveSessionDir(id) : scopeDir;
+      const delDir = (admin ? await resolveSessionDir(id) : scopeDir) ?? preDir;
+      dropJournal(id, delDir ?? null); // FEAT-11.18: журнал чата уходит вместе с чатом
       hub.emit({ type: "session.deleted", properties: { sessionID: id, info: { id, directory: delDir ?? null } } }, delDir ?? null);
-      fetchSessionIndex(true).catch(() => {});
+      // BUG-210: последний чат папки удалён — освобождаем экземпляр opencode этой папки
+      // (иначе он держит её открытой: удаление папки чата — EPERM; память — BUG-195).
+      fetchSessionIndex(true)
+        .then(async () => {
+          const n = normDir(delDir);
+          if (!n || [...sessionIndex.recById.values()].some((r) => normDir(r?.directory) === n)) return;
+          if (await disposeInstance(delDir)) instanceHealth.forget(delDir);
+        })
+        .catch(() => {});
     }
     if (localOnly) return sendJson(res, 200, true);
-    res.writeHead(r.status, { "content-type": r.headers.get("content-type") ?? "application/json" });
+    if (OC.api === "v2") {
+      // v2: мутация отвечала 204 без тела — лицо успеха, как у v1 (true);
+      // отказ — тело {_tag} от адаптера.
+      if (status >= 400) {
+        let face = null;
+        try {
+          face = JSON.parse(text);
+        } catch {}
+        return sendJson(res, status, face && typeof face === "object" ? face : { error: `upstream: ${status}` });
+      }
+      return sendJson(res, 200, true);
+    }
+    res.writeHead(status, { "content-type": faceType });
     return res.end(text);
   } catch (err) {
     return upstreamError(res, err, "session.delete");
@@ -1642,12 +2128,21 @@ async function sessionListRoute({ req, res, url, user, admin, match }) {
   const p = url.pathname;
   const q = url.search;
   try {
-    const r = await fetch(`${UPSTREAM}${admin ? withQuery("/session", q) : "/session"}`, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
-    });
-    if (!r.ok) return sendJson(res, 502, { error: `upstream: ${r.status}` });
-    const list = await r.json();
+    let list = null;
+    if (OC.api === "v2") {
+      // №1: /api/session фильтруется обычным ?directory=; админ-хвосты прочих
+      // query-параметров v1 не переносятся (их у списка нет) (tasks 3.2)
+      const dirHint = admin ? url.searchParams.get("directory") : null;
+      list = await OC.listSessions(dirHint ? { directory: dirHint } : {}, { timeoutMs: DEFAULT_OPTS.timeoutMs });
+      if (!Array.isArray(list)) return sendJson(res, 502, { error: "upstream: bad list" });
+    } else {
+      const r = await fetch(`${UPSTREAM}${admin ? withQuery("/session", q) : "/session"}`, {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
+      });
+      if (!r.ok) return sendJson(res, 502, { error: `upstream: ${r.status}` });
+      list = await r.json();
+    }
     if (!Array.isArray(list)) return sendJson(res, 200, list);
     const out = (admin ? list : list.filter((s) => dirAllowed(user, s?.directory))).filter((s) => !isTempSessionDir(s?.directory));
     return sendJson(res, 200, withClaudeActivity(titler.overlay(out)).map(withBinding));
@@ -1704,21 +2199,34 @@ async function sessionCreateRoute({ req, res, url, user, admin, match }) {
     return sendJson(res, 400, { error: dirProblemText("unreachable"), code: "unreachable" });
   }
   try {
-    const r = await fetch(`${UPSTREAM}${withDir("/session", admin ? scopedQuery(q, dir) : scopedQuery(q, dir))}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify(upBody),
-      signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
-    });
-    const text = await r.text();
-    if (!r.ok) {
-      res.writeHead(r.status, { "content-type": r.headers.get("content-type") ?? "application/json" });
-      return res.end(text);
-    }
     let created = null;
-    try {
-      created = JSON.parse(text);
-    } catch {}
+    if (OC.api === "v2") {
+      // №2: папка — в теле location:{directory}; запись в языке 1.x (tasks 3.2)
+      try {
+        created = await OC.createSession({ directory: dir, ...upBody, timeoutMs: DEFAULT_OPTS.timeoutMs });
+      } catch (err) {
+        if ((err?.status ?? 0) >= 400) {
+          const face = err.body && typeof err.body === "object" ? err.body : { error: `upstream: ${err.status}` };
+          return sendJson(res, err.status, face);
+        }
+        return upstreamError(res, err, "session.create");
+      }
+    } else {
+      const r = await fetch(`${UPSTREAM}${withDir("/session", admin ? scopedQuery(q, dir) : scopedQuery(q, dir))}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify(upBody),
+        signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
+      });
+      const text = await r.text();
+      if (!r.ok) {
+        res.writeHead(r.status, { "content-type": r.headers.get("content-type") ?? "application/json" });
+        return res.end(text);
+      }
+      try {
+        created = JSON.parse(text);
+      } catch {}
+    }
     if (typeof created?.id === "string" && want) bindings.set(created.id, want);
     // FEAT-04.12 stage B: a NEW tenant chat gets its own working subfolder
     // (<tenant>\chats\<id>); its presence switches both engines to it.
@@ -1749,6 +2257,39 @@ async function dialogReplyRoute({ req, res, url, user, admin, match }) {
   // dialog's directory (never the raw client query — duplicate
   // ?directory= params used to slip through), and shell / outside-folder
   // permissions can only be rejected.
+  if (OC.api === "v2") {
+    // v2: ответpermission — {decision} на /api/session/:sid/permission/:rid/reply,
+    // ответ формы — {answer:{...}} (Э5). Адрес диалога — из открытых диалогов хаба
+    // (для админа тоже: ?directory клиента не доверенный якорь).
+    const open = (await hub.collectDialogs()).find((e) => e?.id === m[2] && (admin || dirAllowed(user, e.directory ?? e.dir)));
+    if (!open) {
+      req.resume();
+      return sendJson(res, 404, { error: "dialog not found" });
+    }
+    const raw = await readBody(req, DEFAULT_OPTS.bodyLimit);
+    if (raw === null) return sendJson(res, 413, { error: "body too large" });
+    let body = null;
+    try {
+      body = JSON.parse(raw.toString("utf8"));
+    } catch {}
+    if (!admin && m[1] === "permission" && tenantMustReject(open)) {
+      if (body?.reply !== "reject") return sendJson(res, 403, { error: "permission not allowed for tenants" });
+    }
+    const dir = open.directory ?? open.dir ?? undefined;
+    try {
+      if (m[1] === "permission") {
+        await OC.replyPermission({ directory: dir, sessionID: open.sessionID, requestID: m[2], reply: body?.reply, message: body?.message, timeoutMs: DEFAULT_OPTS.timeoutMs });
+      } else if (body?.answers && typeof body.answers === "object") {
+        // BUG-204: клиент шлёт answers string[][] (1.x) — адаптер раскладывает по полям формы; объект — как есть
+        await OC.replyQuestion({ directory: dir, sessionID: open.sessionID, formID: m[2], ...(Array.isArray(body.answers) ? { answers: body.answers } : { answer: body.answers }), timeoutMs: DEFAULT_OPTS.timeoutMs });
+      } else {
+        await OC.rejectQuestion({ directory: dir, sessionID: open.sessionID, formID: m[2], message: body?.message, timeoutMs: DEFAULT_OPTS.timeoutMs });
+      }
+      return sendJson(res, 200, { ok: true });
+    } catch (err) {
+      return ocUpstreamError(res, err, `dialog.${m[1]}`);
+    }
+  }
   if (admin) return proxyRequest(req, res, withDir(`/${m[1]}/${m[2]}/reply`, q), DEFAULT_OPTS);
   const open = (await hub.collectDialogs()).find((e) => e?.id === m[2] && dirAllowed(user, e.directory ?? e.dir));
   if (!open) {
@@ -1757,7 +2298,7 @@ async function dialogReplyRoute({ req, res, url, user, admin, match }) {
   }
   const raw = await readBody(req, DEFAULT_OPTS.bodyLimit);
   if (raw === null) return sendJson(res, 413, { error: "body too large" });
-  if (m[1] === "permission" && TENANT_REJECT_ONLY.has(open.permission)) {
+  if (m[1] === "permission" && tenantMustReject(open)) {
     let reply = null;
     try {
       reply = JSON.parse(raw.toString("utf8"))?.reply;
@@ -1773,7 +2314,7 @@ async function eventStreamRoute({ req, res, url, user, admin, match }) {
   // SSE hub, never a direct proxy. Tenants get a visibility filter; every
   // stream is tracked per user so it can be closed on disable/regenerate.
   trackStream(user, res);
-  hub.handleClient(req, res, admin ? {} : { visible: (dir) => dirAllowed(user, dir), transform: redactEventForTenant });
+  hub.handleClient(req, res, admin ? {} : { visible: (dir) => dirAllowed(user, dir), transform: tenantEvent }); // BUG-197: белый список типов + редакция tool-частей
   return;
 }
 
@@ -1844,13 +2385,14 @@ let gcRunning = false;
 let lastGc = null;
 
 async function countUpstreamMessages(id, dir) {
-  const u = new URL(`/session/${encodeURIComponent(id)}/message`, UPSTREAM);
-  if (dir) u.searchParams.set("directory", dir);
-  u.searchParams.set("limit", "1");
-  const r = await fetch(u, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-  if (!r.ok) return null;
-  const list = await r.json();
-  return Array.isArray(list) ? list.length : null;
+  // BUG-212: via the oc-client adapter (v1/v2 + auth), not a direct 1.x-path
+  // fetch — on v2 that path 404s, every chat looked "unknown" and stayed.
+  try {
+    const { messages } = await OC.listMessages(id, { directory: dir ?? undefined, limit: 1 });
+    return messages.length;
+  } catch {
+    return null;
+  }
 }
 
 function liveSessionIds() {
@@ -1958,6 +2500,10 @@ function captureResponse(run) {
 // GET /zai/api/healthz (ADR-007): unauthenticated, loopback-only and only for
 // DIRECT callers — anything relayed by the edge carries x-forwarded-for and
 // gets 404 (the edge also refuses the path itself).
+// TASK-12.29: mem/errors/degraded/lastCrashAt — observability for the
+// watchdog; the response code still depends only on engine availability
+// (degraded is a signal, not a refusal).
+let lastCrashAt = null; // set at start when run-state.json says the previous run ended uncleanly
 async function handleHealthz(req, res) {
   const remote = req.socket?.remoteAddress ?? "";
   const loopback = remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
@@ -1967,7 +2513,9 @@ async function handleHealthz(req, res) {
   const host = String(req.headers.host ?? "").replace(/:\d+$/, "").toLowerCase();
   const localHost = host === "127.0.0.1" || host === "localhost" || host === "[::1]";
   if (!loopback || !localHost || req.headers["x-forwarded-for"]) return sendJson(res, 404, { error: "unknown route" });
-  if (MOCK) return sendJson(res, 200, { ok: true, mock: true, version: VERSION, uptimeS: Math.round((Date.now() - STARTED_AT) / 1000) });
+  const memUsage = process.memoryUsage();
+  const mem = { rssMb: Math.round(memUsage.rss / 1048576), heapUsedMb: Math.round(memUsage.heapUsed / 1048576) };
+  if (MOCK) return sendJson(res, 200, { ok: true, mock: true, version: VERSION, uptimeS: Math.round((Date.now() - STARTED_AT) / 1000), mem });
   await fetchSessionIndex();
   const indexAgeS = sessionIndex.at ? Math.round((Date.now() - sessionIndex.at) / 1000) : null;
   const ok = indexAgeS !== null && indexAgeS <= 60;
@@ -1979,7 +2527,11 @@ async function handleHealthz(req, res) {
     upstream: { ok, indexAgeS, directories: hub.directories().length },
     hub: { streams: streamCount(), busy: Object.keys(hub.busySnapshot()).length, stalled: Object.keys(hub.stalledSnapshot()).length },
     claude: { runs: Object.keys(claude.busySnapshot()).length },
-    store: { bindings: bindings.size(), authSessions: sessionCount() },
+    store: { bindings: bindings.size(), authSessions: sessionCount(), authSessionsStale90d: authSessionsStale90d() },
+    mem,
+    degraded: config.ZAI_MEM_WARN_MB > 0 && mem.rssMb > config.ZAI_MEM_WARN_MB,
+    errors: { upstream5m: upstreamErrors5m() },
+    ...(lastCrashAt ? { lastCrashAt } : {}),
   });
 }
 
@@ -2074,6 +2626,7 @@ const server = http.createServer((req, res) => {
   const started = Date.now();
   res.zaiRid = rid;
   res.setHeader("x-request-id", rid);
+  applySecurityHeaders(res); // TASK-12.30
   res.on("close", () => {
     let pathOnly = "";
     try {
@@ -2109,7 +2662,31 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+server.listen(PORT, config.ZAI_LISTEN_HOST, () => { // TASK-17.1: по умолчанию 127.0.0.1
+  // TASK-12.29: did the previous run end uncleanly? Log it, push the owner
+  // (best effort — a push failure never blocks the start), remember for
+  // healthz `lastCrashAt`. uncaughtException (below) deliberately leaves
+  // clean:false, so a kill/crash is detected here on the next boot.
+  try {
+    const prev = readPrevious(DATA_DIR);
+    if (prev.crashed) {
+      console.log(`[zai-fatal] previous run ended uncleanly (pid ${prev.pid ?? "?"}, started ${prev.startedAt ?? "?"})`);
+      lastCrashAt = prev.startedAt;
+      if (webPush) {
+        webPush.notifier
+          .sendToUser("admin", { title: "Портал перезапущен после сбоя", body: prev.startedAt ?? "" }, { ttl: 24 * 3600 })
+          .catch(() => {});
+      }
+    }
+    markStarted(DATA_DIR);
+  } catch (err) {
+    errLog("runState", err);
+  }
+  // TASK-04.15 (SEC-26): hourly sweep of sessions past the cookie life.
+  setInterval(() => {
+    const n = sweepSessions();
+    if (n > 0) console.log(`[zai-gc] auth sessions swept: ${n} expired`);
+  }, 3_600_000).unref();
   if (!MOCK) {
     hub.start(UPSTREAM, { directory: HOME_DIR });
     hub.syncDirectories(); // subscribe to every directory that has sessions
@@ -2118,6 +2695,13 @@ server.listen(PORT, "127.0.0.1", () => {
     const every = config.ZAI_GC_INTERVAL_MS;
     setTimeout(() => gcSweep(), Math.min(every, 30_000)).unref();
     setInterval(() => gcSweep(), every).unref();
+    // BUG-195: папки индекса чатов — под учёт реапера (экземпляры, поднятые до рестарта портала), проход раз в 5 мин
+    if (config.ZAI_INSTANCE_IDLE_MIN > 0) {
+      fetchSessionIndex(true)
+        .then(() => instanceReaper.seed([...sessionIndex.recById.values()].map((r) => r?.directory)))
+        .catch(() => {});
+      setInterval(() => instanceReaper.sweep().catch(() => {}), config.ZAI_INSTANCE_SWEEP_MS).unref();
+    }
   }
   const { port } = server.address();
   console.log(`zai listening on http://127.0.0.1:${port} (mock:${MOCK ? 1 : 0})`);
@@ -2141,7 +2725,20 @@ function shutdown() {
   } catch (err) {
     errLog("claude.shutdown", err);
   }
+  // TASK-13.27: the store write is deferred — unsaved chat history lands
+  // here, before the process exits (spec: «Остановка сервера сразу после
+  // ответа» — история на месте).
+  try {
+    claude.flushNow();
+  } catch (err) {
+    errLog("claude.flushNow", err);
+  }
   hub.stop();
+  // TASK-12.29: a graceful stop marks run-state clean — the next boot does
+  // not report a crash. uncaughtException exits without this mark.
+  try {
+    markClean(DATA_DIR);
+  } catch {}
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 2000).unref(); // force-exit stragglers
 }

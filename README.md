@@ -71,10 +71,12 @@ npm run demo     # → http://127.0.0.1:4171/zai/
 | | | |
 |---|---|---|
 | 💬 | **Two engines, one UI** | opencode (any provider) and Claude Code side by side; a chat stays bound to its engine, model and agent. |
-| 🧠 | **Agent steps** | Live turn progress: reasoning, tool calls with output, subagents, background tasks. Undo a turn and its file edits. |
+| 🧠 | **Agent steps** | Live turn progress: reasoning, tool calls with output, subagent cards with their own steps, background tasks. Undo a turn and its file edits. |
+| 🔀 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. |
+| 📊 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
 | 📡 | **Reliable streaming** | One SSE hub for every engine with replay, stall detection and loop protection — survives flaky mobile networks. |
 | 📎 | **Files** | Attach files and images, get result files as cards, browse allowed folders. A folder per chat. |
-| 🗂️ | **Obsidian as active cache** | Vault snapshot in context, turn digests written back, an isolated zone per user. |
+| 🗂️ | **Obsidian as active cache** | Vault snapshot in context, turn digests and a per-chat journal written back, an isolated zone per user. |
 | 🎙️ | **Voice** | Local speech-to-text and text-to-speech (Python worker, CPU only) and a hands-free voice mode. |
 | 🔔 | **Push notifications** | Get notified when a long turn is done (Web Push, VAPID). |
 | 👥 | **Multi-user** | Admin and users with own folders, system prompts, MCP sets, upload and voice quotas, rate limits. |
@@ -88,7 +90,7 @@ npm run demo     # → http://127.0.0.1:4171/zai/
 | | Version | For |
 |---|---|---|
 | [Node.js](https://nodejs.org) | ≥ 22 | the portal |
-| [opencode](https://opencode.ai) | 1.19.5 | the opencode engine |
+| [opencode](https://opencode.ai) | 2.x (tested with 2.2.6) | the opencode engine |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x | the Claude engine |
 | Python | 3.11+ | optional, voice |
 
@@ -100,18 +102,18 @@ You need at least one of the two engines.
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v1.15.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
-cp .env.example .env               # fill in what you need, then: set -a; . ./.env; set +a
+cp .env.example .env               # every value is optional
 
-# engines
+# engines (you need at least one)
 opencode auth login                # add the providers you want
-opencode serve --port 4096 &       # opencode engine
-claude setup-token                 # Claude engine (token → CLAUDE_CODE_OAUTH_TOKEN)
+claude setup-token                 # Claude engine: put the token into .env as CLAUDE_CODE_OAUTH_TOKEN
 
-node server.js                     # → http://127.0.0.1:4170/zai/
+./ops/opencode/serve-v2.sh &       # opencode 2.x on 127.0.0.1:4196, password in ~/.zai/oc2-password
+./ops/web-v2.sh                    # → http://127.0.0.1:4170/zai/
 ```
 </details>
 
@@ -119,19 +121,25 @@ node server.js                     # → http://127.0.0.1:4170/zai/
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v1.15.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
-Copy-Item .env.example .env        # fill in what you need
+Copy-Item .env.example .env        # every value is optional
 
 opencode auth login
-Start-Process opencode -ArgumentList 'serve','--port','4096'
 claude setup-token
 
+# opencode 2.x with HTTP Basic auth; the portal gets the same password
+$env:OPENCODE_SERVER_PASSWORD = [guid]::NewGuid().ToString('N')
+Start-Process opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','4196'
+
+$env:ZAI_OC_API = 'v2'; $env:ZAI_UPSTREAM = 'http://127.0.0.1:4196'; $env:ZAI_OC_PASSWORD = $env:OPENCODE_SERVER_PASSWORD
 node server.js                     # → http://127.0.0.1:4170/zai/
 ```
 </details>
+
+Step-by-step for a Mac, including launchd services and phone access: [`docs/macos.md`](docs/macos.md).
 
 On first start the portal creates an admin and writes the login token to `data/admin-token.txt`
 (or uses `ZAI_ADMIN_TOKEN`). To reach it from your phone, put it behind TLS — the bundled edge server
@@ -147,9 +155,11 @@ On first start the portal creates an admin and writes the login token to `data/a
 |---|:---:|:---:|:---:|
 | Portal, both engines, files, push | ✅ | ✅ | ✅ |
 | Obsidian cache, voice | ✅ | ✅ | ✅ |
-| Command execution for non-admin users | — | — | ✅ (AppContainer sandbox) |
+| Shell commands for non-admin users | — | — | ✅ (AppContainer sandbox) |
 
-Without a sandbox, shell access for regular users is refused (fail-closed); admins are not affected.
+On macOS and Linux shell access for regular users is refused (fail-closed); admins are not affected.
+User isolation is moving to one container per user with the full agent runtime — the same on every host OS —
+so the Windows sandbox is intentionally not ported to other systems.
 
 ## Architecture
 
@@ -174,7 +184,9 @@ Everything is configured with environment variables; the schema with types, defa
 | Variable | Default | |
 |---|---|---|
 | `PORT` | `4170` | portal port |
-| `ZAI_UPSTREAM` | `http://127.0.0.1:4096` | `opencode serve` address |
+| `ZAI_UPSTREAM` | `http://127.0.0.1:4096` | `opencode serve` address (the default is the opencode 1.x legacy port; with 2.x use `:4196`) |
+| `ZAI_OC_API` | `v1` | `v2` for opencode 2.x (`ops/web-v2.sh` sets it) |
+| `ZAI_OC_PASSWORD` | — | HTTP Basic password of `opencode serve` 2.x |
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | Claude subscription token (`claude setup-token`) |
 | `ZAI_ADMIN_TOKEN` | generated | admin login token |
 | `ZAI_DATA_DIR` | `./data` | users, sessions, logs |

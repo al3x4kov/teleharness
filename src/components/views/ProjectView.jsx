@@ -8,7 +8,7 @@
 import { useState } from "preact/hooks";
 import "../views.css";
 import {
-  createAndOpen, deleteSessionById, explainApiError, removeUserProject, renameSession, agents, sessions, setNotice, userProjects,
+  busyMap, createAndOpen, deleteChat, explainApiError, removeUserProject, renameSession, agents, sessions, setNotice, userProjects,
 } from "../../lib/store.js";
 import { dirBasename, groupSessionsByDate, isSubagentSession, projectDisplayName } from "../../lib/normalize.js";
 import { navigate } from "../../lib/router.js";
@@ -111,9 +111,12 @@ export default function ProjectView({ id }) {
       )}
       {deleting && (
         <DeleteModal
-          session={deleting} onClose={() => setDeleting(null)}
+          session={deleting}
+          // BUG-216: как в «Чатах» — предупреждение и стоп хода перед удалением.
+          busy={!!busyMap.value[deleting.id]}
+          onClose={() => setDeleting(null)}
           onConfirm={() => {
-            deleteSessionById(deleting.id);
+            deleteChat(deleting.id, { stopFirst: !!busyMap.value[deleting.id] });
             setDeleting(null);
             setOpenId(null);
           }}

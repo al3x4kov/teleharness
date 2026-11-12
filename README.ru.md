@@ -68,10 +68,12 @@ npm run demo     # → http://127.0.0.1:4171/zai/
 | | | |
 |---|---|---|
 | 💬 | **Два движка в одном интерфейсе** | opencode (любой провайдер) и Claude Code рядом; чат закреплён за движком, моделью и агентом. |
-| 🧠 | **Шаги агента** | Ход в реальном времени: рассуждения, вызовы инструментов с выводом, субагенты, фоновые задачи. Отмена хода вместе с правками файлов. |
+| 🧠 | **Шаги агента** | Ход в реальном времени: рассуждения, вызовы инструментов с выводом, карточки субагентов с их собственными шагами, фоновые задачи. Отмена хода вместе с правками файлов. |
+| 🔀 | **Передача между движками** | Упёрлись в лимит посреди задачи? Тот же чат продолжается на другом движке или модели: та же папка, одна лента, новый движок получает пропущенные ходы. |
+| 📊 | **Подписки** | Расход и остаток по каждому подключённому провайдеру — там, где провайдер отдаёт их официальным API. |
 | 📡 | **Устойчивый стриминг** | Один SSE-хаб для всех движков с replay, детектором зависаний и защитой от зацикливания — переживает нестабильную мобильную сеть. |
 | 📎 | **Файлы** | Вложения и картинки, файлы-результаты карточками, просмотр разрешённых папок. Своя папка на каждый чат. |
-| 🗂️ | **Obsidian как активный кэш** | Снапшот заметок в контексте, дайджесты ходов обратно в хранилище, отдельная зона на пользователя. |
+| 🗂️ | **Obsidian как активный кэш** | Снапшот заметок в контексте, дайджесты ходов и журнал каждого чата обратно в хранилище, отдельная зона на пользователя. |
 | 🎙️ | **Голос** | Локальные распознавание и синтез речи (Python-воркер, только CPU) и голосовой режим. |
 | 🔔 | **Push-уведомления** | Уведомление, когда долгий ход завершился (Web Push, VAPID). |
 | 👥 | **Несколько пользователей** | Админ и пользователи: свои папки, системный промпт, набор MCP, квоты, rate-limit. |
@@ -85,7 +87,7 @@ npm run demo     # → http://127.0.0.1:4171/zai/
 | | Версия | Для чего |
 |---|---|---|
 | [Node.js](https://nodejs.org) | ≥ 22 | портал |
-| [opencode](https://opencode.ai) | 1.19.5 | движок opencode |
+| [opencode](https://opencode.ai) | 2.x (проверено на 2.2.6) | движок opencode |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x | движок Claude |
 | Python | 3.11+ | по желанию, голос |
 
@@ -97,17 +99,18 @@ npm run demo     # → http://127.0.0.1:4171/zai/
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v1.15.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
-cp .env.example .env               # заполните нужное, затем: set -a; . ./.env; set +a
+cp .env.example .env               # все значения необязательны
 
+# движки (нужен хотя бы один)
 opencode auth login                # добавьте нужных провайдеров
-opencode serve --port 4096 &       # движок opencode
-claude setup-token                 # движок Claude (токен → CLAUDE_CODE_OAUTH_TOKEN)
+claude setup-token                 # движок Claude: токен — в .env как CLAUDE_CODE_OAUTH_TOKEN
 
-node server.js                     # → http://127.0.0.1:4170/zai/
+./ops/opencode/serve-v2.sh &       # opencode 2.x на 127.0.0.1:4196, пароль в ~/.zai/oc2-password
+./ops/web-v2.sh                    # → http://127.0.0.1:4170/zai/
 ```
 </details>
 
@@ -115,19 +118,25 @@ node server.js                     # → http://127.0.0.1:4170/zai/
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v1.15.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
-Copy-Item .env.example .env        # заполните нужное
+Copy-Item .env.example .env        # все значения необязательны
 
 opencode auth login
-Start-Process opencode -ArgumentList 'serve','--port','4096'
 claude setup-token
 
+# opencode 2.x с HTTP Basic; портал получает тот же пароль
+$env:OPENCODE_SERVER_PASSWORD = [guid]::NewGuid().ToString('N')
+Start-Process opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','4196'
+
+$env:ZAI_OC_API = 'v2'; $env:ZAI_UPSTREAM = 'http://127.0.0.1:4196'; $env:ZAI_OC_PASSWORD = $env:OPENCODE_SERVER_PASSWORD
 node server.js                     # → http://127.0.0.1:4170/zai/
 ```
 </details>
+
+Пошагово для Mac, включая службы launchd и доступ с телефона: [`docs/macos.md`](docs/macos.md) (на английском).
 
 При первом запуске портал создаёт администратора и пишет токен входа в `data/admin-token.txt`
 (или берёт `ZAI_ADMIN_TOKEN`). Чтобы открыть портал с телефона, поставьте перед ним TLS — встроенный
@@ -143,9 +152,11 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 |---|:---:|:---:|:---:|
 | Портал, оба движка, файлы, push | ✅ | ✅ | ✅ |
 | Кэш Obsidian, голос | ✅ | ✅ | ✅ |
-| Выполнение команд для не-админов | — | — | ✅ (песочница AppContainer) |
+| Команды оболочки для не-админов | — | — | ✅ (песочница AppContainer) |
 
-Без песочницы командная строка для обычных пользователей отключена (fail-closed); на админа это не влияет.
+На macOS и Linux командная строка для обычных пользователей отключена (fail-closed); на админа это не влияет.
+Изоляция пользователей переезжает на контейнер на пользователя с полным агентным рантаймом — одинаково на любой ОС сервера,
+поэтому песочница Windows на другие системы намеренно не переносится.
 
 ## Архитектура
 
@@ -173,7 +184,9 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 | Переменная | По умолчанию | |
 |---|---|---|
 | `PORT` | `4170` | порт портала |
-| `ZAI_UPSTREAM` | `http://127.0.0.1:4096` | адрес `opencode serve` |
+| `ZAI_UPSTREAM` | `http://127.0.0.1:4096` | адрес `opencode serve` (значение по умолчанию — исторический порт opencode 1.x; для 2.x — `:4196`) |
+| `ZAI_OC_API` | `v1` | `v2` для opencode 2.x (его ставит `ops/web-v2.sh`) |
+| `ZAI_OC_PASSWORD` | — | пароль HTTP Basic у `opencode serve` 2.x |
 | `CLAUDE_CODE_OAUTH_TOKEN` | — | токен подписки Claude (`claude setup-token`) |
 | `ZAI_ADMIN_TOKEN` | генерируется | токен входа администратора |
 | `ZAI_DATA_DIR` | `./data` | пользователи, сессии, логи |

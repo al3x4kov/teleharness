@@ -33,7 +33,28 @@ const variants = () =>
     return { theme: i === 0 ? "light" : "dark", anim: dataUrl(svg), still: dataUrl(stillSvg(svg)) };
   }));
 
-export default function TurnPreloader() {
+// FEAT-01.77 / TASK-01.79 (кадр 4 макета subagents.html): при подписи
+// вместо рисунка — вращающийся знак-звёздочка (i-star из макета, 30 px,
+// --brand) и две строки справа. Без caption — прежний рисунок без изменений
+// (подпись «Готовлю ответ…» внутри SVG).
+const StarIcon = () => (
+  <svg class="spin" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" />
+  </svg>
+);
+
+export default function TurnPreloader({ caption = null }) {
+  if (caption) {
+    return (
+      <div class="msg msg-assistant msg-preloader is-agents" role="status" aria-label={t("preloader.agents")}>
+        <StarIcon />
+        <div class="pre-t">
+          <b>{t("preloader.agents")}</b>
+          <span>{caption}</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div class="msg msg-assistant msg-preloader">
       <div class="turn-preloader" role="status" aria-label={t("preloader.caption")}>

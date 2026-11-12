@@ -23,6 +23,8 @@ import {
   setNotice,
   usage,
   usageError,
+  subscriptions,
+  subscriptionsError,
   voiceInfo,
 } from "./state.js";
 import { seedDialogs } from "./dialogs.js";
@@ -115,6 +117,17 @@ export async function refreshHost() {
     hostError.value = false;
   } catch {
     if (host.value == null) hostError.value = true; // без данных — «Повторить» вместо вечной «Загрузки…»
+  }
+}
+
+// FEAT-11.18: раздел «Подписки» (все пользователи). Сбой без данных → «Повторить».
+export async function refreshSubscriptions() {
+  try {
+    const r = await api.getSubscriptions();
+    subscriptions.value = Array.isArray(r?.providers) ? r.providers : [];
+    subscriptionsError.value = false;
+  } catch {
+    if (subscriptions.value == null) subscriptionsError.value = true;
   }
 }
 

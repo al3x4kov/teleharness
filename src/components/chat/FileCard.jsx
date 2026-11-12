@@ -28,10 +28,23 @@ const ICONS = {
 };
 const iconFor = (kind) => ICONS[kind] ?? ICONS.file;
 
-export default function FileCard({ name, thumb = null, onOpen, hideIfBroken = false }) {
+export default function FileCard({ name, thumb = null, onOpen, hideIfBroken = false, unavailable = false }) {
   const [broken, setBroken] = useState(false);
   if (broken && hideIfBroken) return null;
   const info = fileCardInfo(name);
+  // FEAT-05.29: файл показан агентом, но этой учётной записи недоступен (или его нет) —
+  // не кнопка и не голый путь: имя и причина словами.
+  if (unavailable) {
+    return (
+      <div class="file-card is-unavailable" role="note" title={name}>
+        <span class="fc-tile" aria-hidden="true">{iconFor(info.kind)}</span>
+        <span class="fc-text">
+          <span class="fc-name">{info.stem}</span>
+          <span class="fc-sub">{t("fileCard.unavailable")}</span>
+        </span>
+      </div>
+    );
+  }
   const showThumb = !!thumb && !broken;
   return (
     <button class={"file-card is-" + info.kind} type="button" onClick={onOpen} title={name}

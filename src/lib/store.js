@@ -21,6 +21,7 @@ export {
   editing,
   effectivePrefs,
   firstTexts,
+  idleSeenAt,
   loadDraft,
   sanitizePrefs,
   sanitizeProjects,
@@ -55,6 +56,8 @@ export {
   staleModelText,
   usage,
   usageError,
+  subscriptions,
+  subscriptionsError,
   userProjects,
 } from "./store/state.js";
 export {
@@ -70,8 +73,10 @@ export {
   continueTurn,
   createAndOpen,
   deleteChat,
+  relayChat,
   deleteSessionById,
   dismissTurnError,
+  failedBubbleWith,
   heldCount,
   loadOlder,
   openSession,
@@ -85,7 +90,22 @@ export {
   setSessionBinding,
   stop,
 } from "./store/session.js";
-export { handleEvent } from "./store/events.js";
+export { handleEvent, applyFeedEvent } from "./store/events.js";
+// FEAT-01.77: ленты субагентов открытого чата и вычисляемые запуски.
+export {
+  abortBusyChildren,
+  activeAgentRuns,
+  agentsBusy,
+  chatRuns,
+  childFeedOf,
+  childFeeds,
+  childIdsOfActive,
+  ensureChildFeed,
+  isChildOfActive,
+  patchChildFeed,
+  refreshChildFeeds,
+  resetChildFeeds,
+} from "./store/childfeeds.js";
 export { chatGone, isPinned, pinBusy, PINNED_FOLD, refreshPins, splitPinned, togglePin } from "./store/pins.js";
 export { replyDialog, seedDialogs } from "./store/dialogs.js";
 export { closeEventStream, installEventStream, noteEpoch, onStreamStatus, resync } from "./store/stream.js";
@@ -107,6 +127,7 @@ export {
   refreshProvider,
   refreshSessions,
   refreshUsage,
+  refreshSubscriptions,
   refreshVoice,
   rotateOwnToken,
   uploadFile,

@@ -124,6 +124,9 @@ export const mcpError = signal(false); // last fetch failed — Настройк
 export const host = signal(null); // {cpu, ram, disks, tempC, tempStuck} | null while loading
 export const hostError = signal(false); // host fetch failed with no data — «Повторить»
 export const usage = signal(null); // {ok, plan, windows:[{kind, percent, used, total, resetAt}]} | null while loading
+// FEAT-11.18: карточки раздела «Подписки» — [{id,title,badge,state,…}] | null пока грузится
+export const subscriptions = signal(null);
+export const subscriptionsError = signal(false);
 export const usageError = signal(false); // usage fetch failed with no data — «Повторить»
 export const about = signal(null); // {version, opencodeVersion} from /about — every role (ISSUE-008)
 // FEAT-06.2: GET /voice — {enabled, ready, parked, voices, stt, defaultVoice};
@@ -359,11 +362,23 @@ export function activeSessionDir() {
   return sessionDir(activeId.value);
 }
 
+// BUG-228: когда клиент сам увидел конец хода (id → время). Сервер кэширует
+// /zai/api/status на 3 с, поэтому опрос сразу после конца хода может ещё
+// ответить «занят» — pollBusy такому ответу в пределах окна не верит.
+export const idleSeenAt = new Map();
+export const STATUS_STALE_MS = 5000;
+// Зовётся из событий конца хода (events.js), а не из setBusyTracked: отметки
+// занятости в busyMap к этому моменту может и не быть (её стёр такой же опрос).
+export function noteIdle(id) {
+  if (id) idleSeenAt.set(id, Date.now());
+}
+
 export function setBusyTracked(id, busy) {
   if (!id) return;
   const m = { ...busyMap.value };
   if (busy) {
     if (!m[id]) m[id] = Date.now();
+    idleSeenAt.delete(id);
   } else {
     delete m[id];
   }

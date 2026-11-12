@@ -542,8 +542,8 @@ test("extractFilePaths finds windows paths in order, dedupes, caps", () => {
   ]);
   assert.equal(
     extractFilePaths("C:\\a.md C:\\b.md C:\\c.md C:\\d.md C:\\e.md C:\\f.md C:\\g.md C:\\h.md C:\\i.md C:\\j.md").length,
-    8,
-  ); // cap
+    10,
+  ); // FEAT-05.29: лимит 8 снят, потолок 40
 });
 
 test("extractFilePaths picks up .zai-uploads refs and skips non-artifacts", () => {
@@ -731,13 +731,16 @@ test("collectArtifacts: dedupe write + text mention of the same file, order of a
   assert.ok(out[1].toLowerCase().endsWith("qa-doc.pdf"));
 });
 
-test("collectArtifacts: cap 8 across both sources", () => {
+test("collectArtifacts: FEAT-05.29 — лимит 8 снят (владелец 2026-11-11), все 12 файлов; потолок 40", () => {
   const parts = [];
   for (let i = 1; i <= 5; i++) parts.push({ id: `w${i}`, type: "tool", tool: "write", state: { status: "completed", input: { filePath: `C:\\Users\\USER\\qa-files\\f${i}.md` } } });
   let text = "";
   for (let i = 6; i <= 12; i++) text += `C:\\Users\\USER\\qa-files\\g${i}.md `;
   const out = collectArtifacts(parts, [text], "C:\\Users\\USER");
-  assert.equal(out.length, 8);
+  assert.equal(out.length, 12);
+  let big = "";
+  for (let i = 1; i <= 60; i++) big += `C:\\Users\\USER\\qa-files\\h${i}.md `;
+  assert.equal(collectArtifacts([], [big], "C:\\Users\\USER").length, 40);
 });
 
 // BUG-155 (BUG-05.26): a glob mask in the answer is not a file — no chip, no /zai/api/file 404.

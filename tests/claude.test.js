@@ -226,6 +226,7 @@ test("runner turn: 204, event sequence, store, resume on the next turn", async (
   assert.equal(msgs[1].info.zai, undefined, "a clean turn carries no interruption flag");
 
   // persisted: a NEW runner instance over the same file sees the history
+  runner.flushNow(); // TASK-13.27: the store write is deferred — land it before re-reading the file
   const runner2 = new ClaudeRunner({ hub: stubHub(), storePath, binPath: FIXTURE, keepaliveMs: 50 });
   assert.equal(runner2.messages("s1").length, 2);
   assert.ok(runner2.has("s1"));
@@ -441,6 +442,7 @@ test("runner: a turn with thinking and a command streams and stores reasoning + 
   const toolFrames = hub.events.filter((x) => x.event.type === "message.part.updated" && x.event.properties.part.id === tool.id);
   assert.deepEqual([...new Set(toolFrames.map((x) => x.event.properties.part.state.status))], ["pending", "running", "completed"]);
   // history after a restart (new runner over the same file): the same parts
+  runner.flushNow(); // TASK-13.27: deferred write — land it before re-reading the file
   const again = new ClaudeRunner({ hub: stubHub(), storePath, binPath: FIXTURE });
   assert.deepEqual(again.messages("tl")[1].parts, answer.parts);
 });
@@ -558,10 +560,16 @@ test("runner: idle timeout kills a SILENT turn, never a talking one (BUG-13.3)",
   const m = runner.messages("i1")[1];
   assert.ok(textOf(m).includes("[Прервано по бездействию"), textOf(m));
   assert.equal(m.info.zai.interrupted, "idle");
-  // ~1 s of output with 100 ms gaps: longer than the idle window, but alive
-  await runner.dispatch({ res: fakeRes(), sid: "i2", dir: TMP, body: body("SLOW") });
-  await waitIdle(hub, 10_000, 2);
-  assert.equal(answerOf(runner, "i2"), "0123456789");
+  // ~1 s of output with 100 ms gaps: longer than the idle window, but alive.
+  // BUG-222/QA-07: говорящая половина — на отдельном раннере с окном 1500 мс.
+  // Под нагрузкой паузы фикстуры растягиваются, и окно 400 мс убивало
+  // ГОВОРЯЩИЙ ход (флейк 2026-11-10). Смысл прежний: окно больше паузы между
+  // кусками речи → говорящий ход не прерывается.
+  const talkHub = stubHub();
+  const talkRunner = new ClaudeRunner({ hub: talkHub, storePath: freshStore(), binPath: FIXTURE, idleTimeoutMs: 1500, keepaliveMs: 1000 });
+  await talkRunner.dispatch({ res: fakeRes(), sid: "i2", dir: TMP, body: body("SLOW") });
+  await waitIdle(talkHub, 10_000, 1); // один ход — один idle (в оригинале 2 = idle обеих половин на общем хабе)
+  assert.equal(answerOf(talkRunner, "i2"), "0123456789");
 });
 
 test("runner: CLI failure surfaces as the assistant text", async () => {
@@ -596,6 +604,7 @@ test("store: a corrupt claude-sessions.json is moved aside, never wiped", async 
   assert.equal(readFileSync(path.join(dir, aside[0]), "utf8"), '{"version":1,"sessions":{"s":{"messages":[');
   await runner.dispatch({ res: fakeRes(), sid: "n", dir: TMP, body: body("hi") });
   await waitIdle(hub);
+  runner.flushNow(); // TASK-13.27: deferred write — land it before reading the file
   assert.equal(JSON.parse(readFileSync(storePath, "utf8")).sessions.n.messages.length, 2);
   assert.equal(readFileSync(path.join(dir, aside[0]), "utf8").length > 0, true, "the quarantined copy survives later writes");
 });
@@ -646,6 +655,7 @@ test("restart: orphaned CLI run is killed, question answered, claude session kep
   assert.deepEqual(JSON.parse(readFileSync(path.join(dir, "claude-runs.json"), "utf8")).runs, {});
   assert.ok(logs.some((l) => l.includes("killed 1")));
   // the next prompt resumes the interrupted claude session (FEAT-13.12)
+  runner.flushNow(); // TASK-13.27: recovery marks the store dirty — land it before r2 re-reads the file
   const hub = stubHub();
   const r2 = new ClaudeRunner({ hub, storePath, binPath: FIXTURE, keepaliveMs: 1000 });
   await r2.dispatch({ res: fakeRes(), sid: "r1", dir: TMP, body: body("ECHO продолжай") });
@@ -737,6 +747,7 @@ test("BUG-13.16: a claude turn records activity (persisted) and announces sessio
   assert.ok(lastBumpAt < idleAt, "bumped before idle");
   assert.equal(runner.activityOf("s_act"), asst.time.completed);
   // Survives a restart: the time lives in the store file.
+  runner.flushNow(); // TASK-13.27: deferred write — land it before reading the file
   const stored = JSON.parse(readFileSync(storePath, "utf8")).sessions.s_act;
   assert.equal(stored.updatedAt, asst.time.completed);
   const runner2 = new ClaudeRunner({ hub: stubHub(), storePath, binPath: FIXTURE });

@@ -10,6 +10,66 @@
 | `oh-my-opencode-slim.json` | `C:\Users\USER\.config\opencode\oh-my-opencode-slim.json` | `D:\zai-stage\opencode\config\opencode\oh-my-opencode-slim.json` |
 | `omo.jsonc` (только источник отката на OmO, FEAT-16.2) | раньше `C:\Users\USER\.omo\omo.jsonc` | раньше `D:\zai-stage\home\.omo\omo.jsonc` |
 
+## opencode 2.x (FEAT-16.3): `opencode.v2.json` и стенд :4101/:4174
+
+Нативный конфиг opencode 2.2.6 — `opencode.v2.json` (значения перенесены из `opencode.json` 1.x по `docs/opencode-v2/config-map.md`; детали — design §8). Отличия от 1.x-файла, важные при правке:
+
+- `whitelist` провайдера заменён policies (`provider.use`: deny всем + allow zai-coding-plan); `small_model` → `agents.title.model`; `variant` → суффикс модели (`glm-5.3#high`); `autoupdate:false` → `update:"disable"`; `snapshot` → `snapshots`; `permission`-карты → массивы `permissions` (broad allow строго ДО ask-паттернов, last-match-wins; имена v2: `bash`→`shell`, `task`→`subagent`); `plugin` → `plugins` (slim пиннут точной версией, наш плагин — директория `./plugin-v2`); `mcp` → `mcp.servers` (`enabled` → инвертированный `disabled`); `compaction.prune` выброшен (v2 игнорирует с warning).
+- Без аналога в v2 (осознанно выброшены): `doom_loop`, внутри Sandbox — `list`, `todowrite`, `todoread` (read/glob покрывают).
+- Агент `orchestrator` объявлен в `agents` явно: V1-плагины в v2 не выполняются, и без явного объявления `default_agent` указывал бы несуществующего агента.
+- Sandbox переносит все запреты 1.x поэлементно, включая `external_directory`: deny всем + allow только зоне тенантов (в v2 внешние папки разрешены по умолчанию — правило обязательно). Тест проверяет изоляцию через `lib/policy.js` (`agentIsSandboxed`) на форме, которую v2 отдаёт в `GET /api/agent`.
+
+Тест: `node --test ops/opencode/tests/opencode-v2-config.test.mjs` (форма + Sandbox + сверка с 1.x бит в бит).
+
+### Раскладка стенда v2
+
+| Что | Значение |
+|---|---|
+| serve opencode 2.2.6 | :4101, бинарник `D:\zai-tmp-scripts\oc2-dl\bin\opencode.exe` (SHA256 `oc2.zip` сверяется с `SHA256SUMS` при каждом запуске) |
+| XDG-зона serve | `D:\zai-stage\oc2\{config,data,state,home,logs}`; конфиг — `oc2\config\opencode\opencode.json`, рядом `plugin-v2\`, `prompts\`, `skills\zai-*`, `oh-my-opencode-slim.json` |
+| портал | тот же `D:\Portal\zai\server.js` на :4174: `ZAI_OC_API=v2`, `ZAI_UPSTREAM=http://127.0.0.1:4101`, `ZAI_DATA_DIR=D:\zai-stage\stand2-data` (users.json — копия стенда v1, чатов нет), `ZAI_PUBLIC_DIR=D:\zai-stage\public`, `ZAI_COOKIE_NAME=zai_t_stage2`, `ZAI_ENV=stand` |
+| зоны тенантов | свои, не v1: `ZAI_TENANT_HOME=D:\zai-stage\oc2\tenants\home`, `ZAI_TENANT_VAULT=D:\zai-stage\oc2\tenants\vault` (скрипт патчит allow-зону Sandbox в копии конфига на этот путь; изоляция данных между стендами важнее общего файла). База владельца — общая, только чтение: `VAULT_CACHE_ROOT=D:\Obsidian\agents`, `VAULT_CACHE_PROTECT=D:\Obsidian`, `ZAI_KB_ROOT` тот же |
+| jail/Python | общие бинарники без состояния: `ZAI_JAIL_EXE=D:\Portal\zai\ops\sandbox\zai-jail.exe`, `ZAI_SANDBOX_PY=D:\zai-sandbox\python`; `ZAI_TURN_UNDO_ROOT=oc2\data\turn-undo` — свой |
+| пароль serve | `D:\zai-stage\oc2\secrets\password.txt` (генерируется при первом запуске, ACL — только текущий пользователь, вне git); процессам — только env: `OPENCODE_SERVER_PASSWORD` (serve), `ZAI_OC_PASSWORD` (портал); нигде не печатается |
+
+Скрипт: `D:\zai-stage\stand-v2.ps1` (источник — `ops/opencode`, ставит Claude; логика как у `stand.ps1`, только порты 4101/4174):
+
+```
+powershell -File D:\zai-stage\stand-v2.ps1                # старт (перечитывает конфиг/плагин при каждом запуске)
+powershell -File D:\zai-stage\stand-v2.ps1 -Detach        # то же в фоне
+powershell -File D:\zai-stage\stand-v2.ps1 -RestartOpencode  # перечитать конфиг/плагин serve, портал не трогать
+powershell -File D:\zai-stage\stand-v2.ps1 -Stop
+```
+
+Первый запуск: SHA256 → создание папок → копия users.json из `stand-data` → генерация пароля → serve → портал → проверка `/healthz` и подсказка про ключ. Ключ провайдера из auth.json в v2 сам не мигрирует (api-map §10) — ставится один раз:
+
+```
+$env:ZAI_OC_PASSWORD = (Get-Content D:\zai-stage\oc2\secrets\password.txt -Raw).Trim()
+node ops/deploy/oc2-credential.mjs --url=http://127.0.0.1:4101 --auth=D:\zai-stage\opencode\data\opencode\auth.json
+```
+
+Скрипт печатает только статусы: ответ `/api/credential` эхом возвращает ключ открытым текстом — тело не печатается и не логируется (тест `node --test tests/oc2-credential.test.js` гоняет скрипт против фейка, который эхо-ответ возвращает и в ошибке). Повторный запуск безопасен: 409 → DELETE+POST (обновление, design §9).
+
+Проверки после подъёма стенда: `GET :4174/healthz` → 200; `GET :4101/api/config` (Basic `opencode:<пароль>`) содержит наш документ; `GET :4101/api/agent` содержит `orchestrator` и `Sandbox` с `permissions`-массивом; `/api/provider` непуст после credential. Пробы песочницы/jail — `D:\Portal\zai-qa\probes\` (tasks 6.3–6.4).
+
+### Откат стенда/прода на 1.x
+
+- Стенд v2 → v1: `stand-v2.ps1 -Stop`, затем `D:\zai-stage\stand.ps1` (стенд 1.x не трогался всё время работы v2). Данные v2 остаются в `oc2\` и `stand2-data\`.
+- Прод (когда будет переключён): смена `ZAI_OC_API=v1` + рестарт `zai-web` — решение владельца № 1, 1.x serve не удаляется до закрытия FEAT-16.3.
+
+### Прод v2: комплект переключения (FEAT-16.3, подготовлен 2026-11-08, не применён)
+
+Файлы в репозитории; запуск установки и переключение — только вручную (скрипты ничего не стартуют и не рестартуют):
+
+| Файл | Роль |
+|---|---|
+| `ops/opencode/serve-v2.cmd` | opencode 2.2.6 serve на **:4196**, XDG-зона `D:\Portal\zai-oc2\{config,data,state,home,logs}`; бинарник — аргумент 1 (по умолчанию копия `D:\Portal\zai-oc2\bin\opencode.exe`, SHA256 проверяет `oc2-install.ps1`); `OPENCODE_SERVER_PASSWORD` из `D:\Portal\zai\data\oc2-password.txt` (`set /p`, нигде не печатается); `OPENCODE_DISABLE_PROJECT_CONFIG=1` и `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=65536` — как в 1.x `serve.cmd`; вывод — `zai-oc2\logs\serve-v2.log`. Env плагина не задаётся: дефолты `plugin-v2`/`sandbox-core` уже равны прод-путям 1.x (users.json `D:\Portal\zai\data\users.json`, зоны тенантов `C:\Users\USER\.zai-tenants` + `D:\Obsidian\tenants`, vault `D:\Obsidian\agents`, jail `ops\sandbox\zai-jail.exe`, turn-undo → `data\turn-undo`) |
+| `ops/web-v2.cmd` | тот же `server.js` с прод-умолчаниями (порт 4170, data dir, users.json); добавлены только `ZAI_OC_API=v2`, `ZAI_UPSTREAM=http://127.0.0.1:4196`, `ZAI_OC_PASSWORD` из того же файла пароля |
+| `ops/deploy/oc2-install.ps1` | разовая подготовка прода v2 (ASCII, идемпотентен, БЕЗ рестартов): копия бинарника с проверкой SHA256 (пин — параметром `-ExpectedSha256`), генерация пароля при отсутствии (64 hex, без перевода строки) + `icacls` только текущему пользователю, XDG-папки, `opencode.v2.json → config\opencode\opencode.json` (единственный патч — путь glm-rules на копию в зоне, как на стенде), `plugin-v2` + `sandbox-core` (sibling-импорт `../sandbox-core/index.mjs`) + `prompts` + `skills\zai-*` + `oh-my-opencode-slim.json`, agent-skills тем же установщиком в каталог v2, регистрация S4U-задачи `zai-opencode-v2` (не запускается) |
+
+Порядок переключения (решение владельца): `oc2-install.ps1` → старт задачи `zai-opencode-v2` → ключ провайдера (`ops/deploy/oc2-credential.mjs`, как на стенде §выше) → рестарт `zai-web` с env из `web-v2.cmd`. Откат: обычный `node server.js` без env + рестарт `zai-web`; v2-задачу погасить; 1.x serve всё время не трогается. Тест комплекта: `node --test tests/oc2-cutover.test.js` (порт/XDG, пароль только `set /p` и не печатается, ASCII всех трёх файлов, parse PS 5.1).
+
+
 
 **Фреймворк агентов — oh-my-opencode-slim (FEAT-16.2 / EPIC-16, 2026-11-07; до этого OmO).** Плагин `oh-my-opencode-slim@3.0.7` (закреплён), `default_agent: orchestrator`, конфиг `oh-my-opencode-slim.json` рядом с `opencode.json`: orchestrator Flash max → glm-5.3 high; explorer Flash low; oracle glm-5.3 max → Flash; designer Flash max; fixer Flash high; observer Flash low; `fallback.enabled`, `image_routing: auto`. Тест: `node --test ops/opencode/tests/slim-config.test.mjs`. Чаты, привязанные к агентам OmO, портал переводит на агента по умолчанию (lib/policy.js `adminAgentFor`).
 Переключение и откат: `node ops/deploy/slim-switch.mjs <apply|rollback|status> --config-dir=<…\opencode> --omo-file=<…\.omo\omo.jsonc> --rollback-dir=<бандл>` (бандл создаётся один раз при первом apply; rollback возвращает opencode.json и omo.jsonc байт в байт). После apply/rollback — рестарт opencode (стенд: `D:\zai-stage\stand.ps1 -RestartOpencode`; прод — только отложенной задачей). Стенд переключён 2026-11-07, бандл `D:\zai-stage\rollback\slim-2026-11-07`.

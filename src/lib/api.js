@@ -269,6 +269,8 @@ export const api = {
   // z.ai Coding Plan usage (Settings «Подписка z.ai»): {ok, plan, windows}.
   // The server resolves it with the owner's key; 503 surfaces as a throw.
   getUsage: () => json("GET", "/usage"),
+  // FEAT-11.18: расход подписок по подключённым провайдерам — {providers:[карточка]}; всем пользователям.
+  getSubscriptions: () => json("GET", "/subscriptions"),
   // FEAT-06.2 voice mode: {enabled, ready, parked, voices:[{id,name}], stt,
   // defaultVoice}; tts → WAV bytes (ArrayBuffer); stt takes raw int16 LE mono
   // 16 kHz PCM → {text, seconds}. Errors carry err.body.code

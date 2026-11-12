@@ -177,15 +177,15 @@ test("dirProblem ↔ dirProblemText: любой код из dirProblem имее�
 const posix = (d, o = {}) => paths.dirProblem(d, { platform: "linux", portalRoot: "/srv/zai", ...o });
 
 test("POSIX: isAbsoluteDir — только «/…», без «..» и «//»", () => {
-  for (const d of ["/", "/home/u", "/tmp/a b", "/Users/u/Проекты"]) assert.equal(paths.isAbsoluteDir(d, "linux"), true, d);
-  for (const d of ["home/u", "~/x", "C:/x", "//nas/share", "/a/../b", ""]) assert.equal(paths.isAbsoluteDir(d, "darwin"), false, d);
+  for (const d of ["/", "/home/u", "/tmp/a b", "/Users/u/Проекты"]) assert.equal(paths.isAbsoluteDir(d, { platform: "linux" }), true, d);
+  for (const d of ["home/u", "~/x", "C:/x", "//nas/share", "/a/../b", ""]) assert.equal(paths.isAbsoluteDir(d, { platform: "darwin" }), false, d);
 });
 
 test("POSIX: dirProblem — корень, системные деревья, тенант-зоны", () => {
   assert.equal(posix("/home/u/proj"), null);
   assert.equal(posix("/"), "drive-root");
   assert.equal(posix("relative/x"), "not-absolute");
-  assert.equal(posix("//nas/share"), "unc");
+  assert.equal(posix("//nas/share"), "not-absolute");
   for (const d of ["/etc", "/usr/local/x", "/proc/1", "/System/Library", "/dev"]) assert.equal(posix(d), "system", d);
   assert.equal(posix("/etcetera"), null, "граница сегмента");
   for (const d of ["/a*b", "/a?b", "/a\\b"]) assert.equal(posix(d), "alias", d);
@@ -195,4 +195,53 @@ test("POSIX: dirProblem — корень, системные деревья, т�
   assert.equal(posix("/srv/data/users", t), "portal-data");
   assert.equal(posix("/home/owner/", t), "profile-root");
   assert.equal(posix("/home/owner/.zai-tenants/alice", t), null);
+
+});
+
+// ---- BUG-17.14 (BUG-220): сравнение префиксов путей по платформе ----
+test("BUG-17.14: pathsOverlap/pathInside — win32 без учёта регистра и слэшей, linux с учётом регистра", () => {
+  const { pathsOverlap, pathInside } = paths;
+  assert.equal(pathsOverlap("C:\\T\\a", "c:/t/A/sub", "win32"), true);
+  assert.equal(pathsOverlap("C:\\T\\a", "C:\\T\\ab", "win32"), false, "общий префикс имени — не вложенность");
+  assert.equal(pathsOverlap("/home/t/a", "/home/t/a/b", "linux"), true);
+  assert.equal(pathsOverlap("/home/t/a/b", "/home/t/a", "linux"), true);
+  assert.equal(pathsOverlap("/home/t/a", "/home/t/a", "linux"), true);
+  assert.equal(pathsOverlap("/home/t/a", "/home/t/ab", "linux"), false);
+  assert.equal(pathsOverlap("/home/t/A", "/home/t/a/b", "linux"), false, "регистр на POSIX значим");
+  assert.equal(pathInside("/srv/tenants/x", "/srv/tenants", "linux"), true);
+  assert.equal(pathInside("/srv/tenants", "/srv/tenants", "linux"), false, "сам корень — не внутри");
+  assert.equal(pathInside("D:\\Home\\x", "d:\\home", "win32"), true);
+});
+
+test("BUG-17.14: scopeReferenced на linux — вложенный каталог живого пользователя защищает папку удаляемого", () => {
+  const { scopeReferenced } = paths;
+  const users = [
+    { id: "b", directories: ["/srv/tenants/a/shared-b"], extraRoots: [], obsidianRoot: null },
+    { id: "c", directories: ["/srv/tenants/c"], extraRoots: ["/data/c"], obsidianRoot: "/vault/c" },
+  ];
+  assert.equal(scopeReferenced(users, "/srv/tenants/a", { platform: "linux" }), true, "внутри папки A живёт каталог B → не удалять");
+  assert.equal(scopeReferenced(users, "/srv/tenants/a/shared-b/deep", { platform: "linux" }), true, "папка внутри живого скоупа");
+  assert.equal(scopeReferenced(users, "/srv/tenants/z", { platform: "linux" }), false);
+  assert.equal(scopeReferenced(users, "/vault/c", { platform: "linux" }), true, "obsidianRoot тоже скоуп");
+  assert.equal(scopeReferenced(users, "/srv/tenants/c", { platform: "linux", exceptId: "c" }), false, "exceptId исключает удаляемого");
+  assert.equal(scopeReferenced(users, "", { platform: "linux" }), true, "пустой путь — отказ в закрытую");
+  const win = [{ id: "b", directories: ["D:\\T\\A\\inner"] }];
+  assert.equal(scopeReferenced(win, "d:\\t\\a", { platform: "win32" }), true);
+});
+
+test("BUG-17.14: fsKey — нижний регистр только на win32", () => {
+  assert.equal(paths.fsKey("D:\\Work\\Proj\\", "win32"), "d:\\work\\proj");
+  assert.equal(paths.fsKey("/home/User/Proj/", "linux"), "/home/User/Proj");
+});
+
+test("BUG-17.14: значения по умолчанию путей к бинарникам заданы по платформе", () => {
+  const w = paths.binDefaults({ platform: "win32", home: "C:\\Users\\USER", portalDir: "D:\\Portal\\zai" });
+  assert.equal(w.claudeBin, "C:\\Users\\USER\\.local\\bin\\claude.exe");
+  assert.equal(w.jailExe, "D:/Portal/zai/ops/sandbox/zai-jail.exe");
+  assert.equal(w.sandboxPy, "D:/zai-sandbox/python");
+  const l = paths.binDefaults({ platform: "linux", home: "/home/zai", portalDir: "/opt/zai" });
+  assert.equal(l.claudeBin, "/home/zai/.local/bin/claude");
+  assert.equal(l.jailExe, "/opt/zai/ops/sandbox/zai-jail");
+  assert.equal(l.sandboxPy, "/opt/zai-sandbox/python");
+  for (const v of Object.values(l)) assert.ok(!/\\|\.exe$|^[A-Za-z]:/.test(v), v);
 });
