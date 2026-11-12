@@ -185,7 +185,7 @@ test("POSIX: dirProblem — корень, системные деревья, т�
   assert.equal(posix("/home/u/proj"), null);
   assert.equal(posix("/"), "drive-root");
   assert.equal(posix("relative/x"), "not-absolute");
-  assert.equal(posix("//nas/share"), "not-absolute");
+  assert.equal(posix("//nas/share"), "unc");
   for (const d of ["/etc", "/usr/local/x", "/proc/1", "/System/Library", "/dev"]) assert.equal(posix(d), "system", d);
   assert.equal(posix("/etcetera"), null, "граница сегмента");
   for (const d of ["/a*b", "/a?b", "/a\\b"]) assert.equal(posix(d), "alias", d);
