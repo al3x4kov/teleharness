@@ -918,6 +918,8 @@ export default function SettingsView({ section = null, sub = null } = {}) {
     // /mcp answers every role (a tenant: its own servers, FEAT-03.21).
     const admin = me.value?.role === "admin";
     if (providerCfg.value == null || agents.value.length === 0 || mcp.value == null) init();
+    // BUG-234: an empty or «pending» list may be a cold-start answer — ask again on open.
+    else if (mcp.value.length === 0 || mcp.value.some((s) => s.status === "pending")) refreshMcp();
     if (about.value == null) refreshAbout();
     refreshVoice();
     if (promptState.value.status === "idle" || promptState.value.status === "error") loadPrompt();

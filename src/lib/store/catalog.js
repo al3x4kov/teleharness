@@ -200,10 +200,31 @@ export async function refreshAbout() {
   } catch {}
 }
 
-export async function refreshMcp() {
+// BUG-234: the first /mcp of a cold opencode folder (a new tenant, a fresh
+// serve) answers `{}` while the MCP servers are still connecting. An empty
+// answer is retried in the background (the list stays as it was — a skeleton
+// on first load) and becomes «Не настроены» only after the last try. A list
+// with a server still «pending» is shown and asked again too ({} → {a: connected,
+// b: pending} → both connected). A cold folder can stay «pending» for 15 s and
+// more while other catalogs load — so 6 tries every 2.5 s, then 6 more every
+// 5 s (~45 s total).
+export const MCP_EMPTY_RETRY = { tries: 12, delayMs: 2500 };
+let mcpRetryTimer = null;
+
+export async function refreshMcp(attempt = 0) {
+  if (typeof attempt !== "number") attempt = 0;
+  clearTimeout(mcpRetryTimer);
+  mcpRetryTimer = null;
   try {
-    mcp.value = normalizeMcp(await api.getMcp());
+    const list = normalizeMcp(await api.getMcp());
     mcpError.value = false;
+    const settled = list.length > 0 && !list.some((s) => s.status === "pending");
+    if (!settled && attempt < MCP_EMPTY_RETRY.tries) {
+      if (list.length > 0) mcp.value = list;
+      mcpRetryTimer = setTimeout(() => refreshMcp(attempt + 1), attempt < 6 ? MCP_EMPTY_RETRY.delayMs : MCP_EMPTY_RETRY.delayMs * 2);
+      return;
+    }
+    mcp.value = list;
   } catch {
     if (mcp.value == null) mcpError.value = true; // показать «Повторить» вместо вечного «Загрузка…»
   }

@@ -1,5 +1,6 @@
 // Single source of truth for the UI version shown in Настройки → «О приложении».
 // Bump together with the project-note status entry in the vault.
+// 1.19.4 (2026-11-14): a new user no longer sees «MCP servers: not configured» while its MCP servers are still connecting (an empty or pending /mcp answer is retried for ~45 s; Settings re-ask on open); the sign-in note after a 401 no longer claims the token is dead.
 // 1.19.2 (2026-11-12, FEAT-11.18 step C): Relay — a chat continues on another engine or model (Claude Code <-> opencode): «Продолжить в …» on the limit banner, «Продолжить в другом движке» in the chat menu, a relay mark in the feed, one merged feed of both engines, the new engine is pointed at the chat journal; a «quota is running out» strip where the remainder is known (z.ai, under 15%).
 // 1.18.1 (2026-11-12, FEAT-11.18 step B): the chat journal — the portal writes the full history of every chat (both engines) to the knowledge base (journal/<date>-<chat>.md) after each turn; the agent gets one system-prompt line with the path and reads it on demand.
 // 1.18.0 (2026-11-12, FEAT-11.18 step A): Settings → «Подписки» for every user — a card per connected model provider (z.ai quota windows; OpenRouter key limit; DeepSeek / Moonshot / SiliconFlow balance; OpenAI and Anthropic API spend with an org admin key; an honest «no official API» card otherwise). Official documented endpoints only; keys never reach the client.
@@ -203,4 +204,4 @@
 // 1.3.0 (2026-10-31): artifacts preview/download, orchestration-directive cards,
 // typing indicator, multi-agent AgentCard, theme boot fix, overlay fill-mode
 // hardening, home junk filter, subscription credit units.
-export const VERSION = "1.19.2";
+export const VERSION = "1.19.4";
