@@ -13,6 +13,7 @@ skills, MCP servers, hooks and an Obsidian vault as long-term memory.
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
 [Try the demo](#try-it-in-30-seconds) •
+[Tour](#a-quick-tour) •
 [Features](#features) •
 [Quick start](#quick-start) •
 [Architecture](#architecture) •
@@ -20,7 +21,7 @@ skills, MCP servers, hooks and an Obsidian vault as long-term memory.
 [Contributing](CONTRIBUTING.md) •
 [Русский](README.ru.md)
 
-<img src="docs/screenshots/demo.gif" alt="Teleharness on a phone: chat list, an agent turn with steps and file cards" width="300">
+<img src="docs/screenshots/demo.gif" alt="Teleharness on a phone: chat list, a turn with subagent cards, a handoff to another engine, subscriptions" width="300">
 
 </div>
 
@@ -38,6 +39,8 @@ Teleharness puts a mobile-first web UI in front of those CLIs, so the full harne
 - **Many providers through one portal.** opencode talks to Z.ai GLM, OpenAI, Google Gemini, Anthropic,
   OpenRouter, local models and more; Claude Code brings your Claude subscription. Pick the engine and
   model per chat.
+- **A task survives a usage limit.** When a subscription runs out mid-task, hand the chat over to another
+  engine or model: same folder, one feed, and the new engine receives the turns it missed.
 - **Memory that outlives a chat.** An Obsidian vault works as an active cache: agents get a snapshot
   of your notes at the start of a chat and leave a digest after each turn.
 - **Your machine, your data.** Files, tools and history stay on your server. Providers only see the
@@ -56,15 +59,46 @@ npm ci
 npm run demo     # → http://127.0.0.1:4171/zai/
 ```
 
-<p align="center">
-  <img src="docs/screenshots/phone-light-home.png" alt="Chat list" width="240">
-  <img src="docs/screenshots/phone-light-landing.png" alt="Agent turn with steps" width="240">
-  <img src="docs/screenshots/phone-dark-landing-mid.png" alt="Tool steps and file cards, dark theme" width="240">
-</p>
+## A quick tour
+
+All screenshots are taken from `npm run demo` — what you see is what you get.
+
+<table>
+<tr>
+<td width="25%"><img src="docs/screenshots/phone-light-home.png" alt="Chat list"></td>
+<td width="25%"><img src="docs/screenshots/phone-light-agents.png" alt="A turn that delegates work to subagents"></td>
+<td width="25%"><img src="docs/screenshots/phone-light-agent-open.png" alt="A subagent card opened: steps and the answer"></td>
+<td width="25%"><img src="docs/screenshots/phone-light-relay.png" alt="Handoff mark between two engines in one feed"></td>
+</tr>
+<tr>
+<td valign="top"><b>Chats</b><br>Every chat is bound to an engine, a model and an agent. Claude Code chats are marked.</td>
+<td valign="top"><b>Subagents</b><br>When an agent delegates, each run is a card: who, what for, how long, how many steps and tokens.</td>
+<td valign="top"><b>Inside a run</b><br>Open a card to see the subagent's steps and its answer, or jump to its own chat.</td>
+<td valign="top"><b>Relay</b><br>Hit a usage limit? The same chat continues on another engine — one feed, with a handoff mark.</td>
+</tr>
+<tr>
+<td width="25%"><img src="docs/screenshots/phone-light-relay-sheet.png" alt="Choosing the engine and model to continue on"></td>
+<td width="25%"><img src="docs/screenshots/phone-light-subscriptions.png" alt="Subscriptions: usage per provider"></td>
+<td width="25%"><img src="docs/screenshots/phone-dark-steps.png" alt="Tool steps and result files, dark theme"></td>
+<td width="25%"><img src="docs/screenshots/phone-dark-home.png" alt="Chat list, dark theme"></td>
+</tr>
+<tr>
+<td valign="top"><b>Pick where to continue</b><br>From the chat menu at any time, or straight from the limit notice. The folder stays the same.</td>
+<td valign="top"><b>Subscriptions</b><br>Usage and remaining quota per connected provider, where it reports them through an official API.</td>
+<td valign="top"><b>Steps and files</b><br>Reasoning, tool calls with output, and result files as cards with preview and download.</td>
+<td valign="top"><b>Light and dark</b><br>Follows the system theme or your choice; built for one-handed use on a phone.</td>
+</tr>
+</table>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-light-auth.png" alt="Desktop layout with a Claude Code chat" width="760">
+  <img src="docs/screenshots/desktop-light-relay.png" alt="Desktop layout: a chat handed over from Claude Code to opencode" width="820">
 </p>
+<p align="center"><sub>The same UI on a desktop: Claude Opus did the first half, GLM-5.3 picked the task up after the handoff.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-dark-claude.png" alt="Desktop layout, dark theme: a Claude Code chat" width="820">
+</p>
+<p align="center"><sub>A Claude Code chat in the dark theme.</sub></p>
 
 ## Features
 
@@ -165,12 +199,15 @@ so the Windows sandbox is intentionally not ported to other systems.
 
 <p align="center"><img src="docs/architecture-components.png" alt="Teleharness components: client, portal, harness of two CLIs, Obsidian, voice, sandbox, model providers" width="900"></p>
 
-- **Portal** (`server.js`) — API, auth and users, the event hub, chat-to-engine binding. One adapter per
-  engine: a proxy to `opencode serve` and a runner that starts `claude` per turn.
+- **Portal** (`server.js`) — API, auth and users, the event hub, chat-to-engine binding, the handoff between
+  engines. One adapter per engine: a client for `opencode serve` (1.x and 2.x) and a runner that starts
+  `claude` per turn.
 - **Harness** — everything around the CLI: agents and orchestration (oh-my-opencode-slim), the
-  `vault-cache.ts` plugin, Claude Code hooks, skills, MCP servers. This decides what an agent can do and
+  knowledge-base and sandbox plugin for opencode (`ops/opencode/plugin-v2` for 2.x, `vault-cache.ts` for 1.x),
+  Claude Code hooks, skills, MCP servers. This decides what an agent can do and
   what it knows.
-- **Obsidian** — long-term memory for agents, one zone per user.
+- **Obsidian** — long-term memory for agents, one zone per user; also holds the per-chat journal an engine
+  reads after a handoff.
 - **Voice** — a separate local Python process (Piper TTS, GigaAM STT).
 - **Sandbox** — Windows AppContainer for other users' commands.
 
@@ -219,7 +256,7 @@ npm run demo             # mock mode on fixtures-demo/
 | `server.js`, `lib/`, `routes/` | backend |
 | `src/` → `public/` | frontend (Preact + signals) |
 | `shared/` | code shared by server and client |
-| `ops/` | edge server, sandbox, voice worker, document rendering |
+| `ops/` | launch scripts, opencode plugins, edge server, sandbox, voice worker, document rendering |
 | `config/` | Claude Code and opencode configs |
 | `tests/`, `fixtures/`, `fixtures-demo/` | tests and synthetic fixtures |
 | `openspec/specs/`, `docs/` | requirements, architecture, ADRs |

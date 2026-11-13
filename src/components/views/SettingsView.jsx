@@ -61,10 +61,9 @@ export function mcpView(s) {
   return { text, tone, why, full: s?.error ?? null };
 }
 
-// «Подписка z.ai»: z.ai returns epoch-ms instants with no timezone (verified
-// live 2026-10-31) — everything below renders in Europe/Moscow explicitly.
-const mskFmt = () => new Intl.DateTimeFormat(locale(), {
-  timeZone: "Europe/Moscow",
+// Quota windows: the provider returns epoch-ms instants — shown in the viewer's own time zone
+// and locale, like every other time in the app.
+const resetFmt = () => new Intl.DateTimeFormat(locale(), {
   day: "numeric",
   month: "short",
   hour: "2-digit",
@@ -124,11 +123,11 @@ export function countdown(ms) {
 }
 
 // Two atomic pieces under the window's own bar (S-1/S-2): «сброс 2 нояб.,
-// 17:31 МСК» and «через 1 ч 50 мин», each rendered nowrap, lower-case — the
+// 17:31» and «через 1 ч 50 мин», each rendered nowrap, lower-case — the
 // window name is already the row label above.
 export function resetParts(w, now = Date.now()) {
   if (w?.resetAt == null) return null;
-  const when = t("settings.quota.reset", { date: mskFmt().format(new Date(w.resetAt)) });
+  const when = t("settings.quota.reset", { date: resetFmt().format(new Date(w.resetAt)) });
   const left = w.resetAt - now;
   return { when, left: left <= 60_000 ? t("settings.quota.now") : t("settings.quota.in", { d: countdown(left) }) };
 }

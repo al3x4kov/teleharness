@@ -1,5 +1,63 @@
 [
  {
+  "id": "ses_demo_reports_api",
+  "slug": "bright-harbor",
+  "projectID": "global",
+  "directory": "/home/dev/projects/billing",
+  "summary": {
+   "additions": 96,
+   "deletions": 148,
+   "files": 7
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 118400,
+   "output": 17760,
+   "reasoning": 11840,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Move reports to the new billing API",
+  "agent": "orchestrator",
+  "model": {
+   "id": "glm-5.3",
+   "providerID": "zai-coding-plan"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794304080000,
+   "updated": 1794304687900
+  },
+  "zai": {
+   "engine": "opencode",
+   "model": {
+    "providerID": "zai-coding-plan",
+    "modelID": "glm-5.3"
+   },
+   "agent": "orchestrator",
+   "prompted": true,
+   "source": "stored",
+   "relays": [
+    {
+     "at": 1794304655200,
+     "from": {
+      "engine": "claude",
+      "providerID": "anthropic",
+      "modelID": "claude-opus-5-5"
+     },
+     "to": {
+      "engine": "opencode",
+      "providerID": "zai-coding-plan",
+      "modelID": "glm-5.3"
+     },
+     "reason": "limit"
+    }
+   ]
+  }
+ },
+ {
   "id": "ses_demo_landing_dark_theme",
   "slug": "calm-nebula",
   "projectID": "global",

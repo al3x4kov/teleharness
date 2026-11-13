@@ -62,7 +62,7 @@ async function pickPort() {
 // every timestamp shifted so the newest chat is "a couple of minutes ago"
 // (the chat list groups by date). The mock also appends captured POSTs to
 // its fixtures dir — the copy keeps the repo clean.
-const TIME_KEYS = new Set(["created", "updated", "completed", "start", "end", "fetchedAt", "resetAt"]);
+const TIME_KEYS = new Set(["created", "updated", "completed", "start", "end", "fetchedAt", "resetAt", "at"]);
 function shiftTimes(node, delta) {
   if (Array.isArray(node)) return node.map((x) => shiftTimes(x, delta));
   if (!node || typeof node !== "object") return node;

@@ -559,7 +559,7 @@ export default {
   "settings.quota.billion": "{n}B",
   "settings.quota.million": "{n}M",
   "settings.quota.tokSuffix": " tokens",
-  "settings.quota.reset": "resets {date}\u00a0MSK",
+  "settings.quota.reset": "resets {date}",
   "settings.quota.now": "now",
   "settings.quota.in": "in {d}",
   "settings.quota.noKey": "No data: the server has no z.ai key (opencode auth). This updates on its own once a key is added.",
