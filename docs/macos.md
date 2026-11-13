@@ -28,7 +28,7 @@ claude --version
 ## 2. Get the portal
 
 ```bash
-git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 cp .env.example .env         # every value is optional; the defaults live under your home folder

@@ -11,6 +11,15 @@ and is shown in Settings → About.
 - Demo mode has a chat that shows subagent cards and a handoff between engines.
 - Quota reset times in Settings → Subscriptions are shown in the viewer’s own time zone (they were fixed to Moscow time).
 
+## [1.19.4] — 2026-11-14
+
+### Fixed
+- A new user opening Settings right after the first sign-in saw "MCP servers: not configured" until a reload — the
+  first answer of a cold opencode folder is empty while the MCP servers connect. An empty or still-pending answer is
+  now retried in the background for about 45 seconds, and Settings ask again when opened.
+- After signing out in another tab (or any 401 mid-session) the sign-in screen no longer claims the token is invalid;
+  it suggests signing in again first.
+
 ## [1.19.2] — 2026-11-13
 
 ### Added
@@ -71,5 +80,6 @@ First public release under the name **Teleharness** (codename `zai`).
 - Slash commands in admin opencode chats expand through opencode `/command`.
 - A chat deleted mid-turn no longer stays busy.
 
+[1.19.4]: https://github.com/al3x4kov/teleharness/releases/tag/v1.19.4
 [1.19.2]: https://github.com/al3x4kov/teleharness/releases/tag/v1.19.2
 [1.15.1]: https://github.com/al3x4kov/teleharness/releases/tag/v1.15.1

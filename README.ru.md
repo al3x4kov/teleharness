@@ -137,7 +137,7 @@ npm run demo     # → http://127.0.0.1:4171/zai/
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -156,7 +156,7 @@ claude setup-token                 # движок Claude: токен — в .env
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v1.19.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v1.19.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 

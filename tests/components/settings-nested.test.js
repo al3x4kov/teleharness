@@ -258,3 +258,93 @@ test("BUG-178: версия — приложения (VERSION), отставан
   const al = ui.aboutLine;
   assert.match(al("1.14.4", { version: "1.14.3", opencodeVersion: "1.19.5" }), /^Teleharness 1\.14\.4 \(сервер 1\.14\.3\) · opencode 1\.19\.5/);
 });
+
+// BUG-234 (BUG-03.28): первый /mcp холодной папки нового тенанта — `{}` (MCP
+// ещё подключаются). Клиент не запоминает пустой ответ сразу, а повторяет его;
+// Настройки с запомненным пустым списком при открытии перезапрашивают /mcp.
+const mcpCalls = () => fetchCalls.filter((c) => c.path === "/zai/api/mcp").length;
+
+test("BUG-234: пустой первый ответ /mcp — повтор; тенант без перезагрузки видит свои серверы", async () => {
+  ui.store.me.value = USER;
+  ui.store.MCP_EMPTY_RETRY.delayMs = 0;
+  try {
+    let n = 0;
+    installFetch([{ method: "GET", path: "/zai/api/mcp", reply: () => (++n === 1 ? {} : { context7: { status: "connected" }, marketplace: { status: "connected" } }) }]);
+    await ui.store.refreshMcp();
+    assert.equal(ui.store.mcp.value, null, "пустой первый ответ не запоминается как «Не настроены»");
+    const { root } = t$.mount(ui.SettingsView, { section: "mcp" });
+    await t$.waitFor(() => $$(root, ".settings-pane .mcp-row").length === 2);
+    assert.match($(root, 'a[href="#/settings/mcp"] .set-row-value').textContent, /2 подключено/);
+    assert.ok(n >= 2);
+  } finally {
+    ui.store.MCP_EMPTY_RETRY.delayMs = 2500;
+  }
+});
+
+test("BUG-234: серверов действительно нет — после повторов «Не настроены»", async () => {
+  ui.store.me.value = ADMIN;
+  ui.store.MCP_EMPTY_RETRY.delayMs = 0;
+  try {
+    installFetch([{ method: "GET", path: "/zai/api/mcp", reply: () => ({}) }]);
+    await ui.store.refreshMcp();
+    await t$.waitFor(() => Array.isArray(ui.store.mcp.value), { tries: 5000 });
+    assert.equal(ui.store.mcp.value.length, 0);
+    assert.equal(mcpCalls(), 1 + ui.store.MCP_EMPTY_RETRY.tries);
+  } finally {
+    ui.store.MCP_EMPTY_RETRY.delayMs = 2500;
+  }
+});
+
+test("BUG-234: запомненный пустой список — открытие Настроек перезапрашивает /mcp", async () => {
+  ui.store.me.value = USER;
+  // каталоги уже загружены (как у тенанта после старта) — init() не нужен
+  const saved = { agents: ui.store.agents.value, providerCfg: ui.store.providerCfg.value };
+  ui.store.agents.value = [{ name: "sandbox", mode: "primary" }];
+  ui.store.providerCfg.value = saved.providerCfg ?? { providers: [], default: {} };
+  try {
+    ui.store.mcp.value = [];
+    installFetch([{ method: "GET", path: "/zai/api/mcp", reply: () => ({ context7: { status: "connected" } }) }]);
+    const { root } = t$.mount(ui.SettingsView, { section: "mcp" });
+    await t$.waitFor(() => $$(root, ".settings-pane .mcp-row").length === 1);
+    assert.ok(mcpCalls() >= 1);
+  } finally {
+    ui.store.agents.value = saved.agents;
+    ui.store.providerCfg.value = saved.providerCfg;
+  }
+});
+
+test("BUG-234: сервер ещё «pending» — список показан и перезапрошен до «connected»", async () => {
+  ui.store.me.value = USER;
+  ui.store.MCP_EMPTY_RETRY.delayMs = 0;
+  try {
+    let n = 0;
+    installFetch([{
+      method: "GET",
+      path: "/zai/api/mcp",
+      reply: () => (++n === 1 ? { context7: { status: "connected" }, marketplace: { status: "pending" } } : { context7: { status: "connected" }, marketplace: { status: "connected" } }),
+    }]);
+    await ui.store.refreshMcp();
+    assert.equal(ui.store.mcp.value.length, 2, "список с pending показан сразу");
+    await t$.waitFor(() => ui.store.mcp.value.every((s) => s.status === "connected"));
+    assert.equal(mcpCalls(), 2);
+  } finally {
+    ui.store.MCP_EMPTY_RETRY.delayMs = 2500;
+  }
+});
+
+test("BUG-234: запомненный список с «pending» — открытие Настроек перезапрашивает /mcp", async () => {
+  ui.store.me.value = USER;
+  const saved = { agents: ui.store.agents.value, providerCfg: ui.store.providerCfg.value };
+  ui.store.agents.value = [{ name: "sandbox", mode: "primary" }];
+  ui.store.providerCfg.value = saved.providerCfg ?? { providers: [], default: {} };
+  try {
+    ui.store.mcp.value = [{ name: "context7", status: "pending", error: null }];
+    installFetch([{ method: "GET", path: "/zai/api/mcp", reply: () => ({ context7: { status: "connected" } }) }]);
+    const { root } = t$.mount(ui.SettingsView, { section: "mcp" });
+    await t$.waitFor(() => ui.store.mcp.value[0].status === "connected");
+    assert.match($(root, 'a[href="#/settings/mcp"] .set-row-value').textContent, /1 подключено/);
+  } finally {
+    ui.store.agents.value = saved.agents;
+    ui.store.providerCfg.value = saved.providerCfg;
+  }
+});

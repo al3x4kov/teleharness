@@ -41,7 +41,7 @@ function gate(body) {
 
 test("cold start: a hanging /mcp (+/provider, /agent) does not hold the empty home on the skeleton", async () => {
   ui.store.me.value = { id: "admin", role: "admin" };
-  const mcp = gate({});
+  const mcp = gate({ fs: { status: "connected" } }); // non-empty: an empty answer would arm the BUG-234 retry timer
   const prov = gate({});
   const ag = gate([]);
   installFetch([
@@ -64,7 +64,7 @@ test("cold start: a hanging /mcp (+/provider, /agent) does not hold the empty ho
 
 test("cold start: the chat list renders on /session while /mcp is still pending", async () => {
   ui.store.me.value = { id: "admin", role: "admin" };
-  const mcp = gate([{ name: "fs", status: "connected" }]);
+  const mcp = gate({ fs: { status: "connected" } }); // real /mcp shape (an array normalizes to empty — BUG-234 would retry)
   installFetch([
     { method: "GET", path: "/zai/api/session", reply: () => [ses("ses_a", "Отчёт"), ses("ses_b", "Задача")] },
     { method: "GET", path: "/zai/api/mcp", reply: mcp.reply },

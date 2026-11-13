@@ -797,7 +797,7 @@ export default {
   "login.err.network": "Server unavailable — check your connection and tap “Sign in” again.",
   "login.title": "Sign in",
   "login.hint": "Use the personal access token from your administrator. You’ll stay signed in on this device.",
-  "login.expired": "Session ended: your token is no longer valid. Ask your administrator for a new one.",
+  "login.expired": "Session ended. Sign in again — if the token no longer works, ask your administrator for a new one.",
   "login.token": "Access token",
   "login.checking": "Checking…",
   "login.submit": "Sign in",

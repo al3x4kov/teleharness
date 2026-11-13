@@ -120,7 +120,11 @@ test("«Сессия завершена» — только после 401 из �
   ui.store.me.value = { id: "u_j", name: "julia", role: "user" };
   ui.store.me.value = false; // 401 посреди работы
   const b = t$.mount(ui.LoginView);
-  assert.match($(b.root, '.login-note[role="status"]').textContent, /Сессия завершена: токен больше не действует/);
+  const note = $(b.root, '.login-note[role="status"]').textContent;
+  // BUG-235: причина 401 клиенту неизвестна (выход в другой вкладке, срок,
+  // перевыпуск, отключение) — не утверждать, что токен недействителен.
+  assert.match(note, /Сессия завершена\. Войдите снова/);
+  assert.doesNotMatch(note, /токен больше не действует/);
 });
 
 // ---- выход ------------------------------------------------------------------------
