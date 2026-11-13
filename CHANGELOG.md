@@ -4,6 +4,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 versions follow [SemVer](https://semver.org/). The app version lives in [`src/lib/version.js`](src/lib/version.js)
 and is shown in Settings → About.
 
+## [Unreleased]
+
+### Changed
+- README: a screen-by-screen tour with new screenshots and a new demo GIF (English and Russian), a new banner.
+- Demo mode has a chat that shows subagent cards and a handoff between engines.
+- Quota reset times in Settings → Subscriptions are shown in the viewer’s own time zone (they were fixed to Moscow time).
+
 ## [1.19.2] — 2026-11-13
 
 ### Added

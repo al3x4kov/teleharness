@@ -294,7 +294,7 @@ test("Subscription reset: lower-case pieces, NBSP inside every number+unit pair"
   const now = Date.UTC(2026, 10, 2, 12, 0);
   const p = M.settings.resetParts({ resetAt: now + (1 * 60 + 58) * 60_000 }, now);
   assert.match(p.when, /^сброс /);
-  assert.match(p.when, /\u00a0МСК$/);
+  assert.doesNotMatch(p.when, /МСК|MSK/, "the viewer's own time zone, no fixed zone label");
   assert.equal(p.left, "через 1\u00a0ч 58\u00a0мин");
   assert.equal(M.settings.countdown(4 * 86_400_000 + 5 * 3_600_000), "4\u00a0дн. 5\u00a0ч");
   assert.equal(M.settings.resetParts({ resetAt: now + 10_000 }, now).left, "сейчас");

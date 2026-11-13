@@ -559,7 +559,7 @@ export default {
   "settings.quota.billion": "{n} млрд",
   "settings.quota.million": "{n} млн",
   "settings.quota.tokSuffix": " ток.",
-  "settings.quota.reset": "сброс {date}\u00a0МСК",
+  "settings.quota.reset": "сброс {date}",
   "settings.quota.now": "сейчас",
   "settings.quota.in": "через {d}",
   "settings.quota.noKey": "Данные недоступны: на сервере нет ключа z.ai (opencode auth). Обновится само, когда ключ появится.",
