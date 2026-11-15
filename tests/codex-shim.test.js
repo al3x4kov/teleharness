@@ -7,7 +7,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -163,7 +163,8 @@ test("turn: init with threadId, message_start + text deltas, final text, usage +
   assert.equal(ts.approvalPolicy, "on-request");
   assert.equal(ts.sandbox, "workspace-write");
   assert.equal(ts.model, "gpt-6.1-sol");
-  assert.equal(path.resolve(ts.cwd), path.resolve(r.cwd));
+  // macOS: the temp dir /var/… is a symlink to /private/var/… — compare real paths
+  assert.equal(realpathSync(ts.cwd), realpathSync(r.cwd));
   assert.deepEqual(sentTo(r.received, "turn/start")[0].params.input[0].text, "привет");
 });
 
