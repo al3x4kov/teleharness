@@ -1,10 +1,16 @@
 <div align="center">
 
-<img src="docs/screenshots/social-preview.png" alt="Teleharness: your coding-agent CLIs — with their whole harness — on your phone" width="100%">
+<img src="docs/screenshots/social-preview.png" alt="Teleharness: one chat for multiple AI coding CLIs" width="100%">
 
-Run **Claude Code** and **opencode** on your own machine and drive them from any browser.
-You don't chat with a bare model: every message goes through a real agent CLI, with its agents,
-skills, MCP servers, hooks and an Obsidian vault as long-term memory.
+## One chat for multiple AI coding CLIs
+
+**Switch between Claude Code and opencode in the same conversation — without starting over.**
+
+Teleharness is an open-source, self-hosted web UI for AI coding agents. It runs the real CLIs on your machine,
+with their native agents, skills, MCP servers, hooks and project context, and lets you hand a chat from one CLI
+to another when a subscription hits its usage limit.
+
+**Multi-CLI chat** · **cross-CLI context handoff** · **subscription usage** · **mobile-first UI** · **persistent memory** · **self-hosted**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -12,6 +18,7 @@ skills, MCP servers, hooks and an Obsidian vault as long-term memory.
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
+[Switch CLIs](#switch-cli-mid-conversation) •
 [Try the demo](#try-it-in-30-seconds) •
 [Tour](#a-quick-tour) •
 [Features](#features) •
@@ -26,6 +33,24 @@ skills, MCP servers, hooks and an Obsidian vault as long-term memory.
 </div>
 
 ---
+
+## Switch CLI mid-conversation
+
+Start a task with Claude Code, then continue it with opencode on GLM or any other model opencode supports — or
+the other way round.
+
+- **From the chat menu, at any time:** *Continue in…* → engine and model.
+- **When a subscription runs out:** the usage-limit notice offers *Continue in &lt;model&gt;* — one tap.
+- **What carries over:** the project folder, one shared feed with a handoff mark, the turns the new CLI missed
+  (sent with its first prompt) and, if a knowledge-base folder is set, the full chat journal.
+- **What doesn't:** the previous CLI's private session state. The switch is one tap, not automatic.
+
+<p align="center">
+  <img src="docs/screenshots/phone-light-relay.png" alt="Handoff mark in one feed: Claude Opus → GLM-5.3" width="240">
+  <img src="docs/screenshots/phone-light-relay-sheet.png" alt="Choosing the engine and model to continue on" width="240">
+</p>
+
+Details, limits and FAQ: [docs/cross-cli-handoff.md](docs/cross-cli-handoff.md).
 
 ## Why Teleharness
 

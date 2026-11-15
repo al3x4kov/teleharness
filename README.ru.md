@@ -1,10 +1,16 @@
 <div align="center">
 
-<img src="docs/screenshots/social-preview.png" alt="Teleharness: агентные CLI со всей их обвязкой — у вас в телефоне" width="100%">
+<img src="docs/screenshots/social-preview.png" alt="Teleharness: один чат для нескольких AI coding CLI" width="100%">
 
-Запускайте **Claude Code** и **opencode** на своей машине и работайте с ними из любого браузера.
-Вы общаетесь не с голой моделью: каждое сообщение проходит через настоящий агентный CLI — с его агентами,
-скиллами, MCP-серверами, хуками и базой знаний Obsidian в роли долгой памяти.
+## Один чат для нескольких AI coding CLI
+
+**Переключайтесь между Claude Code и opencode в том же разговоре — без начала заново.**
+
+Teleharness — открытый self-hosted веб-интерфейс для агентов, пишущих код. Он запускает настоящие CLI на вашей
+машине — с их агентами, скиллами, MCP-серверами, хуками и контекстом проекта — и позволяет передать чат другому
+CLI, когда подписка упёрлась в лимит.
+
+**Чат на несколько CLI** · **передача контекста между CLI** · **остаток подписок** · **интерфейс для телефона** · **долгая память** · **на своём сервере**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -12,6 +18,7 @@
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#поддержка-платформ)
 
+[Переключение CLI](#переключение-cli-посреди-разговора) •
 [Демо](#попробовать-за-30-секунд) •
 [Обзор](#обзор-по-экранам) •
 [Возможности](#возможности) •
@@ -25,6 +32,23 @@
 </div>
 
 ---
+
+## Переключение CLI посреди разговора
+
+Начните задачу в Claude Code и продолжите в opencode на GLM или любой другой модели opencode — или наоборот.
+
+- **Из меню чата, в любой момент:** *Продолжить в…* → движок и модель.
+- **Когда подписка закончилась:** плашка лимита предлагает *Продолжить в &lt;модель&gt;* — одно нажатие.
+- **Что переносится:** папка проекта, одна лента с отметкой передачи, ходы, которых новый CLI не видел
+  (уходят с первым запросом), и, если задана папка базы знаний, полный журнал чата.
+- **Что нет:** внутреннее состояние сессии прежнего CLI. Переключение — одним нажатием, не автоматически.
+
+<p align="center">
+  <img src="docs/screenshots/ru/phone-light-relay.png" alt="Отметка передачи в одной ленте: Claude Opus → GLM-5.3" width="240">
+  <img src="docs/screenshots/ru/phone-light-relay-sheet.png" alt="Выбор движка и модели для продолжения" width="240">
+</p>
+
+Подробности, ограничения и FAQ: [docs/cross-cli-handoff.md](docs/cross-cli-handoff.md#переключение-cli-в-одном-чате-relay).
 
 ## Зачем это
 
