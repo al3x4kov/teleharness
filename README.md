@@ -28,7 +28,7 @@ to another when a subscription hits its usage limit.
 [Contributing](CONTRIBUTING.md) •
 [Русский](README.ru.md)
 
-<img src="docs/screenshots/demo.gif" alt="Teleharness on a phone: chat list, a turn with subagent cards, a handoff to another engine, subscriptions" width="300">
+<img src="docs/screenshots/demo.gif" alt="Teleharness 1.21 on a phone: waiting for approval, Allow, context and subscription, Codex, handoff, phone pairing QR" width="300">
 
 </div>
 
@@ -51,6 +51,7 @@ Codex — in any direction.
 <p align="center">
   <img src="docs/screenshots/phone-light-relay.png" alt="Handoff mark in one feed: Claude Opus → GLM-5.3" width="240">
   <img src="docs/screenshots/phone-light-relay-sheet.png" alt="Choosing the engine and model to continue on" width="240">
+  <img src="docs/screenshots/phone-light-autorelay.png" alt="Settings: Continue automatically on a usage limit" width="240">
 </p>
 
 Details, limits and FAQ: [docs/cross-cli-handoff.md](docs/cross-cli-handoff.md).
@@ -130,14 +131,22 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 </p>
 <p align="center"><sub>A Claude Code chat in the dark theme.</sub></p>
 
+<p align="center">
+  <img src="docs/screenshots/desktop-light-codex.png" alt="Codex on desktop: GPT-6.1 Sol, file edits, tests and context meter" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-pair.png" alt="Desktop settings: Connect a phone with QR code, link and expiry" width="820">
+</p>
+
 ## Features
 
 | | | |
 |---|---|---|
-| 💬 | **Three engines, one UI** | opencode (any provider), Claude Code and Codex CLI side by side; a chat stays bound to its engine, model and agent. Codex is admin-only for now, on every OS — it needs its own sandbox before other users get it. |
-| 🛡️ | **Permission mode per chat** | *Ask* — the agent asks before file edits and commands, you approve or deny in the chat (Claude through a permission bridge, Codex natively); *Edits without asking*; *No questions* (admin only). |
-| ⏸️ | **Waiting for you** | A chat list filter with a count of chats where an agent waits for your decision, plus a push notification when it starts waiting. |
-| 📈 | **Context and cost** | A meter above the composer: how full the model's context window is (with a warning past 80 %) and what the chat has cost — or that it runs on a subscription. |
+| 💬 | **Three engines, one UI** | opencode (any provider), Claude Code and Codex CLI side by side; a chat stays bound to its engine, model and agent. Codex is admin-only for now, on every OS — it needs its own sandbox before other users get it.<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Model picker with opencode, Claude and Codex engine groups" width="180"> <img src="docs/screenshots/phone-light-codex.png" alt="Codex chat: file edits, 212 passing tests, Ask mode and subscription" width="180"> |
+| 🛡️ | **Permission mode per chat** | *Ask* — the agent asks before file edits and commands, you approve or deny in the chat (Claude through a permission bridge, Codex natively); *Edits without asking*; *No questions* (admin only).<br><img src="docs/screenshots/phone-light-ask.png" alt="In-chat permission request for a migration command with Allow and Deny" width="180"> <img src="docs/screenshots/phone-light-permission-modes.png" alt="Permission modes: Ask, Edits without asking, No questions" width="180"> |
+| ⏸️ | **Waiting for you** | A chat list filter with a count of chats where an agent waits for your decision, plus a push notification when it starts waiting.<br><img src="docs/screenshots/phone-light-waiting.png" alt="Waiting for you filter enabled with one chat needing approval" width="180"> |
+| 📈 | **Context and cost** | A meter above the composer: how full the model's context window is (with a warning past 80 %) and what the chat has cost — or that it runs on a subscription.<br><img src="docs/screenshots/phone-light-context.png" alt="Answer footer: subscription and Context 41 percent" width="180"> <img src="docs/screenshots/phone-light-context-warning.png" alt="Context warning at 86 percent, almost full" width="180"> |
 | 🧠 | **Agent steps** | Live turn progress: reasoning, tool calls with output, subagent cards with their own steps, background tasks. Undo a turn and its file edits. |
 | 🔀 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. Optionally automatic, with your own order of backup models. |
 | 📊 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
@@ -146,7 +155,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | 🗂️ | **Obsidian as active cache** | Vault snapshot in context, turn digests and a per-chat journal written back, an isolated zone per user. |
 | 🎙️ | **Voice** | Local speech-to-text and text-to-speech (Python worker, CPU only) and a hands-free voice mode. |
 | 🔔 | **Push notifications** | Get notified when a long turn is done or an agent needs your decision (Web Push, VAPID). |
-| 📲 | **Phone pairing by QR** | Settings → Connect a phone shows a one-time QR code (valid 10 minutes); scan it and the phone is signed in to your account — no token typing. Needs `TELEHARNESS_PUBLIC_URL`. |
+| 📲 | **Phone pairing by QR** | Settings → Connect a phone shows a one-time QR code (valid 10 minutes); scan it and the phone is signed in to your account — no token typing. Needs `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/phone-light-pair.png" alt="Connect a phone: QR code, expiry, one-time link and Copy" width="180"> |
 | 👥 | **Multi-user** | Admin and users with own folders, system prompts, MCP sets, upload and voice quotas, rate limits. |
 | 📱 | **Mobile-first** | Built for iOS Safari: keyboard-aware layout, safe areas, light and dark themes, English and Russian UI. |
 | 🪶 | **Zero runtime dependencies** | The backend is plain Node.js stdlib. |
