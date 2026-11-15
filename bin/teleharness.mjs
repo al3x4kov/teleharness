@@ -1,0 +1,322 @@
+#!/usr/bin/env node
+// One-command install: `npx github:al3x4kov/teleharness`.
+//
+// npm installs the repository as a package (into its cache, not the user's
+// folder) and runs this bin. What it does:
+//   1. checks Node >= 22 (a clear error instead of a syntax crash);
+//   2. data directory — ~/.teleharness (TELEHARNESS_HOME): data/ (users.json,
+//      admin-token.txt …), public/ (the built UI), tenants/ — all outside the
+//      package folder, so a rerun or a package update never touches the data;
+//   3. builds the UI into ~/.teleharness/public when there is no build or the
+//      package version changed (build.mjs with TELEHARNESS_OUT_DIR — the live public/
+//      guard does not trigger; esbuild and the UI libraries are dependencies,
+//      npx installs them);
+//   4. looks for claude, opencode and codex in PATH and prints what was found
+//      and how to install what is missing; it does NOT start opencode serve
+//      (see opencodeHint);
+//   5. starts server.js with portable paths and prints the address and (on
+//      the first run) the sign-in token.
+//
+// It never takes over another running portal: its own default port (4180),
+// its own data directory, a busy port is an error, not a takeover.
+import { spawn, spawnSync } from "node:child_process";
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const PKG_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+export const MIN_NODE_MAJOR = 22;
+export const DEFAULT_PORT = 4180;
+const BUILD_MARK = ".teleharness-build";
+
+export const HELP = `Teleharness — a web portal for claude, opencode and codex from your phone and desktop.
+
+Usage:  npx github:al3x4kov/teleharness [--port N] [--host ADDRESS] [--rebuild]
+
+  --port N          portal port (default ${DEFAULT_PORT} or PORT from the environment)
+  --host ADDRESS    listen address (default 127.0.0.1; 0.0.0.0 — reachable from your LAN)
+  --rebuild         rebuild the UI even if the version did not change
+  -h, --help        this help
+
+Data: ~/.teleharness (another folder — TELEHARNESS_HOME, data only — TELEHARNESS_DATA_DIR).
+opencode: the portal talks to opencode serve at TELEHARNESS_UPSTREAM (default http://127.0.0.1:4096).
+Claude Code: CLI path — TELEHARNESS_CLAUDE_BIN (searched in PATH by default).
+Codex: found in PATH or the npm global folder (TELEHARNESS_CODEX_BIN overrides); admin-only engine.`;
+
+// --- pure functions (tests: tests/teleharness-bin.test.js) -------------------
+
+export function parseArgs(argv) {
+  const out = { port: null, host: null, rebuild: false, help: false, error: null };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const eq = a.indexOf("=");
+    const key = eq > 0 ? a.slice(0, eq) : a;
+    const val = () => (eq > 0 ? a.slice(eq + 1) : argv[++i]);
+    if (key === "-h" || key === "--help") out.help = true;
+    else if (key === "--rebuild") out.rebuild = true;
+    else if (key === "--port") {
+      const v = val();
+      const n = Number(v);
+      if (!/^\d+$/.test(String(v ?? "")) || n < 1 || n > 65535) out.error = `--port: expected a port number 1–65535, got "${v ?? ""}"`;
+      else if (BROWSER_BLOCKED_PORTS.has(n)) out.error = `--port: browsers refuse to open port ${n}, pick another one (e.g. ${DEFAULT_PORT})`;
+      else out.port = n;
+    } else if (key === "--host") {
+      const v = val();
+      if (!v) out.error = "--host: no address given";
+      else out.host = v;
+    } else out.error = `unknown option "${a}" (see --help)`;
+  }
+  return out;
+}
+
+// Ports browsers refuse to open (WHATWG fetch "bad port", >= 1024): the
+// portal would start on such a port, but the page would never load.
+export const BROWSER_BLOCKED_PORTS = new Set([1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
+
+// null — the version is fine, otherwise the error text.
+export function nodeVersionProblem(version = process.versions.node, min = MIN_NODE_MAJOR) {
+  const major = Number(String(version).replace(/^v/, "").split(".")[0]);
+  if (Number.isInteger(major) && major >= min) return null;
+  return `Node.js ${min} or newer is required, this is ${version}. Install a current Node.js: https://nodejs.org/`;
+}
+
+export function dataHome(env = process.env, home = os.homedir()) {
+  return env.TELEHARNESS_HOME ? path.resolve(env.TELEHARNESS_HOME) : path.join(home, ".teleharness");
+}
+
+// Find an executable in PATH (on Windows — with the PATHEXT extensions).
+export function findInPath(name, env = process.env, platform = process.platform) {
+  const win = platform === "win32";
+  const sep = win ? ";" : ":";
+  const pathVar = env.PATH ?? env.Path ?? "";
+  const exts = win ? (env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean) : [""];
+  for (const dir of pathVar.split(sep).filter(Boolean)) {
+    for (const ext of exts) {
+      const file = path.join(dir.replace(/^"|"$/g, ""), name + ext.toLowerCase());
+      if (existsSync(file)) return file;
+    }
+  }
+  return null;
+}
+
+// Claude Code: PATH, then the native installer location (~/.local/bin is not
+// always in PATH). The portal runner starts an exe or a .js through node; the
+// npm wrapper claude.cmd cannot run without a shell on Windows — it is
+// unwrapped to the package's cli.js.
+export function findClaude(env = process.env, platform = process.platform, home = os.homedir()) {
+  let bin = findInPath("claude", env, platform);
+  if (!bin && existsSync(nativeClaudePath(platform, home))) bin = nativeClaudePath(platform, home);
+  if (bin && platform === "win32" && /\.(cmd|bat)$/i.test(bin)) {
+    const pkg = path.join(path.dirname(bin), "node_modules", "@anthropic-ai", "claude-code");
+    const target = [path.join(pkg, "bin", "claude.exe"), path.join(pkg, "cli.js")].find((f) => existsSync(f));
+    return { bin: target ?? bin, runnable: Boolean(target) };
+  }
+  return { bin, runnable: Boolean(bin) };
+}
+
+export function nativeClaudePath(platform = process.platform, home = os.homedir()) {
+  return path.join(home, ".local", "bin", platform === "win32" ? "claude.exe" : "claude");
+}
+
+export function findEngines(env = process.env, platform = process.platform, home = os.homedir()) {
+  return { claude: findClaude(env, platform, home), opencode: findInPath("opencode", env, platform), codex: findInPath("codex", env, platform) };
+}
+
+export const INSTALL_HINTS = {
+  claude: "npm i -g @anthropic-ai/claude-code   (then run `claude` once to sign in)",
+  opencode: "https://opencode.ai — install, then `opencode serve --port 4096`",
+  codex: "npm i -g @openai/codex   (then `codex login`; optional, admin-only engine)",
+};
+
+// Engine report lines for the console.
+export function engineReport(engines) {
+  const lines = [];
+  const c = engines.claude;
+  if (c.bin && c.runnable) lines.push(`  claude    found: ${c.bin}`);
+  else if (c.bin) lines.push(`  claude    found ${c.bin}, but the portal cannot run it — set TELEHARNESS_CLAUDE_BIN to claude.exe or cli.js`);
+  else lines.push(`  claude    not found — install: ${INSTALL_HINTS.claude}`);
+  if (engines.opencode) lines.push(`  opencode  found: ${engines.opencode}`);
+  else lines.push(`  opencode  not found — install: ${INSTALL_HINTS.opencode}`);
+  if (engines.codex) lines.push(`  codex     found: ${engines.codex}`);
+  else if ("codex" in engines) lines.push(`  codex     not found — install: ${INSTALL_HINTS.codex}`);
+  return lines;
+}
+
+// The bin does not start opencode serve itself: serve has its own provider
+// keys, port and API version (1.x/2.x), outlives the portal and is often run
+// as a service already. A child serve would die with the portal's Ctrl+C or
+// stay an orphan — so only a hint with the exact command.
+export function opencodeHint(upstream) {
+  let port = "4096";
+  try {
+    port = new URL(upstream).port || "4096";
+  } catch {}
+  return `  opencode serve does not answer at ${upstream} — start it in another window: opencode serve --port ${port}`;
+}
+
+// Server environment: portable paths under ~/.teleharness. Variables the
+// user set explicitly are never overridden.
+export function serverEnv({ env = process.env, home = os.homedir(), thHome, port, host, claudeBin }) {
+  const defaults = {
+    PORT: String(port),
+    TELEHARNESS_DATA_DIR: path.join(thHome, "data"),
+    TELEHARNESS_PUBLIC_DIR: path.join(thHome, "public"),
+    TELEHARNESS_HOME: home,
+    TELEHARNESS_TENANT_HOME: path.join(thHome, "tenants"),
+    TELEHARNESS_TENANT_VAULT: path.join(thHome, "tenants-vault"),
+    TELEHARNESS_FILE_ROOTS: home,
+    TELEHARNESS_KB_ROOT: "off",
+    TELEHARNESS_VOICE_PYTHON: path.join(thHome, "voice", "venv", process.platform === "win32" ? "Scripts\\python.exe" : "bin/python3"),
+    TELEHARNESS_VOICE_MODELS: path.join(thHome, "voice", "models"),
+    TELEHARNESS_PUSH_SUBJECT: "https://github.com/al3x4kov/teleharness",
+  };
+  if (host) defaults.TELEHARNESS_LISTEN_HOST = host;
+  if (claudeBin) defaults.TELEHARNESS_CLAUDE_BIN = claudeBin;
+  const out = { ...env };
+  for (const [k, v] of Object.entries(defaults)) {
+    if (k === "PORT" || k === "TELEHARNESS_LISTEN_HOST") out[k] = v; // flags / the chosen port always win
+    else if (!out[k]) out[k] = v;
+  }
+  return out;
+}
+
+export function needsBuild(publicDir, version) {
+  if (!existsSync(path.join(publicDir, "app.js")) || !existsSync(path.join(publicDir, "app.css"))) return true;
+  try {
+    return readFileSync(path.join(publicDir, BUILD_MARK), "utf8").trim() !== version;
+  } catch {
+    return true;
+  }
+}
+
+// --- run ---------------------------------------------------------------------
+
+function fail(msg, code = 1) {
+  console.error(`Teleharness: ${msg}`);
+  process.exit(code);
+}
+
+function portFree(port, host) {
+  return new Promise((resolve) => {
+    const s = net.createServer();
+    s.once("error", () => resolve(false));
+    s.listen(port, host, () => s.close(() => resolve(true)));
+  });
+}
+
+// node:http, not fetch: fetch (and browsers) refuse "unsafe" ports (4190,
+// 6000 …) before connecting — the check would never see them.
+function reachable(url, ms = 1500) {
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: ms }, (res) => {
+      res.resume();
+      resolve(true);
+    });
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => resolve(false));
+  });
+}
+
+function buildFrontend(publicDir, version) {
+  console.log(`Teleharness: building the UI ${version} into ${publicDir} …`);
+  mkdirSync(publicDir, { recursive: true });
+  // static files (index.html, icons, fonts, sw.js) come from the package; app.js/app.css are built
+  cpSync(path.join(PKG_ROOT, "public"), publicDir, { recursive: true });
+  const r = spawnSync(process.execPath, [path.join(PKG_ROOT, "build.mjs")], {
+    cwd: PKG_ROOT,
+    stdio: "inherit",
+    env: { ...process.env, TELEHARNESS_OUT_DIR: publicDir, TELEHARNESS_BUILD_PROD: "" },
+  });
+  if (r.status !== 0) fail("the UI build failed (see the output above). Run again with --rebuild.");
+  writeFileSync(path.join(publicDir, BUILD_MARK), version + "\n", "utf8");
+}
+
+async function waitListening(url, child, ms = 30_000) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    if (child.exitCode !== null) return false;
+    if (await reachable(url, 1000)) return true;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return false;
+}
+
+function lanAddresses() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const a of list ?? []) if (a.family === "IPv4" && !a.internal) out.push(a.address);
+  }
+  return out;
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const problem = nodeVersionProblem();
+  if (problem) fail(problem);
+  const args = parseArgs(argv);
+  if (args.help) {
+    console.log(HELP);
+    return;
+  }
+  if (args.error) fail(args.error, 2);
+
+  const version = JSON.parse(readFileSync(path.join(PKG_ROOT, "package.json"), "utf8")).version;
+  const thHome = dataHome();
+  const host = args.host ?? process.env.TELEHARNESS_LISTEN_HOST ?? "127.0.0.1";
+  const port = args.port ?? (process.env.PORT ? Number(process.env.PORT) : DEFAULT_PORT);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) fail(`PORT=${process.env.PORT} is not a port number`, 2);
+  if (BROWSER_BLOCKED_PORTS.has(port)) fail(`browsers refuse to open port ${port}, pick another one: --port ${DEFAULT_PORT}`, 2);
+
+  const engines = findEngines();
+  // claude not found — point at the native installer path in THIS user's
+  // profile: install it, restart, done.
+  const env = serverEnv({ thHome, port, host, claudeBin: engines.claude.bin ?? nativeClaudePath() });
+  const dataDir = env.TELEHARNESS_DATA_DIR;
+  const publicDir = env.TELEHARNESS_PUBLIC_DIR;
+  mkdirSync(dataDir, { recursive: true });
+  const firstRun = !existsSync(path.join(dataDir, "users.json"));
+
+  console.log(`Teleharness ${version} — data: ${thHome}`);
+  if (args.rebuild || needsBuild(publicDir, version)) buildFrontend(publicDir, version);
+
+  console.log("Engines:");
+  for (const line of engineReport(engines)) console.log(line);
+  const upstream = env.TELEHARNESS_UPSTREAM || "http://127.0.0.1:4096";
+  if (engines.opencode && !(await reachable(upstream))) console.log(opencodeHint(upstream));
+  if (!engines.claude.bin && !engines.opencode) console.log("  The portal starts without engines: chats work once you install at least one.");
+
+  if (!(await portFree(port, host))) fail(`port ${port} is busy. Pick another one: --port ${port + 1}`);
+
+  const child = spawn(process.execPath, [path.join(PKG_ROOT, "server.js")], { cwd: PKG_ROOT, env, stdio: "inherit" });
+  const stop = (sig) => {
+    if (child.exitCode === null) child.kill(sig);
+  };
+  process.on("SIGINT", () => stop("SIGINT"));
+  process.on("SIGTERM", () => stop("SIGTERM"));
+  child.on("exit", (code, sig) => process.exit(code ?? (sig ? 1 : 0)));
+
+  const local = `http://${host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host}:${port}/teleharness/`;
+  if (!(await waitListening(local, child))) {
+    if (child.exitCode === null) console.error(`Teleharness: the portal did not answer at ${local} within 30 s — see the server output above.`);
+    return;
+  }
+  const lines = ["", `Teleharness is running: ${local}`];
+  if (host === "0.0.0.0" || host === "::") for (const ip of lanAddresses()) lines.push(`  on your LAN: http://${ip}:${port}/teleharness/`);
+  const tokenFile = path.join(dataDir, "admin-token.txt");
+  if (firstRun && existsSync(tokenFile)) lines.push(`Admin token (sign in to the portal): ${readFileSync(tokenFile, "utf8").trim()}`);
+  lines.push(`The admin token is stored in ${tokenFile}`);
+  lines.push("Stop with Ctrl+C.", "");
+  console.log(lines.join("\n"));
+}
+
+function isMain() {
+  try {
+    return realpathSync(process.argv[1] ?? "") === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) await main();

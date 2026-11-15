@@ -12,7 +12,7 @@
 // stops working — said before the second tap) and shows the new one once.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
-import { admin, me, rotateOwnToken } from "../../lib/store.js";
+import { admin, me, providerCfg, rotateOwnToken } from "../../lib/store.js";
 import { copyText } from "../../lib/clipboard.js";
 import { locale, t } from "../../lib/i18n.js";
 import { Glyph, useModalFocus } from "../Pickers.jsx";
@@ -38,6 +38,17 @@ export function actionErrorText(err) {
 
 // Engines of an account (ADR-004): opencode always; Claude only when the
 // admin enabled it (the tenant then runs the CLI in its restricted profile).
+// FEAT-18.7: Codex пока только для admin — кнопка скрыта до
+// настройки песочницы Codex (отдельная задача); код переключателя остаётся.
+const CODEX_FOR_TENANTS = false;
+
+// FEAT-18.7: включить/выключить один движок, не трогая остальные (opencode всегда есть).
+export function toggledEngines(u, engine) {
+  const cur = enginesOfUser(u);
+  const next = cur.includes(engine) ? cur.filter((e) => e !== engine) : [...cur, engine];
+  return ["opencode", ...["claude", "codex"].filter((e) => next.includes(e))];
+}
+
 export function enginesOfUser(u) {
   const list = Array.isArray(u?.engines) && u.engines.length ? u.engines : ["opencode"];
   return u?.role === "admin" ? ["opencode", "claude"] : list;
@@ -164,6 +175,11 @@ export function confirmText(kind, u) {
       ? { tone: "warn", text: t("access.confirm.claudeRevoke", { name }) }
       : { tone: "warn", text: t("access.confirm.claudeGrant", { name }) };
   }
+  if (kind === "codex") {
+    return enginesOfUser(u).includes("codex")
+      ? { tone: "warn", text: t("access.confirm.codexRevoke", { name }) }
+      : { tone: "warn", text: t("access.confirm.codexGrant", { name }) };
+  }
   if (kind === "delete") return { tone: "danger", text: t("access.confirm.delete", { name }) };
   if (kind === "regen") return { tone: "warn", text: t("access.confirm.regen", { name }) };
   return u.disabled
@@ -178,21 +194,25 @@ const ACTION_LABEL = {
   claude: (u) => (enginesOfUser(u).includes("claude")
     ? [t("access.action.claudeRevoke"), t("access.action.claudeRevokeYes")]
     : [t("access.action.claudeGrant"), t("access.action.claudeGrantYes")]),
+  codex: (u) => (enginesOfUser(u).includes("codex")
+    ? [t("access.action.codexRevoke"), t("access.action.codexRevokeYes")]
+    : [t("access.action.codexGrant"), t("access.action.codexGrantYes")]),
   self: () => [t("access.action.self"), t("access.action.selfYes")],
 };
-const ACTION_GLYPH = { toggle: "power", regen: "key", delete: "trash", claude: "power", self: "key" };
+const ACTION_GLYPH = { toggle: "power", regen: "key", delete: "trash", claude: "power", codex: "power", self: "key" };
 
 // Per-account LABELLED actions (A-1/A-2, FEAT-03.11): «Выключить»,
 // «Перевыпустить токен» (not a copy icon — the old token cannot be copied,
 // only replaced), «Удалить». First tap arms: the button says «Да, …», a
 // consequences block with «Отмена» appears and the other buttons lock.
-function UserCard({ u, mine, armed, onArm, onRegen, onToggle, onDelete, onClaude, onSelfToken, busy }) {
+function UserCard({ u, mine, armed, onArm, onRegen, onToggle, onDelete, onClaude, onCodex, codexOn = false, onSelfToken, busy }) {
   const isArmed = armed?.id === u.id;
   const arm = (kind) => onArm({ id: u.id, kind });
   const exec = (kind) =>
     kind === "regen" ? onRegen(u)
       : kind === "toggle" ? onToggle(u)
         : kind === "claude" ? onClaude(u)
+          : kind === "codex" ? onCodex?.(u)
           : kind === "self" ? onSelfToken(u)
             : onDelete(u);
   const confirm = isArmed ? confirmText(armed.kind, u) : null;
@@ -232,7 +252,7 @@ function UserCard({ u, mine, armed, onArm, onRegen, onToggle, onDelete, onClaude
               {u.directories?.length > 1 ? ` (+${u.directories.length - 1})` : ""}
             </span>
             <span title={u.obsidianRoot ?? ""}>obsidian: {u.obsidianRoot ? baseName(u.obsidianRoot) : t("access.meta.wholeVault")}</span>
-            <span>{t("access.meta.engines", { v: enginesOfUser(u).map((e) => (e === "claude" ? "Claude" : "z.ai")).join(", ") })}</span>
+            <span>{t("access.meta.engines", { v: enginesOfUser(u).map((e) => (e === "claude" ? "Claude" : e === "codex" ? "Codex" : "z.ai")).join(", ") })}</span>
             {u.createdAt && <span>{t("access.meta.since", { date: fmtDate(u.createdAt) })}</span>}
           </div>
           {(u.role !== "admin" || mine) && (
@@ -240,6 +260,7 @@ function UserCard({ u, mine, armed, onArm, onRegen, onToggle, onDelete, onClaude
               <div class="acct-actions">
                 {u.role !== "admin" && actionBtn("toggle")}
                 {u.role !== "admin" && actionBtn("claude")}
+                {u.role !== "admin" && codexOn && CODEX_FOR_TENANTS && actionBtn("codex")}
                 {u.role !== "admin" && actionBtn("regen")}
                 {mine && actionBtn("self")}
                 {u.role !== "admin" && actionBtn("delete")}
@@ -335,11 +356,10 @@ export default function AccessSection() {
     });
 
   const toggle = (u) => withBusy(u, () => admin.update(u.id, { disabled: !u.disabled }));
-  const toggleClaude = (u) =>
-    withBusy(u, () => {
-      const has = enginesOfUser(u).includes("claude");
-      return admin.update(u.id, { engines: has ? ["opencode"] : ["opencode", "claude"] });
-    });
+  const toggleClaude = (u) => withBusy(u, () => admin.update(u.id, { engines: toggledEngines(u, "claude") }));
+  // FEAT-18.7: кнопка Codex — только когда на сервере Codex подключён (его модели есть в каталоге)
+  const codexOn = (providerCfg.value?.connected ?? []).includes("openai-codex");
+  const toggleCodex = (u) => withBusy(u, () => admin.update(u.id, { engines: toggledEngines(u, "codex") })); // FEAT-18.7
   // FEAT-03.11: the caller's own token (admin included). The server sets a
   // fresh cookie for this device; other devices are logged out.
   const selfToken = (u) =>
@@ -442,6 +462,8 @@ export default function AccessSection() {
               onToggle={toggle}
               onDelete={remove}
               onClaude={toggleClaude}
+              onCodex={toggleCodex}
+              codexOn={codexOn}
               onSelfToken={selfToken}
               busy={busy}
             />

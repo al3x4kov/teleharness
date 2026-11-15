@@ -1,0 +1,50 @@
+/* == FEAT-18.5: заполнение контекста и расход чата — строка под пилюлями
+   модели (.model-bar, на месте подсказки «закрепятся…», которая после
+   первого сообщения скрыта). Не кнопка: тап-цели не нужны. == */
+.ctx-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 2px 4px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ctx-bar {
+  position: relative;
+  flex: 0 0 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text-3) 35%, transparent);
+  overflow: hidden;
+}
+.ctx-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.ctx-text,
+.ctx-cost {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctx-cost {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.ctx-text {
+  flex: 0 0 auto;
+}
+/* > 80 %: цвет — не единственный носитель смысла (⚠ и «почти заполнен» в тексте) */
+.ctx-meter.is-warn .ctx-text,
+.ctx-meter.is-warn .ctx-warn-ico {
+  color: var(--warning);
+}
+.ctx-meter.is-warn .ctx-fill {
+  background: var(--warning);
+}

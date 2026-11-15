@@ -53,7 +53,7 @@ const ME = { id: "u_admin", name: "admin", role: "admin" };
 test("вход: токен → POST /auth/login {token}, «Проверяем…» на время запроса, me = пользователь, init тянет чаты", async () => {
   let release;
   const gate = new Promise((r) => (release = r));
-  installFetch([{ method: "POST", path: "/teleharness/api/auth/login", reply: async () => (await gate, { user: { id: "u_j", name: "julia", role: "user" } }) }]);
+  installFetch([{ method: "POST", path: "/teleharness/api/auth/login", reply: async () => (await gate, { user: { id: "u_j", name: "alice", role: "user" } }) }]);
   ui.store.me.value = false;
   const { root } = t$.mount(ui.LoginView);
   assert.equal($(root, "h1").textContent, "Вход на портал");
@@ -117,7 +117,7 @@ test("«Сессия завершена» — только после 401 из �
   const a = t$.mount(ui.LoginView);
   assert.equal($(a.root, ".login-note"), null, "первый визит — без плашки");
   a.unmount();
-  ui.store.me.value = { id: "u_j", name: "julia", role: "user" };
+  ui.store.me.value = { id: "u_j", name: "alice", role: "user" };
   ui.store.me.value = false; // 401 посреди работы
   const b = t$.mount(ui.LoginView);
   const note = $(b.root, '.login-note[role="status"]').textContent;
@@ -135,13 +135,13 @@ test("выход: «Выйти» в Настройках → POST /auth/logout, 
   globalThis.location = { reload: () => (reloads += 1), hash: "", href: realLoc.href, pathname: realLoc.pathname, search: "" };
   try {
     installFetch([{ method: "POST", path: "/teleharness/api/auth/logout", reply: () => ({ ok: true }) }]);
-    ui.store.me.value = { id: "u_j", name: "julia", role: "user" };
+    ui.store.me.value = { id: "u_j", name: "alice", role: "user" };
     const { root } = t$.mount(ui.SettingsView);
     await t$.flush();
     // FEAT-03.23: «Выйти» — внизу корня настроек, рядом имя учётки
     const row = byText(root, ".set-row", "Выйти");
-    assert.match(row.textContent, /julia/);
-    assert.match($(root, ".set-account").textContent, /julia.*пользователь/);
+    assert.match(row.textContent, /alice/);
+    assert.match($(root, ".set-account").textContent, /alice.*пользователь/);
     const btn = byText(row, "button", "Выйти");
     t$.click(btn);
     assert.equal(btn.textContent, "Выходим…");
@@ -172,7 +172,7 @@ test("выход: сервер не ответил — перезагрузка 
 
 const USERS = () => [
   { id: "u_admin", name: "admin", role: "admin", directories: ["C:\\Users\\USER"], createdAt: "2026-10-01T00:00:00Z" },
-  { id: "u_j", name: "julia", role: "user", directories: ["D:\\Tenants\\julia", "D:\\Shared"], obsidianRoot: "D:\\Vault\\julia", engines: ["opencode"] },
+  { id: "u_j", name: "alice", role: "user", directories: ["D:\\Tenants\\alice", "D:\\Shared"], obsidianRoot: "D:\\Vault\\alice", engines: ["opencode"] },
   { id: "u_k", name: "kostya", role: "user", directories: [], disabled: true, engines: ["opencode", "claude"] },
 ];
 
@@ -187,13 +187,13 @@ const card = (root, name) => $$(root, "li.card").find((c) => $(c, ".row-title")?
 test("список: бейджи «администратор»/«выключен»/«это вы», папки, obsidian, движки; у админа только «Новый токен»", async () => {
   const { root } = mountAccess();
   assert.ok($(root, '[aria-label="Загрузка пользователей…"]'), "сначала скелетон");
-  await t$.waitFor(() => card(root, "julia"));
+  await t$.waitFor(() => card(root, "alice"));
   const a = card(root, "admin");
   assert.deepEqual($$(a, ".access-badge").map((b) => b.textContent), ["администратор", "это вы"]);
   assert.deepEqual($$(a, ".acct-actions button").map((b) => b.textContent), ["Новый токен"]);
-  const j = card(root, "julia");
-  assert.match($(j, ".access-meta").textContent, /чаты: julia \(\+1\)/);
-  assert.match($(j, ".access-meta").textContent, /obsidian: julia/);
+  const j = card(root, "alice");
+  assert.match($(j, ".access-meta").textContent, /чаты: alice \(\+1\)/);
+  assert.match($(j, ".access-meta").textContent, /obsidian: alice/);
   assert.match($(j, ".access-meta").textContent, /движки: z\.ai(?!, Claude)/);
   assert.deepEqual($$(j, ".acct-actions button").map((b) => b.textContent), ["Выключить", "Разрешить Claude", "Перевыпустить токен", "Удалить"]);
   const k = card(root, "kostya");
@@ -213,7 +213,7 @@ test("список не загрузился → «Не удалось загр�
   await t$.waitFor(() => /Не удалось загрузить учётные записи/.test(root.textContent));
   fail = false;
   t$.click(byText(root, "button", "Повторить"));
-  await t$.waitFor(() => card(root, "julia"));
+  await t$.waitFor(() => card(root, "alice"));
 });
 
 test("создание: неверное имя → подсказка без запроса; верное → POST {name}, токен один раз в модалке, скопирован, список обновлён", async () => {
@@ -229,7 +229,7 @@ test("создание: неверное имя → подсказка без з
     },
     { method: "GET", path: "/teleharness/api/admin/users", reply: () => users },
   ]);
-  await t$.waitFor(() => card(root, "julia"));
+  await t$.waitFor(() => card(root, "alice"));
   const input = $(root, 'input[aria-label="Имя пользователя"]');
   t$.typeInto(input, "Юля");
   t$.fire($(root, "form.access-create"), "submit");
@@ -256,17 +256,17 @@ test("создание: неверное имя → подсказка без з
 
 test("создание: имя занято (409) → «Имя «…» уже занято.»", async () => {
   const { root } = mountAccess([{ method: "POST", path: "/teleharness/api/admin/users", reply: () => json({ error: "exists" }, 409) }]);
-  await t$.waitFor(() => card(root, "julia"));
-  t$.typeInto($(root, "input.access-input"), "julia");
+  await t$.waitFor(() => card(root, "alice"));
+  t$.typeInto($(root, "input.access-input"), "alice");
   t$.fire($(root, "form.access-create"), "submit");
   await t$.waitFor(() => $(root, "#access-create-err"));
-  assert.equal($(root, "#access-create-err").textContent, "Имя «julia» уже занято.");
+  assert.equal($(root, "#access-create-err").textContent, "Имя «alice» уже занято.");
 });
 
 test("буфер обмена недоступен → предупреждение «Автокопирование не сработало», «Скопировать» повторяет", async () => {
   const { root } = mountAccess([{ method: "POST", path: "/teleharness/api/admin/users", reply: () => ({ user: { id: "u_n", name: "masha" }, token: "teleharness_T2" }) }]);
   clipOk = false;
-  await t$.waitFor(() => card(root, "julia"));
+  await t$.waitFor(() => card(root, "alice"));
   t$.typeInto($(root, "input.access-input"), "masha");
   t$.fire($(root, "form.access-create"), "submit");
   const modal = await t$.waitFor(() => document.querySelector(".access-modal"));
@@ -281,38 +281,38 @@ test("буфер обмена недоступен → предупрежден�
 
 test("«Выключить»: первый тап — последствия и «Отмена», остальные кнопки заперты; «Отмена» снимает; второй тап → PATCH {disabled:true}", async () => {
   const { root } = mountAccess([{ method: "PATCH", path: /\/admin\/users\/u_j$/, reply: () => ({ ok: true }) }]);
-  await t$.waitFor(() => card(root, "julia"));
-  let j = card(root, "julia");
+  await t$.waitFor(() => card(root, "alice"));
+  let j = card(root, "alice");
   t$.click(byText(j, "button", "Выключить"));
-  j = card(root, "julia");
+  j = card(root, "alice");
   const armed = byText(j, "button", "Да, выключить");
   assert.ok(armed);
   assert.equal(armed.getAttribute("aria-describedby"), "acct-confirm-u_j");
-  assert.match($(j, "#acct-confirm-u_j").textContent, /julia не сможет войти, пока вы не включите учётную запись\. Чаты сохранятся\./);
+  assert.match($(j, "#acct-confirm-u_j").textContent, /alice не сможет войти, пока вы не включите учётную запись\. Чаты сохранятся\./);
   const others = $$(j, ".acct-actions button").filter((b) => b !== armed);
   assert.equal(others.every((b) => b.disabled), true, "другие действия заперты");
   t$.click(byText(j, ".acct-confirm button", "Отмена"));
-  assert.equal($(card(root, "julia"), ".acct-confirm"), null);
+  assert.equal($(card(root, "alice"), ".acct-confirm"), null);
   assert.equal(fetchCalls.some((c) => c.method === "PATCH"), false, "без второго тапа ничего не отправлено");
 
-  t$.click(byText(card(root, "julia"), "button", "Выключить"));
-  t$.click(byText(card(root, "julia"), "button", "Да, выключить"));
+  t$.click(byText(card(root, "alice"), "button", "Выключить"));
+  t$.click(byText(card(root, "alice"), "button", "Да, выключить"));
   await t$.waitFor(() => fetchCalls.some((c) => c.method === "PATCH"));
   const call = fetchCalls.find((c) => c.method === "PATCH");
   assert.equal(call.path, "/teleharness/api/admin/users/u_j");
   assert.deepEqual(call.body, { disabled: true });
-  await t$.waitFor(() => !$(card(root, "julia"), ".acct-confirm"));
+  await t$.waitFor(() => !$(card(root, "alice"), ".acct-confirm"));
 });
 
 test("«Разрешить Claude» → PATCH {engines:[opencode, claude]}; «Запретить Claude» → только opencode", async () => {
   const { root } = mountAccess([{ method: "PATCH", path: /\/admin\/users\//, reply: () => ({ ok: true }) }]);
-  await t$.waitFor(() => card(root, "julia"));
-  t$.click(byText(card(root, "julia"), "button", "Разрешить Claude"));
-  assert.match(card(root, "julia").textContent, /получит модели Claude .*без shell и без чужих папок/);
-  t$.click(byText(card(root, "julia"), "button", "Да, разрешить"));
+  await t$.waitFor(() => card(root, "alice"));
+  t$.click(byText(card(root, "alice"), "button", "Разрешить Claude"));
+  assert.match(card(root, "alice").textContent, /получит модели Claude .*без shell и без чужих папок/);
+  t$.click(byText(card(root, "alice"), "button", "Да, разрешить"));
   await t$.waitFor(() => fetchCalls.filter((c) => c.method === "PATCH").length === 1);
   assert.deepEqual(fetchCalls.find((c) => c.method === "PATCH").body, { engines: ["opencode", "claude"] });
-  await t$.waitFor(() => !$(card(root, "julia"), ".acct-confirm"));
+  await t$.waitFor(() => !$(card(root, "alice"), ".acct-confirm"));
   t$.click(byText(card(root, "kostya"), "button", "Запретить Claude"));
   t$.click(byText(card(root, "kostya"), "button", "Да, запретить"));
   await t$.waitFor(() => fetchCalls.filter((c) => c.method === "PATCH").length === 2);
@@ -323,12 +323,12 @@ test("«Разрешить Claude» → PATCH {engines:[opencode, claude]}; «З
 
 test("«Перевыпустить токен» → POST /admin/users/:id/token, модалка «Новый токен для «…»»: старый не действует", async () => {
   const { root } = mountAccess([{ method: "POST", path: "/teleharness/api/admin/users/u_j/token", reply: () => ({ token: "teleharness_NEW" }) }]);
-  await t$.waitFor(() => card(root, "julia"));
-  t$.click(byText(card(root, "julia"), "button", "Перевыпустить токен"));
-  assert.match(card(root, "julia").textContent, /Старый токен julia перестанет работать сразу/);
-  t$.click(byText(card(root, "julia"), "button", "Да, перевыпустить"));
+  await t$.waitFor(() => card(root, "alice"));
+  t$.click(byText(card(root, "alice"), "button", "Перевыпустить токен"));
+  assert.match(card(root, "alice").textContent, /Старый токен alice перестанет работать сразу/);
+  t$.click(byText(card(root, "alice"), "button", "Да, перевыпустить"));
   const modal = await t$.waitFor(() => document.querySelector(".access-modal"));
-  assert.equal(modal.getAttribute("aria-label"), "Новый токен для «julia»");
+  assert.equal(modal.getAttribute("aria-label"), "Новый токен для «alice»");
   assert.equal($(modal, ".access-token").textContent, "teleharness_NEW");
   assert.match(modal.textContent, /Старый токен уже не действует\. Этот покажется только сейчас\./);
   assert.deepEqual(copied, ["teleharness_NEW"]);
@@ -353,33 +353,47 @@ test("«Удалить» → DELETE; оставшиеся папки назва�
       path: "/teleharness/api/admin/users/u_j",
       reply: () => {
         users = users.filter((u) => u.id !== "u_j");
-        return { ok: true, warnings: [{ kind: "folder", path: "D:\\Tenants\\julia", retry: true }, { kind: "session", sessionID: "s1" }] };
+        return { ok: true, warnings: [{ kind: "folder", path: "D:\\Tenants\\alice", retry: true }, { kind: "session", sessionID: "s1" }] };
       },
     },
     { method: "GET", path: "/teleharness/api/admin/users", reply: () => users },
   ]);
-  await t$.waitFor(() => card(root, "julia"));
-  t$.click(byText(card(root, "julia"), "button", "Удалить"));
-  const j = card(root, "julia");
+  await t$.waitFor(() => card(root, "alice"));
+  t$.click(byText(card(root, "alice"), "button", "Удалить"));
+  const j = card(root, "alice");
   assert.ok($(j, ".acct-confirm:not(.is-warn)"), "удаление — опасный тон");
   assert.match(j.textContent, /удалится безвозвратно/);
   t$.click(byText(j, "button", "Да, удалить"));
   const note = await t$.waitFor(() => $(root, ".access-delwarn"));
-  assert.match(note.textContent, /Учётная запись «julia» удалена, но не всё убрано\./);
-  assert.match(note.textContent, /Осталась папка: D:\\Tenants\\julia — файлы заняты процессом\. Сервер повторит удаление автоматически/);
+  assert.match(note.textContent, /Учётная запись «alice» удалена, но не всё убрано\./);
+  assert.match(note.textContent, /Осталась папка: D:\\Tenants\\alice — файлы заняты процессом\. Сервер повторит удаление автоматически/);
   assert.match(note.textContent, /Не удалось удалить чатов: 1/);
-  await t$.waitFor(() => !card(root, "julia"));
+  await t$.waitFor(() => !card(root, "alice"));
   t$.click(byText(note, "button", "Понятно"));
   assert.equal($(root, ".access-delwarn"), null);
 });
 
 test("отказ сервера (403) → «Действие отклонено сервером.» + «Обновить список»; подтверждение остаётся", async () => {
   const { root } = mountAccess([{ method: "PATCH", path: /\/admin\/users\//, reply: () => json({ error: "forbidden" }, 403) }]);
-  await t$.waitFor(() => card(root, "julia"));
-  t$.click(byText(card(root, "julia"), "button", "Выключить"));
-  t$.click(byText(card(root, "julia"), "button", "Да, выключить"));
+  await t$.waitFor(() => card(root, "alice"));
+  t$.click(byText(card(root, "alice"), "button", "Выключить"));
+  t$.click(byText(card(root, "alice"), "button", "Да, выключить"));
   const err = await t$.waitFor(() => $(root, '.access-acterr[role="alert"]'));
   assert.match(err.textContent, /^Действие отклонено сервером\./);
   assert.ok(byText(err, "button", "Обновить список"));
-  assert.ok(byText(card(root, "julia"), "button", "Да, выключить"), "можно повторить или отменить");
+  assert.ok(byText(card(root, "alice"), "button", "Да, выключить"), "можно повторить или отменить");
+});
+
+// FEAT-18.7: «Разрешить Codex» — только когда Codex подключён на сервере; переключает
+// один движок, не трогая Claude; без Codex на сервере кнопки нет.
+test("FEAT-18.7: кнопки «Разрешить Codex» у пользователей нет, даже когда Codex подключён", async () => {
+  ui.store.providerCfg.value = { models: [], defaults: {}, connected: ["zai-coding-plan", "openai-codex"] };
+  try {
+    const { root } = mountAccess();
+    await t$.waitFor(() => card(root, "alice"));
+    assert.equal(byText(card(root, "alice"), "button", "Разрешить Codex"), null);
+    assert.equal(byText(card(root, "kostya"), "button", "Разрешить Codex"), null);
+  } finally {
+    ui.store.providerCfg.value = null;
+  }
 });

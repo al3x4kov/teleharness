@@ -31,6 +31,7 @@ import { t } from "../../lib/i18n.js";
 import { bindingOf, modelName, queuedLabel } from "../../lib/engine.js";
 import { describeTurnError } from "../../lib/turn.js";
 import { revealPlan, revealSlices } from "../../lib/exec-detail.js";
+import { costLabel } from "../../lib/context-cost.js";
 import { isSpokenAnswer, isVoicePart } from "../../lib/voice-text.js";
 import { active, activeSessionDir, claudeAgents, editing, fileUrl, lastUserMessage, me, providerCfg, retryFailed, sessions } from "../../lib/store.js";
 import {
@@ -517,7 +518,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
   const author = turnAuthor(info, { engine: binding?.engine ?? null, modelLabel, claudeAgents: claudeAgents.value });
   const isTurnHead = compact || (turn ? turn.first === info.id : showRole);
   const isTurnEnd = (turn ? turn.last === info.id && turn.closed && !streaming : showMeta) && !revealing;
-  const meta = turn ? turnMetaLine(turn) : "";
+  const meta = turn ? turnMetaLine(turn, { cost: costLabel(turn).text }) : ""; // FEAT-18.5
   const stepError = info.error ? describeTurnError(info.error, { engine: binding?.engine ?? "opencode" }) : null;
 
   return (

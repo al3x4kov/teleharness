@@ -7,8 +7,8 @@
 // `teleharness` field and never routes by the Settings defaults (BUG-11.1).
 // Pure, node-importable. The engine identity and the claude catalog live in
 // shared/engine.js (TASK-13.13) — one source for server and client.
-export { CLAUDE_PROVIDER, CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL, engineOf, isClaudeAgentId, isClaudeModel } from "../../shared/engine.js";
-import { CLAUDE_MODELS, engineOf, isClaudeAgentId } from "../../shared/engine.js";
+export { CLAUDE_PROVIDER, CLAUDE_MODELS, CODEX_PROVIDER, DEFAULT_CLAUDE_MODEL, engineOf, isClaudeAgentId, isClaudeModel, isRunnerEngine } from "../../shared/engine.js";
+import { CLAUDE_MODELS, engineOf, isClaudeAgentId, isRunnerEngine } from "../../shared/engine.js";
 import { t } from "./i18n.js";
 
 // A claude chat's agent: a Claude-agent id or null — an opencode agent name
@@ -20,8 +20,11 @@ export const ENGINE_LABEL = {
   get claude() {
     return t("engine.label.claude");
   },
+  get codex() {
+    return t("engine.label.codex");
+  },
 };
-export const ENGINE_SHORT = { opencode: "z.ai", claude: "Claude" };
+export const ENGINE_SHORT = { opencode: "z.ai", claude: "Claude", codex: "Codex" };
 
 function pickModel(m) {
   const providerID = typeof m?.providerID === "string" ? m.providerID : "";
@@ -34,10 +37,10 @@ function pickModel(m) {
 // it until the turn ends; opencode weaves it into the running turn (the agent
 // reads it at its next step). The labels must not promise opencode a queue.
 export function queuedLabel(engine) {
-  return engine === "claude" ? t("engine.queued.claude") : t("engine.queued.opencode");
+  return isRunnerEngine(engine) ? t("engine.queued.claude") : t("engine.queued.opencode");
 }
 export function queuedSendLabel(engine) {
-  return engine === "claude" ? t("engine.queuedSend.claude") : t("engine.queuedSend.opencode");
+  return isRunnerEngine(engine) ? t("engine.queuedSend.claude") : t("engine.queuedSend.opencode");
 }
 
 // The chat's binding: the server's `teleharness` record first; fallback for records
@@ -48,14 +51,42 @@ export function bindingOf(session) {
   const zm = pickModel(z?.model);
   if (zm) {
     const engine = engineOf(zm.providerID);
-    return { engine, model: zm, agent: engine === "claude" ? claudeAgent(z.agent) : z.agent ?? null, prompted: Boolean(z.prompted) };
+    return { engine, model: zm, agent: engine === "claude" ? claudeAgent(z.agent) : engine === "codex" ? null : z.agent ?? null, prompted: Boolean(z.prompted) };
   }
   const um = pickModel(session?.model);
   if (um) {
     const engine = engineOf(um.providerID);
-    return { engine, model: um, agent: engine === "claude" ? null : session.agent ?? null, prompted: true };
+    return { engine, model: um, agent: isRunnerEngine(engine) ? null : session.agent ?? null, prompted: true };
   }
   return null;
+}
+
+// FEAT-18.4: the chat's permission mode (server: lib/binding.js permMode).
+// Admin chats default to «Без вопросов», a tenant's to «Правки без вопросов»
+// (the behaviour before the switch); «Без вопросов» is admin-only.
+export const PERM_MODES = [
+  { id: "ask" },
+  { id: "edits" },
+  { id: "full" },
+].map((m) => Object.defineProperties(m, {
+  label: { get: () => t(`perm.${m.id}.label`), enumerable: true },
+  short: { get: () => t(`perm.${m.id}.short`), enumerable: true },
+  desc: { get: () => t(`perm.${m.id}.desc`), enumerable: true },
+}));
+export function permModeOf(session, { admin = false } = {}) {
+  const m = PERM_MODES.some((x) => x.id === session?.teleharness?.permMode) ? session.teleharness.permMode : null;
+  if (m === "full" && !admin) return "edits";
+  return m ?? (admin ? "full" : "edits");
+}
+// FEAT-18.7: Codex-чат — только «Спрашивать» и «Без вопросов».
+export function permModeChoices({ admin = false, engine = null } = {}) {
+  const list = admin ? PERM_MODES : PERM_MODES.filter((x) => x.id !== "full");
+  return engine === "codex" ? list.filter((x) => x.id !== "edits") : list;
+}
+// Claude chats: every user; opencode chats: admin only (the server overrides
+// session rules on the 2.x API only — a tenant's Sandbox rules stay).
+export function permModeAvailable({ engine, admin = false } = {}) {
+  return isRunnerEngine(engine) || (engine === "opencode" && admin); // FEAT-18.7: Codex — как Claude
 }
 
 // A new chat's binding from the Settings defaults (prefs {model, agent,
@@ -65,7 +96,7 @@ export function defaultBinding(prefs) {
   const m = pickModel(prefs?.model);
   if (!m) return null;
   const engine = engineOf(m.providerID);
-  return { engine, model: m, agent: engine === "claude" ? claudeAgent(prefs?.claudeAgent) : prefs?.agent ?? null, prompted: false };
+  return { engine, model: m, agent: engine === "claude" ? claudeAgent(prefs?.claudeAgent) : engine === "codex" ? null : prefs?.agent ?? null, prompted: false };
 }
 
 // Display name of a Claude agent id from the catalog ([{id, name}]); the id
@@ -116,6 +147,7 @@ export const WORKING_MODELS = {
   "zai-coding-plan": null,
   zai: ["glm-5v-turbo"],
   anthropic: null,
+  "openai-codex": null, // FEAT-18.7: каталог Codex приходит только когда codex установлен и вошёл
 };
 
 export function workingModels(cfg, { keep = null } = {}) {
@@ -165,5 +197,6 @@ export function bindingLine(binding, cfg, claudeAgents = []) {
   if (!binding) return "";
   const name = modelName(cfg, binding.model);
   if (binding.engine === "claude") return `${name} · ${claudeAgentName(claudeAgent(binding.agent), claudeAgents) ?? "Claude Code"}`;
+  if (binding.engine === "codex") return `${name} · Codex`; // FEAT-18.7
   return [binding.agent, name].filter(Boolean).join(" · ");
 }

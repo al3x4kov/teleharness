@@ -8,6 +8,7 @@ import { lowQuota, relayTime, suggestRelay, windowWords } from "../../lib/relay.
 import { fmtClock } from "../../lib/normalize.js";
 import { t } from "../../lib/i18n.js";
 import { ModelPicker, PickerSheet, modelGroups } from "../Pickers.jsx";
+import { RELAY_REASON_AUTO } from "../../../shared/relay.js";
 import "../relay.css";
 
 const sessionOf = (id) => sessions.value.find((s) => s.id === id) ?? null;
@@ -62,21 +63,43 @@ export function RelayActions({ sessionId, onPickOther }) {
   );
 }
 
-// Отметка передачи в ленте (кадр 2).
+// Отметка передачи в ленте (кадр 2). FEAT-18.6: авто-передача по лимиту — строкой под пилюлей.
 export function RelayMark({ mark }) {
   const from = nameOf(mark.from);
   const to = nameOf(mark.to);
+  if (mark.reason === RELAY_REASON_AUTO) {
+    return (
+      <div class="relay-mark-auto" role="note" aria-label={t("relay.markAutoAria", { from, to, time: relayTime(mark.at), why: t("relay.autoWords") })}>
+        <RelayPillRow mark={mark} from={from} to={to} />
+        <div class="relay-why" aria-hidden="true">{t("relay.autoWords")}</div>
+      </div>
+    );
+  }
   return (
     <div class="relay-mark" role="note" aria-label={t("relay.markAria", { from, to, time: relayTime(mark.at) })}>
-      <span class="relay-pill">
-        <i class={"engine-dot" + (mark.from?.engine === "claude" ? " is-claude" : "")} aria-hidden="true" />
-        {from}
-        <b aria-hidden="true">→</b>
-        <i class={"engine-dot" + (mark.to?.engine === "claude" ? " is-claude" : "")} aria-hidden="true" />
-        <b>{to}</b>
-        <span class="relay-at">· {relayTime(mark.at)}</span>
-      </span>
+      <RelayPill mark={mark} from={from} to={to} />
     </div>
+  );
+}
+
+function RelayPillRow({ mark, from, to }) {
+  return (
+    <div class="relay-mark">
+      <RelayPill mark={mark} from={from} to={to} />
+    </div>
+  );
+}
+
+function RelayPill({ mark, from, to }) {
+  return (
+    <span class="relay-pill">
+      <i class={"engine-dot" + (mark.from?.engine === "claude" ? " is-claude" : mark.from?.engine === "codex" ? " is-codex" : "")} aria-hidden="true" />
+      {from}
+      <b aria-hidden="true">→</b>
+      <i class={"engine-dot" + (mark.to?.engine === "claude" ? " is-claude" : mark.to?.engine === "codex" ? " is-codex" : "")} aria-hidden="true" />
+      <b>{to}</b>
+      <span class="relay-at">· {relayTime(mark.at)}</span>
+    </span>
   );
 }
 

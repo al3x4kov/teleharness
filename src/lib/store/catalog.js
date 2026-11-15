@@ -303,6 +303,33 @@ export async function deleteUpload(directory, name) {
 export const uploadFile = (file, directory = activeSessionDir(), opts = {}) => api.uploadFile(file, directory, opts);
 export const fileUrl = (directory, path, download = false) => api.fileUrl(directory, path, download);
 export const rotateOwnToken = () => api.rotateOwnToken();
+// FEAT-18.2: «Подключить телефон» (Settings) and the #/pair/<code> landing.
+export const pairPhone = () => api.pairPhone();
+
+// The phone opened the sign-in link: the code becomes this device's session.
+// A device that was signed in as someone else reloads into the new account
+// (prefs, streams and caches belong to the old one); a fresh device boots in
+// place like a token login. Throws the api error (status 401/410/429/…).
+// The link's own address (#/pair/<code>) is replaced first: a reload must
+// not try the burnt code again.
+const reloadHome = () => {
+  globalThis.location?.replace?.("#/");
+  globalThis.location?.reload?.();
+};
+export async function claimPair(code, { reload = reloadHome } = {}) {
+  const prev = me.value;
+  const user = await api.pairClaim(code);
+  if (prev && typeof prev === "object") {
+    reload();
+    return user;
+  }
+  bindUserStorage(user);
+  setNotice(null);
+  me.value = user;
+  closeEventStream();
+  await init();
+  return user;
+}
 export const admin = {
   users: () => api.adminUsers(),
   create: (body) => api.adminCreateUser(body),

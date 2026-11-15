@@ -19,6 +19,8 @@ import { LANGS, fmtNumber, lang, locale, setLang, t } from "../../lib/i18n.js";
 import { VERSION } from "../../lib/version.js";
 import AccessSection from "./AccessSection.jsx";
 import NotificationsRow from "./NotificationsRow.jsx";
+import PhoneSection from "./PhoneSection.jsx";
+import AutoRelayRow from "./AutoRelayRow.jsx";
 import { promptHint, SystemPromptEditor, loadPrompt, promptState } from "./SystemPromptRow.jsx";
 import { disablePush, pushState } from "../../lib/push.js";
 import { Modal } from "./HomeView.jsx";
@@ -392,6 +394,7 @@ const ICONS = {
   voice: ["M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3Z", "M19 11a7 7 0 0 1-14 0", "M12 18v3"],
   appearance: ["M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z"],
   notifications: ["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M10.3 21a1.94 1.94 0 0 0 3.4 0"],
+  phone: ["M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5Z", "M11 18.5h2"],
   mcp: ["M9 2v6", "M15 2v6", "M6 8h12v4a6 6 0 0 1-12 0Z", "M12 18v4"],
   subscription: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 7v5l3 2"],
   computer: ["M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z", "M8 20h8", "M12 16v4"],
@@ -423,6 +426,7 @@ export const SECTIONS = [
   { id: "voice", group: "chats" },
   { id: "appearance", group: "app" },
   { id: "notifications", group: "app" },
+  { id: "phone", group: "app" }, // every user, own account
   { id: "mcp", group: "features" },
   { id: "subscription", group: "features" },
   { id: "computer", group: "features", admin: true },
@@ -567,7 +571,7 @@ function ModelsSection({ sub, done }) {
   return (
     <ul class="card-list">
       <NavRow href="#/settings/models/model" title={t("settings.sub.model")}
-        value={<>{defModel && <span class={"engine-dot" + (defEngine === "claude" ? " is-claude" : "")} aria-hidden="true" />}{modelSub}</>}
+        value={<>{defModel && <span class={"engine-dot" + (defEngine === "claude" ? " is-claude" : defEngine === "codex" ? " is-codex" : "")} aria-hidden="true" />}{modelSub}</>}
         warn={eff.staleModel ? <div class="set-warn" role="status">{staleModelText(eff)} {t("settings.models.pickAgain")}</div> : null}
         hint={t("settings.models.modelHint")} />
       <NavRow href="#/settings/models/agent" title={<>{t("settings.models.agentTitle")} <span class="engine-tag">· z.ai</span></>}
@@ -584,6 +588,7 @@ function ModelsSection({ sub, done }) {
           value={claudeAgentSub}
           hint={t("settings.models.claudeHint")} />
       )}
+      <AutoRelayRow />
     </ul>
   );
 }
@@ -1140,6 +1145,7 @@ export default function SettingsView({ section = null, sub = null } = {}) {
       : id === "voice" ? (voiceInfo.value == null ? <Skeleton label={t("settings.voice.loading")} /> : <ul class="card-list"><VoiceSettings /></ul>)
       : id === "appearance" ? <AppearanceSection theme={theme} setTheme={setTheme} />
       : id === "notifications" ? <ul class="card-list"><NotificationsRow /></ul>
+      : id === "phone" ? <PhoneSection />
       : id === "mcp" ? <McpSection />
       : id === "subscription" ? <SubscriptionSection />
       : id === "computer" ? <ComputerSection />

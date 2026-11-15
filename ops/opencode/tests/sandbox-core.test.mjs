@@ -23,7 +23,7 @@ const HOME_T = P("tenants", "home")
 const VAULT_T = P("tenants", "vault")
 const ALICE = P("tenants", "home", "alice")
 const BOB = P("tenants", "home", "bob")
-const NATALIA = P("portal-tenants", "natalia")
+const CAROL = P("portal-tenants", "carol")
 const ADMIN_DIR = P("admin-project")
 const SECRET = P("secret", "auth.json")
 const JAIL = P("ops", "sandbox", "teleharness-jail.exe")
@@ -36,7 +36,7 @@ const sessions = {
   ses_alice: { id: "ses_alice", directory: ALICE },
   ses_alice_sub: { id: "ses_alice_sub", directory: path.join(ALICE, "proj") },
   ses_child: { id: "ses_child", directory: ALICE, parentID: "ses_alice" },
-  ses_nat: { id: "ses_nat", directory: NATALIA },
+  ses_nat: { id: "ses_nat", directory: CAROL },
   ses_bad: { id: "ses_bad", directory: P("tenants", "home", "bad name") },
 }
 
@@ -44,7 +44,7 @@ let core, sb
 
 before(async () => {
   for (const d of [
-    ALICE, path.join(ALICE, "proj"), path.join(ALICE, "vault-link-target"), BOB, NATALIA,
+    ALICE, path.join(ALICE, "proj"), path.join(ALICE, "vault-link-target"), BOB, CAROL,
     P("tenants", "home", "bad name"), ADMIN_DIR, path.dirname(SECRET),
     P("tenants", "vault", "alice"), P("tenants", "vault", "bob"), P("vault", "agents"),
   ])
@@ -60,7 +60,7 @@ before(async () => {
   execFileSync("cmd", ["/c", "mklink", "/J", path.join(ALICE, "escape-bob"), BOB], { stdio: "ignore" })
   fs.writeFileSync(P("users.json"), JSON.stringify({ users: [
     { name: "admin", role: "admin", directories: [] },
-    { name: "Carol S.", role: "user", directories: [NATALIA] },
+    { name: "Carol S.", role: "user", directories: [CAROL] },
   ] }))
   Object.assign(process.env, {
     TELEHARNESS_TENANT_HOME: HOME_T,
@@ -299,7 +299,7 @@ test("portal-defined tenant with a non-ASCII name gets a stable hashed container
   const b = parse((await bash("ses_nat", "ver")).command)
   assert.match(a.opt("--name"), /^teleharness-t-h[0-9a-f]{16}$/)
   assert.equal(a.opt("--name"), b.opt("--name"))
-  assert.equal(a.opt("--dir"), F(NATALIA))
+  assert.equal(a.opt("--dir"), F(CAROL))
 })
 
 test("tenant folder with a space is refused (shell-unsafe path)", async () => {

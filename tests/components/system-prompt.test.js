@@ -37,7 +37,7 @@ test("promptPreview: first non-empty line or «Не задан»", () => {
 
 test("TC-SET-005: тенант — нет admin-разделов и «Доступно администратору»; есть «Системный промпт» и свои MCP", async () => {
   installFetch([{ method: "GET", path: "/teleharness/api/mcp", reply: () => ({ marketplace: { status: "connected" } }) }]);
-  ui.store.me.value = { id: "u_t", name: "julia", role: "user" };
+  ui.store.me.value = { id: "u_t", name: "alice", role: "user" };
   const { root } = t$.mount(ui.SettingsView);
   await t$.waitFor(() => ui.store.mcp.value?.length === 1 && /Не задан/.test(root.textContent));
   const t = titles(root);

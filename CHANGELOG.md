@@ -6,6 +6,42 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [1.21.0] — 2026-11-16
+
+### Added
+- **Codex CLI as a third engine.** Codex models (ChatGPT subscription) appear in the model picker as their own group
+  once `codex` is installed and signed in on the server. Turns run through `codex app-server` behind a small shim
+  (`lib/codex-shim.mjs`) that speaks the same protocol as the Claude runner, so Codex chats get history, the message
+  queue, in-chat permission requests and push, context and usage, and Relay / auto-handoff to and from the other
+  engines. The binary is found in the npm global folder or `PATH` on macOS, Linux and Windows (`TELEHARNESS_CODEX_BIN`
+  overrides, `TELEHARNESS_CODEX=off` disables).
+- Codex chats offer the permission modes *Ask* and *No questions*.
+
+### Notes
+- Codex is admin-only on every OS for now: an allowed command runs with the server's rights until Codex gets its own
+  sandbox, so it is not offered to other users. Undo and edit of a turn are off for Codex turns.
+
+## [1.20.0] — 2026-11-15
+
+### Added
+- **Permission mode per chat.** *Ask* (the agent asks before file edits and commands, you approve or deny right in
+  the chat), *Edits without asking* and *No questions* (admin only). For Claude chats the approvals go through a
+  permission bridge (`claude` stream-json control requests); the mode applies from the next turn.
+- **Waiting for you.** A push notification when an agent needs your decision, and a chat list filter with the number
+  of chats waiting for you.
+- **Phone pairing by QR code.** Settings → Connect a phone shows a one-time sign-in link as a QR code (valid
+  10 minutes); scanning it signs the phone in to the same account without typing a token. Set `TELEHARNESS_PUBLIC_URL` to
+  the public https address of the portal root to enable it.
+- **Context and cost.** A meter above the composer shows how full the model's context window is (a warning past
+  80 %) and what the chat has cost, or that it runs on a subscription; each turn's footer shows its cost.
+- **Auto-handoff on a usage limit (optional).** Settings → Model & agents → *Continue automatically on a usage
+  limit* with up to three backup models: the server hands the chat over and asks the new engine to continue, even
+  with the phone closed. Off by default.
+- **One-command install:** `npx github:al3x4kov/teleharness` — data in `~/.teleharness`, the UI is built on the
+  first run, engines are detected and the admin token is printed.
+- Demo mode: a Codex chat, a chat waiting for a permission decision, context fields on answers, a demo QR code and
+  the auto-handoff setting.
+
 ### Changed
 - README: a screen-by-screen tour with new screenshots and a new demo GIF (English and Russian), a new banner.
 - Demo mode has a chat that shows subagent cards and a handoff between engines.
@@ -80,6 +116,8 @@ First public release under the name **Teleharness**.
 - Slash commands in admin opencode chats expand through opencode `/command`.
 - A chat deleted mid-turn no longer stays busy.
 
+[1.21.0]: https://github.com/al3x4kov/teleharness/releases/tag/v1.21.0
+[1.20.0]: https://github.com/al3x4kov/teleharness/compare/v1.19.4...v1.21.0
 [1.19.4]: https://github.com/al3x4kov/teleharness/releases/tag/v1.19.4
 [1.19.2]: https://github.com/al3x4kov/teleharness/releases/tag/v1.19.2
 [1.15.1]: https://github.com/al3x4kov/teleharness/releases/tag/v1.15.1

@@ -355,7 +355,7 @@ export default function ChatView({ id }) {
         )}
         {notFound ? null : (
           <footer class="composer">
-            <ModelBar sessionId={id} hasMessages={hasMessages} />
+            <ModelBar sessionId={id} hasMessages={hasMessages} messages={messages} />
             <Composer
               key={id}
               sessionId={id}

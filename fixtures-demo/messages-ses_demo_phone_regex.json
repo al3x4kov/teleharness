@@ -50,9 +50,11 @@
     "cache": {
      "read": 0,
      "write": 0
-    }
+    },
+    "context": 172000
    },
-   "finish": "stop"
+   "finish": "stop",
+   "contextWindow": 200000
   },
   "parts": [
    {

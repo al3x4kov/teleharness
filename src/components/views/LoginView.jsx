@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { loginWithToken, me } from "../../lib/store.js";
 import { TeleharnessMark } from "../Menu.jsx";
 import { t } from "../../lib/i18n.js";
+import { pairError } from "./PairView.jsx";
 import "../views.css";
 
 // L-4: a 401 in the middle of work (cookie revoked, token re-issued) drops
@@ -148,6 +149,7 @@ export default function LoginView() {
   const [error, setError] = useState(null); // {text, field}
   const [rainOn, setRainOn] = useState(false);
   const [wasExpired] = useState(sessionExpired);
+  const linkError = pairError.value; // FEAT-18.2: a used / expired QR link
   const inputRef = useRef(null);
   const rainRef = useRef(null);
   useMatrixRain(rainRef);
@@ -192,7 +194,10 @@ export default function LoginView() {
         </div>
         <h1 class="login-title">{t("login.title")}</h1>
         <p class="login-hint">{t("login.hint")}</p>
-        {wasExpired && !error && (
+        {linkError && !error && (
+          <p class="login-note" role="alert">{linkError}</p>
+        )}
+        {wasExpired && !error && !linkError && (
           <p class="login-note" role="status">{t("login.expired")}</p>
         )}
         <form class="login-form" onSubmit={submit}>
@@ -209,6 +214,7 @@ export default function LoginView() {
             onInput={(e) => {
               setToken(e.currentTarget.value);
               if (error) setError(null);
+              if (pairError.value) pairError.value = null;
             }}
           />
           {error && <div class="login-error" id="login-error" role="alert">{error.text}</div>}

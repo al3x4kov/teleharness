@@ -7,9 +7,55 @@
 // Pure, zero dependencies, node- and browser-importable.
 
 export const CLAUDE_PROVIDER = "anthropic";
+// FEAT-18.7: Codex CLI (подписка ChatGPT) — третий движок; ходы идут через тот же
+// раннер CLI, что у Claude (lib/claude.js), программой-посредником lib/codex-shim.mjs.
+export const CODEX_PROVIDER = "openai-codex";
 
 export function engineOf(providerID) {
-  return providerID === CLAUDE_PROVIDER ? "claude" : "opencode";
+  if (providerID === CLAUDE_PROVIDER) return "claude";
+  if (providerID === CODEX_PROVIDER) return "codex";
+  return "opencode";
+}
+
+// FEAT-18.7: движки, ходы которых ведёт раннер CLI портала (история в сторе портала,
+// очередь, мост разрешений), — в отличие от opencode serve.
+export function isRunnerEngine(engine) {
+  return engine === "claude" || engine === "codex";
+}
+
+// FEAT-18.7: движок раннера для модели хода или null (opencode).
+export function runnerEngineOfModel(model) {
+  const e = engineOf(model?.providerID);
+  return isRunnerEngine(e) ? e : null;
+}
+
+// FEAT-18.7: id модели Codex, который может уйти в аргумент посредника: простые id
+// из model/list, ничего похожего на опцию CLI.
+const CODEX_MODEL_ID_RE = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
+export function isCodexModelId(id) {
+  return typeof id === "string" && CODEX_MODEL_ID_RE.test(id);
+}
+
+// FEAT-18.7: каталог Codex из ответа model/list app-server (lib/codex-catalog.js):
+// [{id, name, context, isDefault}], скрытые и негодные отброшены, основная модель —
+// первой (по ней новый Codex-чат). null, если ничего не осталось. Окно контекста
+// model/list не сообщает — 475000 (thread/tokenUsage/updated, спайк 2026-11-15);
+// точное значение приходит в расходе хода.
+export const CODEX_DEFAULT_CONTEXT = 475_000;
+export function normalizeCodexCatalog(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  const seen = new Set();
+  for (const m of list) {
+    const id = typeof m?.id === "string" ? m.id.trim() : typeof m?.model === "string" ? m.model.trim() : "";
+    if (!isCodexModelId(id) || seen.has(id) || m.hidden === true) continue;
+    seen.add(id);
+    const name = typeof m.displayName === "string" && m.displayName.trim() ? m.displayName.trim() : typeof m.name === "string" && m.name.trim() ? m.name.trim() : id;
+    const context = Number(m.context);
+    out.push({ id, name, context: Number.isFinite(context) && context > 0 ? context : CODEX_DEFAULT_CONTEXT, isDefault: m.isDefault === true });
+  }
+  out.sort((x, y) => Number(y.isDefault) - Number(x.isDefault));
+  return out.length > 0 ? out : null;
 }
 
 // Claude models of the subscription, freshest Opus first (FEAT-11.10). The

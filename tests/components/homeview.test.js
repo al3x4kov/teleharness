@@ -198,3 +198,13 @@ test("BUG-154: «работает» и «⏸ разрешение» — в ст�
     ui.store.busyMap.value = {};
   }
 });
+
+test("FEAT-18.7: чат на Codex помечен бейджем «Codex» с зелёной точкой, не «Claude»", () => {
+  const s = ses("ses_codex187", "Скрипт отчёта", { teleharness: { engine: "codex", model: { providerID: "openai-codex", modelID: "gpt-6.1-sol" } } });
+  const { root } = mountRow(s);
+  const badge = $(root, ".badge-engine");
+  assert.ok(badge, "бейдж движка есть");
+  assert.match(badge.textContent, /Codex/);
+  assert.ok($(badge, ".engine-dot.is-codex"));
+  assert.equal($(badge, ".engine-dot.is-claude"), null);
+});

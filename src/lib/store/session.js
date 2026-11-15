@@ -533,7 +533,7 @@ async function sendParts(parts, { agent, model, sessionId } = {}) {
   const binding = bound ?? defaultBinding({ model: model ?? defs.model, agent: agent ?? defs.agent });
   const queued = act.status === "busy" || act.status === "stopping";
   const hold =
-    queued && binding?.engine !== "claude" && (heldCount(act.id) > 0 || releasing.has(act.id) || awaitingAnswer(act.messages));
+    queued && binding?.engine !== "claude" && binding?.engine !== "codex" && (heldCount(act.id) > 0 || releasing.has(act.id) || awaitingAnswer(act.messages));
   const tmpId = `tmp-${Date.now()}-${++tmpSeq}`;
   const bubble = makeMessage({ id: tmpId, role: "user", time: { created: Date.now() }, delivery: hold ? "held" : "sending", queued }, parts);
   active.value = {
@@ -546,7 +546,7 @@ async function sendParts(parts, { agent, model, sessionId } = {}) {
   };
   setBusyTracked(act.id, true);
   const body = {
-    ...(binding?.engine === "claude" ? {} : { agent: binding?.agent ?? agent ?? defs.agent ?? undefined }),
+    ...(binding?.engine === "claude" || binding?.engine === "codex" ? {} : { agent: binding?.agent ?? agent ?? defs.agent ?? undefined }),
     ...(binding ? { model: { providerID: binding.model.providerID, modelID: binding.model.modelID } } : {}),
     parts,
   };
@@ -592,7 +592,8 @@ async function deliver({ sid, tmpId, parts, body, directory, session, bound, bin
   // locked face only once the server took the prompt.
   if (session && binding && !bound?.prompted) {
     const cur = sessions.value.find((s) => s.id === sid);
-    if (cur) sessions.value = upsertSession(sessions.value, { id: sid, teleharness: { ...(bindingOf(cur) ?? binding), prompted: true } });
+    // EPIC-18 стенд 2026-11-15: поля привязки сверх модели и агента (permMode, relays) сохраняются.
+    if (cur) sessions.value = upsertSession(sessions.value, { id: sid, teleharness: { ...(cur.teleharness ?? {}), ...(bindingOf(cur) ?? binding), prompted: true } });
   }
   return true;
 }
@@ -797,15 +798,26 @@ export async function setSessionBinding(id, patch) {
   const nextAgent = "agent" in (patch ?? {}) ? patch.agent : cur?.agent;
   // claudeAgent: the same agent when the chat is (or becomes) a Claude chat.
   const optimistic = defaultBinding({ model, agent: nextAgent, claudeAgent: nextAgent });
-  if (optimistic) sessions.value = upsertSession(sessions.value, { id, teleharness: { ...optimistic, prompted: cur?.prompted ?? false } });
+  // FEAT-18.4: the permission mode rides the binding too.
+  const permMode = "permMode" in (patch ?? {}) ? patch.permMode : prev?.permMode ?? null;
+  if (optimistic) sessions.value = upsertSession(sessions.value, { id, teleharness: { ...optimistic, prompted: cur?.prompted ?? false, ...(permMode ? { permMode } : {}) } });
   try {
     const r = await api.patchBinding(id, patch, { directory: sessionDir(id) });
     if (r?.teleharness) sessions.value = upsertSession(sessions.value, { id, teleharness: r.teleharness });
     return true;
   } catch (err) {
     sessions.value = upsertSession(sessions.value, { id, teleharness: prev });
+    const modeOnly = Boolean(patch && "permMode" in patch); // only the mode sheet sends it
     setNotice(
-      err?.status === 409
+      modeOnly
+        ? err?.status === 409
+          ? t("store.binding.modeBusy")
+          : err?.status === 403
+            ? t("store.binding.modeAdminOnly")
+            : err?.status === 400
+              ? t("store.binding.modeUnavailable")
+              : t("store.binding.modeFailed")
+        : err?.status === 409
         ? t("store.binding.engineLocked")
         : patch && !("model" in patch) && "agent" in patch
           ? t("store.binding.agentFailed")

@@ -570,3 +570,39 @@ test("гейт [2]: serve подтвердил плагин — тенантск
   // возвращаем исходный маршрут на случай будущих тестов после гейтов
   up.route("GET", "/api/plugin", PLUGIN_ROUTE);
 });
+
+// FEAT-18.4 (design §2): режим прав чата opencode 2.x — правила сессии
+// PATCH /api/session/:id {permissions} перед ходом (только admin); без
+// выбранного режима — без PATCH (как раньше); отказ upstream ход не роняет;
+// тенанту режим opencode недоступен (правила Sandbox не перекрываются).
+test("FEAT-18.4: режим прав → permissions сессии перед ходом; без режима — без PATCH; отказ upstream — ход идёт", async () => {
+  const created = await (await api("/teleharness/api/session", { method: "POST", body: { model: FLASH, agent: "orchestrator", title: "режим" } })).json();
+  const sid = created.id;
+  const patches = () => up.requests.filter((r) => r.method === "PATCH" && r.path === `/api/session/${sid}` && Array.isArray(r.body?.permissions));
+  const turn = async (text) => {
+    assert.equal((await api(`/teleharness/api/session/${sid}/prompt`, { method: "POST", body: { parts: [{ type: "text", text }] } })).status, 204);
+    await waitFor(() => sidOps(sid, "prompt").some((b) => b?.text === text), { what: `prompt ${text}` });
+  };
+  await turn("pm-0");
+  assert.equal(patches().length, 0, "без режима правил нет");
+  const r = await api(`/teleharness/api/session/${sid}/binding`, { method: "PATCH", body: { permMode: "ask" } });
+  assert.equal(r.status, 200);
+  assert.equal((await r.json()).teleharness.permMode, "ask");
+  await turn("pm-1");
+  assert.deepEqual(patches().at(-1).body.permissions, [{ action: "edit", resource: "*", effect: "ask" }, { action: "shell", resource: "*", effect: "ask" }]);
+  const iPatch = up.requests.indexOf(patches().at(-1));
+  const iPrompt = up.requests.findIndex((x) => x.path === `/api/session/${sid}/prompt` && x.body?.text === "pm-1");
+  assert.ok(iPatch >= 0 && iPatch < iPrompt, "правила — до хода");
+  // «Без вопросов»: пустой список — решают правила сервера (как до FEAT-18.4)
+  assert.equal((await api(`/teleharness/api/session/${sid}/binding`, { method: "PATCH", body: { permMode: "full" } })).status, 200);
+  await turn("pm-2");
+  assert.deepEqual(patches().at(-1).body.permissions, []);
+  // upstream не принял правила — ход всё равно уходит
+  up.route("PATCH", `/api/session/${sid}`, () => ({ status: 400, json: { _tag: "InvalidRequestError", message: "permissions" } }));
+  assert.equal((await api(`/teleharness/api/session/${sid}/binding`, { method: "PATCH", body: { permMode: "edits" } })).status, 200);
+  await turn("pm-3");
+  // тенант: режим opencode недоступен
+  const t = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "t-perm" } })).json();
+  const ts = await (await api("/teleharness/api/session", { method: "POST", token: t.token, body: { model: FLASH } })).json();
+  assert.equal((await api(`/teleharness/api/session/${ts.id}/binding`, { method: "PATCH", token: t.token, body: { permMode: "ask" } })).status, 400);
+});

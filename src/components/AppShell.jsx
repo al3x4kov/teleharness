@@ -18,6 +18,7 @@ import ProjectsView from "./views/ProjectsView.jsx";
 import ProjectView from "./views/ProjectView.jsx";
 import SettingsView from "./views/SettingsView.jsx";
 import LoginView from "./views/LoginView.jsx";
+import PairView from "./views/PairView.jsx";
 import ChatView from "./views/ChatView.jsx";
 import Drawer from "./Drawer.jsx";
 import { t } from "../lib/i18n.js";
@@ -196,6 +197,9 @@ export default function AppShell() {
   // Login gate: the cookie check runs first; the splash avoids a flash of
   // the whole portal for anonymous devices (SSE would also 401-loop).
   const user = me.value;
+  // FEAT-18.2: the sign-in link from the QR comes before the login gate —
+  // an anonymous phone is exactly who opens it (PairView waits for boot).
+  if (view === "pair") return <PairView code={params.code} />;
   if (user === null) {
     return (
       <div class="login-splash" role="status" aria-label={t("shell.checkingLogin")}>

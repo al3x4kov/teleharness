@@ -245,6 +245,19 @@ test("Model picker data: two engine groups, z.ai first, only working models", ()
   assert.ok(kept[0].models.some((m) => m.id === "big-pickle"));
 });
 
+test("FEAT-18.7: Codex — третья группа «Codex · подписка», основная модель первой; без Codex группы нет", () => {
+  const cfg = fixtureProviders();
+  cfg.models.push(...claudeModels, { id: "gpt-6-astra", providerID: "openai-codex", label: "GPT-6-Astra (openai-codex)", status: "active" }, { id: "gpt-6.1-sol", providerID: "openai-codex", label: "GPT-6.1-Sol (openai-codex)", status: "active" });
+  cfg.connected = [...cfg.connected, "anthropic", "openai-codex"];
+  cfg.defaults = { ...(cfg.defaults ?? {}), "openai-codex": "gpt-6.1-sol" };
+  const groups = M.pickers.modelGroups(cfg);
+  assert.deepEqual(groups.map((g) => g.title), ["opencode", "Claude · подписка", "Codex · подписка"]);
+  assert.deepEqual(groups[2].models.map((m) => m.id), ["gpt-6.1-sol", "gpt-6-astra"]);
+  assert.deepEqual(M.pickers.modelGroups(cfg, { engine: "codex" }).map((g) => g.engine), ["codex"]);
+  const noCodex = fixtureProviders();
+  assert.ok(!M.pickers.modelGroups(noCodex).some((g) => g.engine === "codex"));
+});
+
 test("Model picker: unknown catalog falls back to connected models (never an empty sheet)", () => {
   const cfg = { models: [{ id: "x1", providerID: "other", label: "X1 (other)", status: "active" }], connected: ["other"], defaults: {} };
   assert.equal(M.pickers.modelGroups(cfg)[0].models[0].id, "x1");
@@ -337,7 +350,7 @@ test("Access: labelled «Перевыпустить токен», consequences +
   M.store.me.value = { id: "admin", name: "admin", role: "admin" };
   const users = [
     { id: "admin", name: "admin", role: "admin" },
-    { id: "u1", name: "julia", role: "user", directories: [] },
+    { id: "u1", name: "alice", role: "user", directories: [] },
   ];
   routes = {
     ...baseRoutes(),
@@ -355,7 +368,7 @@ test("Access: labelled «Перевыпустить токен», consequences +
   assert.ok(byText(el, "button", "Удалить"));
   regen.click();
   await flush();
-  assert.match(el.textContent, /Старый токен julia перестанет работать сразу/);
+  assert.match(el.textContent, /Старый токен alice перестанет работать сразу/);
   const armed = byText(el, "button", "Да, перевыпустить");
   assert.ok(armed);
   assert.equal(byText(el, "button", "Удалить").disabled, true, "other actions lock while armed");
@@ -380,8 +393,8 @@ test("Access: labelled «Перевыпустить токен», consequences +
 test("Access: action error texts distinguish refusal and network", () => {
   assert.equal(M.access.actionErrorText({ status: 403 }), "Действие отклонено сервером.");
   assert.match(M.access.actionErrorText(new Error("x")), /проверьте связь/);
-  assert.equal(M.access.confirmText("toggle", { name: "ivan", disabled: false }).tone, "warn");
-  assert.equal(M.access.confirmText("delete", { name: "ivan" }).tone, "danger");
+  assert.equal(M.access.confirmText("toggle", { name: "bob", disabled: false }).tone, "warn");
+  assert.equal(M.access.confirmText("delete", { name: "bob" }).tone, "danger");
 });
 
 // ------------------------------------------------------------------ Login

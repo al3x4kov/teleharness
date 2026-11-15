@@ -189,7 +189,12 @@ function reduce(evt) {
       // ({id, directory, time.updated}): it only moves a KNOWN chat up and
       // never adds a title-less stub to the list.
       if (typeof info?.title !== "string" && !sessions.value.some((s) => s.id === info?.id)) return;
+      const lastRelayAt = (s) => Number(s?.teleharness?.relays?.at(-1)?.at ?? 0);
+      const relayedNow = lastRelayAt(info) > lastRelayAt(sessions.value.find((s) => s.id === info?.id));
       sessions.value = upsertSession(sessions.value, info);
+      // FEAT-18.6: чат передан (в т.ч. сервером автоматически по лимиту) — плашка
+      // ошибки прежнего хода больше не про этот чат: он продолжается на новой модели.
+      if (relayedNow) patchActive(info.id, (act) => (act.turnError || act.incomplete ? { ...act, turnError: null, incomplete: null } : act));
       // The header follows a new title live (BUG-01.27 / BUG-083).
       if (typeof info?.title === "string") patchActive(info.id, (act) => (keepTitle(act.title, info.title) === act.title ? act : { ...act, title: info.title }));
       return;

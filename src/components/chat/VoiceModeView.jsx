@@ -129,7 +129,7 @@ export default function VoiceModeView({ sessionId, ctx = null, onClose, createSe
   const session = sessions.value.find((s) => s.id === sessionId);
   const binding = bindingOf(session);
   const model = binding
-    ? binding.engine === "claude"
+    ? binding.engine === "claude" || binding.engine === "codex"
       ? modelName(providerCfg.value, binding.model)
       : [modelName(providerCfg.value, binding.model), binding.agent].filter(Boolean).join(" · ")
     : "";

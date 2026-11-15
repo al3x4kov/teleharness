@@ -20,6 +20,10 @@ import { usageStats } from "./lib/usage.js";
 import { subscriptionCards } from "./lib/subscriptions.js";
 import { JournalWriter, isJournalAccess, journalRule } from "./lib/chat-journal.js";
 import { RelayStore, marksForJournal, mergeFeeds, missedTurns, planRelay, relayMark, relayRule, withCatchUp } from "./lib/relay.js";
+import { AUTO_RELAY_ORDER_MAX, cleanAutoRelay, createAutoRelay, readAutoRelay } from "./lib/auto-relay.js"; // FEAT-18.6
+import { isLimitError } from "./shared/turn-error.js"; // FEAT-18.6: общий с клиентом классификатор
+import { RELAY_REASON_AUTO, RELAY_RESUME_TEXT } from "./shared/relay.js";
+import { Readable, Writable } from "node:stream";
 import { materializeFileParts, modelAcceptsImages, openUnique, sanitizeFilename, UPLOAD_DIR, visionSibling } from "./lib/attach.js";
 import { serveWorkspaceFile, workspaceFileExists } from "./lib/file.js";
 import { parseWindows, turnFiles } from "./lib/turn-files.js";
@@ -61,6 +65,8 @@ import {
   getPins,
   setPins,
   dropPinEverywhere,
+  getAutoRelay,
+  setAutoRelay,
   PINS_MAX,
   engineAllowed,
   enginesOf,
@@ -85,12 +91,19 @@ import {
   loginThrottled,
   loginFailure,
   loginSuccess,
+  // FEAT-18.2: one-time phone sign-in codes
+  createPairCode,
+  claimPairCode,
+  claimThrottled,
+  claimFailure,
 } from "./lib/auth.js";
 import { ClaudeRunner, DEFAULT_BIN as CLAUDE_DEFAULT_BIN, checkMcpConfig } from "./lib/claude.js";
 import { ClaudeAgentCatalog, isClaudeAgentId } from "./lib/claude-agents.js";
 import { VoiceQuota, VoiceService } from "./lib/voice.js";
 import { voiceRoutes } from "./routes/voice.js";
-import { BindingStore, applyBinding, cleanModel, engineOf, makeBinding, patchBinding, resolveBinding } from "./lib/binding.js";
+import { BindingStore, applyBinding, cleanModel, cleanPermMode, effectivePermMode, engineOf, makeBinding, ocPermRules, patchBinding, resolveBinding } from "./lib/binding.js";
+import { isRunnerEngine } from "./shared/engine.js";
+import { createCodexCatalog } from "./lib/codex-catalog.js"; // FEAT-18.7 // FEAT-18.7: claude и codex — ходы раннера CLI
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -432,6 +445,37 @@ async function handleLogin(req, res) {
   return sendJson(res, 200, { user: await meFace(user) });
 }
 
+// FEAT-18.2: POST /teleharness/api/auth/pair/claim {code} — the phone that scanned
+// the QR swaps the one-time code for an ordinary session (the same cookie as
+// a token login). Unauthenticated by design; JSON only (BUG-12.9). Failures
+// count per address and globally (lib/auth.js claimThrottled → 429). A phone
+// that already had a session of its own drops it (the cookie is replaced).
+async function handlePairClaim(req, res) {
+  const ip = clientIp(req);
+  if (claimThrottled(ip)) {
+    req.resume();
+    return sendJson(res, 429, { error: "слишком много попыток — подождите минуту" });
+  }
+  if (!/^application\/json\b/i.test(String(req.headers["content-type"] ?? ""))) {
+    req.resume();
+    claimFailure(ip);
+    return sendJson(res, 415, { error: "ожидается application/json" });
+  }
+  const body = await readJsonBody(req, 4 * 1024);
+  let user;
+  try {
+    user = claimPairCode(body?.code);
+  } catch (err) {
+    claimFailure(ip);
+    return apiError(res, err);
+  }
+  const prev = authFromReq(req);
+  if (prev?.kind === "sid") destroySession(prev.sid);
+  setAuthCookie(res, createSession(user), isHttps(req));
+  res.teleharnessUser = user.id;
+  return sendJson(res, 200, { user: await meFace(user) });
+}
+
 // What the client needs to know about the caller (ISSUE-001/002, final
 // review 2026-11-02): engines it may run, and for tenants the server-side
 // default agent and their chat folders — the client sanitizes its stored
@@ -527,6 +571,8 @@ const claude = new ClaudeRunner({
   undoRoot: config.TELEHARNESS_TURN_UNDO_ROOT,
   onTurnEnd: (e) => {
     webPush?.notifier.claudeTurnEnd(e); // FEAT-07.20: «Готово: <чат>»
+    // FEAT-18.6: ход Claude упал по лимиту подписки → авто-передача (если включена)
+    if (e?.error && isLimitError(e.error, { engine: "claude" })) autoRelayOnLimit(e.sid, e.dir ?? null);
     return titler?.claudeTurnDone(e);
   },
   // BUG-142: title as soon as the first question is stored (a Workflow turn
@@ -581,6 +627,11 @@ async function markPrompted(id, binding) {
 // thing that decides where a prompt goes.
 const bindings = new BindingStore({ storePath: path.join(DATA_DIR, "session-bindings.json") });
 // FEAT-11.18 (шаг В): отметки передачи чата между движками и моделями.
+// FEAT-18.7: каталог Codex (подписка ChatGPT владельца) — из кэша сразу, свежий в фоне;
+// пока он пуст, модели Codex не предлагаются и не принимаются.
+const codexCatalog = createCodexCatalog({ dataDir: DATA_DIR, onChange: (models) => claude.setCodexCatalog(models) });
+if (MOCK) codexCatalog.load();
+else codexCatalog.start();
 const relays = new RelayStore(MOCK ? null : path.join(DATA_DIR, "relays.json"));
 // Какой движок ведёт чат СЕЙЧАС: после передачи история Claude у чата остаётся, но ведёт его
 // тот движок, что записан в привязке. Без записи — прежнее правило «есть история Claude».
@@ -607,8 +658,14 @@ async function withRelayCatchUp(id, dir, body, binding) {
     try {
       oc = (await ocWholeMessages(id, dir)) ?? [];
     } catch {} // движок недоступен: остаются журнал и строка системного промпта
-    const isClaude = engineOfChat(id, binding) === "claude";
-    const missed = missedTurns(isClaude ? mine : oc, isClaude ? oc : mine);
+    // FEAT-18.7: в сторе раннера ходы Claude и Codex вместе — вопрос относится к движку своего ответа
+    const target = engineOfChat(id, binding);
+    const answerEngine = new Map();
+    for (const m of mine) if (m?.info?.role === "assistant" && m.info.parentID) answerEngine.set(m.info.parentID, m.info.providerID === "openai-codex" ? "codex" : "claude");
+    const engineOfMsg = (m) => (m?.info?.role === "assistant" ? (m.info.providerID === "openai-codex" ? "codex" : "claude") : answerEngine.get(m?.info?.id) ?? target);
+    const own = target === "opencode" ? oc : mine.filter((m) => engineOfMsg(m) === target);
+    const other = target === "opencode" ? mine : [...oc, ...mine.filter((m) => engineOfMsg(m) !== target)];
+    const missed = missedTurns(own, other);
     return withCatchUp(body, missed, { journalFile: journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null) });
   } catch (err) {
     errLog("relay.catchUp", err);
@@ -679,6 +736,7 @@ if (!MOCK)
     const p = evt?.type === "permission.asked" ? evt.properties : null;
     const requestID = p?.id ?? p?.requestID;
     if (!p?.sessionID || typeof requestID !== "string") return;
+    if (isRunnerEngine(p.teleharness?.engine)) return; // FEAT-18.4: the Claude bridge asks the person (FEAT-18.7: Codex too)
     (async () => {
       const dir = evtDir ?? (await resolveSessionDir(p.sessionID));
       if (!dir || !isJournalAccess(p, kbZoneOfDir(dir)?.root ?? null)) return;
@@ -761,6 +819,7 @@ async function deleteSessionEverywhere(id, dir) {
     titler.forget(id);
     dropJournal(id, dir); // FEAT-11.18
     dropPinEverywhere(id); // FEAT-01.69: no «ghost» pins of a deleted chat
+    autoRelay.forget(id); // FEAT-18.6
   }
   return ok;
 }
@@ -885,9 +944,9 @@ async function defaultModel() {
 async function imagesInline(binding, parsed) {
   const parts = Array.isArray(parsed?.parts) ? parsed.parts : [];
   if (!parts.some((x) => x?.type === "file" && String(x.mime ?? "").startsWith("image/"))) return true;
-  if (binding?.engine === "claude") return true;
+  if (isRunnerEngine(binding?.engine)) return true;
   const model = binding?.model ?? cleanModel(parsed?.model);
-  if (!model || engineOf(model.providerID) === "claude") return true;
+  if (!model || isRunnerEngine(engineOf(model.providerID))) return true;
   const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status !== 200) return true;
   try {
@@ -902,19 +961,20 @@ async function imagesInline(binding, parsed) {
 // that sees them (TELEHARNESS_TENANT_VISION_MODEL first, only from the tenant's own
 // catalog). The chat binding is not touched. Admin → null (look_at, BUG-140).
 async function tenantVisionModel(user, binding, parsed) {
-  if (isAdmin(user) || binding?.engine === "claude") return null;
+  if (isAdmin(user) || isRunnerEngine(binding?.engine)) return null;
   const parts = Array.isArray(parsed?.parts) ? parsed.parts : [];
   if (!parts.some((x) => x?.type === "file" && String(x.mime ?? "").startsWith("image/"))) return null;
   const model = binding?.model ?? cleanModel(parsed?.model);
-  if (!model || engineOf(model.providerID) === "claude") return null;
+  if (!model || isRunnerEngine(engineOf(model.providerID))) return null;
   const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status !== 200) return null;
   try {
     const catalog = JSON.parse(captured.body);
     const claudeAllowed = engineAllowed(user, "claude");
+    const codexAllowed = engineAllowed(user, "codex");
     return visionSibling(catalog, model, {
       preferred: config.TELEHARNESS_TENANT_VISION_MODEL,
-      allowed: (m) => modelInCatalog(catalog, m, { claudeAllowed }) !== false,
+      allowed: (m) => modelInCatalog(catalog, m, { claudeAllowed, codexAllowed }) !== false,
     });
   } catch {
     return null;
@@ -927,15 +987,9 @@ async function tenantVisionModel(user, binding, parsed) {
 // let it pass (the empty-turn detector stays the safety net).
 async function tenantModelProblem(user, model) {
   if (!model || isAdmin(user)) return null;
-  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
-  if (captured.status !== 200) return null;
-  let catalog = null;
-  try {
-    catalog = JSON.parse(captured.body);
-  } catch {
-    return null;
-  }
-  return modelInCatalog(catalog, model, { claudeAllowed: engineAllowed(user, "claude") }) === false
+  const catalog = await providerCatalogJson();
+  if (!catalog) return null;
+  return modelInCatalog(catalog, model, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex") }) === false
     ? { status: 403, error: "model not allowed" }
     : null;
 }
@@ -1223,6 +1277,8 @@ const API_ROUTES = validateTable([
     lastGc: () => lastGc, gcRunning: () => gcRunning, gcSweep, rotateOwnToken, setAuthCookie, createSession, isHttps,
     getSystemPrompt, setSystemPrompt, cleanSystemPrompt, SYSTEM_PROMPT_MAX,
     getPins, setPins, cleanPins, PINS_MAX, visibleIds: visiblePinIds,
+    createPairCode, publicUrl: config.TELEHARNESS_PUBLIC_URL,
+    getAutoRelay, setAutoRelay, cleanAutoRelay, readAutoRelay, AUTO_RELAY_ORDER_MAX, autoRelayModelOk, // FEAT-18.6
     storeKbTrace: (t) => storeKbTrace(config.TELEHARNESS_LOG_DIR, t),
   }),
   ...pushRoutes({ sendJson, readJsonBody, push: () => webPush }),
@@ -1277,6 +1333,143 @@ async function handleApi(req, res, url, user) {
 // They keep their own session/directory resolution — see ADR-001 «Ход
 // миграции» for why the common «session» scope is not used yet.
 
+// FEAT-11.18 (шаг В): передача чата на другой движок или модель — ОДИН путь для ручной
+// кнопки (PATCH binding {relay:true}) и авто-передачи при лимите (FEAT-18.6).
+// Вызывается под локом чата (withSessionLock) с только что прочитанной привязкой.
+// → {status, body} — ответ маршрута.
+async function relayUnderLock({ id, dir, user, admin, current, target, reason = null }) {
+  const busy = Boolean(hub.busySnapshot()[id] || claude.busySnapshot()[id]);
+  const plan = planRelay({ current, target, busy, claudeAgentOk: (a) => admin && claudeAgents.has(a) });
+  if (plan.error) return { status: plan.status, body: { error: plan.error, teleharness: current } };
+  if (!engineAllowed(user, plan.binding.engine)) return { status: 403, body: { error: "engine not allowed" } };
+  const problem = await tenantModelProblem(user, plan.binding.model);
+  if (problem) return { status: problem.status, body: { error: problem.error, teleharness: current } };
+  if (!admin && plan.binding.engine === "opencode" && plan.binding.agent && !agentAllowedForTenant(plan.binding.agent, await agentList()))
+    return { status: 403, body: { error: "agent not allowed" } };
+  const rdir = dir ?? claude.dirOf(id) ?? null;
+  // журнал — до смены привязки: новый движок должен найти в нём всё сделанное
+  try {
+    await journal.flush(id);
+  } catch (err) {
+    errLog("relay.journal", err);
+  }
+  const marks = relays.add(id, relayMark(current, plan.binding, { reason }));
+  // FEAT-18.4: the chat's permission mode goes along with the chat
+  if (cleanPermMode(current?.permMode)) plan.binding.permMode = current.permMode;
+  bindings.set(id, plan.binding);
+  if (!isRunnerEngine(plan.binding.engine)) hub.unmarkManaged(id);
+  const teleharness = { ...plan.binding, source: "stored", relays: marks };
+  hub.emit({ type: "session.updated", properties: { sessionID: id, info: { id, teleharness } } }, rdir);
+  journal.schedule(id); // отметка передачи попадает в журнал
+  return { status: 200, body: { id, teleharness, relay: marks.at(-1) } };
+}
+
+// ---- FEAT-18.6: авто-передача при лимите ---------------------------------------
+// Модель доступна пользователю: движок разрешён и модель есть в его каталоге
+// (тот же каталог, что видит клиент; каталог недоступен — не отказываем здесь,
+// передача сама перепроверит модель тенанта).
+async function providerCatalogJson() {
+  const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
+  if (captured.status !== 200) return null;
+  try {
+    return JSON.parse(captured.body);
+  } catch {
+    return null;
+  }
+}
+async function autoRelayModelOk(user, model) {
+  const m = cleanModel(model);
+  if (!m || !engineAllowed(user, engineOf(m.providerID))) return false;
+  const catalog = await providerCatalogJson();
+  return modelInCatalog(catalog, m, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex") }) !== false;
+}
+
+// Чья настройка действует для чата: тенант, которому принадлежит папка чата (как журнал
+// и push), иначе администратор.
+function chatOwner(dir) {
+  const users = listUsers().filter((u) => !u.disabled);
+  const tenant = dir ? users.find((u) => u.role !== "admin" && dirAllowed(u, dir)) : null;
+  if (tenant) return getUser(tenant.id);
+  const admins = users.filter((u) => u.role === "admin");
+  const on = admins.find((u) => readAutoRelay(getAutoRelay(u.id)).on) ?? admins[0];
+  return on ? getUser(on.id) : null;
+}
+
+// Внутренний ход «продолжи» — тот же маршрут prompt, что у клиента (гейты, привязка,
+// вложение пропущенных ходов, системный промпт), без HTTP: синтетические req/res.
+// req.teleharnessAutoRelay: этот ход не открывает новый цикл авто-передачи.
+function internalPrompt({ sid, dir, user, text }) {
+  const admin = isAdmin(user);
+  const body = Buffer.from(JSON.stringify({ parts: [{ type: "text", text }] }), "utf8");
+  const req = Readable.from([body]);
+  Object.assign(req, { method: "POST", url: `/teleharness/api/session/${sid}/prompt`, headers: { "content-type": "application/json", "content-length": String(body.length) }, teleharnessAutoRelay: true });
+  const q = dir ? `?directory=${encodeURIComponent(dir)}` : "";
+  const url = new URL(`http://internal/teleharness/api/session/${encodeURIComponent(sid)}/prompt${q}`);
+  return new Promise((resolve) => {
+    let status = 200;
+    let text = "";
+    const res = new Writable({
+      write(c, _e, cb) {
+        if (text.length < 300) text += Buffer.from(c).toString("utf8").slice(0, 300);
+        cb();
+      },
+    });
+    res.headersSent = false;
+    res.setHeader = () => {};
+    res.writeHead = (s) => {
+      status = s;
+      res.headersSent = true;
+      return res;
+    };
+    res.on("finish", () => resolve({ ok: status < 300, status, error: status < 300 ? null : text }));
+    res.on("error", () => resolve({ ok: false, status: 502 }));
+    sessionActionRoute({ req, res, url, user, admin, match: [null, sid, "prompt"] }).catch((err) => {
+      errLog("autoRelay.prompt", err);
+      resolve({ ok: false, status: 502 });
+    });
+  });
+}
+
+const autoRelay = createAutoRelay({
+  ownerOf: (_sid, dir) => chatOwner(dir),
+  settingOf: (user) => getAutoRelay(user.id),
+  bindingOf: async (sid) => bindingFor(sid, await sessionRecord(sid, true).catch(() => null)),
+  available: autoRelayModelOk,
+  relay: ({ sid, dir, user, model }) =>
+    withSessionLock(sid, async () => {
+      const current = bindingFor(sid, await sessionRecord(sid, true).catch(() => null));
+      const out = await relayUnderLock({ id: sid, dir, user, admin: isAdmin(user), current, target: { model }, reason: RELAY_REASON_AUTO });
+      return { ok: out.status === 200, status: out.status, error: out.body?.error ?? null };
+    }),
+  resume: ({ sid, dir, user }) => internalPrompt({ sid, dir, user, text: RELAY_RESUME_TEXT }),
+  log: (m) => console.log(m),
+});
+
+// Лимит хода: Claude — по тексту ошибки хода (onTurnEnd раннера), opencode — по
+// session.error хаба. Классификатор — общий с клиентом (shared/turn-error.js).
+const AUTO_RELAY_DELAY_MS = Number(process.env.TELEHARNESS_AUTO_RELAY_DELAY_MS) >= 0 && process.env.TELEHARNESS_AUTO_RELAY_DELAY_MS ? Number(process.env.TELEHARNESS_AUTO_RELAY_DELAY_MS) : 1500;
+function autoRelayOnLimit(sid, dir) {
+  // ход ещё доедает свои события (session.idle после session.error) — передаём чуть позже
+  const t = setTimeout(() => void autoRelay.onLimit({ sid, dir }), AUTO_RELAY_DELAY_MS);
+  t.unref?.();
+}
+if (!MOCK)
+  hub.onEvent((data, dir) => {
+    if (!data.includes('"session.error"')) return;
+    let evt = null;
+    try {
+      evt = JSON.parse(data);
+    } catch {
+      return;
+    }
+    const sid = evt?.properties?.sessionID;
+    if (evt?.type !== "session.error" || typeof sid !== "string" || !sid) return;
+    if (engineOfChat(sid) === "claude") return; // Claude — через onTurnEnd
+    if (!isLimitError(evt.properties.error)) return;
+    // папка — из индекса чатов (по ней определяется владелец настройки), поток событий — запасной вариант
+    void (async () => autoRelayOnLimit(sid, claude.dirOf(sid) ?? (await resolveSessionDir(sid).catch(() => null)) ?? dir ?? null))();
+  });
+
 // PATCH {model?, agent?}: change the chat's own model/agent (pills above
 // the composer). The engine is locked once the chat has messages (409).
 async function sessionBindingRoute({ req, res, url, user, admin, match }) {
@@ -1301,32 +1494,25 @@ async function sessionBindingRoute({ req, res, url, user, admin, match }) {
     // FEAT-11.18 (шаг В): {relay: true, model, agent?} — передача чата на другой движок или модель.
     // Единственный разрешённый способ сменить движок у чата с сообщениями.
     if (body.relay === true) {
-      const busy = Boolean(hub.busySnapshot()[id] || claude.busySnapshot()[id]);
-      const plan = planRelay({ current, target: { model: body.model, ...(Object.prototype.hasOwnProperty.call(body, "agent") ? { agent: body.agent } : {}) }, busy, claudeAgentOk: (a) => admin && claudeAgents.has(a) });
-      if (plan.error) return sendJson(res, plan.status, { error: plan.error, teleharness: current });
-      if (!engineAllowed(user, plan.binding.engine)) return sendJson(res, 403, { error: "engine not allowed" });
-      const problem = await tenantModelProblem(user, plan.binding.model);
-      if (problem) return sendJson(res, problem.status, { error: problem.error, teleharness: current });
-      if (!admin && plan.binding.engine === "opencode" && plan.binding.agent && !agentAllowedForTenant(plan.binding.agent, await agentList()))
-        return sendJson(res, 403, { error: "agent not allowed" });
-      const rdir = dir ?? claude.dirOf(id) ?? null;
-      // журнал — до смены привязки: новый движок должен найти в нём всё сделанное
-      try {
-        await journal.flush(id);
-      } catch (err) {
-        errLog("relay.journal", err);
-      }
-      const marks = relays.add(id, relayMark(current, plan.binding, { reason: typeof body.reason === "string" ? body.reason : null }));
-      bindings.set(id, plan.binding);
-      if (plan.binding.engine !== "claude") hub.unmarkManaged(id);
-      const teleharness = { ...plan.binding, source: "stored", relays: marks };
-      hub.emit({ type: "session.updated", properties: { sessionID: id, info: { id, teleharness } } }, rdir);
-      journal.schedule(id); // отметка передачи попадает в журнал
-      return sendJson(res, 200, { id, teleharness, relay: marks.at(-1) });
+      // FEAT-18.6: «лимит, авто» ставит только сервер (lib/auto-relay.js), не клиент
+      const reason = typeof body.reason === "string" && body.reason !== RELAY_REASON_AUTO ? body.reason : null;
+      const out = await relayUnderLock({ id, dir, user, admin, current, target: { model: body.model, ...(Object.prototype.hasOwnProperty.call(body, "agent") ? { agent: body.agent } : {}) }, reason });
+      return sendJson(res, out.status, out.body);
     }
     // FEAT-13.17: Claude agents are admin-only and must exist in the catalog.
     const r = patchBinding(current, body, { claudeAgentOk: (a) => admin && claudeAgents.has(a) });
     if (r.error) return sendJson(res, r.status, { error: r.error, teleharness: current });
+    // FEAT-18.4: the permission mode — acts from the next turn, never changes
+    // mid-turn (409); «Без вопросов» is admin-only; opencode
+    // chats take it on the 2.x API, admin only (tenant Sandbox rules stay).
+    if (Object.prototype.hasOwnProperty.call(body, "permMode") && (body.permMode ?? null) !== (current?.permMode ?? null)) {
+      if (hub.busySnapshot()[id] || claude.busySnapshot()[id]) return sendJson(res, 409, { error: "turn is running: the permission mode changes between turns", teleharness: current });
+      if (!admin && body.permMode === "full") return sendJson(res, 403, { error: "permission mode not allowed", teleharness: current });
+      // FEAT-18.7: без песочницы Codex «Правки без вопросов» не могут писать — в Codex-чате их нет
+      if (body.permMode === "edits" && r.binding.engine === "codex") return sendJson(res, 400, { error: "permission mode not supported for this chat", teleharness: current });
+      if (body.permMode !== null && r.binding.engine === "opencode" && (!admin || OC.api !== "v2"))
+        return sendJson(res, 400, { error: "permission mode not supported for this chat", teleharness: current });
+    }
     // ADR-004 / BUG-12.5: the engine and the agent are policy-checked.
     if (!engineAllowed(user, r.binding.engine)) return sendJson(res, 403, { error: "engine not allowed" });
     const modelProblem = await tenantModelProblem(user, r.binding.model);
@@ -1424,6 +1610,8 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     // any side effect. The authoritative re-check sits under the chat lock in
     // markPrompted (a revert may start right after this line).
     if (isReverting(id)) return sendJson(res, 409, { error: "revert in progress" });
+    // FEAT-18.6: ход пользователя открывает новый цикл авто-передачи (авто-«продолжи» — нет)
+    if (!req.teleharnessAutoRelay) autoRelay.userTurn(id);
     const dir = admin ? await adminSessionDir(id, url) : tenantDir;
     if (admin) upQ = scopedQuery(q, dir);
     let parsed = null;
@@ -1519,7 +1707,7 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       // commandBody, синхронный upstream-ход (BUG-183): без await в обоих
       // режимах клиент получает 204 сразу.
       if (OC.api === "v2") {
-        fireCommandTurnV2({ id, dir, name: slash.name, text: slash.arguments, agent: binding.agent ?? null, model: binding.model });
+        fireCommandTurnV2({ id, dir, name: slash.name, text: slash.arguments, agent: binding.agent ?? null, model: binding.model, permMode: binding.permMode ?? null });
       } else {
         fireCommandTurn({ id, dir, query: upQ, name: slash.name, body: commandBody({ command: slash.name, arguments: slash.arguments, agent: binding.agent ?? null, model: binding.model, variantSetting: config.TELEHARNESS_GLM_VARIANT }) });
       }
@@ -1552,7 +1740,7 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     }
     // FEAT-13.9: the CLI permission profile follows the caller's role.
     // FEAT-13.17: the agent comes from the binding only (admin chats).
-    if (binding?.engine === "claude")
+    if (isRunnerEngine(binding?.engine))
       return claude.dispatch({
         res, sid: id, dir, body: Buffer.isBuffer(out) ? out : Buffer.from(String(out)),
         access: admin ? "admin" : "tenant",
@@ -1567,6 +1755,8 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
         portalNote: [journalRule(journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null)), relayRule(relays.get(id), journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null))].filter(Boolean).join("\n\n"),
         // FEAT-04.12 stage B: a tenant chat with its own subfolder runs the CLI there.
         workDir: admin ? null : existingChatFolder(dir, id),
+        // FEAT-18.4: the chat's permission mode (null = the role default, as before).
+        permMode: cleanPermMode(binding.permMode) ? effectivePermMode(binding, { admin }) : null,
       });
     // BUG-07.10: a busy-but-silent hung run would swallow «Продолжай» —
     // the hub aborts it first so this prompt starts a fresh run.
@@ -1613,6 +1803,7 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
             await OC.setSessionModel(id, { model: { providerID: model.providerID, modelID: model.modelID, ...(variant ? { variant } : {}) }, timeoutMs: DEFAULT_OPTS.timeoutMs });
           }
           if (agent) await OC.setSessionAgent(id, { agent, timeoutMs: DEFAULT_OPTS.timeoutMs });
+          await applyOcPermMode(id, dir, admin ? binding?.permMode : null);
           await OC.prompt({ directory: dir ?? null, sessionID: id, parts, ...(sysMeta ? { metadata: sysMeta } : {}), timeoutMs: PROMPT_OPTS.timeoutMs });
         });
         res.writeHead(204); // тот же ход, что v1 показывал после приёма prompt_async
@@ -1679,7 +1870,22 @@ function fireCommandTurn({ id, dir, query, name, body }) {
 // prompt (3.5, design §116) — a parallel prompt/replay can't interleave and
 // switch the model under the command turn. A failure (upstream 4xx/5xx,
 // transport) is logged and announced via teleharness.notice, like v1.
-function fireCommandTurnV2({ id, dir, name, text, agent, model }) {
+// FEAT-18.4 (design §2): the chat's permission mode → opencode 2.x session
+// rules before the turn (admin chats; null = no override). An upstream that
+// refuses them must not cost the turn: a notice, the turn goes on with the
+// server rules.
+async function applyOcPermMode(id, dir, permMode) {
+  const rules = ocPermRules(permMode);
+  if (!rules) return;
+  try {
+    await OC.patchSession(id, { directory: dir ?? undefined, permissions: rules, timeoutMs: DEFAULT_OPTS.timeoutMs });
+  } catch (err) {
+    errLog("permMode.opencode", err);
+    hub.emit({ type: "teleharness.notice", properties: { sessionID: id, text: "Режим прав не применён: движок opencode его не принял — ход идёт с правами сервера." } }, dir ?? null);
+  }
+}
+
+function fireCommandTurnV2({ id, dir, name, text, agent, model, permMode = null }) {
   void (async () => {
     try {
       await OC.enqueueTurn(id, async () => {
@@ -1689,6 +1895,7 @@ function fireCommandTurnV2({ id, dir, name, text, agent, model }) {
           await OC.setSessionModel(id, { model: { providerID: m.providerID, modelID: m.modelID, ...(variant ? { variant } : {}) }, timeoutMs: DEFAULT_OPTS.timeoutMs });
         }
         if (agent) await OC.setSessionAgent(id, { agent, timeoutMs: DEFAULT_OPTS.timeoutMs });
+        await applyOcPermMode(id, dir, permMode); // admin only: slash commands never expand for tenants
         const out = await OC.runCommand(id, { directory: dir ?? undefined, body: { name, text }, timeoutMs: COMMAND_TURN_BACKSTOP_MS });
         if (out.status >= 400) {
           const detail = String(out.text ?? "").slice(0, 300);
@@ -1837,7 +2044,7 @@ async function sessionRevertRoute({ req, res, url, user, admin, match }) {
   if (op === "unrevert" && req.method !== "POST") return sendJson(res, 405, { error: "method not allowed" });
   const record = await sessionRecord(id, true);
   const binding = bindingFor(id, record);
-  const isClaude = relays.has(id) ? engineOfChat(id, binding) === "claude" : binding?.engine === "claude" || claude.has(id);
+  const isClaude = relays.has(id) ? isRunnerEngine(engineOfChat(id, binding)) : isRunnerEngine(binding?.engine) || claude.has(id);
   // Scope: the prompt's rules (tenant → its own folders, engine grant).
   const dir = isClaude ? claude.dirOf(id) ?? (await resolveSessionDir(id)) : await resolveSessionDir(id);
   if (dir == null && !isClaude) return sendJson(res, 404, { error: "session not found" });
@@ -1845,7 +2052,7 @@ async function sessionRevertRoute({ req, res, url, user, admin, match }) {
     if (dir == null) return sendJson(res, 404, { error: "session not found" });
     if (!dirAllowed(user, dir)) return sendJson(res, 403, { error: "outside your scope" });
   }
-  if (!engineAllowed(user, isClaude ? "claude" : "opencode")) return sendJson(res, 403, { error: "engine not allowed" });
+  if (!engineAllowed(user, isClaude ? (binding?.engine === "codex" ? "codex" : "claude") : "opencode")) return sendJson(res, 403, { error: "engine not allowed" });
   let messageID = null;
   if (op === "revert") {
     if (req.method === "GET") messageID = url.searchParams.get("messageID");
@@ -2015,7 +2222,7 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
       body = JSON.parse(raw.toString("utf8"));
     } catch {}
     if (typeof body?.title === "string" && body.title.trim())
-      titler.userRenamed(id, body.title.trim(), { claudeChat: bindingFor(id, await sessionRecord(id))?.engine === "claude" });
+      titler.userRenamed(id, body.title.trim(), { claudeChat: isRunnerEngine(bindingFor(id, await sessionRecord(id))?.engine) });
     // A claude-only chat unknown upstream: the claude store is its home.
     if (claude.titleInfo(id) && typeof body?.title === "string" && !(await resolveSessionDir(id))) return sendJson(res, 200, { id, title: body.title.trim() });
     if (OC.api === "v2") {
@@ -2238,7 +2445,7 @@ async function sessionCreateRoute({ req, res, url, user, admin, match }) {
       }
     }
     // BUG-183: initialize the folder's Provider/MCP now, while the user types the first message.
-    if (want?.engine !== "claude" && created?.directory) instanceHealth.warm(created.directory);
+    if (!isRunnerEngine(want?.engine) && created?.directory) instanceHealth.warm(created.directory);
     hub.syncDirectories();
     fetchSessionIndex(true).catch(() => {});
     return sendJson(res, 200, withBinding(created));
@@ -2257,6 +2464,25 @@ async function dialogReplyRoute({ req, res, url, user, admin, match }) {
   // dialog's directory (never the raw client query — duplicate
   // ?directory= params used to slip through), and shell / outside-folder
   // permissions can only be rejected.
+  // FEAT-18.4: a request of the Claude permission bridge — answered into the
+  // live CLI (control_response). Tenants: only a dialog of their own folder;
+  // the tenant CLI stays --restricted + jail, so «Разрешить» adds no right.
+  const bridged = m[1] === "permission" ? claude.dialogOf(m[2]) : null;
+  if (bridged) {
+    if (!admin && !dirAllowed(user, bridged.dir)) {
+      req.resume();
+      return sendJson(res, 404, { error: "dialog not found" });
+    }
+    const raw = await readBody(req, DEFAULT_OPTS.bodyLimit);
+    if (raw === null) return sendJson(res, 413, { error: "body too large" });
+    let body = null;
+    try {
+      body = JSON.parse(raw.toString("utf8"));
+    } catch {}
+    if (!["once", "always", "reject"].includes(body?.reply)) return sendJson(res, 400, { error: "bad reply" });
+    if (!claude.replyDialog(m[2], { reply: body.reply, message: typeof body?.message === "string" ? body.message : null })) return sendJson(res, 410, { error: "dialog is gone" });
+    return sendJson(res, 200, { ok: true });
+  }
   if (OC.api === "v2") {
     // v2: ответpermission — {decision} на /api/session/:sid/permission/:rid/reply,
     // ответ формы — {answer:{...}} (Э5). Адрес диалога — из открытых диалогов хаба
@@ -2567,6 +2793,7 @@ function route(req, res, url) {
   // keeps a device logged in for a year and is what EventSource / file
   // downloads authenticate with.
   if (p === "/teleharness/api/auth/login" && req.method === "POST") return handleLogin(req, res);
+  if (p === "/teleharness/api/auth/pair/claim" && req.method === "POST") return handlePairClaim(req, res);
   if (p === "/teleharness/api/auth/logout" && req.method === "POST") {
     // Logout REVOKES the session server-side, not just the cookie (BUG-12.9).
     const a = authFromReq(req);

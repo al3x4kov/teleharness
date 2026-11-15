@@ -936,6 +936,8 @@ export function buildTurns(messages, { busy = false } = {}) {
       tokensIn: 0,
       tokensOut: 0,
       tokensTotal: 0,
+      cost: 0, // FEAT-18.5: сумма info.cost шагов ($; у Claude — условная цена API)
+      providerID: lastInfo.providerID ?? null,
       completedAt: Number.isFinite(completedAt) ? completedAt : null,
       durationMs: null,
     };
@@ -945,6 +947,7 @@ export function buildTurns(messages, { busy = false } = {}) {
       turn.tokensIn += Number(t.input) || 0;
       turn.tokensOut += (Number(t.output) || 0) + (Number(t.reasoning) || 0);
       turn.tokensTotal += Number(t.total) || 0;
+      turn.cost += Number(s.info?.cost) > 0 ? Number(s.info.cost) : 0;
       for (const p of s.parts ?? []) {
         if (p?.type === "text" && !p.synthetic) {
           const v = String(p.text ?? "").trim();
@@ -965,12 +968,16 @@ export function buildTurns(messages, { busy = false } = {}) {
 // «↑12,4k ↓48,2k · 14:34 · 3м 05с» — input without cache reads, output with
 // reasoning; a record that only knows `total` (older fixtures, Claude runs)
 // falls back to «12,9k ток». Empty pieces are dropped.
-export function turnMetaLine(turn) {
+// FEAT-18.5: cost — готовая подпись расхода хода («$0,0123» / «подписка» /
+// «цена неизвестна», context-cost.costLabel) идёт сразу за токенами, только
+// если токены известны.
+export function turnMetaLine(turn, { cost = "" } = {}) {
   if (!turn) return "";
   const bits = [];
   if (turn.tokensIn > 0 || turn.tokensOut > 0) {
     bits.push([turn.tokensIn > 0 ? `↑${fmtNum(turn.tokensIn)}` : "", turn.tokensOut > 0 ? `↓${fmtNum(turn.tokensOut)}` : ""].filter(Boolean).join(" "));
   } else if (turn.tokensTotal > 0) bits.push(t("format.tokens", { n: fmtNum(turn.tokensTotal) }));
+  if (bits.length > 0 && cost) bits.push(cost);
   const clock = fmtClock(turn.completedAt);
   if (clock) bits.push(clock);
   if (turn.durationMs != null) bits.push(fmtElapsed(turn.durationMs));

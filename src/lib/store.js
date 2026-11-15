@@ -131,6 +131,8 @@ export {
   refreshSubscriptions,
   refreshVoice,
   rotateOwnToken,
+  pairPhone,
+  claimPair,
   uploadFile,
   voiceApi,
 } from "./store/catalog.js";

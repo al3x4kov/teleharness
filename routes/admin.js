@@ -10,7 +10,10 @@
 //         ownerlessTenantDirs, lastGc(), gcRunning(), gcSweep,
 //         rotateOwnToken, setAuthCookie, createSession, isHttps,
 //         getSystemPrompt, setSystemPrompt, cleanSystemPrompt, SYSTEM_PROMPT_MAX,
-//         getPins, setPins, cleanPins, PINS_MAX, visibleIds(user, admin, ids) }
+//         getPins, setPins, cleanPins, PINS_MAX, visibleIds(user, admin, ids),
+//         createPairCode, publicUrl (FEAT-18.2),
+//         getAutoRelay, setAutoRelay, cleanAutoRelay, readAutoRelay,
+//         AUTO_RELAY_ORDER_MAX, autoRelayModelOk(user, model) }
 export function adminRoutes(deps) {
   const { sendJson, apiError } = deps;
   return [
@@ -158,6 +161,34 @@ export function adminRoutes(deps) {
         }
       },
     },
+    // FEAT-18.2: POST /teleharness/api/auth/pair — a one-time phone sign-in code for
+    // the CALLER's own account (any role). Naming another user (userId in the
+    // body) is refused: the admin cannot sign a phone in as a tenant. Without
+    // TELEHARNESS_PUBLIC_URL nothing is minted — the screen says what to configure.
+    {
+      method: "*",
+      path: "/teleharness/api/auth/pair",
+      scope: "user",
+      handler: async ({ req, res, user }) => {
+        if (req.method !== "POST") return sendJson(res, 405, { error: "method not allowed" });
+        const body = await deps.readJsonBody(req, 4 * 1024);
+        const asked = body?.userId ?? body?.user ?? null;
+        if (asked != null && asked !== user.id) return sendJson(res, 403, { error: "код входа выпускается только для своей учётной записи" });
+        if (!deps.publicUrl) return sendJson(res, 200, { configured: false, setting: "TELEHARNESS_PUBLIC_URL" });
+        try {
+          const { code, expiresAt } = deps.createPairCode(user.id);
+          res.setHeader("cache-control", "no-store");
+          return sendJson(res, 201, {
+            configured: true,
+            code,
+            url: `${deps.publicUrl}/#/pair/${code}`,
+            expiresAt: new Date(expiresAt).toISOString(),
+          });
+        } catch (err) {
+          return apiError(res, err);
+        }
+      },
+    },
     // FEAT-03.22: GET/PUT /teleharness/api/me/system-prompt {text} — the caller's own
     // system prompt (any role; only their own record). PUT "" clears it.
     {
@@ -177,6 +208,35 @@ export function adminRoutes(deps) {
         }
         try {
           return sendJson(res, 200, { text: deps.setSystemPrompt(user.id, text), max: deps.SYSTEM_PROMPT_MAX });
+        } catch (err) {
+          return apiError(res, err);
+        }
+      },
+    },
+    // FEAT-18.6: GET/PUT /teleharness/api/me/auto-relay {on, order:[{providerID, modelID}]} —
+    // the caller's own «Продолжать автоматически при лимите» (any role; only their
+    // own record). Off by default. PUT accepts only models available to the caller
+    // (engine allowed, in its catalog) — a foreign one → 403 «model not allowed».
+    {
+      method: "*",
+      path: "/teleharness/api/me/auto-relay",
+      scope: "user",
+      handler: async ({ req, res, user }) => {
+        if (req.method === "GET") return sendJson(res, 200, { ...deps.readAutoRelay(deps.getAutoRelay(user.id)), max: deps.AUTO_RELAY_ORDER_MAX });
+        if (req.method !== "PUT") return sendJson(res, 405, { error: "method not allowed" });
+        const body = await deps.readJsonBody(req, 16 * 1024);
+        if (body === null || typeof body !== "object") return sendJson(res, 400, { error: "bad json body" });
+        let value;
+        try {
+          value = deps.cleanAutoRelay(body);
+        } catch (err) {
+          return sendJson(res, err.status ?? 400, { error: err.message });
+        }
+        for (const m of value.order) {
+          if (!(await deps.autoRelayModelOk(user, m))) return sendJson(res, 403, { error: "model not allowed", model: m });
+        }
+        try {
+          return sendJson(res, 200, { ...deps.readAutoRelay(deps.setAutoRelay(user.id, value)), max: deps.AUTO_RELAY_ORDER_MAX });
         } catch (err) {
           return apiError(res, err);
         }

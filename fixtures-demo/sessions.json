@@ -443,5 +443,89 @@
    "created": 1793266200000,
    "updated": 1793266800000
   }
+ },
+ {
+  "id": "ses_demo_codex_flaky_test",
+  "slug": "calm-heron",
+  "projectID": "global",
+  "directory": "/home/dev/projects/api-server",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 61200,
+   "output": 3900,
+   "reasoning": 1500,
+   "cache": {
+    "read": 41000,
+    "write": 0
+   }
+  },
+  "title": "Fix the flaky date test",
+  "model": {
+   "id": "gpt-6.1-sol",
+   "providerID": "openai-codex"
+  },
+  "teleharness": {
+   "engine": "codex",
+   "model": {
+    "providerID": "openai-codex",
+    "modelID": "gpt-6.1-sol"
+   },
+   "agent": null,
+   "prompted": true,
+   "source": "stored",
+   "permMode": "ask"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794301927900,
+   "updated": 1794302287900
+  }
+ },
+ {
+  "id": "ses_demo_orders_migration",
+  "slug": "quiet-lynx",
+  "projectID": "global",
+  "directory": "/home/dev/projects/api-server",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 18400,
+   "output": 900,
+   "reasoning": 0,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Add an index migration for orders",
+  "model": {
+   "id": "claude-sonnet-5-5",
+   "providerID": "anthropic"
+  },
+  "teleharness": {
+   "engine": "claude",
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-5-5"
+   },
+   "agent": null,
+   "prompted": true,
+   "source": "stored",
+   "permMode": "ask"
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794304567900,
+   "updated": 1794304747900
+  }
  }
 ]

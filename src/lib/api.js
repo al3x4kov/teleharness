@@ -45,7 +45,9 @@ async function request(method, path, body, { signal, raw = false, contentType } 
     } catch {}
   }
   if (!res.ok) {
-    if (res.status === 401 && path !== "/auth/login") onUnauthorizedCb?.();
+    // FEAT-18.2: a refused phone link is not «the session died» — the pair
+    // screen explains it itself.
+    if (res.status === 401 && path !== "/auth/login" && path !== "/auth/pair/claim") onUnauthorizedCb?.();
     const err = new Error(`teleharness api ${method} ${path} failed: ${res.status}`);
     err.status = res.status; // callers split «network down» (no status) from «server said no»
     // The server's own reason ({error, code}) — explainApiError() turns the
@@ -131,6 +133,11 @@ export const api = {
   // Self-service token rotation (FEAT-03.11, TASK-12.21): every other session
   // of the caller is revoked; this device gets a fresh cookie from the server.
   rotateOwnToken: () => json("POST", "/auth/token", { confirm: true }), // → {token}
+  // FEAT-18.2: one-time phone sign-in link for the caller's own account →
+  // {configured:false, setting} | {configured:true, code, url, expiresAt}.
+  pairPhone: () => json("POST", "/auth/pair", {}),
+  // The phone side: code → ordinary session cookie; → user (410/401 throw).
+  pairClaim: async (code) => (await json("POST", "/auth/pair/claim", { code })).user,
 
   // ---- admin: tenant management (role "admin" only; the server answers 403
   // for everyone else). The create/regenerate responses carry the plaintext
@@ -251,6 +258,9 @@ export const api = {
   getSystemPrompt: () => json("GET", "/me/system-prompt"),
   setSystemPrompt: (text) => json("PUT", "/me/system-prompt", { text }),
   // FEAT-01.69: the caller's pinned chats (ids in pin order).
+  // FEAT-18.6: «Продолжать автоматически при лимите» — {on, order:[{providerID, modelID}]}
+  getAutoRelay: () => json("GET", "/me/auto-relay"),
+  setAutoRelay: (value) => json("PUT", "/me/auto-relay", value),
   getPins: () => json("GET", "/me/pins"),
   setPins: (ids) => json("PUT", "/me/pins", { ids }),
   // Authoritative per-session run status from upstream /session/status:

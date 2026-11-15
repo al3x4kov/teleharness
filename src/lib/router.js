@@ -1,6 +1,7 @@
 // Hash router for /teleharness/: signal-driven, works under any base path.
 // Routes: #/ -> home, #/projects, #/project/:dir, #/settings,
-// #/settings/:section[/:sub] (FEAT-03.23), #/chat/:id. Unknown -> #/.
+// #/settings/:section[/:sub] (FEAT-03.23), #/chat/:id, #/pair/:code
+// (FEAT-18.2). Unknown -> #/.
 // FEAT-03.23 also needs to know the history around the current entry
 // («‹» goes back when the parent is the previous entry; «›» only when there
 // IS a forward entry) and a leave guard («Выйти без сохранения?», П32.Н4):
@@ -16,6 +17,7 @@ const ROUTES = [
   { path: "/settings/:section/:sub", view: "settings" },
   { path: "/access", view: "access" }, // admin-only: tenant management
   { path: "/chat/:id", view: "chat" },
+  { path: "/pair/:code", view: "pair" }, // FEAT-18.2: phone sign-in link (QR)
 ];
 
 // replace: swap the current entry (no way «Назад» into it — a deleted chat,

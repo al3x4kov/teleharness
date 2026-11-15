@@ -43,10 +43,11 @@ the chat keeps its history, its project folder and one continuous feed.
 
 ## Limits
 
-- Two CLIs are supported natively: **Claude Code** and **opencode**. Through opencode you can use any provider it
-  supports (Z.ai GLM, OpenAI, Google Gemini, Anthropic, OpenRouter, local models…). Codex CLI and Gemini CLI are not
-  integrated as separate engines yet.
-- Switching after a usage limit needs one tap — it does not happen automatically.
+- Three CLIs are supported natively: **Claude Code**, **opencode** and **Codex CLI** (Codex is admin-only for now).
+  Through opencode you can use any provider it supports (Z.ai GLM, OpenAI, Google Gemini, Anthropic, OpenRouter,
+  local models…). Gemini CLI is not integrated as a separate engine.
+- Switching after a usage limit takes one tap, or happens automatically if you turn on *Continue automatically on a
+  usage limit* (Settings → Model & agents) and list backup models.
 - A chat cannot be switched while a turn is running, and an empty chat has nothing to hand over.
 - Users other than the admin can switch only to engines and models they are allowed to use.
 - Remaining quota is shown only for providers with an official usage API (z.ai Coding Plan, OpenRouter, DeepSeek,
@@ -61,11 +62,12 @@ and hooks. Relay switches which CLI (or model) handles the chat from now on.
 **Do I lose context when I switch?** The new CLI gets the missed turns in its first prompt and can read the full
 journal. It does not inherit the previous CLI's private session state.
 
-**Can it switch automatically when I hit a limit?** Not yet — you confirm with one tap, so you decide which other
-subscription to spend.
+**Can it switch automatically when I hit a limit?** Yes, if you opt in: Settings → Model & agents → *Continue
+automatically on a usage limit*, with up to three backup models in your order. The server hands the chat over and asks
+the new engine to continue, even with your phone closed. It is off by default — then you confirm with one tap.
 
-**Does it work with Codex CLI or Gemini CLI?** Not as separate engines. Gemini, GPT and other models are available
-through opencode.
+**Does it work with Codex CLI or Gemini CLI?** Codex CLI is a native engine since 1.21 (admin-only until it has its own
+sandbox). Gemini CLI is not; Gemini models are available through opencode.
 
 **Where does my code run?** On your machine. Providers receive only the prompts and tool results needed for inference.
 
@@ -106,9 +108,11 @@ Teleharness запускает настоящие агентные CLI — **Cla
 
 ## Ограничения
 
-- Поддерживаются два CLI: **Claude Code** и **opencode**. Через opencode доступны все его провайдеры (Z.ai GLM, OpenAI,
-  Google Gemini, Anthropic, OpenRouter, локальные модели…). Codex CLI и Gemini CLI отдельными движками пока не подключены.
-- После лимита переключение требует одного нажатия — автоматически оно не происходит.
+- Поддерживаются три CLI: **Claude Code**, **opencode** и **Codex CLI** (Codex пока только для администратора). Через
+  opencode доступны все его провайдеры (Z.ai GLM, OpenAI, Google Gemini, Anthropic, OpenRouter, локальные модели…).
+  Gemini CLI отдельным движком не подключён.
+- После лимита переключение требует одного нажатия — или происходит автоматически, если включить *Продолжать
+  автоматически при лимите* (Настройки → Модель и агенты) и задать запасные модели.
 - Во время хода переключить чат нельзя; пустой чат передавать нечему.
 - Пользователи, кроме администратора, переключаются только на разрешённые им движки и модели.
 - Остаток подписки виден только у провайдеров с официальным API (z.ai Coding Plan, OpenRouter, DeepSeek, Moonshot,
@@ -123,8 +127,11 @@ Relay меняет, какой CLI (или модель) ведёт чат да�
 **Теряется ли контекст при переключении?** Новый CLI получает пропущенные ходы в первом запросе и может прочитать весь
 журнал. Внутреннее состояние сессии прежнего CLI не наследуется.
 
-**Переключается ли он сам при лимите?** Пока нет — вы подтверждаете одним нажатием и сами решаете, чью подписку тратить.
+**Переключается ли он сам при лимите?** Да, если включить: Настройки → Модель и агенты → *Продолжать автоматически при
+лимите*, до трёх запасных моделей в вашем порядке. Сервер передаст чат и попросит новый движок продолжить, даже при
+закрытом телефоне. По умолчанию выключено — тогда вы подтверждаете одним нажатием.
 
-**Работает ли с Codex CLI или Gemini CLI?** Отдельными движками — нет. Модели Gemini, GPT и другие доступны через opencode.
+**Работает ли с Codex CLI или Gemini CLI?** Codex CLI — отдельный движок с версии 1.21 (только для администратора, пока у
+него нет своей песочницы). Gemini CLI — нет; модели Gemini доступны через opencode.
 
 **Где выполняется код?** На вашей машине. Провайдеры получают только запросы и результаты инструментов, нужные для ответа.

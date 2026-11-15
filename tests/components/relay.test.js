@@ -153,3 +153,18 @@ test("FEAT-11.18 (кадр 6): остаток z.ai меньше 15 % — пол�
   await t$.flush(5);
   assert.equal($(h2.root, ".quota-strip"), null);
 });
+
+// EPIC-18 стенд 2026-11-15: плашка лимита на телефоне — текст во всю ширину, действия строкой ниже.
+test("плашка лимита переносит действия под текст, длинная кнопка переносит подпись", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../src/components/relay.css", import.meta.url), "utf8").replace(/\r/g, "");
+  const body = (sel) => {
+    const at = css.indexOf("\n" + sel + " {");
+    assert.ok(at >= 0, "нет правила " + sel);
+    return css.slice(at, css.indexOf("}", at));
+  };
+  assert.match(body(".turn-error"), /flex-wrap: wrap/);
+  assert.match(body(".turn-error .turn-error-actions"), /flex: 1 1 100%/);
+  assert.match(body(".turn-error .stall-btn"), /white-space: normal/);
+  assert.match(body(".turn-error .stall-btn"), /min-height: 44px/);
+});

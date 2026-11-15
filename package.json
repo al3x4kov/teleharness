@@ -1,9 +1,15 @@
 {
   "name": "teleharness",
-  "version": "1.19.4",
+  "version": "1.21.0",
   "license": "MIT",
   "private": true,
   "type": "module",
+  "bin": {
+    "teleharness": "bin/teleharness.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node build.mjs",
     "demo": "node scripts/demo.mjs",
@@ -14,16 +20,18 @@
     "test:batched": "node tests/run-tests.mjs all --batch=4",
     "graph:fresh": "node scripts/graph-fresh.mjs"
   },
-  "devDependencies": {
+  "dependencies": {
     "@preact/signals": "^2.0.0",
     "dompurify": "^3.2.0",
     "esbuild": "^0.25.0",
-    "happy-dom": "^21.0.4",
     "highlight.js": "^11.11.0",
     "marked": "^16.0.0",
     "preact": "^10.26.0"
   },
-  "description": "Mobile-first web portal for coding-agent CLIs (Claude Code, opencode) with their full harness: agents, skills, MCP, Obsidian memory.",
+  "devDependencies": {
+    "happy-dom": "^21.0.4"
+  },
+  "description": "Mobile-first web portal for coding-agent CLIs (Claude Code, opencode, Codex) with their full harness: agents, skills, MCP, Obsidian memory.",
   "repository": {
     "type": "git",
     "url": "https://github.com/al3x4kov/teleharness.git"
@@ -32,6 +40,7 @@
   "keywords": [
     "claude-code",
     "opencode",
+    "codex",
     "ai-agents",
     "coding-agent",
     "mobile",

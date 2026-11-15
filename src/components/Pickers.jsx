@@ -15,6 +15,7 @@ const GLYPHS = {
   plus: ["M12 5v14", "M5 12h14"],
   close: ["M18 6 6 18", "M6 6l12 12"],
   check: ["M20 6 9 17l-5-5"],
+  shield: ["M12 3 4.5 6v5c0 4.6 3.2 8.6 7.5 10 4.3-1.4 7.5-5.4 7.5-10V6L12 3z"], // FEAT-18.4: режим прав
   chevron: ["m9 18 6-6-6-6"],
   pencil: ["M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"],
   trash: ["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", "M10 11v6", "M14 11v6"],
@@ -206,6 +207,7 @@ const providerRank = (pid) => {
 export const ENGINE_GROUPS = [
   { engine: "opencode", title: ENGINE_LABEL.opencode, get sub() { return t("pickers.engine.opencode"); } },
   { engine: "claude", title: ENGINE_LABEL.claude, get sub() { return t("pickers.engine.claude"); } },
+  { engine: "codex", title: ENGINE_LABEL.codex, get sub() { return t("pickers.engine.codex"); } }, // only while Codex is connected
 ];
 
 // Pure: catalog → [{engine, title, sub, models}] (empty groups dropped).
@@ -223,7 +225,7 @@ export function modelGroups(cfg, { engine = null, query = "", keep = null } = {}
       .filter((m) => engineOf(m.providerID) === g.engine)
       .sort((a, b) =>
         providerRank(a.providerID) - providerRank(b.providerID) ||
-        (g.engine === "claude" ? Number(isDefault(b)) - Number(isDefault(a)) : 0) ||
+        (g.engine === "claude" || g.engine === "codex" ? Number(isDefault(b)) - Number(isDefault(a)) : 0) ||
         modelTitle(a).localeCompare(modelTitle(b), locale(), { numeric: true })),
   })).filter((g) => g.models.length > 0);
 }
@@ -298,7 +300,7 @@ export function ModelPicker({ value, onPick, engine = null, note = null }) {
           {groups.map((g) => (
             <section key={g.engine} aria-label={g.title}>
               <h3 class="engine-group">
-                <span class={"engine-dot" + (g.engine === "claude" ? " is-claude" : "")} aria-hidden="true" />
+                <span class={"engine-dot" + (g.engine === "claude" ? " is-claude" : g.engine === "codex" ? " is-codex" : "")} aria-hidden="true" />
                 <span class="eg-name">{g.title}</span>
                 <span class="eg-sub">{g.sub}</span>
               </h3>

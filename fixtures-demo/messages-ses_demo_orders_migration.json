@@ -1,0 +1,140 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_orders_migration_023",
+   "sessionID": "ses_demo_orders_migration",
+   "role": "user",
+   "time": {
+    "created": 1794304567900
+   },
+   "summary": {
+    "diffs": []
+   },
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-5-5"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_orders_migration_024",
+    "sessionID": "ses_demo_orders_migration",
+    "messageID": "msg_demo_orders_migration_023",
+    "type": "text",
+    "text": "Orders by customer are slow. Add an index migration and apply it to the dev database."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_orders_migration_025",
+   "sessionID": "ses_demo_orders_migration",
+   "role": "assistant",
+   "time": {
+    "created": 1794304569400
+   },
+   "parentID": "msg_demo_orders_migration_023",
+   "modelID": "claude-sonnet-5-5",
+   "providerID": "anthropic",
+   "path": {
+    "cwd": "/home/dev/projects/api-server",
+    "root": "/home/dev/projects/api-server"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 19300,
+    "input": 18400,
+    "output": 900,
+    "reasoning": 0,
+    "cache": {
+     "read": 0,
+     "write": 0
+    },
+    "context": 18400
+   },
+   "contextWindow": 1000000
+  },
+  "parts": [
+   {
+    "id": "prt_demo_orders_migration_026",
+    "sessionID": "ses_demo_orders_migration",
+    "messageID": "msg_demo_orders_migration_025",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_orders_migration_027",
+    "sessionID": "ses_demo_orders_migration",
+    "messageID": "msg_demo_orders_migration_025",
+    "type": "tool",
+    "callID": "call_demo_orders_migration_028",
+    "tool": "read",
+    "state": {
+     "status": "completed",
+     "input": {
+      "filePath": "/home/dev/projects/api-server/db/schema.sql"
+     },
+     "output": "<file>\n00041| CREATE TABLE orders (\n00042|   id bigserial PRIMARY KEY,\n00043|   customer_id bigint NOT NULL REFERENCES customers(id),\n00044|   created_at timestamptz NOT NULL DEFAULT now(),\n00045|   total_cents integer NOT NULL\n00046| );\n</file>",
+     "title": "db/schema.sql",
+     "metadata": {},
+     "time": {
+      "start": 1794304569800,
+      "end": 1794304570700
+     }
+    }
+   },
+   {
+    "id": "prt_demo_orders_migration_029",
+    "sessionID": "ses_demo_orders_migration",
+    "messageID": "msg_demo_orders_migration_025",
+    "type": "tool",
+    "callID": "call_demo_orders_migration_030",
+    "tool": "write",
+    "state": {
+     "status": "completed",
+     "input": {
+      "filePath": "/home/dev/projects/api-server/db/migrations/0042_orders_customer_idx.sql",
+      "content": "CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_created_idx\n  ON orders (customer_id, created_at DESC);\n"
+     },
+     "output": "Wrote file successfully.",
+     "title": "db/migrations/0042_orders_customer_idx.sql",
+     "metadata": {},
+     "time": {
+      "start": 1794304570200,
+      "end": 1794304571100
+     }
+    }
+   },
+   {
+    "id": "prt_demo_orders_migration_031",
+    "sessionID": "ses_demo_orders_migration",
+    "messageID": "msg_demo_orders_migration_025",
+    "type": "text",
+    "text": "The migration is ready: a composite index on `(customer_id, created_at DESC)`, built `CONCURRENTLY` so the table stays writable. Next I'll apply it to the dev database.",
+    "time": {
+     "start": 1794304570600,
+     "end": 1794304570900
+    }
+   },
+   {
+    "id": "prt_demo_orders_migration_032",
+    "sessionID": "ses_demo_orders_migration",
+    "messageID": "msg_demo_orders_migration_025",
+    "type": "tool",
+    "callID": "call_demo_orders_migration_033",
+    "tool": "bash",
+    "state": {
+     "status": "running",
+     "input": {
+      "command": "npm run db:migrate -- --env dev",
+      "description": "Apply migrations (dev)"
+     },
+     "title": "Apply migrations (dev)",
+     "metadata": {},
+     "time": {
+      "start": 1794304571000
+     }
+    }
+   }
+  ]
+ }
+]

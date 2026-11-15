@@ -1,1 +1,20 @@
-[]
+[
+ {
+  "kind": "permission",
+  "id": "per_demo_orders_migrate",
+  "sessionID": "ses_demo_orders_migration",
+  "directory": "/home/dev/projects/api-server",
+  "permission": "Bash",
+  "patterns": [
+   "npm run db:migrate -- --env dev"
+  ],
+  "metadata": {
+   "command": "npm run db:migrate -- --env dev"
+  },
+  "always": [],
+  "askedAt": 1794304747900,
+  "teleharness": {
+   "engine": "claude"
+  }
+ }
+]

@@ -58,6 +58,39 @@
 .home-search {
   margin: 4px 0 8px;
 }
+/* FEAT-18.3: фильтр «Ждут вас» под поиском (тап-цель 40 px) */
+.list-filters {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text);
+  font: 500 14px/1.2 var(--font-ui);
+  cursor: pointer;
+}
+.filter-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filter-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.filter-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+  font-size: 12px;
+  text-align: center;
+}
 
 /* Swipe-to-actions row. The content slides left over the page background
    revealing the action cluster; on hover-capable devices the actions simply
@@ -1775,7 +1808,8 @@
   flex: 1 1 100%;
   min-width: 0;
 }
-.model-pill {
+.model-pill,
+.perm-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1794,8 +1828,13 @@
   cursor: pointer;
   transition: border-color var(--t), background var(--t);
 }
-.model-pill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.model-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.model-pill:hover,
+.perm-pill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.model-pill:focus-visible,
+.perm-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* FEAT-18.4: режим прав — короткая пилюля в конце строки, не сжимается */
+.perm-pill { flex: 0 0 auto; gap: 5px; color: var(--text-2); }
+.perm-pill.is-ask { color: var(--accent); }
 .model-pill:disabled { cursor: default; opacity: 0.6; }
 .model-pill.is-static { cursor: default; color: var(--text-2); background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .model-pill.is-static:hover { border-color: var(--border); }
@@ -1809,6 +1848,7 @@
   flex-shrink: 0;
 }
 .engine-dot.is-claude { background: #d97757; }
+.engine-dot.is-codex { background: #10a37f; } /* FEAT-18.7: Codex — зелёный OpenAI, подпись рядом всегда есть */
 .model-bar-note {
   flex-basis: 100%;
   font-size: 12px;
@@ -2556,3 +2596,66 @@
 .sub-big b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sub-big span { font-size: 13.5px; color: var(--text-2); }
 .sub-card .set-value.is-error, .sub-card .host-note.is-error { color: var(--error); }
+
+/* FEAT-18.2: Настройки → «Подключить телефон» — QR, ссылка, срок, «Новый код».
+   QR всегда чёрный на белом (сканируемость в тёмной теме). */
+.pair-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+.pair-hint {
+  margin: 0;
+  align-self: stretch;
+}
+.pair-qr-wrap {
+  line-height: 0;
+}
+.pair-qr {
+  display: block;
+  width: min(240px, 70vw);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: var(--r-md);
+  background: #fff;
+}
+.pair-qr-wait {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.pair-qr-wrap.is-expired .pair-qr {
+  opacity: 0.2;
+}
+.pair-until {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.pair-until.is-expired,
+.pair-error {
+  color: var(--error);
+  font-size: 13px;
+  text-align: center;
+}
+.pair-link {
+  display: flex;
+  gap: 8px;
+  align-self: stretch;
+}
+.pair-url {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px; /* iOS: no zoom on focus */
+  text-overflow: ellipsis;
+}
+.pair-new {
+  align-self: stretch;
+  justify-content: center;
+}

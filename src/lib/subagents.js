@@ -298,7 +298,7 @@ function claudeRun(part, ctx, id) {
 export function agentRun(part, ctx = {}) {
   if (!isAgentTool(part)) return null;
   const id = part?.callID ?? part?.id ?? null;
-  return ctx.engine === "claude" ? claudeRun(part, ctx, id) : ocRun(part, ctx, id);
+  return ctx.engine === "claude" || ctx.engine === "codex" ? claudeRun(part, ctx, id) : ocRun(part, ctx, id);
 }
 
 // Все запуски ленты в порядке появления; запуски дочерних лент идут сразу

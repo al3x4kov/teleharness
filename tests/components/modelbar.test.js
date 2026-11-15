@@ -182,3 +182,21 @@ test("UI-ISSUE-01 (BUG-160): тенант в Claude-чате — только п
     ui.store.me.value = null;
   }
 });
+
+test("FEAT-18.7: Codex-чат — пилюля модели с меткой Codex, без пилюли агента, режим прав есть", () => {
+  ui.store.providerCfg.value = { models: [...CFG.models, { id: "gpt-6.1-sol", providerID: "openai-codex", label: "GPT-6.1-Sol (openai-codex)" }] };
+  ui.store.sessions.value = [{ id: "ses_m", title: "", directory: "C:\\Home", time: { created: 1, updated: 1 }, teleharness: { model: { providerID: "openai-codex", modelID: "gpt-6.1-sol" }, prompted: false } }];
+  const { root } = t$.mount(ui.ModelBar, { sessionId: "ses_m", hasMessages: false });
+  assert.deepEqual(pills(root), ["GPT-6.1-Sol"]);
+  assert.match($$(root, "button.model-pill")[0].getAttribute("aria-label"), /, Codex\. Сменить/);
+  assert.ok($(root, ".engine-dot.is-codex"));
+  assert.ok($(root, ".perm-pill"), "режим прав доступен");
+  assert.equal(root.textContent.includes("агент opencode"), false);
+  assert.match($(root, ".model-bar-note").textContent, /^Модель закрепится за чатом/);
+});
+
+test("FEAT-18.7: выбор режима в Codex-чате — «Спрашивать» и «Без вопросов», без «Правок»", async () => {
+  const { permModeChoices } = await import("../../src/lib/engine.js");
+  assert.deepEqual(permModeChoices({ admin: true, engine: "codex" }).map((m) => m.id), ["ask", "full"]);
+  assert.deepEqual(permModeChoices({ admin: true, engine: "claude" }).map((m) => m.id), ["ask", "edits", "full"]);
+});

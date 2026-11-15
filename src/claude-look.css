@@ -920,7 +920,8 @@ body {
   padding: 10px 2px 0;
 }
 
-.model-pill {
+.model-pill,
+.perm-pill {
   position: relative;
   min-height: 40px;
   padding: 0 14px;
@@ -937,14 +938,21 @@ body {
 }
 
 /* BUG-102: хит-зона пилюли 44 px по высоте (видимая — 40), как у .copy-turn. */
-.model-pill::after {
+.model-pill::after,
+.perm-pill::after {
   content: "";
   position: absolute;
   inset: -2px 0;
 }
 
-.model-pill:hover {
+.model-pill:hover,
+.perm-pill:hover {
   border-color: transparent;
+}
+/* FEAT-18.4: пилюля режима прав — компактнее пилюль модели и агента */
+.perm-pill {
+  padding: 0 12px;
+  font-size: 14px;
 }
 
 /* == служебные полосы == */

@@ -244,14 +244,105 @@
      }
     }
    }
+  },
+  {
+   "id": "openai-codex",
+   "name": "Codex (ChatGPT subscription)",
+   "source": "custom",
+   "env": [],
+   "options": {},
+   "models": {
+    "gpt-6.1-sol": {
+     "id": "gpt-6.1-sol",
+     "providerID": "openai-codex",
+     "name": "GPT-6.1 Sol",
+     "status": "active",
+     "capabilities": {
+      "input": {
+       "text": true,
+       "image": true,
+       "audio": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "toolcall": true,
+      "reasoning": true,
+      "attachment": true,
+      "temperature": false
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 400000,
+      "output": 128000
+     },
+     "options": {},
+     "headers": {}
+    },
+    "gpt-6.1-sol-mini": {
+     "id": "gpt-6.1-sol-mini",
+     "providerID": "openai-codex",
+     "name": "GPT-6.1 Sol Mini",
+     "status": "active",
+     "capabilities": {
+      "input": {
+       "text": true,
+       "image": true,
+       "audio": false,
+       "video": false,
+       "pdf": false
+      },
+      "output": {
+       "text": true,
+       "audio": false,
+       "image": false,
+       "video": false,
+       "pdf": false
+      },
+      "toolcall": true,
+      "reasoning": true,
+      "attachment": true,
+      "temperature": false
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 400000,
+      "output": 128000
+     },
+     "options": {},
+     "headers": {}
+    }
+   }
   }
  ],
  "default": {
   "zai-coding-plan": "glm-5.3",
-  "anthropic": "claude-opus-5-5"
+  "anthropic": "claude-opus-5-5",
+  "openai-codex": "gpt-6.1-sol"
  },
  "connected": [
   "zai-coding-plan",
-  "anthropic"
+  "anthropic",
+  "openai-codex"
  ]
 }

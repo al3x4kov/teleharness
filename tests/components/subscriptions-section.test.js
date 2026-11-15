@@ -28,7 +28,7 @@ const CARDS = [
 
 test("FEAT-11.18: обычный пользователь видит раздел «Подписки» с карточками всех провайдеров", async () => {
   installFetch([{ method: "GET", path: "/teleharness/api/subscriptions", reply: () => ({ providers: CARDS }) }, { method: "GET", path: "/teleharness/api/mcp", reply: () => ({}) }]);
-  ui.store.me.value = { id: "u_t", name: "julia", role: "user" };
+  ui.store.me.value = { id: "u_t", name: "alice", role: "user" };
   location.hash = "#/settings/subscription";
   const { root } = t$.mount(ui.SettingsView, { section: "subscription" });
   await t$.waitFor(() => $$(root, ".sub-card").length === CARDS.length);
@@ -62,7 +62,7 @@ test("FEAT-11.18: тексты причин — без кодов и путей;
 
 test("FEAT-11.18: сбой загрузки без данных — «Повторить»; пустой список — понятная строка", async () => {
   installFetch([{ method: "GET", path: "/teleharness/api/subscriptions", reply: () => ({ status: 503, body: { error: "x" } }) }, { method: "GET", path: "/teleharness/api/mcp", reply: () => ({}) }]);
-  ui.store.me.value = { id: "u_t", name: "julia", role: "user" };
+  ui.store.me.value = { id: "u_t", name: "alice", role: "user" };
   location.hash = "#/settings/subscription";
   const h = t$.mount(ui.SettingsView, { section: "subscription" });
   await t$.waitFor(() => /Повторить/.test(h.root.textContent));

@@ -499,7 +499,7 @@ keepalive подделывался событием `busy`, запись ист�
 эффективная конфигурация с источником каждого значения и `***` у секретов.
 До 1.7.0 env читался в 10 файлах без проверки, и `NaN` тихо выключал защиту (R19).
 
-### 5.1. server.js и lib/* (схема `lib/config.js`, 61 переменных)
+### 5.1. server.js и lib/* (схема `lib/config.js`, 62 переменных)
 
 Таблица сверяется тестом `tests/docs-env-schema.test.js` со схемой `lib/config.js` (TASK-15.9):
 каждое имя схемы должно быть в таблице, дефолт — равен `def` из схемы (секреты и вычисляемые
@@ -555,6 +555,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_PUSH_EXTRA_ORIGINS` | пусто | дополнительные origins push-сервисов через `;` (тесты/проверки с локальным фейком) |
 | `TELEHARNESS_PUSH_DEBOUNCE_MS` | `20000` | дебаунс отправки push |
 | `TELEHARNESS_PUSH_MAX_PER_USER` | `10` | максимум push на пользователя в сутки-окно |
+| `TELEHARNESS_PUBLIC_URL` | пусто | публичный адрес корня портала, например `https://example.com/teleharness/` (путь обязан кончаться на `/teleharness`); ссылка входа и QR «Подключить телефон» — `<адрес>/#/pair/<код>`; пусто — экран просит задать переменную (FEAT-18.2) |
 | `TELEHARNESS_ADMIN_TOKEN` | пусто (секрет) | bootstrap-токен admin; **только** если нет `users.json` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | пусто (секрет) | подставляется дочернему `claude`, если его нет в env (нужен для tenant-профиля `--restricted`) |
 | `TELEHARNESS_OC_API` | `v1` | версия API адаптера `lib/oc-client.js`: `v1` (1.19.5) \| `v2` (2.x: `/api/*`, Basic); прод с 1.16.0 задаёт `v2` (`ops\web-v2.cmd`) (FEAT-16.3) |
@@ -578,6 +579,10 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_OPENAI_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора организации OpenAI — траты в разделе «Подписки»; пусто → карточка «нужен ключ администратора» |
 | `TELEHARNESS_ANTHROPIC_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора Anthropic API — карточка трат «Anthropic API»; пусто → карточки нет |
 | `TELEHARNESS_JOURNAL_DEBOUNCE_MS` | `server.js` | пауза перед пересборкой журнала чата после конца хода; пусто → 3000 |
+| `TELEHARNESS_AUTO_RELAY_DELAY_MS` | `server.js` | пауза перед автоматической передачей чата при лимите (FEAT-18.6), чтобы ход успел закрыться; пусто → 1500 |
+| `TELEHARNESS_CODEX_SHIM` | `lib/claude.js` | посредник Codex, который раннер запускает для моделей Codex (FEAT-18.7); пусто → `lib/codex-shim.mjs` |
+| `TELEHARNESS_CODEX` | `lib/codex-catalog.js` | `off` — движок Codex выключен, посредник не запускается (FEAT-18.7); пусто → Codex предлагается, когда codex установлен и в нём выполнен вход |
+| `TELEHARNESS_CODEX_BIN` | `lib/codex-shim.mjs` | путь к бинарю codex или его `bin/codex.js` (JS — через node); пусто → нативный codex из глобального пакета npm `@openai/codex` (npm prefix, папка node, `%APPDATA%\npm` на Windows, `/usr/local/lib`, `~/.npm-global` на macOS/Linux), затем `codex` в `PATH` |
 | `TELEHARNESS_JOURNAL_DEBUG` | `server.js`, `lib/chat-journal.js` | непусто → причины пропуска журнала чата пишутся в stderr |
 | `TELEHARNESS_CLAUDE_ADMIN_MODE` | `lib/claude.js` | permission-mode admin-хода Claude; пусто → `bypassPermissions` |
 | `TELEHARNESS_CLAUDE_ADD_DIRS` | `lib/claude.js` | extra `--add-dir` через `;`; пусто → корень портала |

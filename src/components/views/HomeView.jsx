@@ -131,6 +131,13 @@ export function fmtTokensShort(n) {
   return String(n);
 }
 
+// FEAT-18.3: chats parked on the person (an open permission/question dialog
+// — the same source as the «⏸ разрешение» badge), for the «Ждут вас» filter.
+export function waitingChats(list, dialogList = dialogs.value) {
+  const ids = new Set((dialogList ?? []).map((d) => d?.sessionID).filter(Boolean));
+  return (list ?? []).filter((s) => ids.has(s?.id));
+}
+
 // Row run state (FEAT-01.31): an open dialog wins over «busy» — the turn is
 // parked on the user, not working.
 export function rowState(id) {
@@ -172,6 +179,11 @@ export function SessionBody({ session: s, pinned = false }) {
       {bindingOf(s)?.engine === "claude" && (
         <span class="badge-engine" title={t("home.badge.claudeTitle")}>
           <span class="engine-dot is-claude" aria-hidden="true" />Claude
+        </span>
+      )}
+      {bindingOf(s)?.engine === "codex" && (
+        <span class="badge-engine" title={t("home.badge.codexTitle")}>
+          <span class="engine-dot is-codex" aria-hidden="true" />Codex
         </span>
       )}
     </>
@@ -424,6 +436,7 @@ export default function HomeView() {
   const [renaming, setRenaming] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [waitingOnly, setWaitingOnly] = useState(false); // FEAT-18.3: «Ждут вас»
 
   async function newChat() {
     if (creating) return;
@@ -445,9 +458,11 @@ export default function HomeView() {
   const visible = sessions.value.filter(
     (s) => !isHiddenDir(s.directory) && !isSubagentSession(s, agents.value),
   );
+  const waiting = waitingChats(visible);
+  const base = waitingOnly ? waiting : visible;
   const filtered = q
-    ? visible.filter((s) => (s.title ?? "").toLowerCase().includes(q) || chatTitle(s).toLowerCase().includes(q))
-    : visible;
+    ? base.filter((s) => (s.title ?? "").toLowerCase().includes(q) || chatTitle(s).toLowerCase().includes(q))
+    : base;
   // FEAT-01.69: «Закреплённые» — над датами, в порядке закрепления; в датах
   // их уже нет. Н14: больше PINNED_FOLD — «Ещё N».
   const { pinned, rest } = splitPinned(filtered, pins.value);
@@ -493,11 +508,28 @@ export default function HomeView() {
             aria-label={t("home.search")} autocomplete="off" spellcheck={false}
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
+          {(waiting.length > 0 || waitingOnly) && (
+            <div class="list-filters" role="group" aria-label={t("home.filterAria")} data-req="FEAT-18.3">
+              <button
+                type="button" class={"filter-chip" + (waitingOnly ? " is-on" : "")} aria-pressed={waitingOnly ? "true" : "false"}
+                title={t("home.waitingTitle")} onClick={() => setWaitingOnly(!waitingOnly)}
+              >
+                {t("home.waiting")}<span class="filter-count">{waiting.length}</span>
+              </button>
+            </div>
+          )}
           {filtered.length === 0 ? (
-            <p class="hint" role="status">
-              {t("pickers.nothingFound", { query: query.trim() })}{" "}
-              <button class="link-btn" type="button" onClick={() => setQuery("")}>{t("home.resetSearch")}</button>
-            </p>
+            waitingOnly && !q ? (
+              <p class="hint" role="status">
+                {t("home.waitingNone")}{" "}
+                <button class="link-btn" type="button" onClick={() => setWaitingOnly(false)}>{t("home.showAll")}</button>
+              </p>
+            ) : (
+              <p class="hint" role="status">
+                {t("pickers.nothingFound", { query: query.trim() })}{" "}
+                <button class="link-btn" type="button" onClick={() => setQuery("")}>{t("home.resetSearch")}</button>
+              </p>
+            )
           ) : (
             <>
             {pinned.length > 0 && (

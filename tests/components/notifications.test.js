@@ -152,7 +152,7 @@ test("pushSupport: iPhone и navigator.standalone=false → ios-browser; с эк
 });
 
 test("Настройки показывают строку «Уведомления» (настоящая библиотека: браузер без push → понятный текст)", async () => {
-  ui.store.me.value = { id: "u", name: "julia", role: "user" };
+  ui.store.me.value = { id: "u", name: "alice", role: "user" };
   installFetch();
   // FEAT-03.23: строка корня ведёт в раздел «Уведомления»
   const top = t$.mount(ui.SettingsView);

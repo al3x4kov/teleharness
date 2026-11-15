@@ -4,6 +4,7 @@
 // (BUG-13.3 / BUG-07.8 UI) and the clean «send again» payload.
 import { fmtSpan as fmtSec, splitDirective, splitInjected } from "./normalize.js";
 import { t } from "./i18n.js";
+import { claudeAnswerError, errText, turnErrorKind } from "../../shared/turn-error.js";
 
 // ---- optimistic user bubbles ------------------------------------------------
 // tmp-<n> entries live only in this tab. info.delivery walks
@@ -109,16 +110,8 @@ export function resendParts(message) {
 }
 
 // ---- turn errors (session.error / info.error / Claude error text) ------------
-
-const CLAUDE_ERROR_TEXT_RE =
-  /^(Не удалось запустить claude CLI|Claude вернул ошибку)|Please run \/login|OAuth token (has )?expired|Invalid API key|authentication_error|usage limit reached|Claude AI usage limit/i;
-
-function errText(err) {
-  if (err == null) return "";
-  if (typeof err === "string") return err;
-  const m = err.data?.message ?? err.message ?? err.data?.error ?? "";
-  return typeof m === "string" ? m : "";
-}
+// The classification itself is shared with the server (FEAT-18.6 auto-relay):
+// shared/turn-error.js. Here — only the words of the card.
 
 function clip(s, n = 280) {
   const t = String(s ?? "").replace(/\s+/g, " ").trim();
@@ -129,13 +122,12 @@ function clip(s, n = 280) {
 // actions: "retry" (resend the last user message), "settings" (limits live in
 // Настройки → Подписка), "continue" (the answer was cut off).
 export function describeTurnError(err, { engine = "opencode" } = {}) {
-  if (err == null || err === false) return null;
-  const name = typeof err === "object" ? String(err.name ?? "") : "";
-  if (name === "MessageAbortedError") return null; // «Стоп» — the user's own choice
+  const kind = turnErrorKind(err, { engine });
+  if (!kind) return null; // «Стоп» — the user's own choice
   // BUG-11.13 / BUG-082: the hub marks a turn that finished with no content
   // and no error (live session.error + info.error in history). Its own face:
   // nothing broke on the provider side, a resend usually helps.
-  if (name === "EmptyTurnError") {
+  if (kind === "empty") {
     return {
       kind: "empty",
       title: t("turn.err.empty.title"),
@@ -145,12 +137,11 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
     };
   }
   const raw = errText(err);
-  const low = `${name} ${raw}`.toLowerCase();
-  const claude = engine === "claude";
+  const claude = engine === "claude" || engine === "codex"; // FEAT-18.7: Codex — тот же раннер
   const detail = clip(raw) || null;
   // ISSUE-006: the chat's folder is gone / on a missing drive — upstream
   // answers a raw PlatformError realPath stack. A retry cannot help.
-  if (/platformerror|filesystem\.realpath|enoent|no such file or directory/.test(low)) {
+  if (kind === "workdir") {
     return {
       kind: "workdir",
       title: t("turn.err.workdir.title"),
@@ -159,10 +150,7 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
       actions: [],
     };
   }
-  if (
-    name === "ProviderAuthError" ||
-    /unauthori[sz]ed|invalid api key|oauth|authenticat|please run \/login|\b401\b|forbidden|\b403\b/.test(low)
-  ) {
+  if (kind === "auth") {
     return {
       kind: "auth",
       title: t(claude ? "turn.err.auth.claude.title" : "turn.err.auth.title"),
@@ -171,7 +159,7 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
       actions: ["retry"],
     };
   }
-  if (/rate.?limit|quota|\b429\b|too many requests|usage limit|limit (exceeded|reached)|insufficient (balance|quota)|余额|exceeded your/.test(low)) {
+  if (kind === "limit") {
     return {
       kind: "limit",
       title: t(claude ? "turn.err.limit.claude.title" : "turn.err.limit.title"),
@@ -180,7 +168,7 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
       actions: claude ? ["retry"] : ["retry", "settings"],
     };
   }
-  if (name === "MessageOutputLengthError" || /output length|max.?tokens/.test(low)) {
+  if (kind === "length") {
     return {
       kind: "length",
       title: t("turn.err.length.title"),
@@ -189,7 +177,7 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
       actions: ["continue"],
     };
   }
-  if (/overloaded|\b5\d\d\b|timeout|timed out|econn|network|fetch failed|socket|unavailable/.test(low)) {
+  if (kind === "provider") {
     return {
       kind: "provider",
       title: t("turn.err.provider.title"),
@@ -198,8 +186,9 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
       actions: ["retry"],
     };
   }
-  if (claude && /^Не удалось запустить claude CLI/i.test(raw)) {
-    return { kind: "spawn", title: t("turn.err.spawn.title"), text: t("turn.err.spawn.text"), detail, actions: ["retry"] };
+  if (kind === "spawn") {
+    const cx = engine === "codex";
+    return { kind: "spawn", title: t(cx ? "turn.err.spawn.codex.title" : "turn.err.spawn.title"), text: t(cx ? "turn.err.spawn.codex.text" : "turn.err.spawn.text"), detail, actions: ["retry"] };
   }
   return {
     kind: "unknown",
@@ -218,13 +207,14 @@ export function turnErrorFromMessages(messages, { engine = "opencode" } = {}) {
   const tail = list[list.length - 1];
   if (!tail || tail.info?.role !== "assistant") return null;
   if (tail.info.error) return describeTurnError(tail.info.error, { engine });
-  if (engine === "claude") {
+  if (engine === "claude" || engine === "codex") {
     const text = (tail.parts ?? [])
       .filter((p) => p?.type === "text")
       .map((p) => p.text ?? "")
       .join("\n")
       .trim();
-    if (text && text.length < 2000 && CLAUDE_ERROR_TEXT_RE.test(text)) return describeTurnError(text, { engine });
+    const errorText = claudeAnswerError(text);
+    if (errorText) return describeTurnError(errorText, { engine });
   }
   return null;
 }

@@ -8,8 +8,8 @@ import { normDir, normDirFor } from "../lib/auth.js";
 const L = { platform: "linux" };
 
 test("TASK-17.1: isAbsoluteDir на Linux — только абсолютные POSIX-пути без «..»", () => {
-  assert.equal(isAbsoluteDir("/home/julia/chats", L), true);
-  assert.equal(isAbsoluteDir("home/julia", L), false);
+  assert.equal(isAbsoluteDir("/home/alice/chats", L), true);
+  assert.equal(isAbsoluteDir("home/alice", L), false);
   assert.equal(isAbsoluteDir("/home/../etc", L), false);
   assert.equal(isAbsoluteDir("C:\\Users\\x", L), false, "Windows-путь на Linux — не абсолютный");
   assert.equal(isAbsoluteDir("", L), false);
@@ -20,8 +20,8 @@ test("TASK-17.1: dirProblem на Linux — корень ФС и системны
   for (const d of ["/etc", "/etc/ssh", "/usr/bin", "/proc/1", "/sys", "/dev", "/boot", "/root", "/var/lib/docker", "/run/docker.sock", "/bin", "/sbin", "/lib", "/lib64"]) {
     assert.equal(dirProblem(d, L), "system", d);
   }
-  assert.equal(dirProblem("/home/julia/work", L), null);
-  assert.equal(dirProblem("/srv/teleharness/tenants/julia", L), null);
+  assert.equal(dirProblem("/home/alice/work", L), null);
+  assert.equal(dirProblem("/srv/teleharness/tenants/alice", L), null);
   assert.equal(dirProblem("relative/dir", L), "not-absolute");
   assert.equal(dirProblem("/home/a\u0001b", L), "alias", "управляющие символы");
   assert.equal(dirProblem("", L), "empty");
@@ -31,7 +31,7 @@ test("TASK-17.1: dirProblem на Linux — зоны владельца для т
   const o = { ...L, tenant: true, portalRoot: "/opt/teleharness", dataDir: "/var/teleharness-data", profileRoot: "/home/owner" };
   assert.equal(dirProblem("/opt/teleharness/server.js", o), "portal");
   assert.equal(dirProblem("/home/owner", o), "profile-root");
-  assert.equal(dirProblem("/home/owner/.teleharness-tenants/julia", o), null, "подпапки профиля — можно");
+  assert.equal(dirProblem("/home/owner/.teleharness-tenants/alice", o), null, "подпапки профиля — можно");
   assert.equal(dirProblem("/opt/TELEHARNESS", o), null, "на Linux /opt/TELEHARNESS — другая папка, не портал");
 });
 

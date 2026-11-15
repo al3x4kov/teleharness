@@ -150,7 +150,8 @@ export function catalogRoutes(deps) {
       path: "/teleharness/api/dialogs",
       scope: "user",
       handler: async ({ res, user, admin }) => {
-        const all = await deps.hub.collectDialogs();
+        // FEAT-18.4: + the open requests of the Claude permission bridge.
+        const all = [...(await deps.hub.collectDialogs()), ...(deps.claude?.dialogs?.() ?? [])];
         if (admin) return sendJson(res, 200, all);
         return sendJson(res, 200, all.filter((e) => deps.dirAllowed(user, e.directory ?? e.dir)));
       },
@@ -177,7 +178,7 @@ export function catalogRoutes(deps) {
         } catch {
           return sendJson(res, 502, { error: "provider unavailable" });
         }
-        return sendJson(res, 200, deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude") }));
+        return sendJson(res, 200, deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex") }));
       },
     },
     // FEAT-13.17: the Claude agents catalog — id/name/description only (no
@@ -313,7 +314,7 @@ export function catalogRoutes(deps) {
             catalog = captured.status === 200 ? JSON.parse(captured.body) : null;
           } catch {}
           if (!catalog) return sendJson(res, 503, { error: "subscriptions unavailable" });
-          const visible = admin ? catalog : deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude") });
+          const visible = admin ? catalog : deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex") });
           const connected = Array.isArray(visible?.connected) ? visible.connected : [];
           return sendJson(res, 200, { providers: await deps.subscriptionCards({ connected, zai: deps.usageStats }) });
         } catch (err) {

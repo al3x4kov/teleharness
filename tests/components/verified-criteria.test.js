@@ -95,7 +95,7 @@ test("BUG-03.14 (с FEAT-03.21): тенант — /host и /claude/agents не �
     { method: "GET", path: "/teleharness/api/host", reply: () => ({ status: 403, body: { error: "admin only" } }) },
     { method: "GET", path: "/teleharness/api/claude/agents", reply: () => ({ status: 403, body: { error: "admin only" } }) },
   ]);
-  ui.store.me.value = { id: "u_t", name: "julia", role: "user" };
+  ui.store.me.value = { id: "u_t", name: "alice", role: "user" };
   await ui.store.loadCatalogs();
   const { root } = t$.mount(ui.SettingsView, { section: "about" });
   await t$.waitFor(() => /opencode 1\.19\.5/.test(root.textContent));
