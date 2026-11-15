@@ -507,7 +507,7 @@ test("FEAT-01.77: глаголы, сводка и длительность по 
 
 test("FEAT-01.77: у пути в шаге показывается хвост — имя файла видно в одну строку", async () => {
   const { pathTail } = await import("../src/lib/subagents.js");
-  assert.equal(pathTail("D:\\teleharness-stage\\tmp\\sa-x\\a.txt"), "…\\sa-x\\a.txt");
+  assert.equal(pathTail("D:\\th-stage\\tmp\\sa-x\\a.txt"), "…\\sa-x\\a.txt");
   assert.equal(pathTail("/srv/teleharness/home/a/b.txt"), "…/a/b.txt");
   assert.equal(pathTail("a.txt"), "a.txt");
 });
@@ -629,7 +629,7 @@ test("TASK-01.79: у шагов Claude с путём — хвост пути (BU
       CLAUDE_CTX,
     );
   const run = z([
-    { id: "s1", kind: "tool", tool: "read", object: "C:\\Users\\USER\\teleharness-qa-tmp\\claude-subagent-rec\\a.txt", status: "done" },
+    { id: "s1", kind: "tool", tool: "read", object: "C:\\Users\\dev\\teleharness-qa-tmp\\claude-subagent-rec\\a.txt", status: "done" },
     { id: "s2", kind: "tool", tool: "bash", object: "Get-ChildItem -Force C:\\tmp", status: "done" },
     { id: "s3", kind: "tool", tool: "glob", object: "**/*", status: "done" },
     { id: "s4", kind: "tool", tool: "grep", object: "src/lib/auth.ts", status: "done" },
@@ -638,7 +638,7 @@ test("TASK-01.79: у шагов Claude с путём — хвост пути (BU
   assert.equal(run.steps[1].object, "Get-ChildItem -Force C:\\tmp", "команда с пробелом — не путь");
   assert.equal(run.steps[2].object, "**/*", "шаблон — не путь");
   assert.equal(run.steps[3].object, "…/lib/auth.ts", "путь со слешами — хвост");
-  assert.equal(pathTail("D:\\teleharness-stage\\tmp\\sa-x\\a.txt"), "…\\sa-x\\a.txt", "pathTail как был");
+  assert.equal(pathTail("D:\\th-stage\\tmp\\sa-x\\a.txt"), "…\\sa-x\\a.txt", "pathTail как был");
 });
 
 test("TASK-01.79: задача без служебной заглушки — title части только неслужебный, иначе input.description", () => {

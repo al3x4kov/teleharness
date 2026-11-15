@@ -18,7 +18,7 @@ Claude-mobile-app-style web UI for opencode. This scaffold contains the
 ## Run
 
 ```cmd
-cd D:\Portal\teleharness
+cd D:\Apps\teleharness
 npm install
 set TELEHARNESS_MOCK=1 && node server.js       :: mock API + static UI on http://127.0.0.1:4170
 npm test                                :: 4 contract tests

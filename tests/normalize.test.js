@@ -49,10 +49,10 @@ test("parseTime treats sub-1e12 values as seconds and larger ones as ms", () => 
 });
 
 test("isUnderPath containment: case-insensitive, boundary-safe, empty-dir hides", () => {
-  assert.equal(isUnderPath("D:\\Obsidian\\x.md", "D:\\Obsidian"), true);
-  assert.equal(isUnderPath("d:/obsidian/sub/x.md", "D:\\Obsidian"), true);
-  assert.equal(isUnderPath("D:\\ObsidianX\\x.md", "D:\\Obsidian"), false, "segment boundary required");
-  assert.equal(isUnderPath("C:\\Users\\USER\\version.js", "C:\\Users\\USER"), true);
+  assert.equal(isUnderPath("D:\\Vault\\x.md", "D:\\Vault"), true);
+  assert.equal(isUnderPath("d:/vault/sub/x.md", "D:\\Vault"), true);
+  assert.equal(isUnderPath("D:\\ObsidianX\\x.md", "D:\\Vault"), false, "segment boundary required");
+  assert.equal(isUnderPath("C:\\Users\\dev\\version.js", "C:\\Users\\dev"), true);
   assert.equal(isUnderPath("version.js", ""), false, "no session dir -> cannot verify scope");
   assert.equal(isUnderPath(null, "D:\\x"), false);
 });
@@ -307,7 +307,7 @@ test("splitInjected hides the vault-cache snapshot, keeps the user text", () => 
 // separator AFTER the snapshot terminator, not at the first `---`.
 test("splitInjected: snapshot with inner --- lines (digest tail) stays out of the bubble", () => {
   const snapshot = [
-    "[obsidian-cache] Активный кэш проекта «user» (C:\\Users\\USER), собран 2026-11-02 14:31.",
+    "[obsidian-cache] Активный кэш проекта «user» (C:\\Users\\dev), собран 2026-11-02 14:31.",
     "## Хвост последнего дайджеста (2026-11-02-user.md)",
     "- Итог: работает.",
     "",
@@ -316,7 +316,7 @@ test("splitInjected: snapshot with inner --- lines (digest tail) stays out of th
     "# Сессия 2026-11-02 — HTTPS-сертификат",
     "## 08:55 — в общем так и не заработало",
     "",
-    "Правила кэша: D:\\Obsidian\\agents\\_index.md. Дайджест пишется автоматически.",
+    "Правила кэша: D:\\Vault\\agents\\_index.md. Дайджест пишется автоматически.",
   ].join("\n");
   const r = splitInjected(snapshot + "\n\n---\n\nОтветь одним словом: столица Франции?");
   assert.equal(r.text, "Ответь одним словом: столица Франции?");
@@ -346,14 +346,14 @@ test("validateProjectDir (BUG-013): absolute, no .., no system dirs", () => {
 });
 
 test("collectArtifacts (BUG-012): files in temp scratch dirs are not result chips", () => {
-  assert.equal(isScratchPath("C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\gen-qa.ps1"), true);
-  assert.equal(isScratchPath("C:\\Users\\USER\\qa-files\\qa-doc.pdf"), false);
+  assert.equal(isScratchPath("C:\\Users\\dev\\AppData\\Local\\Temp\\opencode\\gen-qa.ps1"), true);
+  assert.equal(isScratchPath("C:\\Users\\dev\\qa-files\\qa-doc.pdf"), false);
   const parts = [
-    { type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\gen-qa.ps1" } } },
-    { type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\USER\\qa-files\\qa-page.html" } } },
+    { type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\dev\\AppData\\Local\\Temp\\opencode\\gen-qa.ps1" } } },
+    { type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\dev\\qa-files\\qa-page.html" } } },
   ];
-  const chips = collectArtifacts(parts, ["готово: C:\\Users\\USER\\qa-files\\qa-doc.pdf"], "C:\\Users\\USER");
-  assert.deepEqual(chips, ["C:\\Users\\USER\\qa-files\\qa-page.html", "C:\\Users\\USER\\qa-files\\qa-doc.pdf"]);
+  const chips = collectArtifacts(parts, ["готово: C:\\Users\\dev\\qa-files\\qa-doc.pdf"], "C:\\Users\\dev");
+  assert.deepEqual(chips, ["C:\\Users\\dev\\qa-files\\qa-page.html", "C:\\Users\\dev\\qa-files\\qa-doc.pdf"]);
 });
 
 test("splitInjected passes clean texts through untouched", () => {
@@ -403,9 +403,9 @@ test("mergePostIntoMessages appends by id and replaces keeping old parts when ne
 // ---- projects (Claude-style grouping) --------------------------------------
 
 test("dirBasename takes the last segment of both separators, falls back for roots", () => {
-  assert.equal(dirBasename("C:\\Users\\USER"), "USER");
-  assert.equal(dirBasename("C:\\Users\\USER\\AppData\\Local\\Temp\\oc_test"), "oc_test");
-  assert.equal(dirBasename("D:/Portal/teleharness"), "teleharness");
+  assert.equal(dirBasename("C:\\Users\\dev"), "dev");
+  assert.equal(dirBasename("C:\\Users\\dev\\AppData\\Local\\Temp\\oc_test"), "oc_test");
+  assert.equal(dirBasename("D:/Apps/teleharness"), "teleharness");
   assert.equal(dirBasename("C:\\"), "C:"); // root drive: label without the slash
   assert.equal(dirBasename("/"), "/");
   assert.equal(dirBasename(""), "");
@@ -415,12 +415,12 @@ test("dirBasename takes the last segment of both separators, falls back for root
 test("isHiddenDir default rules hide windows/temp with segment boundaries, extra is exact", () => {
   // built-in junk from the live server (watchdog incident + test runs)
   assert.equal(isHiddenDir("C:\\Windows\\System32"), true);
-  assert.equal(isHiddenDir("C:\\Users\\USER\\AppData\\Local\\Temp\\oc_test"), true);
+  assert.equal(isHiddenDir("C:\\Users\\dev\\AppData\\Local\\Temp\\oc_test"), true);
   // real projects survive, including lookalike names (boundary required)
-  assert.equal(isHiddenDir("C:\\Users\\USER"), false);
-  assert.equal(isHiddenDir("D:\\Portal\\teleharness"), false);
-  assert.equal(isHiddenDir("D:\\Portal\\template"), false);
-  assert.equal(isHiddenDir("D:\\Portal\\windows-tools"), false);
+  assert.equal(isHiddenDir("C:\\Users\\dev"), false);
+  assert.equal(isHiddenDir("D:\\Apps\\teleharness"), false);
+  assert.equal(isHiddenDir("D:\\Apps\\template"), false);
+  assert.equal(isHiddenDir("D:\\Apps\\windows-tools"), false);
   // user extras: exact, case-insensitive
   assert.equal(isHiddenDir("D:\\Secret", ["d:\\secret"]), true);
   assert.equal(isHiddenDir("D:\\Secret", ["D:\\Other"]), false);
@@ -431,8 +431,8 @@ test("buildProjects groups by directory with counts and recency, sorted desc", (
   // parseTime treats <1e12 as seconds: use realistic millisecond timestamps.
   const t = (ms) => ({ updated: ms });
   const sessions = [
-    { id: "a", directory: "C:\\Users\\USER", time: t(1_793_393_000_000) },
-    { id: "b", directory: "C:\\Users\\USER", time: t(1_793_393_002_000) },
+    { id: "a", directory: "C:\\Users\\dev", time: t(1_793_393_000_000) },
+    { id: "b", directory: "C:\\Users\\dev", time: t(1_793_393_002_000) },
     { id: "c", directory: "D:\\Proj", time: t(1_793_393_001_000) },
     { id: "d", directory: null }, // no directory: dropped
     { id: "e" }, // no directory field: dropped
@@ -440,10 +440,10 @@ test("buildProjects groups by directory with counts and recency, sorted desc", (
   const groups = buildProjects(sessions);
   assert.deepEqual(
     groups.map((g) => g.directory),
-    ["C:\\Users\\USER", "D:\\Proj"], // by lastUpdated desc (...002 > ...001)
+    ["C:\\Users\\dev", "D:\\Proj"], // by lastUpdated desc (...002 > ...001)
   );
   const home = groups[0];
-  assert.equal(home.name, "USER");
+  assert.equal(home.name, "dev");
   assert.equal(home.count, 2);
   assert.equal(home.lastUpdated, 1_793_393_002_000);
   assert.deepEqual(
@@ -457,25 +457,25 @@ test("buildProjects groups by directory with counts and recency, sorted desc", (
 
 test("buildProjects applies default junk rules and extra hidden list", () => {
   const sessions = [
-    { id: "a", directory: "C:\\Users\\USER", time: { updated: 1 } },
+    { id: "a", directory: "C:\\Users\\dev", time: { updated: 1 } },
     { id: "sys", directory: "C:\\Windows\\System32", time: { updated: 2 } },
-    { id: "tmp", directory: "C:\\Users\\USER\\AppData\\Local\\Temp\\oc_test", time: { updated: 3 } },
+    { id: "tmp", directory: "C:\\Users\\dev\\AppData\\Local\\Temp\\oc_test", time: { updated: 3 } },
     { id: "x", directory: "D:\\X", time: { updated: 4 } },
   ];
   assert.deepEqual(
     buildProjects(sessions).map((g) => g.directory),
-    ["D:\\X", "C:\\Users\\USER"],
+    ["D:\\X", "C:\\Users\\dev"],
   );
   assert.deepEqual(
     buildProjects(sessions, { hidden: ["D:\\X"] }).map((g) => g.directory),
-    ["C:\\Users\\USER"],
+    ["C:\\Users\\dev"],
   );
   assert.deepEqual(buildProjects(null), []);
 });
 
 test("buildProjects merges user-added folders as empty cards, dedupes and hides", () => {
   const sessions = [
-    { id: "a", directory: "C:\\Users\\USER", time: { updated: 1_793_393_000_000 } },
+    { id: "a", directory: "C:\\Users\\dev", time: { updated: 1_793_393_000_000 } },
     { id: "b", directory: "D:\\Proj", time: { updated: 5 } },
   ];
   const groups = buildProjects(sessions, { extraDirs: ["D:\\Proj", "E:\\Fresh", "C:\\Windows\\junk", "not a dir? no — it is"] });
@@ -484,7 +484,7 @@ test("buildProjects merges user-added folders as empty cards, dedupes and hides"
   assert.deepEqual(
     groups.map((g) => [g.directory, g.count]),
     [
-      ["C:\\Users\\USER", 1],
+      ["C:\\Users\\dev", 1],
       ["D:\\Proj", 1],
       ["E:\\Fresh", 0],
       ["not a dir? no — it is", 0],
@@ -556,12 +556,12 @@ test("extractFilePaths picks up .teleharness-uploads refs and skips non-artifact
 });
 
 test("projectDisplayName renames home folders, keeps real project names", () => {
-  assert.equal(projectDisplayName("C:\\Users\\USER"), "Домашняя папка");
+  assert.equal(projectDisplayName("C:\\Users\\dev"), "Домашняя папка");
   assert.equal(projectDisplayName("/home/john"), "Домашняя папка");
-  assert.equal(projectDisplayName("D:\\Portal\\teleharness"), "teleharness");
-  assert.equal(projectDisplayName("C:\\Users\\USER\\AppData\\Local\\Temp\\oc_test"), "oc_test");
-  // a sibling folder like C:\Users\USER\dev is a real project, not a home
-  assert.equal(projectDisplayName("C:\\Users\\USER\\dev"), "dev");
+  assert.equal(projectDisplayName("D:\\Apps\\teleharness"), "teleharness");
+  assert.equal(projectDisplayName("C:\\Users\\dev\\AppData\\Local\\Temp\\oc_test"), "oc_test");
+  // a sibling folder like C:\Users\dev\dev is a real project, not a home
+  assert.equal(projectDisplayName("C:\\Users\\dev\\dev"), "dev");
 });
 
 // ---- orchestration directives ------------------------------------------------
@@ -696,36 +696,36 @@ test("collapseToolRuns: identical consecutive tool calls collapse with a counter
 
 test("collectArtifacts: write-tool files chip only inside the session dir", () => {
   const write = (p) => ({ id: "w", type: "tool", tool: "write", state: { status: "completed", input: { filePath: p } } });
-  const parts = [write("C:\\Users\\USER\\qa-files\\qa-picture.png"), write("D:\\Portal\\teleharness\\src\\lib\\version.js")];
-  const out = collectArtifacts(parts, [], "C:\\Users\\USER");
-  assert.deepEqual(out, ["C:\\Users\\USER\\qa-files\\qa-picture.png"], "вне папки сессии — не чип (leak audit)");
+  const parts = [write("C:\\Users\\dev\\qa-files\\qa-picture.png"), write("D:\\Apps\\teleharness\\src\\lib\\version.js")];
+  const out = collectArtifacts(parts, [], "C:\\Users\\dev");
+  assert.deepEqual(out, ["C:\\Users\\dev\\qa-files\\qa-picture.png"], "вне папки сессии — не чип (leak audit)");
 });
 
 test("collectArtifacts: script-generated artifacts from the final text chip (scoped)", () => {
-  const text = `Готово — 4 артефакта созданы в C:\\Users\\USER\\qa-files\\:
-| qa-picture.png | C:\\Users\\USER\\qa-files\\qa-picture.png | 12 592 B |
-| qa-table.xlsx | C:\\Users\\USER\\qa-files\\qa-table.xlsx | 2 097 B |
-| qa-doc.pdf | C:\\Users\\USER\\qa-files\\qa-doc.pdf | 1 084 B |`;
-  const out = collectArtifacts([], [text], "C:\\Users\\USER");
+  const text = `Готово — 4 артефакта созданы в C:\\Users\\dev\\qa-files\\:
+| qa-picture.png | C:\\Users\\dev\\qa-files\\qa-picture.png | 12 592 B |
+| qa-table.xlsx | C:\\Users\\dev\\qa-files\\qa-table.xlsx | 2 097 B |
+| qa-doc.pdf | C:\\Users\\dev\\qa-files\\qa-doc.pdf | 1 084 B |`;
+  const out = collectArtifacts([], [text], "C:\\Users\\dev");
   assert.equal(out.length, 3);
   assert.ok(out[0].endsWith("qa-picture.png"));
-  assert.ok(out.every((p) => p.toLowerCase().replace(/\\/g, "/").startsWith("c:/users/user/qa-files/")));
+  assert.ok(out.every((p) => p.toLowerCase().replace(/\\/g, "/").startsWith("c:/users/dev/qa-files/")));
 });
 
 test("collectArtifacts: text path outside the session dir never chips (leak guard)", () => {
-  const text = "Правку внёс в D:\\Portal\\teleharness\\src\\app.css и заметку D:\\Obsidian\\notes\\x.md.";
-  assert.deepEqual(collectArtifacts([], [text], "C:\\Users\\USER"), []);
+  const text = "Правку внёс в D:\\Apps\\teleharness\\src\\app.css и заметку D:\\Vault\\notes\\x.md.";
+  assert.deepEqual(collectArtifacts([], [text], "C:\\Users\\dev"), []);
 });
 
 test("collectArtifacts: unknown session dir hides everything", () => {
-  const write = { id: "w", type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\USER\\qa-files\\qa-doc.pdf" } } };
-  assert.deepEqual(collectArtifacts([write], ["См. C:\\Users\\USER\\qa-files\\qa-doc.pdf"], ""), []);
+  const write = { id: "w", type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\dev\\qa-files\\qa-doc.pdf" } } };
+  assert.deepEqual(collectArtifacts([write], ["См. C:\\Users\\dev\\qa-files\\qa-doc.pdf"], ""), []);
 });
 
 test("collectArtifacts: dedupe write + text mention of the same file, order of appearance", () => {
-  const write = { id: "w", type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\USER\\qa-files\\qa-page.html" } } };
-  const text = "Страница: C:\\Users\\USER\\qa-files\\qa-page.html и отчёт C:\\Users\\USER\\qa-files\\qa-doc.pdf";
-  const out = collectArtifacts([write], [text], "C:\\Users\\USER");
+  const write = { id: "w", type: "tool", tool: "write", state: { status: "completed", input: { filePath: "C:\\Users\\dev\\qa-files\\qa-page.html" } } };
+  const text = "Страница: C:\\Users\\dev\\qa-files\\qa-page.html и отчёт C:\\Users\\dev\\qa-files\\qa-doc.pdf";
+  const out = collectArtifacts([write], [text], "C:\\Users\\dev");
   assert.equal(out.length, 2);
   assert.ok(out[0].toLowerCase().endsWith("qa-page.html"));
   assert.ok(out[1].toLowerCase().endsWith("qa-doc.pdf"));
@@ -733,21 +733,21 @@ test("collectArtifacts: dedupe write + text mention of the same file, order of a
 
 test("collectArtifacts: FEAT-05.29 — лимит 8 снят (владелец 2026-11-11), все 12 файлов; потолок 40", () => {
   const parts = [];
-  for (let i = 1; i <= 5; i++) parts.push({ id: `w${i}`, type: "tool", tool: "write", state: { status: "completed", input: { filePath: `C:\\Users\\USER\\qa-files\\f${i}.md` } } });
+  for (let i = 1; i <= 5; i++) parts.push({ id: `w${i}`, type: "tool", tool: "write", state: { status: "completed", input: { filePath: `C:\\Users\\dev\\qa-files\\f${i}.md` } } });
   let text = "";
-  for (let i = 6; i <= 12; i++) text += `C:\\Users\\USER\\qa-files\\g${i}.md `;
-  const out = collectArtifacts(parts, [text], "C:\\Users\\USER");
+  for (let i = 6; i <= 12; i++) text += `C:\\Users\\dev\\qa-files\\g${i}.md `;
+  const out = collectArtifacts(parts, [text], "C:\\Users\\dev");
   assert.equal(out.length, 12);
   let big = "";
-  for (let i = 1; i <= 60; i++) big += `C:\\Users\\USER\\qa-files\\h${i}.md `;
-  assert.equal(collectArtifacts([], [big], "C:\\Users\\USER").length, 40);
+  for (let i = 1; i <= 60; i++) big += `C:\\Users\\dev\\qa-files\\h${i}.md `;
+  assert.equal(collectArtifacts([], [big], "C:\\Users\\dev").length, 40);
 });
 
 // BUG-155 (BUG-05.26): a glob mask in the answer is not a file — no chip, no /teleharness/api/file 404.
 test("BUG-155: paths with * or ? are not artifacts", () => {
-  const dir = String.raw`C:\Users\USER`;
-  const text = String.raw`Превью лежат в C:\Users\USER\teleharness-preview\*.svg и C:\Users\USER\out\chart?.png, а итог — C:\Users\USER\teleharness-preview\a.svg; см. /home/u/x/*.md`;
-  const want = [String.raw`C:\Users\USER\teleharness-preview\a.svg`];
+  const dir = String.raw`C:\Users\dev`;
+  const text = String.raw`Превью лежат в C:\Users\dev\teleharness-preview\*.svg и C:\Users\dev\out\chart?.png, а итог — C:\Users\dev\teleharness-preview\a.svg; см. /home/u/x/*.md`;
+  const want = [String.raw`C:\Users\dev\teleharness-preview\a.svg`];
   assert.deepEqual(extractFilePaths(text), want);
   assert.deepEqual(collectArtifactEntries([], [text], dir).map((e) => e.path), want);
 });

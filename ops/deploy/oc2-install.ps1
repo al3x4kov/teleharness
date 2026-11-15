@@ -5,15 +5,15 @@
 # Idempotent: re-run refreshes copied files and the task, keeps the existing password.
 # ASCII-only on purpose: Windows PowerShell 5.1 without BOM reads non-ASCII as ANSI.
 # Run:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File D:\Portal\teleharness\ops\deploy\oc2-install.ps1
-#            [-Binary <opencode.exe>] [-ExpectedSha256 <hex>] [-Root D:\Portal\teleharness-oc2]
-#            [-PasswordFile D:\Portal\teleharness\data\oc2-password.txt] [-Repo D:\Portal\teleharness]
+#   powershell -NoProfile -ExecutionPolicy Bypass -File D:\Apps\teleharness\ops\deploy\oc2-install.ps1
+#            [-Binary <opencode.exe>] [-ExpectedSha256 <hex>] [-Root D:\Apps\teleharness-oc2]
+#            [-PasswordFile D:\Apps\teleharness\data\oc2-password.txt] [-Repo D:\Apps\teleharness]
 #            [-AgentSkillsRoot <plugin cache dir>]
 param(
   [string]$Binary = "D:\teleharness-tmp-scripts\oc2-dl\bin\opencode.exe",
-  [string]$Root = "D:\Portal\teleharness-oc2",
-  [string]$PasswordFile = "D:\Portal\teleharness\data\oc2-password.txt",
-  [string]$Repo = "D:\Portal\teleharness",
+  [string]$Root = "D:\Apps\teleharness-oc2",
+  [string]$PasswordFile = "D:\Apps\teleharness\data\oc2-password.txt",
+  [string]$Repo = "D:\Apps\teleharness",
   [string]$ExpectedSha256 = "",
   [string]$AgentSkillsRoot = ""
 )
@@ -59,13 +59,13 @@ foreach ($d in @("config", "data", "state", "home", "logs", "config\opencode")) 
 Say "xdg: $Root\{config,data,state,home,logs}"
 
 # ---- 4) config zone (same layout as the v2 stand, prod paths) -----------------
-# opencode.v2.json already carries prod paths (instructions D:\Obsidian\agents\_index.md,
-# Sandbox allow-zone D:\Obsidian\tenants\*); the only patch: glm-rules.md points to the
+# opencode.v2.json already carries prod paths (instructions D:\Vault\agents\_index.md,
+# Sandbox allow-zone D:\Vault\tenants\*); the only patch: glm-rules.md points to the
 # copy placed NEXT TO this config (same marker-patch as stand-v2.ps1), so the v2 zone
 # does not depend on the 1.x config dir.
 $cfg = "$Root\config\opencode"
 $doc = [IO.File]::ReadAllText("$Repo\ops\opencode\opencode.v2.json")
-$oldRules = "C:\\Users\\USER\\.config\\opencode\\prompts\\glm-rules.md"
+$oldRules = "C:\\Users\\dev\\.config\\opencode\\prompts\\glm-rules.md"
 $newRules = $cfg.Replace("\", "\\") + "\\prompts\\glm-rules.md"
 if (-not $doc.Contains($oldRules)) { Fail "glm-rules marker not found in opencode.v2.json" }
 $doc = $doc.Replace($oldRules, $newRules)
@@ -95,7 +95,7 @@ if (-not $AgentSkillsRoot) {
   if ($cand) { $AgentSkillsRoot = ($cand | Select-Object -Last 1).FullName }
 }
 if ($AgentSkillsRoot -and (Test-Path (Join-Path $AgentSkillsRoot "skills"))) {
-  $node = if (Test-Path "D:\nodejs\node.exe") { "D:\nodejs\node.exe" } else { "node" }
+  $node = if (Test-Path "D:\tools\node\node.exe") { "D:\tools\node\node.exe" } else { "node" }
   & $node "$Repo\ops\opencode\agent-skills-opencode.mjs" $AgentSkillsRoot $cfg
   if ($LASTEXITCODE -ne 0) { Fail "agent-skills installer exit $LASTEXITCODE" }
   Say "agent-skills: installed from $AgentSkillsRoot"

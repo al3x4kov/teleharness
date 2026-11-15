@@ -20,7 +20,7 @@ const noTls = tlsEdge.tlsActive ? false : "нет ops/certs — HTTPS-only не 
 test("http /teleharness/* → 308 на https, путь и query сохранены", { skip: noTls }, async () => {
   const r = await tlsEdge.request("/teleharness/api/session?x=1");
   assert.equal(r.status, 308);
-  assert.equal(r.headers.location, "https://192.168.0.10/teleharness/api/session?x=1");
+  assert.equal(r.headers.location, "https://192.0.2.10/teleharness/api/session?x=1");
 });
 
 test("http POST /teleharness/* → 308 (метод сохраняется), до бэкенда не доходит", { skip: noTls }, async () => {

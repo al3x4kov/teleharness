@@ -193,7 +193,7 @@
     <rect x="484" y="1194" width="170" height="48" rx="10" class="chip"/><text x="569" y="1215" class="t" text-anchor="middle" font-weight="600">Python</text><text x="569" y="1232" class="m" text-anchor="middle" font-size="11">D:\teleharness-sandbox\python</text>
     <rect x="664" y="1194" width="170" height="48" rx="10" class="chip"/><text x="749" y="1215" class="t" text-anchor="middle" font-weight="600">Playwright MCP</text><text x="749" y="1232" class="m" text-anchor="middle" font-size="11">браузер для агента</text>
     <rect x="844" y="1194" width="200" height="48" rx="10" class="chip"/><text x="944" y="1215" class="t" text-anchor="middle" font-weight="600">Вложения</text><text x="944" y="1232" class="m" text-anchor="middle" font-size="11">.teleharness-uploads в папке чата</text>
-    <rect x="1054" y="1194" width="222" height="48" rx="10" class="chip"/><text x="1165" y="1215" class="t" text-anchor="middle" font-weight="600">Инструкции агентам</text><text x="1165" y="1232" class="m" text-anchor="middle" font-size="11">D:\Obsidian\agents\_index.md</text>
+    <rect x="1054" y="1194" width="222" height="48" rx="10" class="chip"/><text x="1165" y="1215" class="t" text-anchor="middle" font-weight="600">Инструкции агентам</text><text x="1165" y="1232" class="m" text-anchor="middle" font-size="11">D:\Vault\agents\_index.md</text>
   </g>
 
   <!-- side lanes: engines → egress -->

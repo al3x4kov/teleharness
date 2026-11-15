@@ -86,7 +86,7 @@ test("createSession: body по умолчанию {} и null → {}; directory �
 });
 
 test("id в пути кодируется (encodeURIComponent), session-ручки несут ?directory=", async () => {
-  const dir = "C:\\Users\\USER\\Temp dir";
+  const dir = "C:\\Users\\dev\\Temp dir";
   const qs = `?${new URLSearchParams({ directory: dir })}`;
   const cases = [
     [() => api.patchBinding("a/b", { agent: "x" }, { directory: dir }), "PATCH", `/teleharness/api/session/a%2Fb/binding${qs}`],
@@ -130,12 +130,12 @@ test("getMessages: limit/before/directory в query; без опций — без
   await api.getMessages("ses_1");
   assert.equal(calls[0].url, "/teleharness/api/session/ses_1/message");
   fakeFetch(() => ({ body: [] }));
-  await api.getMessages("ses_1", { limit: 50, before: "msg_9", directory: "D:\\Portal" });
+  await api.getMessages("ses_1", { limit: 50, before: "msg_9", directory: "D:\\Apps" });
   const u = new URL(calls[0].url, "http://x");
   assert.equal(u.pathname, "/teleharness/api/session/ses_1/message");
   assert.equal(u.searchParams.get("limit"), "50");
   assert.equal(u.searchParams.get("before"), "msg_9");
-  assert.equal(u.searchParams.get("directory"), "D:\\Portal");
+  assert.equal(u.searchParams.get("directory"), "D:\\Apps");
   fakeFetch(() => ({ body: [] }));
   await api.getMessages("ses_1", { limit: 0, before: 0 });
   assert.equal(calls[0].url, "/teleharness/api/session/ses_1/message?limit=0&before=0", "0 — валидное значение, не отбрасывается");
@@ -315,10 +315,10 @@ test("uploadFile: не-2xx → throw с err.status; 401 ведёт на экра
 });
 
 test("fileUrl: inline и download=1, Windows-пути кодируются", () => {
-  const inline = api.fileUrl("D:\\Portal\\teleharness", "out\\отчёт.md");
+  const inline = api.fileUrl("D:\\Apps\\teleharness", "out\\отчёт.md");
   const u = new URL(inline, "http://x");
   assert.equal(u.pathname, "/teleharness/api/file");
-  assert.equal(u.searchParams.get("directory"), "D:\\Portal\\teleharness");
+  assert.equal(u.searchParams.get("directory"), "D:\\Apps\\teleharness");
   assert.equal(u.searchParams.get("path"), "out\\отчёт.md");
   assert.equal(u.searchParams.has("download"), false);
   const dl = new URL(api.fileUrl(null, "a.txt", true), "http://x");
@@ -369,7 +369,7 @@ test("openEvents: /teleharness/api/event; JSON-события → onEvent, teleh
 // ---- BUG-08.8: постраничная история ------------------------------------------------
 
 test("BUG-08.8: история грузится постранично (openSession шлёт limit, догрузка через before)", async () => {
-  sessions.value = [{ id: "ses_p", directory: "D:\\Portal" }];
+  sessions.value = [{ id: "ses_p", directory: "D:\\Apps" }];
   const page = (n, from) => Array.from({ length: n }, (_, i) => ({ info: { id: `m${from + i}`, role: "user" }, parts: [] }));
   fakeFetch((url) => {
     if (url.includes("/status")) return { body: {} };
@@ -379,7 +379,7 @@ test("BUG-08.8: история грузится постранично (openSess
   try {
     await openSession("ses_p");
     const first = new URL(calls.find((c) => c.url.includes("/message")).url, "http://x");
-    assert.equal(first.searchParams.get("directory"), "D:\\Portal");
+    assert.equal(first.searchParams.get("directory"), "D:\\Apps");
     assert.ok(first.searchParams.has("limit"), "первая страница ограничена limit");
     assert.equal(active.value.hasOlder, true);
     assert.equal(active.value.olderCursor, "m3");

@@ -515,7 +515,7 @@ test("BUG-090: file/exists — batch existence check, 200 for the own folder (no
 
 test("BUG-141: malformed ?directory= (UNC, device, alias, relative) → 400 before upstream on any route; drive root / system tree still readable", async () => {
   const before = seen.length;
-  const bad = { unc: "\\\\evil\\share", "device-namespace": "\\\\?\\C:\\x", alias: WIN ? "C:\\Users\\USER\\file.txt:stream" : "/home/u/file*stream", "not-absolute": "relative\\folder" };
+  const bad = { unc: "\\\\evil\\share", "device-namespace": "\\\\?\\C:\\x", alias: WIN ? "C:\\Users\\dev\\file.txt:stream" : "/home/u/file*stream", "not-absolute": "relative\\folder" };
   for (const [code, dir] of Object.entries(bad)) {
     for (const route of ["/teleharness/api/session", "/teleharness/api/session/ses_a/message", "/teleharness/api/file/exists"]) {
       const r = await admin(`${route}?directory=${encodeURIComponent(dir)}&path=x.png`);
@@ -735,7 +735,7 @@ test("TASK-12.20: /healthz is loopback-direct only; access log has no query stri
   assert.equal((await fetch(`${base}/teleharness/api/healthz`, { headers: { "x-forwarded-for": "1.2.3.4" } })).status, 404, "edge-relayed callers get 404");
   const viaOldEdge = await new Promise((resolve) => {
     const u = new URL(base);
-    http.get({ host: u.hostname, port: u.port, path: "/teleharness/api/healthz", headers: { host: "192.168.0.10" } }, (r) => {
+    http.get({ host: u.hostname, port: u.port, path: "/teleharness/api/healthz", headers: { host: "192.0.2.10" } }, (r) => {
       r.resume();
       resolve(r.statusCode);
     });

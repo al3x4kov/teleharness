@@ -15,7 +15,7 @@
    "created": 1794373671971,
    "type": "session.created",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -57,7 +57,7 @@
    "created": 1794373691827,
    "type": "session.inbox.enqueued",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "inboxID": "msg_1c9015d26001y4akuZp8hiV3YA",
@@ -104,7 +104,7 @@
    },
    "type": "session.instructions.updated",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -129,7 +129,7 @@
    "created": 1794373691906,
    "type": "session.inbox.delivered",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -166,7 +166,7 @@
    "created": 1794373694465,
    "type": "session.renamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -184,7 +184,7 @@
    "created": 1794373696484,
    "type": "session.step.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -209,7 +209,7 @@
    "created": 1794373696492,
    "type": "session.reasoning.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -231,7 +231,7 @@
    "created": 1794373696602,
    "type": "session.reasoning.delta",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -246,7 +246,7 @@
    "created": 1794373697069,
    "type": "session.reasoning.delta",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -261,7 +261,7 @@
    "created": 1794373697173,
    "type": "session.reasoning.delta",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -276,7 +276,7 @@
    "created": 1794373697282,
    "type": "session.reasoning.delta",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -291,7 +291,7 @@
    "created": 1794373697305,
    "type": "session.reasoning.delta",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -306,7 +306,7 @@
    "created": 1794373697307,
    "type": "session.text.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -325,7 +325,7 @@
    "created": 1794373697377,
    "type": "session.reasoning.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -348,7 +348,7 @@
    "created": 1794373697384,
    "type": "session.text.delta",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -363,7 +363,7 @@
    "created": 1794373697384,
    "type": "session.text.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -383,7 +383,7 @@
    "created": 1794373697390,
    "type": "session.step.streamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",
@@ -401,7 +401,7 @@
    "created": 1794373697398,
    "type": "session.step.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbnr32r"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbnr32r"
    },
    "data": {
     "sessionID": "ses_e36fea3f1ffeYW8ZeCD4CAR2qg",

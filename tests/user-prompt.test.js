@@ -93,8 +93,8 @@ test("FEAT-03.21: tenantMcpView — whitelist only, status only (no error text, 
     context7: { status: "connected" },
     grep_app: { status: "connected" },
     lsp: { status: "connected" },
-    playwright: { status: "failed", error: "spawn C:\\Users\\USER\\npx ENOENT" },
-    marketplace: { status: "failed", error: "C:\\Users\\USER\\AppData\\Local\\ru-marketplace-mcp crashed" },
+    playwright: { status: "failed", error: "spawn C:\\Users\\dev\\npx ENOENT" },
+    marketplace: { status: "failed", error: "C:\\Users\\dev\\AppData\\Local\\ru-marketplace-mcp crashed" },
     "owner-secret": { status: "connected" },
   };
   const v = tenantMcpView(raw);

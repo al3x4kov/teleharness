@@ -28,7 +28,7 @@ function makeEnv(t, { withSlimJson = false, plugin } = {}) {
     $schema: "https://opencode.ai/config.json",
     model: "zai-coding-plan/glm-5.3",
     default_agent: "sisyphus",
-    instructions: ["D:\\Obsidian\\agents\\_index.md"],
+    instructions: ["D:\\Vault\\agents\\_index.md"],
     plugin: plugin ?? ["oh-my-openagent@1.2.3", "./vault-cache.ts"],
     provider: { "zai-coding-plan": { baseURL: "https://api.z.ai/api/coding-plan", options: { timeout: 600000 } } },
     agent: { Sandbox: { mode: "primary", prompt: "{file:./prompts/sandbox.md}" } },
@@ -57,7 +57,7 @@ test("apply on an OmO config swaps the plugin, keeps the rest, backs up original
   assert.deepEqual(cfg.plugin, ["oh-my-opencode-slim@3.0.7", "./vault-cache.ts"]);
   assert.equal(cfg.default_agent, "orchestrator");
   // свои поля стенда/прода не тронуты
-  assert.deepEqual(cfg.instructions, ["D:\\Obsidian\\agents\\_index.md"]);
+  assert.deepEqual(cfg.instructions, ["D:\\Vault\\agents\\_index.md"]);
   assert.equal(cfg.provider["zai-coding-plan"].baseURL, "https://api.z.ai/api/coding-plan");
   assert.deepEqual(cfg.agent.Sandbox, { mode: "primary", prompt: "{file:./prompts/sandbox.md}" });
   assert.deepEqual(cfg.permission, { edit: "allow", bash: { "*": "allow", "rm -rf *": "ask" } });

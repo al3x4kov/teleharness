@@ -6,7 +6,7 @@
 // Fixture-verified deviation: opencode capabilities.input is an object
 // ({text,audio,image,video,pdf:bool}), not a string array; both are supported.
 
-// The vault-cache plugin (C:\Users\USER\.config\opencode\vault-cache.ts)
+// The vault-cache plugin (C:\Users\dev\.config\opencode\vault-cache.ts)
 // prepends its knowledge-base snapshot to the FIRST user text part of a
 // session, in the exact shape `<snapshot>\n\n---\n\n<real user text>` where
 // the snapshot starts with the literal marker `[obsidian-cache]`. The model
@@ -316,7 +316,7 @@ export function mergePostIntoMessages(messages, postResult) {
 
 // ---- projects (Claude-style: a project = a directory of chats) -------------
 
-// "C:\Users\USER\AppData\Local\Temp\oc_test" -> "oc_test"; a bare drive/root
+// "C:\Users\dev\AppData\Local\Temp\oc_test" -> "oc_test"; a bare drive/root
 // ("C:\") falls back to the input. Accepts both separators.
 export function dirBasename(dir) {
   const s = String(dir ?? "").trim();
@@ -330,7 +330,7 @@ export function dirBasename(dir) {
 // Junk directories are never shown as projects: system folders and temp
 // harness dirs (the C:\Windows\System32 sessions appeared after the
 // 2026-10-31 watchdog incident; Temp\oc_* are recorded test runs). A path
-// segment boundary is required, so "D:\Portal\template" stays visible.
+// segment boundary is required, so "D:\Apps\template" stays visible.
 // extra is an exact-string list (localStorage "teleharness.hiddenDirs").
 const DEFAULT_HIDDEN_DIR_RE = [/\\windows([\\/]|$)/i, /\\temp([\\/]|$)/i];
 
@@ -587,7 +587,7 @@ const CMD_CD_RE = /^\s*(?:cd|set-location|pushd)\s+(?:\/d\s+)?(?:"([^"]+)"|'([^'
 
 const isAbsWin = (p) => /^[A-Za-z]:[\\/]/.test(p) || /^\\\\[^\\/]/.test(p);
 const toWin = (p) => String(p).replace(/\//g, "\\");
-// BUG-098: Git Bash / MSYS paths «/d/Portal/x.png» (and «/mnt/d/…») are the
+// BUG-098: Git Bash / MSYS paths «/d/Apps/x.png» (and «/mnt/d/…») are the
 // drive D: — not a path under the chat folder (that gave 404s).
 const fromMsys = (p) => {
   const m = /^\/(?:mnt\/)?([A-Za-z])(\/.*|$)/.exec(String(p ?? ""));
@@ -664,7 +664,7 @@ export function isScratchPath(p) {
 
 // Windows/Unix path containment for chip scoping: case-insensitive,
 // separator-normalized, boundary-safe ("D:\\ObsidianX" is NOT under
-// "D:\\Obsidian"). Empty dir → false (cannot verify scope → hide).
+// "D:\\Vault"). Empty dir → false (cannot verify scope → hide).
 export function isUnderPath(filePath, dir) {
   const norm = (p) => String(p ?? "").replace(/[\\/]+$/, "").toLowerCase().replace(/\\/g, "/");
   const f = norm(filePath);
@@ -690,7 +690,7 @@ export function validateProjectDir(dir) {
   return null;
 }
 
-// "C:\Users\USER" reads as a person's name on a project card; a home folder
+// "C:\Users\dev" reads as a person's name on a project card; a home folder
 // (<root>\Users\<name> or <root>/home/<name>) shows as «Домашняя папка».
 export function projectDisplayName(dir) {
   if (/[\\/](?:users|home)[\\/]+[^\\/]+$/i.test(String(dir ?? ""))) return t("project.home");

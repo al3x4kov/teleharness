@@ -30,9 +30,9 @@ test("match: '/chat/:id' carries the session id", () => {
 });
 
 test("match: '/project/:id' decodes percent-encoded directories", () => {
-  const m = match(cleanPath("#/project/D%3A%5CPortal%5Cteleharness"));
+  const m = match(cleanPath("#/project/D%3A%5CApps%5Cteleharness"));
   assert.equal(m.view, "project");
-  assert.equal(m.params.id, "D:\\Portal\\teleharness");
+  assert.equal(m.params.id, "D:\\Apps\\teleharness");
   const ru = match("/project/D%3A%5C%D0%9F%D1%80%D0%BE%D0%B5%D0%BA%D1%82%D1%8B");
   assert.equal(ru.params.id, "D:\\Проекты");
 });

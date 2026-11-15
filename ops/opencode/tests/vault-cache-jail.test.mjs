@@ -95,7 +95,7 @@ test("tenant bash is rewritten into teleharness-jail with the command in base64"
 
 test("quotes, &, |, \" and shell syntax stay inside the base64 payload", async () => {
   const evil = [
-    'echo a & type D:\\Portal\\teleharness\\data\\users.json',
+    'echo a & type D:\\Apps\\teleharness\\data\\users.json',
     'echo "x" | findstr x && whoami',
     '" & calc & "',
     "'; rm -rf / #",
@@ -122,7 +122,7 @@ test("workdir inside the tenant folder becomes --cwd; relative ones resolve agai
 })
 
 test("workdir outside the tenant folder is refused", async () => {
-  for (const workdir of [BOB, "..\\bob", "C:\\Windows", "D:\\Portal\\teleharness", path.join(ALICE, "escape"), P("tenants", "vault", "alice")])
+  for (const workdir of [BOB, "..\\bob", "C:\\Windows", "D:\\Apps\\teleharness", path.join(ALICE, "escape"), P("tenants", "vault", "alice")])
     await assert.rejects(bash("ses_alice", "dir", { workdir }), /Доступ запрещён/, workdir)
 })
 
@@ -228,7 +228,7 @@ test("agent-config plants from the tenant shell are moved away before and after 
 })
 
 // FEAT-04.12 (2026-11-06): `cd /d <own folder> && rest` → the folder is the jail
-// --cwd (cmd's own cd died with «Access is denied» walking C:\Users\USER);
+// --cwd (cmd's own cd died with «Access is denied» walking C:\Users\dev);
 // `teleharness-render <file>` as a whole command → the host renderer, args in base64.
 test("FEAT-04.12: cd /d <своя подпапка> && … → --cwd подпапки, в base64 только остаток", async () => {
   const j = parse((await bash("ses_alice", `cd /d "${path.join(ALICE, "proj")}" && python build.py`)).command)

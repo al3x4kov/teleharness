@@ -1,9 +1,9 @@
 // portal-server.js — node replacement for the WDAC-blocked caddy.exe on port 80.
-// Mirrors D:\Portal\Caddyfile exactly:
+// Mirrors D:\Apps\Caddyfile exactly:
 //   /tv/api/*  -> reverse_proxy 127.0.0.1:8099  (Host: {upstream_hostport}, X-Orig-Host: {host})
 //   /teleharness/*     -> reverse_proxy 127.0.0.1:4170  (strip prefix, streaming/SSE)
 //   /          -> 302 /tv/   |  /tv -> 302 /tv/
-//   else       -> file_server root D:\Portal (no browse, index.html, hide list)
+//   else       -> file_server root D:\Apps (no browse, index.html, hide list)
 // Zero dependencies. Signed node.exe passes Smart App Control where unsigned
 // caddy.exe cannot start again (running instance predates the policy).
 // TLS (2026-10-31): voice input needs a SECURE CONTEXT — iOS Safari exposes
@@ -54,8 +54,8 @@ const TELEHARNESS = envHostPort("TELEHARNESS_EDGE_UPSTREAM", { host: "127.0.0.1"
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CERTS = path.join(REPO, "ops", "certs");
 const ROOT = process.env.TELEHARNESS_EDGE_ROOT || path.dirname(REPO);
-const TLS_CERT = process.env.TELEHARNESS_TLS_CERT || path.join(CERTS, "192.168.0.10.pem");
-const TLS_KEY = process.env.TELEHARNESS_TLS_KEY || path.join(CERTS, "192.168.0.10-key.pem");
+const TLS_CERT = process.env.TELEHARNESS_TLS_CERT || path.join(CERTS, "192.0.2.10.pem");
+const TLS_KEY = process.env.TELEHARNESS_TLS_KEY || path.join(CERTS, "192.0.2.10-key.pem");
 const TLS_CA = process.env.TELEHARNESS_TLS_CA || path.join(CERTS, "ca", "rootCA.pem");
 // Public domain: some mobile networks drop TLS by SNI for the router's DNS
 // name, so the portal can also be published under its own domain. Clients
@@ -240,7 +240,7 @@ function serveStatic(req, res, pathname) {
   // name lists — NTFS streams (/teleharness::$INDEX_ALLOCATION/data/admin-token.txt
   // served the prod admin token), 8.3 short names (TELEHA~1), trailing dots/
   // spaces. Refuse every alias shape, then ALLOW-LIST: the only static tree
-  // this edge serves is D:\Portal\tv (the TV admin page + status.json).
+  // this edge serves is D:\Apps\tv (the TV admin page + status.json).
   if (/[:~*?"<>|\\\x00-\x1f]/.test(decoded) || /[. ]($|\/)/.test(decoded.replace(/\/+$/, ""))) {
     res.writeHead(404, { "content-type": "text/plain" });
     return res.end("Not Found");
@@ -288,7 +288,7 @@ const HTTPS_ONLY = TLS_UP && process.env.TELEHARNESS_HTTPS_ONLY !== "0";
 
 function teleharnessToHttps(req, res) {
   const u = new URL(req.url, "http://x");
-  const host = (req.headers.host || "").split(":")[0] || "192.168.0.10";
+  const host = (req.headers.host || "").split(":")[0] || "192.0.2.10";
   const p = u.pathname === "/teleharness" ? "/teleharness/" : u.pathname;
   res.writeHead(308, { location: `https://${host}${p}${u.search}` });
   res.end();

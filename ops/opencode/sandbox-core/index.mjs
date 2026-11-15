@@ -49,13 +49,13 @@ import os from "node:os"
 import path from "node:path"
 
 const env = process.env
-export const VAULT = fwd(env.VAULT_CACHE_ROOT || "D:/Obsidian/agents")
-export const LOG_FILE = env.VAULT_CACHE_LOG || "C:/Users/USER/.config/opencode/vault-cache.log"
-export const TENANT_HOME = fwd(env.TELEHARNESS_TENANT_HOME || "C:/Users/USER/.teleharness-tenants")
-export const TENANT_VAULT = fwd(env.TELEHARNESS_TENANT_VAULT || "D:/Obsidian/tenants")
-export const USERS_FILE = env.TELEHARNESS_USERS_FILE || "D:/Portal/teleharness/data/users.json"
+export const VAULT = fwd(env.VAULT_CACHE_ROOT || "D:/Vault/agents")
+export const LOG_FILE = env.VAULT_CACHE_LOG || "C:/Users/dev/.config/opencode/vault-cache.log"
+export const TENANT_HOME = fwd(env.TELEHARNESS_TENANT_HOME || "C:/Users/dev/.teleharness-tenants")
+export const TENANT_VAULT = fwd(env.TELEHARNESS_TENANT_VAULT || "D:/Vault/tenants")
+export const USERS_FILE = env.TELEHARNESS_USERS_FILE || "D:/Apps/teleharness/data/users.json"
 // Everything under these roots is off-limits for tenant tools, except the tenant's own zone.
-export const PROTECTED_ROOTS = [fwd(env.VAULT_CACHE_PROTECT || "D:/Obsidian"), VAULT, TENANT_VAULT]
+export const PROTECTED_ROOTS = [fwd(env.VAULT_CACHE_PROTECT || "D:/Vault"), VAULT, TENANT_VAULT]
 export const ADMIN_INDEX = `${VAULT}/_index.md`
 const HOME = fwd(os.homedir())
 
@@ -463,7 +463,7 @@ export async function urlViolation(url) {
 
 // ---------- tenant shell: teleharness-jail (FEAT-04.9; vault-cache.ts:755-805) ----------
 
-export const JAIL_EXE = fwd(env.TELEHARNESS_JAIL_EXE || "D:/Portal/teleharness/ops/sandbox/teleharness-jail.exe")
+export const JAIL_EXE = fwd(env.TELEHARNESS_JAIL_EXE || "D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe")
 export const SANDBOX_PY = fwd(env.TELEHARNESS_SANDBOX_PY || "D:/teleharness-sandbox/python")
 const SHELL_SAFE_PATH = /^[A-Za-z]:\/[A-Za-z0-9_.\/-]*$/
 const JAIL_ID = /^[A-Za-z0-9_-]{1,40}$/
@@ -506,7 +506,7 @@ export function splitCd(command, cwd) {
 const RENDER_CMD = /^\s*teleharness-render(?:\s+([^&|<>^\r\n]*))?\s*$/i
 export async function renderCommand(args, z, workdir) {
   if (!z.tenant || !z.home) return { error: "у сессии нет папки пользователя" }
-  const script = fwd(env.TELEHARNESS_RENDER_SCRIPT || "D:/Portal/teleharness/ops/render/teleharness_render.py")
+  const script = fwd(env.TELEHARNESS_RENDER_SCRIPT || "D:/Apps/teleharness/ops/render/teleharness_render.py")
   const python = `${SANDBOX_PY}/Scripts/python.exe`
   if (!existsSync(python) || !existsSync(script)) return { error: "просмотр документов (teleharness-render) недоступен на сервере" }
   const root = fwd(z.home)

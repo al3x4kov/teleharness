@@ -1,13 +1,13 @@
 schema: spec-driven
 
 context: |
-  Портал teleharness — мобильный web-клиент opencode (прод в D:\Portal\teleharness, сервер 127.0.0.1:4170,
-  наружу https://192.168.0.10/teleharness/ и https://teleharness.home.example.net/teleharness/).
+  Портал teleharness — мобильный web-клиент opencode (прод в D:\Apps\teleharness, сервер 127.0.0.1:4170,
+  наружу https://192.0.2.10/teleharness/ и https://teleharness.home.example.net/teleharness/).
   Все артефакты (спеки, proposal, tasks) писать по-русски.
   Контракт opencode ЗАПИННЕН на версии 1.19.5 (v2 меняет API на /api/* с другим конвертом) —
   не проектировать под v2. Backend zero-dep Node (server.js + lib/), фронт preact + signals,
   сборка esbuild (node build.mjs → public/app.js + app.css), тесты node --test (tests/),
-  QA-харнесс Playwright в D:\Portal\teleharness-qa (msedge). Секреты (data/, ops/certs/) в git не попадают.
+  QA-харнесс Playwright в D:\Apps\teleharness-qa (msedge). Секреты (data/, ops/certs/) в git не попадают.
   Управление работой: tracker/ (бэклог EPIC/FEAT/TASK/BUG, корпус пользовательских требований),
   qa-manage/ (тест-планы/кейсы/прогоны), design/ (макеты). Граф кода: graphify (graphify-out/).
 
@@ -24,7 +24,7 @@ rules:
 operations:
   apply:
     guidance:
-      - 'После правок кода: сборка в стенд (TELEHARNESS_OUT_DIR=D:\teleharness-stage\public node build.mjs; без TELEHARNESS_OUT_DIR/TELEHARNESS_BUILD_PROD=1 build.mjs откажется), npm test, при UI-правках npm run qa:smoke / qa-матрица D:\Portal\teleharness-qa'
+      - 'После правок кода: сборка в стенд (TELEHARNESS_OUT_DIR=D:\th-stage\public node build.mjs; без TELEHARNESS_OUT_DIR/TELEHARNESS_BUILD_PROD=1 build.mjs откажется), npm test, при UI-правках npm run qa:smoke / qa-матрица D:\Apps\teleharness-qa'
       - После правок кода — graphify update . и npm run graph:fresh (exit 0)
   archive:
     guidance:

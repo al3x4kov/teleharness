@@ -18,7 +18,7 @@ import { startFakeOpencodeV2 } from "./helpers/fake-opencode-v2.mjs";
 import { createOcClient, OcError } from "../lib/oc-client.js";
 import * as ocClientNs from "../lib/oc-client.js";
 
-const DIR = "C:\\Users\\USER\\.teleharness-tenants\\alice";
+const DIR = "C:\\Users\\dev\\.teleharness-tenants\\alice";
 const PWD = "oc2-secret";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const at = (up, m, p) => up.requests.find((r) => r.method === m && r.path === p);
@@ -365,9 +365,9 @@ test("BUG-195: v2 disposeInstance — ключ экземпляра 2.2.6 — т
   const up = await startFakeOpencodeV2({ password: PWD });
   try {
     const c = createOcClient({ api: "v2", base: up.url, password: PWD });
-    assert.equal(await c.disposeInstance({ directory: "C:\\Users\\USER\\.teleharness-tenants\\Carol" }), true);
+    assert.equal(await c.disposeInstance({ directory: "C:\\Users\\dev\\.teleharness-tenants\\Carol" }), true);
     const dirs = up.requests.filter((r) => r.method === "DELETE" && r.path === "/api/debug/location").map((r) => r.queryEntries[0][1]);
-    assert.deepEqual(dirs.sort(), ["C:/Users/USER/.teleharness-tenants/Carol", "C:\\Users\\USER\\.teleharness-tenants\\Carol"].sort());
+    assert.deepEqual(dirs.sort(), ["C:/Users/dev/.teleharness-tenants/Carol", "C:\\Users\\dev\\.teleharness-tenants\\Carol"].sort());
     // путь без разделителей обеих форм — один запрос
     up.requests.length = 0;
     await c.disposeInstance({ directory: "relative-name" });
@@ -486,10 +486,10 @@ test("v2 warmup: health-check GET /api/mcp с retry (500 → ок, Э2); v1 — 
 });
 
 test("v2 listProjects: GET /api/project — голый массив как есть (№25)", async () => {
-  const up = await startFakeOpencodeV2({ password: PWD, projects: [{ id: "p1", canonical: "D:\\Portal\\teleharness", vcs: "git", sandboxes: [] }] });
+  const up = await startFakeOpencodeV2({ password: PWD, projects: [{ id: "p1", canonical: "D:\\Apps\\teleharness", vcs: "git", sandboxes: [] }] });
   try {
     const c = createOcClient({ api: "v2", base: up.url, password: PWD });
-    assert.deepEqual(await c.listProjects(), [{ id: "p1", canonical: "D:\\Portal\\teleharness", vcs: "git", sandboxes: [] }]);
+    assert.deepEqual(await c.listProjects(), [{ id: "p1", canonical: "D:\\Apps\\teleharness", vcs: "git", sandboxes: [] }]);
     assert.equal(up.requests[0].path, "/api/project");
   } finally { await up.close(); }
 });
@@ -799,7 +799,7 @@ test("SSE v2: несколько папок в одном глобальном �
     const got = [];
     const stop = c.events({ onEvent: (e) => got.push(e), backoffMs: [10, 20] });
     await up.waitForSubscription();
-    const dirB = "C:\\Users\\USER\\.teleharness-tenants\\bob";
+    const dirB = "C:\\Users\\dev\\.teleharness-tenants\\bob";
     up.emit({ type: "session.idle", location: { directory: DIR }, data: { sessionID: "ses_a" } });
     up.emit({ type: "session.idle", location: { directory: dirB }, data: { sessionID: "ses_b" } });
     // session.execution.* несут location нет (api-map §2) — BUG-196: папка сессии

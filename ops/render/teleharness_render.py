@@ -222,7 +222,7 @@ def office_to_pdf(copy: Path, work: Path) -> Path:
 
 
 HTML2PDF = Path(__file__).with_name("html2pdf.mjs")
-NODE = os.environ.get("TELEHARNESS_RENDER_NODE") or r"D:\nodejs\node.exe"
+NODE = os.environ.get("TELEHARNESS_RENDER_NODE") or r"D:\tools\node\node.exe"
 
 
 def web_to_pdf(src: Path, work: Path) -> Path:

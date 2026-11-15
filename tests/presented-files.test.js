@@ -10,31 +10,31 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PORTAL_FILE_RULE, claudePromptFile, withUserSystem, withUserSystemBody } from "../lib/user-prompt.js";
 
-const DIR = "C:\\Users\\USER\\chat";
+const DIR = "C:\\Users\\dev\\chat";
 
 test("FEAT-05.29: extractPresentedFiles — ссылки и картинки markdown с локальным абсолютным путём", () => {
   const text = [
     "Вот макеты:",
-    "![Кадр 1](D:\\Portal\\teleharness\\design\\frame-1.png)",
+    "![Кадр 1](D:\\Apps\\teleharness\\design\\frame-1.png)",
     "[Отчёт за ноябрь](<D:\\Docs\\My Reports\\report 11.pdf>)",
     "[на Linux](/home/teleharness/out/result.xlsx)",
-    "[через file](file:///D:/Portal/teleharness/design/frame-2.png)",
+    "[через file](file:///D:/Apps/teleharness/design/frame-2.png)",
     "[обычная ссылка](https://example.com/a.png) и [якорь](#top), [относительная](docs/readme.md)",
   ].join("\n");
   assert.deepEqual(
     extractPresentedFiles(text).map((e) => e.path),
-    ["D:\\Portal\\teleharness\\design\\frame-1.png", "D:\\Docs\\My Reports\\report 11.pdf", "/home/teleharness/out/result.xlsx", "D:\\Portal\\teleharness\\design\\frame-2.png"],
+    ["D:\\Apps\\teleharness\\design\\frame-1.png", "D:\\Docs\\My Reports\\report 11.pdf", "/home/teleharness/out/result.xlsx", "D:\\Apps\\teleharness\\design\\frame-2.png"],
   );
   assert.equal(extractPresentedFiles(text)[1].label, "Отчёт за ноябрь");
-  assert.deepEqual(extractPresentedFiles("путь просто текстом D:\\Portal\\x.png"), [], "голый путь — не показ файла");
-  assert.deepEqual(extractPresentedFiles("[папка](D:\\Portal\\teleharness\\design)"), [], "папка — не файл");
+  assert.deepEqual(extractPresentedFiles("путь просто текстом D:\\Apps\\x.png"), [], "голый путь — не показ файла");
+  assert.deepEqual(extractPresentedFiles("[папка](D:\\Apps\\teleharness\\design)"), [], "папка — не файл");
   assert.deepEqual(extractPresentedFiles("[маска](D:\\a\\*.png) [хоп](D:\\a\\..\\b.png)"), [], "маска и «..» отсекаются");
 });
 
 test("FEAT-05.29: collectArtifactEntries — показанный ссылкой файл вне папки чата становится записью presented", () => {
-  const text = "Держите: [Кадр 1](D:\\Portal\\teleharness\\design\\frame-1.png)\n\nа ещё я читал D:\\Portal\\teleharness\\server.js";
+  const text = "Держите: [Кадр 1](D:\\Apps\\teleharness\\design\\frame-1.png)\n\nа ещё я читал D:\\Apps\\teleharness\\server.js";
   const entries = collectArtifactEntries([], [text], DIR);
-  assert.deepEqual(entries, [{ path: "D:\\Portal\\teleharness\\design\\frame-1.png", guessed: false, presented: true }], "ссылка — карточка; упомянутый текстом путь вне папки чата — по-прежнему нет (защита от утечек)");
+  assert.deepEqual(entries, [{ path: "D:\\Apps\\teleharness\\design\\frame-1.png", guessed: false, presented: true }], "ссылка — карточка; упомянутый текстом путь вне папки чата — по-прежнему нет (защита от утечек)");
   // файл в папке чата, названный текстом, — как раньше, без пометки presented
   const inside = collectArtifactEntries([], [`готово: ${DIR}\\out.pdf`], DIR);
   assert.deepEqual(inside, [{ path: `${DIR}\\out.pdf`, guessed: false }]);
@@ -44,23 +44,23 @@ test("FEAT-05.29: collectArtifactEntries — показанный ссылкой
 });
 
 test("FEAT-05.29: карточек больше восьми — показываются все запрошенные (до 40)", () => {
-  const links = Array.from({ length: 12 }, (_, i) => `[f${i}](D:\\Portal\\shots\\f${i}.png)`).join("\n");
+  const links = Array.from({ length: 12 }, (_, i) => `[f${i}](D:\\Apps\\shots\\f${i}.png)`).join("\n");
   assert.equal(collectArtifactEntries([], [links], DIR).length, 12);
-  const many = Array.from({ length: 60 }, (_, i) => `[f${i}](D:\\Portal\\shots\\f${i}.png)`).join("\n");
+  const many = Array.from({ length: 60 }, (_, i) => `[f${i}](D:\\Apps\\shots\\f${i}.png)`).join("\n");
   assert.equal(collectArtifactEntries([], [many], DIR).length, 40, "потолок от злоупотребления остаётся");
 });
 
 test("FEAT-05.29: hideServerPaths — ссылка превращается в название, путь к файлу с карточкой — в имя файла", () => {
-  const p1 = "D:\\Portal\\teleharness\\design\\frame-1.png";
-  const text = `Вот: ![Кадр 1](${p1})\n[](D:\\Docs\\report.pdf)\nФайл лежит в \`${p1}\`, рядом D:\\Portal\\teleharness\\server.js`;
+  const p1 = "D:\\Apps\\teleharness\\design\\frame-1.png";
+  const text = `Вот: ![Кадр 1](${p1})\n[](D:\\Docs\\report.pdf)\nФайл лежит в \`${p1}\`, рядом D:\\Apps\\teleharness\\server.js`;
   const out = hideServerPaths(text, [p1, "D:\\Docs\\report.pdf"]);
-  assert.equal(out, "Вот: Кадр 1\nФайл лежит в `frame-1.png`, рядом D:\\Portal\\teleharness\\server.js", "ссылка в строке текста → название; строка только со ссылкой → убрана");
+  assert.equal(out, "Вот: Кадр 1\nФайл лежит в `frame-1.png`, рядом D:\\Apps\\teleharness\\server.js", "ссылка в строке текста → название; строка только со ссылкой → убрана");
   assert.equal(hideServerPaths("[сайт](https://example.com/a.png)", [p1]), "[сайт](https://example.com/a.png)", "обычные ссылки не трогаются");
   assert.equal(hideServerPaths("без файлов", []), "без файлов");
   // строка только со ссылкой на файл с карточкой убирается: карточка уже показывает файл
   assert.equal(hideServerPaths(`Вот:\n\n[frame-1.png](${p1})\n- ![Кадр](${p1})\n\nГотово.`, [p1]), "Вот:\n\n\nГотово.");
   assert.equal(hideServerPaths(`[frame-1.png](${p1})`, []), "frame-1.png", "карточки ещё нет — название остаётся");
-  assert.equal(hideServerPaths(`D:/Portal/teleharness/design/frame-1.png и ${p1.toUpperCase()}`, [p1]), "frame-1.png и frame-1.png", "слэши и регистр не важны");
+  assert.equal(hideServerPaths(`D:/Apps/teleharness/design/frame-1.png и ${p1.toUpperCase()}`, [p1]), "frame-1.png и frame-1.png", "слэши и регистр не важны");
 });
 
 test("FEAT-05.29: правило портала о файлах — в системном промпте каждого хода opencode, перед инструкциями пользователя", () => {

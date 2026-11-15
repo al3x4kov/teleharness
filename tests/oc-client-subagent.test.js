@@ -53,7 +53,7 @@ test("FEAT-01.77: tool.progress кладёт metadata.sessionID дочерней
 
 test("FEAT-01.77: события дочерней сессии идут дальше с её sessionID и папкой родителя (directory не null)", () => {
   const rw = createV2Rewriter({ emit: () => {}, throttleMs: 1 });
-  const DIR = "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze";
+  const DIR = "D:\\th-stage\\tmp\\w2-fixture-mwbohnze";
   const CHILD = "ses_e36eb8e5cffeiN1GF5pBbIeL7U";
   const emitted = feedAll(rw, SYNC);
   const childEvents = emitted.filter((e) => e.properties?.sessionID === CHILD || e.properties?.info?.sessionID === CHILD || e.properties?.info?.id === CHILD);

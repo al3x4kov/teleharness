@@ -163,9 +163,9 @@
 
 #### Scenario: Путь Git Bash
 
-- **GIVEN** команда хода «cp data.bin /d/Portal/teleharness/shots/a.png»
+- **GIVEN** команда хода «cp data.bin /d/Apps/teleharness/shots/a.png»
 - **WHEN** ответ показывается
-- **THEN** превью картинки запрашивается по пути D:\Portal\teleharness\shots\a.png, а не под папкой чата
+- **THEN** превью картинки запрашивается по пути D:\Apps\teleharness\shots\a.png, а не под папкой чата
 
 ### Requirement: Итоговый файл хода при лимите списка
 

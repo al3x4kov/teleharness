@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInstanceReaper } from "../lib/instance-reaper.js";
 
-function setup({ busy = new Set(), protectedDirs = ["C:\\Users\\USER"], failDispose = false } = {}) {
+function setup({ busy = new Set(), protectedDirs = ["C:\\Users\\dev"], failDispose = false } = {}) {
   const disposed = [];
   const logs = [];
   const r = createInstanceReaper({
@@ -25,18 +25,18 @@ const MIN = 60_000;
 
 test("BUG-195: папка без активности дольше idle освобождается, свежая — нет", async () => {
   const { r, disposed } = setup();
-  r.touch("C:\\Users\\USER\\.teleharness-tenants\\Alice\\chat-1", 0);
-  r.touch("C:\\Users\\USER\\.teleharness-tenants\\Carol", 20 * MIN);
+  r.touch("C:\\Users\\dev\\.teleharness-tenants\\Alice\\chat-1", 0);
+  r.touch("C:\\Users\\dev\\.teleharness-tenants\\Carol", 20 * MIN);
   const out = await r.sweep(35 * MIN);
-  assert.deepEqual(disposed, ["C:\\Users\\USER\\.teleharness-tenants\\Alice\\chat-1"]);
+  assert.deepEqual(disposed, ["C:\\Users\\dev\\.teleharness-tenants\\Alice\\chat-1"]);
   assert.deepEqual(out, { disposed: 1, busy: 0, kept: 1 });
   assert.equal(r.size(), 1, "освобождённая папка больше не отслеживается");
 });
 
 test("BUG-195: touch продлевает жизнь; одна папка в разных формах пути — одна запись", async () => {
   const { r, disposed } = setup();
-  r.touch("C:\\Users\\USER\\.teleharness-tenants\\Alice", 0);
-  r.touch("C:/Users/USER/.teleharness-tenants/Alice/", 25 * MIN);
+  r.touch("C:\\Users\\dev\\.teleharness-tenants\\Alice", 0);
+  r.touch("C:/Users/dev/.teleharness-tenants/Alice/", 25 * MIN);
   assert.equal(r.size(), 1);
   await r.sweep(40 * MIN);
   assert.deepEqual(disposed, [], "последняя активность 25 мин → в 40 мин ещё жива");
@@ -56,7 +56,7 @@ test("BUG-195: папка с идущим ходом не освобождает
 
 test("BUG-195: папка владельца по умолчанию не освобождается никогда", async () => {
   const { r, disposed } = setup();
-  r.touch("C:/Users/USER", 0);
+  r.touch("C:/Users/dev", 0);
   await r.sweep(999 * MIN);
   assert.deepEqual(disposed, []);
   assert.equal(r.size(), 0, "защищённая папка не учитывается вовсе");

@@ -39,9 +39,9 @@ test("planRelay: отказы — ход идёт, та же модель, не�
 test("relayMark / relayRule / marksForJournal: отметка, строка для нового движка с путём журнала", () => {
   const m = relayMark(CLAUDE, GLM, { at: 1000, reason: "limit" });
   assert.deepEqual(m, { at: 1000, from: { engine: "claude", providerID: "anthropic", modelID: "claude-opus-5-5" }, to: { engine: "opencode", providerID: "zai-coding-plan", modelID: "glm-5.3" }, reason: "limit" });
-  const rule = relayRule([m], "D:\\Obsidian\\agents\\journal\\2026-11-12-ses_1.md");
+  const rule = relayRule([m], "D:\\Vault\\agents\\journal\\2026-11-12-ses_1.md");
   assert.match(rule, /claude-opus-5-5 → glm-5\.3/);
-  assert.match(rule, /D:\/Obsidian\/agents\/journal\/2026-11-12-ses_1\.md/);
+  assert.match(rule, /D:\/Vault\/agents\/journal\/2026-11-12-ses_1\.md/);
   assert.match(rule, /прочитай журнал/);
   assert.equal(relayRule([], "x"), "");
   assert.deepEqual(marksForJournal([m]), [{ at: 1000, from: { engine: "claude", model: "claude-opus-5-5" }, to: { engine: "opencode", model: "glm-5.3" } }]);

@@ -89,7 +89,7 @@ export function isolatedServerEnv({ tmp, upstream, mock = false, extra = {} }) {
     TELEHARNESS_TENANT_HOME: tmp.tenants,
     TELEHARNESS_TENANT_VAULT: tmp.vault,
     TELEHARNESS_FILE_ROOTS: tmp.root,
-    // FEAT-13.11: never the real D:\Obsidian\agents; tests opt in via extra
+    // FEAT-13.11: never the real D:\Vault\agents; tests opt in via extra
     TELEHARNESS_KB_ROOT: "off",
     // FEAT-06.2: never the real voice worker (D:\Voice); tests opt in via extra
     TELEHARNESS_VOICE: "0",

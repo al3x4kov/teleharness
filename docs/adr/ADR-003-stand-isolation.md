@@ -11,7 +11,7 @@ sources: docs/reviews/2026-11-02/architecture.md S10, S3 (R18, R3); code-securit
 
 ## Контекст
 
-Стенд (`D:\Portal\teleharness-stage\stand.cmd`) запускает тот же `server.js` на
+Стенд (`D:\th-stage\stand.cmd`) запускает тот же `server.js` на
 127.0.0.1:4172 со своими `TELEHARNESS_DATA_DIR`, `TELEHARNESS_PUBLIC_DIR` и
 `TELEHARNESS_COOKIE_NAME`, но **`TELEHARNESS_UPSTREAM` не задан** — стенд работает с прод
 `opencode serve` :4096.
@@ -21,7 +21,7 @@ sources: docs/reviews/2026-11-02/architecture.md S10, S3 (R18, R3); code-securit
 - Привязки расходятся: у стенда и прода разные `session-bindings.json`
   при общих сессиях.
 - `TELEHARNESS_ADMIN_TOKEN` стенда записан открытым текстом в `stand.cmd`, а
-  каталог стенда лежит в web-root `D:\Portal` (до 2026-11-02 edge его
+  каталог стенда лежит в web-root `D:\Apps` (до 2026-11-02 edge его
   раздавал).
 
 ## Решение
@@ -37,7 +37,7 @@ sources: docs/reviews/2026-11-02/architecture.md S10, S3 (R18, R3); code-securit
 3. Для быстрых UI-проверок без opencode допустим режим `TELEHARNESS_MOCK=1` (уже
    есть, :4171).
 4. **Секреты стенда вне web-root**: каталог стенда переносится в
-   `D:\teleharness-stage` (вне `D:\Portal`), токен читается из файла с ACL
+   `D:\th-stage` (вне `D:\Apps`), токен читается из файла с ACL
    владельца, а не из `stand.cmd`.
 5. Claude на стенде продолжает использовать подписку владельца; это
    допустимо, пока стенд слушает только 127.0.0.1.

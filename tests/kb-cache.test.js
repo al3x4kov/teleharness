@@ -20,7 +20,7 @@ const note = (f, s) => {
 note(path.join(ADMIN, "projects", "teleharness.md"), "---\nx: 1\n---\n# Портал teleharness\nстрока проекта\n");
 note(path.join(ADMIN, "tasks", "t1.md"), "---\nstatus: active\n---\n# Задача администратора\n");
 note(path.join(ADMIN, "lessons", "l1.md"), "---\nstatus: active\narea: ops\n---\n# Урок про рестарты\n");
-note(path.join(ADMIN, "sessions", "2026-11-03-ses_prev.md"), `---\ndirectory: D:\\Portal\\teleharness\n---\n# Прошлый дайджест\n`);
+note(path.join(ADMIN, "sessions", "2026-11-03-ses_prev.md"), `---\ndirectory: D:\\Apps\\teleharness\n---\n# Прошлый дайджест\n`);
 note(path.join(TV, "alice", "tasks", "a1.md"), "---\nstatus: active\n---\n# Задача Алисы\n");
 
 test("zoneForUser: admin → admin root; tenant → own obsidianRoot or tenant vault; unsafe name → none", () => {
@@ -29,20 +29,20 @@ test("zoneForUser: admin → admin root; tenant → own obsidianRoot or tenant v
   const a = zoneForUser({ name: "alice", directories: ["C:\\t\\alice"] }, { admin: false, adminRoot: ADMIN, tenantVault: TV });
   assert.equal(a.tenant, "alice");
   assert.equal(a.root.toLowerCase(), path.join(TV, "alice").replace(/\\/g, "/").toLowerCase());
-  const own = zoneForUser({ name: "bob", obsidianRoot: "D:\\Obsidian\\tenants\\b" }, { admin: false, adminRoot: ADMIN, tenantVault: TV });
+  const own = zoneForUser({ name: "bob", obsidianRoot: "D:\\Vault\\tenants\\b" }, { admin: false, adminRoot: ADMIN, tenantVault: TV });
   assert.match(own.root, /tenants\/b$/);
   assert.equal(zoneForUser({ name: "..\\x" }, { admin: false, adminRoot: ADMIN, tenantVault: TV }).root, null);
 });
 
 test("buildSnapshot admin: marker, project note, tasks, lessons, digest pointers, admin rules", () => {
-  const zone = zoneForUser({}, { admin: true, adminRoot: ADMIN, tenantVault: TV, home: "C:\\Users\\USER" });
-  const s = buildSnapshot({ dir: "D:\\Portal\\teleharness", sid: "ses_now", zone, now: new Date(2026, 10, 4, 9, 5) });
-  assert.match(s, /^\[obsidian-cache\] Активный кэш проекта «teleharness» \(D:\\Portal\\teleharness\), собран 2026-11-04 09:05\./);
+  const zone = zoneForUser({}, { admin: true, adminRoot: ADMIN, tenantVault: TV, home: "C:\\Users\\dev" });
+  const s = buildSnapshot({ dir: "D:\\Apps\\teleharness", sid: "ses_now", zone, now: new Date(2026, 10, 4, 9, 5) });
+  assert.match(s, /^\[obsidian-cache\] Активный кэш проекта «teleharness» \(D:\\Apps\\teleharness\), собран 2026-11-04 09:05\./);
   for (const re of [/Портал teleharness/, /Задача администратора/, /Урок про рестарты \(area: ops\)/, /sessions\/2026-11-03-ses_prev\.md/, /Правила кэша: .*agents[\\/]_index\.md/]) assert.match(s, re);
   // BUG-169: a question about the user → search the admin vault first
   assert.match(s, /Вопрос о самом пользователе .*сначала поищи в базе знаний .*agents/)
   // the catch-all home folder gets no digest pointers (BUG-12.14)
-  assert.doesNotMatch(buildSnapshot({ dir: "C:\\Users\\USER", zone }), /Прошлые дайджесты/);
+  assert.doesNotMatch(buildSnapshot({ dir: "C:\\Users\\dev", zone }), /Прошлые дайджесты/);
 });
 
 test("buildSnapshot tenant: own zone only, admin rules and admin vault never named", () => {

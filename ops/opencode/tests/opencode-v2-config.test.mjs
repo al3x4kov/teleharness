@@ -14,7 +14,7 @@ const DIR = path.resolve(import.meta.dirname, "..")
 const read = (f) => fs.readFileSync(path.join(DIR, f), "utf8")
 
 // opencode.v2.json is written for this tenant knowledge-base root (the portal default is ~/.teleharness/tenants-vault)
-setTenantVaultRoots(["D:\\Obsidian\\tenants"])
+setTenantVaultRoots(["D:\\Vault\\tenants"])
 
 const cfg = JSON.parse(read("opencode.v2.json")) // строго JSON: .json, не .jsonc
 const v1 = JSON.parse(read("opencode.json")) // источник значений 1.x для сверки
@@ -139,7 +139,7 @@ test("Sandbox: правила v2 эквивалентны 1.x; агент изо
   }
   assert.ok(find("context7_*", "*") > 0 && find("grep_app_*", "*") > 0 && find("marketplace_*", "*") > 0)
   assert.ok(find("skill", "*") < find("skill", "teleharness-*"), "skill: deny * до allow teleharness-*")
-  assert.ok(find("external_directory", "*") < find("external_directory", "D:\\Obsidian\\tenants\\*"), "внешние папки: deny * до allow зоны тенантов")
+  assert.ok(find("external_directory", "*") < find("external_directory", "D:\\Vault\\tenants\\*"), "внешние папки: deny * до allow зоны тенантов")
   assert.ok(find("shell", "*") > 0, "bash → shell allow (jail подменяет в плагине)")
   assert.ok(find("subagent", "*") > 0, "task → subagent deny")
   assert.equal(find("task", "*"), -1, "V1-имён нет")
@@ -153,17 +153,17 @@ test("Sandbox: правила v2 эквивалентны 1.x; агент изо
 })
 
 test("Sandbox изолирован и на стенде v2 (своя зона тенантов после патча скрипта)", () => {
-  const standVault = "D:\\teleharness-stage\\oc2\\tenants\\vault"
+  const standVault = "D:\\th-stage\\oc2\\tenants\\vault"
   const prev = read("opencode.v2.json")
   setTenantVaultRoots([standVault])
   try {
-    const patched = JSON.parse(prev.replace("D:\\\\Obsidian\\\\tenants\\\\*", `${standVault.replace(/\\/g, "\\\\")}\\\\*`))
+    const patched = JSON.parse(prev.replace("D:\\\\Vault\\\\tenants\\\\*", `${standVault.replace(/\\/g, "\\\\")}\\\\*`))
     const live = { name: "Sandbox", mode: "primary", permissions: patched.agents.Sandbox.permissions }
     assert.equal(agentCan(live, "external_directory"), false)
     assert.equal(agentIsSandboxed(live), true)
     assert.ok(tenantAgents([{ name: "Sandbox", mode: "primary", permissions: patched.agents.Sandbox.permissions }]).length === 1)
   } finally {
-    setTenantVaultRoots(["D:\\Obsidian\\tenants"])
+    setTenantVaultRoots(["D:\\Vault\\tenants"])
   }
 })
 

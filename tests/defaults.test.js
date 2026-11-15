@@ -185,12 +185,12 @@ test("createAndOpen в чистом браузере: POST /session несёт g
   };
   let navigated = null;
   s.setNavigate((to) => (navigated = to));
-  const created = await s.createAndOpen({ directory: "D:\\Portal\\teleharness" });
+  const created = await s.createAndOpen({ directory: "D:\\Apps\\teleharness" });
 
   const post = calls.find((c) => c.init.method === "POST");
-  assert.equal(post.url, `/teleharness/api/session?${new URLSearchParams({ directory: "D:\\Portal\\teleharness" })}`);
+  assert.equal(post.url, `/teleharness/api/session?${new URLSearchParams({ directory: "D:\\Apps\\teleharness" })}`);
   assert.deepEqual(JSON.parse(post.init.body), { model: DEFAULT_MODEL, agent: DEFAULT_AGENT });
-  assert.equal(created.directory, "D:\\Portal\\teleharness", "directory подставлен, если сервер его не вернул");
+  assert.equal(created.directory, "D:\\Apps\\teleharness", "directory подставлен, если сервер его не вернул");
   assert.deepEqual(created.teleharness, { engine: "opencode", model: DEFAULT_MODEL, agent: DEFAULT_AGENT, prompted: false });
   assert.equal(s.active.value.id, "ses_new");
   assert.equal(navigated, "#/chat/ses_new");
@@ -239,7 +239,7 @@ test("BUG-01.27 / BUG-018: автозаголовок чата берётся и
   const norm = await import("../src/lib/normalize.js");
   const title = await import("../shared/title.js");
   const injected =
-    "[obsidian-cache] Активный кэша проекта «user» (C:\\Users\\USER), собран 2026-11-02 07:02.\n\n" +
+    "[obsidian-cache] Активный кэша проекта «user» (C:\\Users\\dev), собран 2026-11-02 07:02.\n\n" +
     "teleharness.home.example.net HTTPS IPv6\n\nПравила кэша: _index.md.\n\n---\n\nОтветь одним словом: столица Италии?";
   assert.equal(norm.splitInjected(injected).text, "Ответь одним словом: столица Италии?");
   // Сервер: эвристический заголовок нового чата — из набранного вопроса.

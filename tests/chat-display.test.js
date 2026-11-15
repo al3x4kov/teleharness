@@ -266,7 +266,7 @@ test("titleFromText: word-boundary cut with ellipsis", () => {
 
 // ---- BUG-01.37 п.6 ---------------------------------------------------------
 test("isScratchPath: only system temp roots, a project tmp folder keeps its chips", () => {
-  assert.equal(isScratchPath("C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\gen.ps1"), true);
+  assert.equal(isScratchPath("C:\\Users\\dev\\AppData\\Local\\Temp\\opencode\\gen.ps1"), true);
   assert.equal(isScratchPath("C:\\Windows\\Temp\\x.ps1"), true);
   assert.equal(isScratchPath("/tmp/x.sh"), true);
   assert.equal(isScratchPath("D:\\proj\\tmp\\report.pdf"), false);

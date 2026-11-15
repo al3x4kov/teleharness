@@ -4,7 +4,7 @@
 Пакет: `oh-my-opencode-slim@3.0.7` (npm), репозиторий: https://github.com/alvinunreal/oh-my-opencode-slim
 
 Источники: unpkg.com (опубликованный тарболл 3.0.7), локальная установка
-`C:\Users\USER\.cache\opencode\packages\oh-my-opencode-slim@3.0.7\node_modules\oh-my-opencode-slim\`
+`C:\Users\dev\.cache\opencode\packages\oh-my-opencode-slim@3.0.7\node_modules\oh-my-opencode-slim\`
 (далее «локально»), GitHub-репозиторий по тегу `v3.0.7`.
 
 ---

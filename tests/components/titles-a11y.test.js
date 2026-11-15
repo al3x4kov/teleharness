@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 const NOW = Date.now();
-const DIR = "C:\\Users\\USER";
+const DIR = "C:\\Users\\dev";
 const ses = (id, title, extra = {}) => ({ id, title, directory: DIR, time: { created: NOW, updated: NOW }, ...extra });
 const msg = (sid, id, role, text) => ({
   info: { id, role, sessionID: sid, time: { created: NOW, completed: role === "assistant" ? NOW : undefined } },
@@ -417,7 +417,7 @@ test("BUG-01.38: модалка токена — фон inert, Tab удержи�
 test("BUG-01.38: просмотр файла — диалог, фон inert, фокус на «Закрыть», Escape закрывает, фокус на карточку", async () => {
   const { shell, opener } = shellWithOpener("отчёт.txt");
   let closed = false;
-  const h = t$.mount(ui.FileViewer, { file: { name: "отчёт.txt", path: "C:\\Users\\USER\\отчёт.txt" }, onClose: () => (closed = true) });
+  const h = t$.mount(ui.FileViewer, { file: { name: "отчёт.txt", path: "C:\\Users\\dev\\отчёт.txt" }, onClose: () => (closed = true) });
   await t$.flush();
   const panel = $(document.body, ".file-panel");
   assert.equal(panel.getAttribute("role"), "dialog");

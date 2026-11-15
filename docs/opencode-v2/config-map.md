@@ -7,11 +7,11 @@ status: draft
 
 # Карта переноса конфига opencode 1.x → 2.2.6
 
-Исследование: как наш `D:\Portal\teleharness\ops\opencode\opencode.json` (формат 1.x) выражается в формате opencode 2.2.6. Прод (:4096, :4170) и стенд (:4097, :4172) не трогались; все живые проверки — только GET на изолированный сервер **:4099** (opencode 2.2.6, Basic `opencode:***`).
+Исследование: как наш `D:\Apps\teleharness\ops\opencode\opencode.json` (формат 1.x) выражается в формате opencode 2.2.6. Прод (:4096, :4170) и стенд (:4097, :4172) не трогались; все живые проверки — только GET на изолированный сервер **:4099** (opencode 2.2.6, Basic `opencode:***`).
 
 Источники:
 
-- Наш конфиг 1.x: `D:\Portal\teleharness\ops\opencode\opencode.json` (прочитан полностью; API-ключей в файле **нет** — маскировать нечего).
+- Наш конфиг 1.x: `D:\Apps\teleharness\ops\opencode\opencode.json` (прочитан полностью; API-ключей в файле **нет** — маскировать нечего).
 - Живой сервер :4099: `GET /api/config`, `GET /openapi.json` (точные типы установленного 2.2.6), `GET /api/provider`, `GET /api/model`, `GET /api/agent`, `GET /api/mcp`, `GET /api/skill`, `GET /api/command`, `GET /api/location`, `GET /api/info`, лог `D:\teleharness-tmp-scripts\oc2-run\data\opencode\log\opencode.log`.
 - Доки v2: [config](https://opencode.ai/docs/config), [permissions](https://opencode.ai/docs/permissions), [policies](https://opencode.ai/docs/policies), [mcp-servers](https://opencode.ai/docs/mcp-servers), [migrate-v1](https://opencode.ai/docs/migrate-v1).
 - Типы: `@opencode/sdk@2.2.6` через unpkg ([package.json](https://unpkg.com/@opencode/sdk@2.2.6/package.json)); схемы конфига — из живого `/openapi.json` (:4099), они соответствуют `@opencode/schema@2.2.6`.
@@ -72,7 +72,7 @@ status: draft
 
 ## Карта переноса: поле 1.x → v2
 
-Источником значений 1.x служит `D:\Portal\teleharness\ops\opencode\opencode.json`. Статусы: **прямо** — имя и форма совпадают; **авто** — v2 принимает V1-синтаксис и нормализует сам (рекомендуемая native-форма другая); **нет аналога** — v2 поле игнорирует (с warning) или действия не существует.
+Источником значений 1.x служит `D:\Apps\teleharness\ops\opencode\opencode.json`. Статусы: **прямо** — имя и форма совпадают; **авто** — v2 принимает V1-синтаксис и нормализует сам (рекомендуемая native-форма другая); **нет аналога** — v2 поле игнорирует (с warning) или действия не существует.
 
 | # | Поле 1.x (путь, значение кратко) | Поле/структура v2 (источник) | Статус |
 |---|---|---|---|
@@ -84,7 +84,7 @@ status: draft
 | 6 | `autoupdate` = `false` | `update: "disable"` (false→disable, "notify"→notify, true→auto; [migrate-v1](https://opencode.ai/docs/migrate-v1); подтверждено живьём) | **авто** |
 | 7 | `share` = `"disabled"` | `share` без изменений (enum `manual|auto|disabled`; живая схема) | **прямо** |
 | 8 | `snapshot` = `false` | `snapshots` ([migrate-v1 → Snapshots](https://opencode.ai/docs/migrate-v1)) | **авто** (переименование) |
-| 9 | `instructions` = `[D:\Obsidian\agents\_index.md, C:\Users\USER\.config\opencode\prompts\glm-rules.md]` | `instructions` — массив файлов/globs/URL ([config → Instructions](https://opencode.ai/docs/config)) | **прямо** |
+| 9 | `instructions` = `[D:\Vault\agents\_index.md, C:\Users\dev\.config\opencode\prompts\glm-rules.md]` | `instructions` — массив файлов/globs/URL ([config → Instructions](https://opencode.ai/docs/config)) | **прямо** |
 | 10 | `plugin` = `["oh-my-opencode-slim@3.0.7", "./vault-cache.ts"]` | `plugins` (массив строк/`{package, options}`). ⚠️ **V1-плагины не выполняются в v2** — нужен порт кода ([migrate-v1 → Plugins](https://opencode.ai/docs/migrate-v1)); локальный путь должен стать директорией (`./vault-cache/index.ts`) | **авто** (имя) + обязательный порт |
 | 11 | `provider` → `zai-coding-plan` | `providers` → `zai-coding-plan`; `npm`→`package` (у нас не задан), `api`→`settings.baseURL` (не задан), `options`→`settings`/`headers`/`body` по роли ([migrate-v1 → Providers](https://opencode.ai/docs/migrate-v1)) | **авто** |
 | 11а | `provider.zai-coding-plan.whitelist` = `["glm-5.3","glm-5.3-flash"]` | нет поля: V1 `whitelist` — в списке «accepted but unsupported» ([migrate-v1](https://opencode.ai/docs/migrate-v1)), игнорируется с warning. Замена по смыслу — `policies` (deny-всё-кроме-разрешённых уже даёт `enabled_providers`) | **нет аналога** |
@@ -113,7 +113,7 @@ status: draft
 | `todowrite/todoread: "allow"` | действий нет; todos в v2 — experimental-флаг `experimental.todo`, не permission action | **нет аналога** |
 | `context7_*`, `grep_app_*`, `marketplace_*: allow` | MCP-инструменты именуются `<server>_<tool>` с нормализацией символов → правила-паттерны переносятся как есть: `{action:"context7_*", resource:"*", effect:"allow"}` | **прямо** (форма правила) |
 | `skill: {"*": deny, "teleharness-*": allow}` | два правила: `{action:"skill",resource:"*",effect:"deny"}`, `{action:"skill",resource:"teleharness-*",effect:"allow"}` | **авто** |
-| `external_directory: {"*": deny, "D:\Obsidian\tenants\*": allow}` | те же два правила с `action:"external_directory"`. ⚠️ В v2 external_directory **по умолчанию разрешён** (V1 спрашивал) — наши правила сохраняют старое поведение ([migrate-v1 → Permissions warning](https://opencode.ai/docs/migrate-v1)) | **авто** |
+| `external_directory: {"*": deny, "D:\Vault\tenants\*": allow}` | те же два правила с `action:"external_directory"`. ⚠️ В v2 external_directory **по умолчанию разрешён** (V1 спрашивал) — наши правила сохраняют старое поведение ([migrate-v1 → Permissions warning](https://opencode.ai/docs/migrate-v1)) | **авто** |
 | `bash: "allow"` | `{action:"shell", resource:"*", effect:"allow"}` | **авто** |
 | `task: "deny"` | `{action:"subagent", resource:"*", effect:"deny"}` (**task → subagent**) | **авто** |
 
@@ -207,7 +207,7 @@ status: draft
 }
 ```
 
-При этом в `/api/provider` и `/api/model` `data: []` — пусто на трёх проверенных location (`C:\Windows\System32`, `D:/teleharness-tmp-scripts/oc2-run`, `D:/Portal/teleharness`; параметры `location[directory]` deepObject, см. `/openapi.json` → `provider.list`). То есть настроенный провайдер **не виден через эти GET-эндпоинты живьём**; причина не установлена (ленивый резолв каталога моделей / отсутствие активной сессии — не проверено). **Пояснение из позднейшего исследования [api-map.md, раздел 10](api-map.md)**: ключ из `auth.json` в v2 сам не мигрирует — таблица credential пуста, каталоги провайдеров/моделей пусты и ходы падают с `provider.no-route`, пока ключ не добавлен через `POST /api/credential`; на момент этой проверки credential ещё не был добавлен (эти проверки шли до эксперимента api-map).
+При этом в `/api/provider` и `/api/model` `data: []` — пусто на трёх проверенных location (`C:\Windows\System32`, `D:/teleharness-tmp-scripts/oc2-run`, `D:/Apps/teleharness`; параметры `location[directory]` deepObject, см. `/openapi.json` → `provider.list`). То есть настроенный провайдер **не виден через эти GET-эндпоинты живьём**; причина не установлена (ленивый резолв каталога моделей / отсутствие активной сессии — не проверено). **Пояснение из позднейшего исследования [api-map.md, раздел 10](api-map.md)**: ключ из `auth.json` в v2 сам не мигрирует — таблица credential пуста, каталоги провайдеров/моделей пусты и ходы падают с `provider.no-route`, пока ключ не добавлен через `POST /api/credential`; на момент этой проверки credential ещё не был добавлен (эти проверки шли до эксперимента api-map).
 
 **MCP**: `/api/mcp` → `data: []` — соответствует пустому `mcp` в файле; playwright/marketplace из нашего 1.x на :4099 не подключены (их там и не конфигурировали).
 
@@ -240,12 +240,12 @@ level=WARN message="configuration normalization diagnostic"
 
 Приоритет обычных настроек (снизу вверх): global → project-файлы (внешние каталоги раньше внутренних; `.opencode/opencode.json` перекрывает прямые `opencode.json`) → системный файл. Для **policies порядок обратный** — глобальные/системные правила сильнее проектных ([policies → Precedence](https://opencode.ai/docs/policies)).
 
-**Почему наш 1.x файл «молча не применяется»**: `D:\Portal\teleharness\ops\opencode\opencode.json` лежит **вне всех зон поиска** (не system, не global, не project-цепочка от cwd). Для сервера :4099 подтверждено живьём:
+**Почему наш 1.x файл «молча не применяется»**: `D:\Apps\teleharness\ops\opencode\opencode.json` лежит **вне всех зон поиска** (не system, не global, не project-цепочка от cwd). Для сервера :4099 подтверждено живьём:
 
 - location по умолчанию — `C:\Windows\System32` (`GET /api/location` → `project.directory`), а глобальный каталог перенаправлен env в `D:\teleharness-tmp-scripts\oc2-run\config\opencode` (watcher в логе сидит именно там, `/api/config` возвращает именно этот документ). Точный механизм переопределения (XDG_CONFIG_HOME/OPENCODE_CONFIG у процесса) по GET-запросам не определяется — **не проверено**;
 - в `/api/config` наш файл не фигурирует ни как document, ни как warning — v2 его просто **не находит** и не ругается: «молчание» — это отсутствие файла в зоне поиска, а не игнорирование формата.
 
-Если бы файл был в зоне поиска, формат 1.x сам по себе **поддерживается**: «Existing supported server config fields, agent definitions, command definitions, skills... should continue to work without changes» ([migrate-v1](https://opencode.ai/docs/migrate-v1)). Неподдерживаемые поля (наш `whitelist`, `compaction.prune`, `doom_loop` и т.п.) дают warning в лог, а не падение. Для рабочего портала файл нужно разместить как `D:\Portal\teleharness\opencode.json` или `D:\Portal\teleharness\.opencode\opencode.json` (либо global) — тогда он применится.
+Если бы файл был в зоне поиска, формат 1.x сам по себе **поддерживается**: «Existing supported server config fields, agent definitions, command definitions, skills... should continue to work without changes» ([migrate-v1](https://opencode.ai/docs/migrate-v1)). Неподдерживаемые поля (наш `whitelist`, `compaction.prune`, `doom_loop` и т.п.) дают warning в лог, а не падение. Для рабочего портала файл нужно разместить как `D:\Apps\teleharness\opencode.json` или `D:\Apps\teleharness\.opencode\opencode.json` (либо global) — тогда он применится.
 
 ---
 

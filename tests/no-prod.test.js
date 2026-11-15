@@ -14,7 +14,7 @@ const src = Object.fromEntries(files.map((f) => [f, readFileSync(path.join(TESTS
 const spawnsServer = (s) => /spawn\([^)]*server\.js/.test(s.replace(/\s+/g, " ")) || /path\.join\(ROOT, "server\.js"\)/.test(s);
 
 test("assertSafeUrl: прод/стенд-порты запрещены, эфемерные — нет", () => {
-  for (const u of ["http://127.0.0.1:4096", "http://127.0.0.1:4170", "http://localhost:4172", "http://127.0.0.1:4097", "http://127.0.0.1:4196", "http://192.168.0.10/", "https://192.168.0.10/teleharness/"]) {
+  for (const u of ["http://127.0.0.1:4096", "http://127.0.0.1:4170", "http://localhost:4172", "http://127.0.0.1:4097", "http://127.0.0.1:4196", "http://192.0.2.10/", "https://192.0.2.10/teleharness/"]) {
     assert.throws(() => assertSafeUrl(u), /прод|стенд/, u);
   }
   assert.equal(assertSafeUrl("http://127.0.0.1:53123"), "http://127.0.0.1:53123");

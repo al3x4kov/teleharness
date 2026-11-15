@@ -16,7 +16,7 @@ import * as paths from "../lib/paths.js";
 import { isUnderAny } from "../lib/paths.js";
 // The Windows path policy, checked on every OS (POSIX: tests/paths.test.js).
 const isAbsoluteDir = (d) => paths.isAbsoluteDir(d, "win32");
-const dirProblem = (d, o = {}) => paths.dirProblem(d, { platform: "win32", portalRoot: "D:\\Portal", ...o });
+const dirProblem = (d, o = {}) => paths.dirProblem(d, { platform: "win32", portalRoot: "D:\\Apps", ...o });
 import { agentCan, agentHasShell, agentIsSandboxed, defaultTenantAgent, providerForUser, publicAgent, redactMessages, tenantAgents } from "../lib/policy.js";
 import { realInside, serveWorkspaceFile } from "../lib/file.js";
 import { planGc } from "../lib/gc.js";
@@ -135,18 +135,18 @@ test("path policy: one rule set for every route", () => {
   }
   assert.equal(dirProblem("D:\\Windowsy"), null, "a segment boundary is required");
   // BUG-01.28: temp-tree membership for the session-list filter.
-  const roots = ["C:\\Users\\USER\\AppData\\Local\\Temp"];
-  assert.equal(isUnderAny("c:/users/user/appdata/local/temp/teleharness-claude-smoke", roots), true);
-  assert.equal(isUnderAny("C:\\Users\\USER\\AppData\\Local\\Temp", roots), true);
-  assert.equal(isUnderAny("C:\\Users\\USER\\AppData\\Local\\Temporary", roots), false);
+  const roots = ["C:\\Users\\dev\\AppData\\Local\\Temp"];
+  assert.equal(isUnderAny("c:/users/dev/appdata/local/temp/teleharness-claude-smoke", roots), true);
+  assert.equal(isUnderAny("C:\\Users\\dev\\AppData\\Local\\Temp", roots), true);
+  assert.equal(isUnderAny("C:\\Users\\dev\\AppData\\Local\\Temporary", roots), false);
   assert.equal(isUnderAny("D:\\proj\\tmp", roots), false);
   assert.equal(isUnderAny(null, roots), false);
-  assert.equal(dirProblem("D:\\Portal\\teleharness"), null, "admin may use the portal tree");
-  const t = { tenant: true, dataDir: "D:\\Portal\\teleharness\\data", profileRoot: "C:\\Users\\USER" };
-  assert.equal(dirProblem("D:\\Portal\\teleharness", t), "portal");
-  assert.equal(dirProblem("C:\\Users\\USER", t), "profile-root");
-  assert.equal(dirProblem("C:\\Users\\USER\\.teleharness-tenants\\alice", t), null);
-  assert.equal(dirProblem("D:\\Obsidian\\tenants\\alice", t), null);
+  assert.equal(dirProblem("D:\\Apps\\teleharness"), null, "admin may use the portal tree");
+  const t = { tenant: true, dataDir: "D:\\Apps\\teleharness\\data", profileRoot: "C:\\Users\\dev" };
+  assert.equal(dirProblem("D:\\Apps\\teleharness", t), "portal");
+  assert.equal(dirProblem("C:\\Users\\dev", t), "profile-root");
+  assert.equal(dirProblem("C:\\Users\\dev\\.teleharness-tenants\\alice", t), null);
+  assert.equal(dirProblem("D:\\Vault\\tenants\\alice", t), null);
 });
 
 // ---- BUG-12.5 / BUG-12.10 / FEAT-12.16 ------------------------------------------------
@@ -180,7 +180,7 @@ test("policy: shell detection on the live agent catalog fixture", () => {
     ],
   };
   assert.equal(agentIsSandboxed(sandbox), true, "deny-by-default agent with file tools only");
-  const spool = { permission: "external_directory", pattern: "D:\\teleharness-stage\\opencode\\data\\opencode\\tool-output\\*", action: "allow" };
+  const spool = { permission: "external_directory", pattern: "D:\\th-stage\\opencode\\data\\opencode\\tool-output\\*", action: "allow" };
   assert.equal(agentIsSandboxed({ ...sandbox, permission: [...sandbox.permission, spool] }), true, "opencode's own tool-output spool is not a user folder");
   assert.equal(agentIsSandboxed({ ...sandbox, permission: [...sandbox.permission, { ...spool, pattern: "C:\\Users\\*" }] }), false, "any other external allow re-opens");
   assert.equal(agentIsSandboxed({ ...sandbox, permission: [...sandbox.permission, { permission: "task", pattern: "explore", action: "allow" }] }), false, "a narrower task allow re-opens delegation");
@@ -193,7 +193,7 @@ test("policy: shell detection on the live agent catalog fixture", () => {
   assert.equal(agentIsSandboxed(jailed), true, "bash allow + task/external_directory deny → tenant agent");
   assert.equal(agentIsSandboxed({ permission: { "*": "deny", bash: "allow", read: "allow" } }), true, "object shape: bash allow, rest denied");
   assert.equal(agentIsSandboxed({ permission: { "*": "deny", bash: "allow", task: "allow" } }), false, "bash + task → delegation re-opens");
-  assert.equal(agentIsSandboxed({ ...jailed, permission: [...jailed.permission, { permission: "external_directory", pattern: "D:\\Portal\\*", action: "ask" }] }), false, "bash + external_directory ask → not a tenant agent");
+  assert.equal(agentIsSandboxed({ ...jailed, permission: [...jailed.permission, { permission: "external_directory", pattern: "D:\\Apps\\*", action: "ask" }] }), false, "bash + external_directory ask → not a tenant agent");
   assert.equal(agentIsSandboxed(sisyphus), false, "Sisyphus delegates and reaches outside files");
   assert.equal(tenantAgents([...agents, jailed]).some((a) => a.name === "Sandbox"), true);
   const withSandbox = [...agents, sandbox];
@@ -224,8 +224,8 @@ test("policy: provider filtering and message redaction", () => {
       parts: [
         { type: "text", text: "готово" },
         { type: "tool", tool: "bash", callID: "c1", state: { status: "completed", input: { command: "whoami" }, output: "desktop\\user", metadata: { exit: 0 }, title: "whoami", time: { start: 1 } } },
-        { type: "tool", tool: "read", state: { status: "error", input: { filePath: "D:\\Portal\\teleharness\\data\\users.json" }, error: "ENOENT D:\\Portal" } },
-        { type: "patch", files: ["D:\\Portal\\teleharness\\x.js"] },
+        { type: "tool", tool: "read", state: { status: "error", input: { filePath: "D:\\Apps\\teleharness\\data\\users.json" }, error: "ENOENT D:\\Apps" } },
+        { type: "patch", files: ["D:\\Apps\\teleharness\\x.js"] },
       ],
     },
   ];
@@ -329,17 +329,17 @@ test("BUG-171: agentIsSandboxed tolerates external_directory allow under the ten
   const ext = (pattern, action = "allow") => ({ permission: "external_directory", pattern, action });
   const { config } = await import("../lib/config.js");
   assert.deepEqual(tenantVaultRoots(), [config.TELEHARNESS_TENANT_VAULT], "default root = config default");
-  setTenantVaultRoots(["D:\\Obsidian\\tenants"]);
-  assert.equal(agentIsSandboxed(sb([ext("D:\\Obsidian\\tenants\\*")])), true, "vault root allow keeps the agent sandboxed");
-  assert.equal(agentIsSandboxed(sb([ext("d:/obsidian/tenants/*")])), true, "case and slash insensitive");
-  for (const bad of ["D:\\Obsidian\\*", "D:\\Obsidian\\agents\\*", "D:\\Obsidian\\tenants-x\\*", "D:\\Obsidian\\tenants\\..\\agents\\*", "*", "D:\\*"])
+  setTenantVaultRoots(["D:\\Vault\\tenants"]);
+  assert.equal(agentIsSandboxed(sb([ext("D:\\Vault\\tenants\\*")])), true, "vault root allow keeps the agent sandboxed");
+  assert.equal(agentIsSandboxed(sb([ext("d:/vault/tenants/*")])), true, "case and slash insensitive");
+  for (const bad of ["D:\\Vault\\*", "D:\\Vault\\agents\\*", "D:\\Vault\\tenants-x\\*", "D:\\Vault\\tenants\\..\\agents\\*", "*", "D:\\*"])
     assert.equal(agentIsSandboxed(sb([ext(bad)])), false, `outside the vault root: ${bad}`);
   try {
-    setTenantVaultRoots(["D:\\teleharness-stage\\tenants\\vault"]);
-    assert.equal(agentIsSandboxed(sb([ext("D:\\teleharness-stage\\tenants\\vault\\*")])), true);
-    assert.equal(agentIsSandboxed(sb([ext("D:\\Obsidian\\tenants\\*")])), false, "the configured root only");
+    setTenantVaultRoots(["D:\\th-stage\\tenants\\vault"]);
+    assert.equal(agentIsSandboxed(sb([ext("D:\\th-stage\\tenants\\vault\\*")])), true);
+    assert.equal(agentIsSandboxed(sb([ext("D:\\Vault\\tenants\\*")])), false, "the configured root only");
     setTenantVaultRoots([]);
-    assert.equal(agentIsSandboxed(sb([ext("D:\\teleharness-stage\\tenants\\vault\\*")])), false, "no root → strict as before");
+    assert.equal(agentIsSandboxed(sb([ext("D:\\th-stage\\tenants\\vault\\*")])), false, "no root → strict as before");
   } finally {
     setTenantVaultRoots([config.TELEHARNESS_TENANT_VAULT]);
   }

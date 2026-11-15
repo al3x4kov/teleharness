@@ -625,7 +625,7 @@ test("R-23: «Назад» from a chat returns to its source / its project", () 
   assert.equal(chatBackTarget({ from: proj }), "/project/D%3A%5CP");
   assert.equal(chatBackTarget({ from: { view: "home", path: "/" }, directory: "D:\\P", projects: ["D:\\P"] }), "/");
   assert.equal(chatBackTarget({ from: null, directory: "d:\\p", projects: ["D:\\P"] }), "/project/d%3A%5Cp", "deep link → the chat's project");
-  assert.equal(chatBackTarget({ from: { view: "settings", path: "/settings" }, directory: "C:\\Users\\USER", projects: [] }), "/");
+  assert.equal(chatBackTarget({ from: { view: "settings", path: "/settings" }, directory: "C:\\Users\\dev", projects: [] }), "/");
 });
 
 // ---- TASK-01.42: active chat id is a signal ----------------------------------

@@ -8,7 +8,7 @@
 
 ### Requirement: Allow-list статики edge
 
-Система SHALL на edge (:80/:443) отдавать статику из D:\Portal только из дерева `tv`. Любой другой путь вне маршрута /teleharness отвечает 404, в том числе каталоги teleharness, teleharness-qa, teleharness-stage, .git, secrets и служебные файлы корня. (трекер: BUG-12.1 (BUG-019))
+Система SHALL на edge (:80/:443) отдавать статику из D:\Apps только из дерева `tv`. Любой другой путь вне маршрута /teleharness отвечает 404, в том числе каталоги teleharness, teleharness-qa, teleharness-stage, .git, secrets и служебные файлы корня. (трекер: BUG-12.1 (BUG-019))
 
 #### Scenario: Стенд не раздаётся
 

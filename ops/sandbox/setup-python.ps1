@@ -11,7 +11,7 @@
 #     Запись в эти каталоги контейнерам не выдаётся.
 param(
   [string]$Root = 'D:\teleharness-sandbox',
-  [string]$BasePython = 'C:\Users\USER\AppData\Local\Programs\Python\Python312\python.exe'
+  [string]$BasePython = 'C:\Users\dev\AppData\Local\Programs\Python\Python312\python.exe'
 )
 $ErrorActionPreference = 'Stop'
 # FEAT-04.10: + python-pptx, XlsxWriter, reportlab, pdfplumber (тянет pdfminer.six, pypdfium2, cryptography),

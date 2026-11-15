@@ -171,7 +171,7 @@ test("выход: сервер не ответил — перезагрузка 
 // ---- AccessSection ----------------------------------------------------------------
 
 const USERS = () => [
-  { id: "u_admin", name: "admin", role: "admin", directories: ["C:\\Users\\USER"], createdAt: "2026-10-01T00:00:00Z" },
+  { id: "u_admin", name: "admin", role: "admin", directories: ["C:\\Users\\dev"], createdAt: "2026-10-01T00:00:00Z" },
   { id: "u_j", name: "alice", role: "user", directories: ["D:\\Tenants\\alice", "D:\\Shared"], obsidianRoot: "D:\\Vault\\alice", engines: ["opencode"] },
   { id: "u_k", name: "kostya", role: "user", directories: [], disabled: true, engines: ["opencode", "claude"] },
 ];

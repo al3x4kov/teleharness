@@ -261,7 +261,7 @@ test("v2 shell is jailed identically (Э7: bash → shell)", async () => {
 
 test("quotes, &, |, \" and shell syntax stay inside the base64 payload", async () => {
   const evil = [
-    'echo a & type D:\\Portal\\teleharness\\data\\users.json',
+    'echo a & type D:\\Apps\\teleharness\\data\\users.json',
     'echo "x" | findstr x && whoami',
     '" & calc & "',
     "'; rm -rf / #",
@@ -290,7 +290,7 @@ test("workdir inside the tenant folder becomes --cwd; relative ones resolve agai
 })
 
 test("workdir outside the tenant folder is refused", async () => {
-  for (const workdir of [BOB, "..\\bob", "C:\\Windows", "D:\\Portal\\teleharness", path.join(ALICE, "escape"), P("tenants", "vault", "alice")])
+  for (const workdir of [BOB, "..\\bob", "C:\\Windows", "D:\\Apps\\teleharness", path.join(ALICE, "escape"), P("tenants", "vault", "alice")])
     await assert.rejects(bash("ses_alice", "dir", { workdir }), /Доступ запрещён/, workdir)
 })
 

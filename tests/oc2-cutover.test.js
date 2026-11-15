@@ -1,7 +1,7 @@
 // @suite: server — spawnSync PowerShell-парсера (BUG-222/QA-05)
 // FEAT-16.3, п.9 (перевод прода на v2): комплект скриптов.
 //   ops/opencode/serve-v2.cmd   — opencode 2.2.6 serve на :4196, своя XDG-зона
-//                                 D:\Portal\teleharness-oc2, пароль из data\oc2-password.txt
+//                                 D:\Apps\teleharness-oc2, пароль из data\oc2-password.txt
 //   ops/web-v2.cmd              — тот же server.js, только TELEHARNESS_OC_API/TELEHARNESS_UPSTREAM/TELEHARNESS_OC_PASSWORD
 //   ops/deploy/oc2-install.ps1  — разовая подготовка прода v2: бинарник (SHA256),
 //                                 пароль (генерация + ACL), XDG, конфиг/плагин/скиллы,
@@ -25,7 +25,7 @@ const ascii = (f) => {
   const bad = [...buf].filter((b) => b > 0x7f).length;
   return { ok: bad === 0, bad };
 };
-const PASSWORD_FILE = "D:\\Portal\\teleharness\\data\\oc2-password.txt";
+const PASSWORD_FILE = "D:\\Apps\\teleharness\\data\\oc2-password.txt";
 // литеральный текст → источник regex (бэкслеши и метасимволы)
 const re = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const pwReadRe = (varName) => new RegExp(`set /p ${varName}=<${re(PASSWORD_FILE)}`);
@@ -35,13 +35,13 @@ const pwReadRe = (varName) => new RegExp(`set /p ${varName}=<${re(PASSWORD_FILE)
 test("serve-v2.cmd: порт 4196, XDG-зона teleharness-oc2, проектный конфиг отключён, OUTPUT_TOKEN_MAX как в 1.x", () => {
   const s = read("ops/opencode/serve-v2.cmd");
   assert.match(s, /serve --hostname 127\.0\.0\.1 --port 4196/);
-  assert.match(s, /set "XDG_CONFIG_HOME=D:\\Portal\\teleharness-oc2\\config"/);
-  assert.match(s, /set "XDG_DATA_HOME=D:\\Portal\\teleharness-oc2\\data"/);
-  assert.match(s, /set "XDG_STATE_HOME=D:\\Portal\\teleharness-oc2\\state"/);
-  assert.match(s, /set "HOME=D:\\Portal\\teleharness-oc2\\home"/);
+  assert.match(s, /set "XDG_CONFIG_HOME=D:\\Apps\\teleharness-oc2\\config"/);
+  assert.match(s, /set "XDG_DATA_HOME=D:\\Apps\\teleharness-oc2\\data"/);
+  assert.match(s, /set "XDG_STATE_HOME=D:\\Apps\\teleharness-oc2\\state"/);
+  assert.match(s, /set "HOME=D:\\Apps\\teleharness-oc2\\home"/);
   assert.match(s, /set "OPENCODE_DISABLE_PROJECT_CONFIG=1"/, "как у прод 1.x serve.cmd");
   assert.match(s, /set "OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=65536"/, "BUG-180 паритет с 1.x");
-  assert.match(s, /D:\\Portal\\teleharness-oc2\\bin\\opencode\.exe/, "бинарник — копия в зоне v2");
+  assert.match(s, /D:\\Apps\\teleharness-oc2\\bin\\opencode\.exe/, "бинарник — копия в зоне v2");
   assert.match(s, /%~1/, "путь бинарника можно передать параметром");
   assert.match(s, /teleharness-oc2\\logs/, "логи serve — в XDG-зоне");
 });
@@ -63,8 +63,8 @@ test("web-v2.cmd: только TELEHARNESS_OC_API/TELEHARNESS_UPSTREAM/TELEHARNE
   assert.match(s, /set "TELEHARNESS_UPSTREAM=http:\/\/127\.0\.0\.1:4196"/);
   assert.match(s, pwReadRe("TELEHARNESS_OC_PASSWORD"));
   // запуск — как действие задачи teleharness-web (watchdog): абсолютный node + cwd корня репо
-  assert.match(s, /cd \/d D:\\Portal\\teleharness\r?\n/);
-  assert.match(s, /D:\\nodejs\\node\.exe D:\\Portal\\teleharness\\server\.js\r?\n/);
+  assert.match(s, /cd \/d D:\\Apps\\teleharness\r?\n/);
+  assert.match(s, /D:\\tools\\node\\node\.exe D:\\Apps\\teleharness\\server\.js\r?\n/);
   // остальные env не задавать: прод живёт на умолчаниях lib/config.js.
   // Разрешены ровно пять строк: три set "NAME=...", сброс пароля и set /p.
   // BUG-190: TELEHARNESS_OC_CONFIG_FILE — путь к конфигу зоны v2 (версия slim в «О приложении»), не секрет.
@@ -74,7 +74,7 @@ test("web-v2.cmd: только TELEHARNESS_OC_API/TELEHARNESS_UPSTREAM/TELEHARNE
     [
       'set "TELEHARNESS_OC_API=v2"',
       'set "TELEHARNESS_UPSTREAM=http://127.0.0.1:4196"',
-      String.raw`set "TELEHARNESS_OC_CONFIG_FILE=D:\Portal\teleharness-oc2\config\opencode\opencode.json"`,
+      String.raw`set "TELEHARNESS_OC_CONFIG_FILE=D:\Apps\teleharness-oc2\config\opencode\opencode.json"`,
       'set "TELEHARNESS_OC_PASSWORD="',
       `set /p TELEHARNESS_OC_PASSWORD=<${PASSWORD_FILE}`,
     ],

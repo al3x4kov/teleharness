@@ -74,7 +74,7 @@
 
 #### Scenario: Попытка изменить портал
 
-- **WHEN** команда тенанта пытается записать в D:\Portal\teleharness или C:\Windows, прочитать data/users.json или обратиться к 127.0.0.1:4096
+- **WHEN** команда тенанта пытается записать в D:\Apps\teleharness или C:\Windows, прочитать data/users.json или обратиться к 127.0.0.1:4096
 - **THEN** операция отклоняется системой, файлы не меняются
 
 ### Requirement: Скиллы документов и marketplace для тенантов
@@ -217,7 +217,7 @@ Claude-чат тенанта SHALL иметь возможности opencode-а
 #### Scenario: Тенант работает с заметками своей зоны
 
 - **GIVEN** агент Sandbox с `external_directory` deny и allow только `<TELEHARNESS_TENANT_VAULT>\*`
-- **WHEN** тенант просит прочитать и создать заметку в своей зоне, затем прочитать файл чужой зоны или D:\Obsidian\agents
+- **WHEN** тенант просит прочитать и создать заметку в своей зоне, затем прочитать файл чужой зоны или D:\Vault\agents
 - **THEN** Sandbox остаётся в списке агентов тенанта, своя заметка читается и создаётся, чужие пути отклоняются «Доступ запрещён»
 
 ### Requirement: Серверная песочница инструментов тенанта
@@ -278,7 +278,7 @@ Claude-чат тенанта SHALL иметь возможности opencode-а
 #### Scenario: cd в свою папку
 
 - **GIVEN** Claude-чат тенанта Carol
-- **WHEN** модель выполняет `cd /d C:\Users\USER\.teleharness-tenants\Carol && python -I a.py`
+- **WHEN** модель выполняет `cd /d C:\Users\dev\.teleharness-tenants\Carol && python -I a.py`
 - **THEN** исполняется `python -I a.py` с этой рабочей папкой, без «Access is denied»
 
 ### Requirement: Защита тенантов на opencode 2.x

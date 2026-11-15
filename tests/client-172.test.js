@@ -34,12 +34,12 @@ function reset() {
 // ---- BUG-05.13 / BUG-079: pictures from a shell command ----------------------
 
 test("BUG-098: Git Bash paths /d/… and cd /d/… are the D: drive, not the chat folder", () => {
-  assert.deepEqual(commandImagePaths(bash("cp data.bin /d/Portal/teleharness/shots/a.png"), S), ["D:\\Portal\\teleharness\\shots\\a.png"]);
-  assert.deepEqual(commandImagePaths(bash("cd /c/Users/USER && python plot.py --out chart.png"), S), ["C:\\Users\\USER\\chart.png"]);
+  assert.deepEqual(commandImagePaths(bash("cp data.bin /d/Apps/teleharness/shots/a.png"), S), ["D:\\Apps\\teleharness\\shots\\a.png"]);
+  assert.deepEqual(commandImagePaths(bash("cd /c/Users/dev && python plot.py --out chart.png"), S), ["C:\\Users\\dev\\chart.png"]);
   assert.deepEqual(commandImagePaths(bash("ls /mnt/d/pics/p.jpg"), S), ["D:\\pics\\p.jpg"]);
   assert.deepEqual(commandImagePaths(bash("cp a /tmp/x.png"), S), ["/tmp/x.png"], "/tmp — не диск");
-  // live-smoke прода 1.8.6: «ls C:\Users\USER\*.png» → 404 на /file?path=…\*.png
-  assert.deepEqual(commandImagePaths(bash("ls C:\\Users\\USER\\*.png shot-?.jpg"), S), [], "маски — не файлы");
+  // live-smoke прода 1.8.6: «ls C:\Users\dev\*.png» → 404 на /file?path=…\*.png
+  assert.deepEqual(commandImagePaths(bash("ls C:\\Users\\dev\\*.png shot-?.jpg"), S), [], "маски — не файлы");
 });
 
 test("BUG-05.13: image paths from a completed bash command resolve into the session folder", () => {
@@ -88,11 +88,11 @@ test("BUG-05.13: no URL, variable, «..», upload ref; not from a running/failed
 test("BUG-05.13: collectArtifactEntries — command pictures are chips marked guessed (404 hides the card); Temp and outside folders are not", () => {
   const parts = [
     bash("python plot.py --out chart.png"),
-    bash("x C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\z.png"),
+    bash("x C:\\Users\\dev\\AppData\\Local\\Temp\\opencode\\z.png"),
     bash("y D:\\Other\\q.png"),
     bash("python plot.py --out later.png", { status: "running" }),
   ];
-  assert.equal(isScratchPath("C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\z.png"), true);
+  assert.equal(isScratchPath("C:\\Users\\dev\\AppData\\Local\\Temp\\opencode\\z.png"), true);
   assert.deepEqual(collectArtifactEntries(parts, [], S), [{ path: "D:\\Chats\\s1\\chart.png", guessed: true }]);
   // The same picture named by the text with its full path: one chip, not guessed
   // (the text path wins — the absolute path keeps the broken-card face).

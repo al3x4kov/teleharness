@@ -1,5 +1,5 @@
-# teleharness deploy helpers (BUG-157 / BUG-15.8). Dot-source from D:\teleharness-stage\deploy-*.ps1:
-#   . D:\Portal\teleharness\ops\deploy\teleharness-deploy-lib.ps1
+# teleharness deploy helpers (BUG-157 / BUG-15.8). Dot-source from D:\th-stage\deploy-*.ps1:
+#   . D:\Apps\teleharness\ops\deploy\teleharness-deploy-lib.ps1
 #
 # Why: the 1.11.2 deploy (2026-11-05 00:44) failed twice over in Windows PowerShell 5.1:
 #  1. `Invoke-RestMethod http://127.0.0.1:4096/config` returns a RAW STRING for opencode's
@@ -11,7 +11,7 @@
 # Rules: JSON is read by node, never by Invoke-RestMethod; files are restored by git itself
 # (`git restore --source`), never through a PowerShell pipeline.
 
-$TeleharnessNode = 'D:\nodejs\node.exe'
+$TeleharnessNode = 'D:\tools\node\node.exe'
 
 # Value of a (dot-separated) field of a JSON endpoint as JSON text: 'false', '"x"', '12',
 # '<absent>' when the field is missing, '<error: ...>' when the request or the parse failed.
@@ -27,7 +27,7 @@ function Get-TeleharnessJsonValue {
 # touching the index. Files absent at $Rev are left as they are (an older server does not
 # import them). Returns the list of restored paths.
 function Restore-TeleharnessFromGit {
-  param([Parameter(Mandatory)][string]$Rev, [Parameter(Mandatory)][string[]]$Files, [string]$Repo = 'D:\Portal\teleharness')
+  param([Parameter(Mandatory)][string]$Rev, [Parameter(Mandatory)][string[]]$Files, [string]$Repo = 'D:\Apps\teleharness')
   $present = @()
   foreach ($f in $Files) {
     $g = $f -replace '\\', '/'

@@ -1,7 +1,7 @@
 // Запуск копии/экземпляра edge (ops/portal-server.js) для тестов (TASK-14.8, tests.md A6).
 //
 // Боевой edge захардкожен на прод: /teleharness → 127.0.0.1:4170, /tv/api → :8099,
-// статика из D:\Portal, слушает :80/:443. Тест не имеет права ни слушать эти
+// статика из D:\Apps, слушает :80/:443. Тест не имеет права ни слушать эти
 // порты, ни проксировать в прод, поэтому helper:
 //   1) копирует исходник во временный .mjs, подменяя цели (порт портала, порт
 //      TV API, ROOT статики) на тестовые — если шаблон не найден, бросает
@@ -95,7 +95,7 @@ export async function spawnEdge({ tls = false, httpsOnly = true, readyTimeoutMs 
   const teleharness = await startEchoBackend("teleharness");
   const tv = await startEchoBackend("tv");
 
-  // Статика: D:\Portal заменён на tmp-корень с минимальным деревом tv/ и
+  // Статика: D:\Apps заменён на tmp-корень с минимальным деревом tv/ и
   // «опасными» соседями, которые edge обязан НЕ отдавать.
   const staticRoot = path.join(tmp.root, "portal");
   const files = {
@@ -189,7 +189,7 @@ export async function spawnEdge({ tls = false, httpsOnly = true, readyTimeoutMs 
           port: useTls ? tlsPort : httpPort,
           path: p,
           method,
-          headers: { host: "192.168.0.10", ...headers },
+          headers: { host: "192.0.2.10", ...headers },
           rejectUnauthorized: false,
         },
         (res) => {

@@ -85,7 +85,7 @@ test("routes: 401 without login; key = 65-octet point; a foreign/LAN endpoint or
   const k = await (await api("/teleharness/api/push/key")).json();
   assert.equal(k.enabled, true);
   assert.equal(Buffer.from(k.publicKey, "base64url").length, 65);
-  assert.equal((await api("/teleharness/api/push/subscribe", { method: "POST", body: subBody("https://192.168.0.10/teleharness/x", uaAdmin) })).status, 400);
+  assert.equal((await api("/teleharness/api/push/subscribe", { method: "POST", body: subBody("https://192.0.2.10/teleharness/x", uaAdmin) })).status, 400);
   assert.equal((await api("/teleharness/api/push/subscribe", { method: "POST", body: subBody("http://127.0.0.1:4170/x", uaAdmin) })).status, 400);
   assert.equal((await api("/teleharness/api/push/subscribe", { method: "POST", body: { endpoint: `${pushSvc.origin}/ok-x`, keys: { p256dh: "AAAA", auth: uaAdmin.auth } } })).status, 400);
   assert.equal((await api("/teleharness/api/push/test", { method: "POST", body: {} })).status, 409, "no subscription yet");

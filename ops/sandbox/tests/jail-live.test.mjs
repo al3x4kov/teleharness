@@ -14,7 +14,7 @@ const HERE = import.meta.dirname
 const EXE = process.env.TELEHARNESS_JAIL_EXE || path.resolve(HERE, "..", "teleharness-jail.exe")
 const PY = (process.env.TELEHARNESS_SANDBOX_PY || "D:/teleharness-sandbox/python").replace(/\\/g, "/")
 const CAFILE = `${PY}/Lib/site-packages/certifi/cacert.pem`
-const PORTAL = process.env.TELEHARNESS_PORTAL_DIR || "D:\\Portal\\teleharness"
+const PORTAL = process.env.TELEHARNESS_PORTAL_DIR || "D:\\Apps\\teleharness"
 const skip =
   process.platform !== "win32" ? "не Windows" :
   !fs.existsSync(EXE) ? `нет ${EXE} (ops/sandbox/build.ps1)` :
@@ -101,9 +101,9 @@ test("секреты портала и файлы владельца — отк�
   assert.match(probe(READ(path.join(PORTAL, "data", "users.json"))).out, /DENIED PermissionError/)
   assert.match(probe(READ(path.join(PORTAL, "data", "admin-token.txt"))).out, /DENIED PermissionError/)
   assert.match(probe(LIST(path.join(PORTAL, "data"))).out, /DENIED PermissionError/)
-  assert.match(probe(LIST("C:\\Users\\USER\\Documents")).out, /DENIED PermissionError/)
+  assert.match(probe(LIST("C:\\Users\\dev\\Documents")).out, /DENIED PermissionError/)
   assert.match(probe(LIST(path.join(os.homedir(), ".config", "opencode"))).out, /DENIED PermissionError/)
-  assert.match(probe(LIST("D:\\Obsidian\\agents")).out, /DENIED PermissionError/)
+  assert.match(probe(LIST("D:\\Vault\\agents")).out, /DENIED PermissionError/)
 })
 
 test("чужая папка тенанта — ни чтения, ни записи", { skip }, () => {

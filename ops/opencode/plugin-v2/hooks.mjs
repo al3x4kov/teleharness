@@ -23,7 +23,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 const env = process.env
-export const VAULT = (env.VAULT_CACHE_ROOT || "D:/Obsidian/agents").replace(/\\/g, "/")
+export const VAULT = (env.VAULT_CACHE_ROOT || "D:/Vault/agents").replace(/\\/g, "/")
 export const ADMIN_INDEX = `${VAULT}/_index.md`
 export const SNAPSHOT_MAX_CHARS = 3500
 const MAX_NOTE_LINES = 260
@@ -101,7 +101,7 @@ export function tenantRules(z) {
   return [
     `Твоя база знаний (Obsidian) — только ${r}. Подпапки: projects\\, tasks\\, decisions\\, lessons\\, sessions\\ (создавай при необходимости).`,
     `Дайджест диалога пишется автоматически в ${r}\\sessions — рутину не логируй; задачи/решения/уроки оформляй заметками в своей зоне.`,
-    `Другие разделы D:\\Obsidian (в том числе D:\\Obsidian\\agents и зоны других пользователей) тебе недоступны: не читай и не пиши туда.`,
+    `Другие разделы D:\\Vault (в том числе D:\\Vault\\agents и зоны других пользователей) тебе недоступны: не читай и не пиши туда.`,
     personalRule(r),
   ].join(" ")
 }

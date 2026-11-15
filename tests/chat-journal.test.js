@@ -86,25 +86,25 @@ test("JournalWriter: чат ещё не виден порталу — повто
 });
 
 test("isJournalAccess: сам разрешается только доступ к папке журналов зоны чата", () => {
-  const Z = "D:\\Obsidian\\agents";
+  const Z = "D:\\Vault\\agents";
   const ask = (patterns, permission = "external_directory") => ({ permission, patterns });
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journal/*"]), Z, "win32"), true);
-  assert.equal(isJournalAccess(ask(["d:\\obsidian\\AGENTS\\journal\\2026-11-12-ses_1.md"]), Z, "win32"), true);
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journal"]), Z, "win32"), true);
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/*"]), Z, "win32"), false, "вся зона — обычный диалог");
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journal/*", "C:/Windows/*"]), Z, "win32"), false, "хотя бы один чужой путь — диалог");
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journal/../secrets/*"]), Z, "win32"), false);
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journalX/*"]), Z, "win32"), false, "общий префикс имени — не вложенность");
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journal/*"], "bash"), Z, "win32"), false, "только доступ к папке");
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journal/*"]), Z, "win32"), true);
+  assert.equal(isJournalAccess(ask(["d:\\vault\\AGENTS\\journal\\2026-11-12-ses_1.md"]), Z, "win32"), true);
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journal"]), Z, "win32"), true);
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/*"]), Z, "win32"), false, "вся зона — обычный диалог");
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journal/*", "C:/Windows/*"]), Z, "win32"), false, "хотя бы один чужой путь — диалог");
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journal/../secrets/*"]), Z, "win32"), false);
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journalX/*"]), Z, "win32"), false, "общий префикс имени — не вложенность");
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journal/*"], "bash"), Z, "win32"), false, "только доступ к папке");
   assert.equal(isJournalAccess(ask([]), Z, "win32"), false);
-  assert.equal(isJournalAccess(ask(["D:/Obsidian/agents/journal/*"]), null, "win32"), false);
+  assert.equal(isJournalAccess(ask(["D:/Vault/agents/journal/*"]), null, "win32"), false);
   assert.equal(isJournalAccess(ask(["/vault/a/journal/x.md"]), "/vault/a", "linux"), true);
   assert.equal(isJournalAccess(ask(["/vault/A/journal/x.md"]), "/vault/a", "linux"), false, "регистр на POSIX значим");
 });
 
 test("journalRule: путь прямыми слэшами и указание читать по необходимости; пустой путь — пусто", () => {
-  const rule = journalRule("D:\\Obsidian\\agents\\journal\\2026-11-12-ses_9.md");
-  assert.match(rule, /D:\/Obsidian\/agents\/journal\/2026-11-12-ses_9\.md/);
+  const rule = journalRule("D:\\Vault\\agents\\journal\\2026-11-12-ses_9.md");
+  assert.match(rule, /D:\/Vault\/agents\/journal\/2026-11-12-ses_9\.md/);
   assert.match(rule, /прочитай журнал/);
   assert.equal(journalRule(null), "");
 });

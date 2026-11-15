@@ -15,7 +15,7 @@ sources: docs/reviews/2026-11-02/architecture.md S9 (R6); code-security.md #2, #
   Тогда `ClaudeRunner` запускает `claude.exe` от имени владельца: его
   подписка, его `~/.claude` (permissions `PowerShell`, `Read/Edit/Write(D:/**)`,
   MCP, CLAUDE.md), `cwd` — каталог тенанта без песочницы. На стенде агент
-  тенанта выполнил `whoami` и прочитал `D:\Portal\teleharness\package.json` (SEC-2).
+  тенанта выполнил `whoami` и прочитал `D:\Apps\teleharness\package.json` (SEC-2).
 - Дочерний процесс наследует весь `process.env` сервера, включая
   `TELEHARNESS_ADMIN_TOKEN` и `CLAUDE_CODE_OAUTH_TOKEN` (SEC-9).
 - Промпт передаётся позиционным аргументом: `["-p", prompt, …]`. Текст,

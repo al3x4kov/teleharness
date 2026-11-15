@@ -22,7 +22,7 @@ function fakeUpstream(script = {}) {
   };
   return { calls, fetchImpl };
 }
-const DIR = "C:\\Users\\USER\\.teleharness-tenants\\alice";
+const DIR = "C:\\Users\\dev\\.teleharness-tenants\\alice";
 
 test("warm: providers then MCP of the folder, once per folder; concurrent callers share it", async () => {
   const up = fakeUpstream();

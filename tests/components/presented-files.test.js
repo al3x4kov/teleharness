@@ -23,9 +23,9 @@ afterEach(() => {
 });
 
 const SID = "ses_pf";
-const DIR = "C:\\Users\\USER";
-const OUT1 = "D:\\Portal\\teleharness\\design\\frame-1.png";
-const OUT2 = "D:\\Portal\\teleharness\\design\\brief.pdf";
+const DIR = "C:\\Users\\dev";
+const OUT1 = "D:\\Apps\\teleharness\\design\\frame-1.png";
+const OUT2 = "D:\\Apps\\teleharness\\design\\brief.pdf";
 const T0 = Date.UTC(2026, 10, 11, 18, 0, 0);
 const user = { info: { id: "u1", role: "user", sessionID: SID, time: { created: T0 } }, parts: [{ id: "pu", type: "text", text: "пришли макеты" }] };
 const answerOf = (text) => ({ info: { id: "a1", role: "assistant", sessionID: SID, time: { created: T0 + 1000, completed: T0 + 9000 } }, parts: [{ id: "pt", type: "text", text }] });
@@ -49,7 +49,7 @@ test("FEAT-05.29: файл вне папки чата, показанный сс
   // строки, где была только ссылка на файл, после появления карточек убраны: карточка — и есть файл
   await t$.waitFor(() => !$(root, ".md").textContent.includes("Кадр 1"));
   const body = $(root, ".md").textContent;
-  assert.ok(!body.includes("D:\\Portal"), "пути на сервере в тексте нет: " + body);
+  assert.ok(!body.includes("D:\\Apps"), "пути на сервере в тексте нет: " + body);
   assert.match(body, /Вот макеты:/);
   assert.ok(!body.includes("Бриф"), "название под карточкой не повторяется: " + body);
 });
@@ -64,5 +64,5 @@ test("FEAT-05.29: файл недоступен этой учётной запи
   assert.match(note.textContent, /недоступен в этом чате/);
   assert.equal(note.tagName, "DIV", "не кнопка — открывать нечего");
   assert.equal($$(root, "button.file-card").length, 0);
-  assert.ok(!$(root, ".md").textContent.includes("D:\\Portal"));
+  assert.ok(!$(root, ".md").textContent.includes("D:\\Apps"));
 });

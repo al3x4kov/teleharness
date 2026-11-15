@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { agentCan, agentHasShell, agentIsSandboxed, defaultTenantAgent, setTenantVaultRoots, tenantAgents } from "../lib/policy.js";
 
 // the fixtures below use this tenant knowledge-base root (the default one is ~/.teleharness/tenants-vault)
-setTenantVaultRoots(["D:\\Obsidian\\tenants"]);
+setTenantVaultRoots(["D:\\Vault\\tenants"]);
 
 // The live build agent (api-map §9, 2026-11-07): broad allow, everything legal.
 const BUILD = {
@@ -38,8 +38,8 @@ const SANDBOX_V2 = {
     { action: "*", resource: "*", effect: "allow" },
     { action: "subagent", resource: "*", effect: "deny" },
     { action: "external_directory", resource: "*", effect: "deny" },
-    { action: "external_directory", resource: "D:\\Obsidian\\tenants\\*", effect: "allow" },
-    { action: "external_directory", resource: "C:\\Users\\USER\\AppData\\Local\\opencode\\tool-output\\*", effect: "allow" },
+    { action: "external_directory", resource: "D:\\Vault\\tenants\\*", effect: "allow" },
+    { action: "external_directory", resource: "C:\\Users\\dev\\AppData\\Local\\opencode\\tool-output\\*", effect: "allow" },
     { action: "shell", resource: "*", effect: "allow" },
     { action: "webfetch", resource: "*", effect: "allow" },
   ],
@@ -100,7 +100,7 @@ test("v2 external_directory: spool/vault exemptions grant nothing by themselves 
       { action: "*", resource: "*", effect: "deny" },
       { action: "shell", resource: "*", effect: "allow" },
       { action: "external_directory", resource: "*", effect: "deny" },
-      { action: "external_directory", resource: "D:\\Obsidian\\tenants\\*", effect: "allow" },
+      { action: "external_directory", resource: "D:\\Vault\\tenants\\*", effect: "allow" },
     ],
   };
   assert.equal(agentCan(onlyExemptions, "external_directory"), false);

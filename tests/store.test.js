@@ -12,7 +12,7 @@ import { makeMessage, splitInjected } from "../src/lib/normalize.js";
 
 const SES = "ses_test";
 
-const SNAPSHOT_HEAD = "[obsidian-cache] Активный кэша проекта «user» (C:\\Users\\USER), собран 2026-10-31 07:02.";
+const SNAPSHOT_HEAD = "[obsidian-cache] Активный кэша проекта «user» (C:\\Users\\dev), собран 2026-10-31 07:02.";
 const injectedText = (user) => `${SNAPSHOT_HEAD}\n\nПравила кэша: _index.md.\n\n---\n\n${user}`;
 
 function setActive(messages) {
@@ -309,7 +309,7 @@ test("openSession: dead history fetch sets loadError; successful retry clears it
   const { openSession, sessions: sessionsSignal } = await import("../src/lib/store.js");
   const realFetch = globalThis.fetch;
   try {
-    sessionsSignal.value = [{ id: SES, title: "chat in list", directory: "C:\\Users\\USER" }];
+    sessionsSignal.value = [{ id: SES, title: "chat in list", directory: "C:\\Users\\dev" }];
     globalThis.fetch = async (url) => {
       const path = String(url).split("?")[0];
       if (path.endsWith("/status")) return { ok: true, status: 200, json: async () => ({}) };

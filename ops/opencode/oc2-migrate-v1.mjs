@@ -2,8 +2,8 @@
 // BUG-189 (BUG-16.5): перенос истории чатов opencode 1.x в отдельную базу opencode 2.x.
 //
 //   node ops/opencode/oc2-migrate-v1.mjs --target=<opencode.db v2> [--step=all|snapshot|convert|merge|verify]
-//        [--source=C:\Users\USER\.local\share\opencode\opencode.db] [--work=D:\teleharness-tmp-scripts\oc2-migrate]
-//        [--bin=D:\Portal\teleharness-oc2\bin\opencode.exe] [--port=4197] [--dry-run]
+//        [--source=C:\Users\dev\.local\share\opencode\opencode.db] [--work=D:\teleharness-tmp-scripts\oc2-migrate]
+//        [--bin=D:\Apps\teleharness-oc2\bin\opencode.exe] [--port=4197] [--dry-run]
 //
 // Шаги:
 //   snapshot — VACUUM INTO базы 1.x в <work>\data\opencode\opencode.db + сброс следа пробного 2.2.5;
@@ -25,9 +25,9 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
   const m = /^--([^=]+)(?:=(.*))?$/.exec(a);
   return m ? [m[1], m[2] ?? true] : [a, true];
 }));
-const SOURCE = args.source ?? "C:\\Users\\USER\\.local\\share\\opencode\\opencode.db";
+const SOURCE = args.source ?? "C:\\Users\\dev\\.local\\share\\opencode\\opencode.db";
 const WORK = args.work ?? "D:\\teleharness-tmp-scripts\\oc2-migrate";
-const BIN = args.bin ?? "D:\\Portal\\teleharness-oc2\\bin\\opencode.exe";
+const BIN = args.bin ?? "D:\\Apps\\teleharness-oc2\\bin\\opencode.exe";
 const PORT = Number(args.port ?? 4197);
 const TARGET = args.target;
 const STEP = args.step ?? "all";

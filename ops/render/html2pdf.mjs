@@ -9,7 +9,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { chromium } = require(process.env.TELEHARNESS_RENDER_PLAYWRIGHT || "D:/Portal/teleharness-qa/node_modules/playwright");
+const { chromium } = require(process.env.TELEHARNESS_RENDER_PLAYWRIGHT || "D:/Apps/teleharness-qa/node_modules/playwright");
 
 const [site, page, out] = process.argv.slice(2);
 const root = path.resolve(site);

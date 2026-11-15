@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "marketplace": {
-      "command": "C:/Users/USER/AppData/Local/ru-marketplace-mcp/Scripts/python.exe",
+      "command": "C:/Users/dev/AppData/Local/ru-marketplace-mcp/Scripts/python.exe",
       "args": ["-m", "marketplace_connector"],
       "env": { "MARKETPLACE_SOURCES": "wildberries,ozon,yandex_market,compare" }
     }

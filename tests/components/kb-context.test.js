@@ -18,7 +18,7 @@ afterEach(() => {
   ui.store.active.value = null;
 });
 
-const SNAP = "[obsidian-cache] Активный кэш проекта «teleharness».\n\nПравила кэша: D:\\Obsidian\\agents\\_index.md.";
+const SNAP = "[obsidian-cache] Активный кэш проекта «teleharness».\n\nПравила кэша: D:\\Vault\\agents\\_index.md.";
 const userMsg = (parts) => ({ info: { id: "u1", role: "user", sessionID: "s1", time: { created: 1 } }, parts });
 
 test("metadata.kbContext: bubble = typed text, admin gets the expandable context row", () => {

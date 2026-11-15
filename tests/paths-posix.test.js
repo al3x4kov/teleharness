@@ -46,7 +46,7 @@ test("TASK-17.1: isUnderAny на Linux — граница сегмента и р
 });
 
 test("TASK-17.1: pathKey — Windows регистро- и слэш-нечувствителен, Linux — нет", () => {
-  assert.equal(pathKey("C:/Users/USER/", "win32"), pathKey("c:\\users\\user", "win32"));
+  assert.equal(pathKey("C:/Users/dev/", "win32"), pathKey("c:\\users\\dev", "win32"));
   assert.notEqual(pathKey("/home/A", "linux"), pathKey("/home/a", "linux"));
   assert.equal(pathKey("/home/a/", "linux"), "/home/a");
   assert.equal(pathKey("/home//a/./b", "linux"), "/home/a/b");
@@ -54,7 +54,7 @@ test("TASK-17.1: pathKey — Windows регистро- и слэш-нечувс�
 
 test("TASK-17.1: normDir не схлопывает регистр на Linux", () => {
   if (process.platform === "win32") {
-    assert.equal(normDir("C:\\Users\\USER"), normDir("c:\\users\\user"));
+    assert.equal(normDir("C:\\Users\\dev"), normDir("c:\\users\\dev"));
   } else {
     assert.notEqual(normDir("/home/A"), normDir("/home/a"));
   }

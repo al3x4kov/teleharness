@@ -42,7 +42,7 @@
         { "action": "skill", "resource": "*", "effect": "deny" },
         { "action": "skill", "resource": "teleharness-*", "effect": "allow" },
         { "action": "external_directory", "resource": "*", "effect": "deny" },
-        { "action": "external_directory", "resource": "D:\\Obsidian\\tenants\\*", "effect": "allow" },
+        { "action": "external_directory", "resource": "D:\\Vault\\tenants\\*", "effect": "allow" },
         { "action": "shell", "resource": "*", "effect": "allow" },
         { "action": "subagent", "resource": "*", "effect": "deny" }
       ]
@@ -104,7 +104,7 @@
       },
       "marketplace": {
         "type": "local",
-        "command": ["C:\\Users\\USER\\AppData\\Local\\ru-marketplace-mcp\\Scripts\\python.exe", "-m", "marketplace_connector"],
+        "command": ["C:\\Users\\dev\\AppData\\Local\\ru-marketplace-mcp\\Scripts\\python.exe", "-m", "marketplace_connector"],
         "disabled": false,
         "environment": {
           "MARKETPLACE_SOURCES": "wildberries,ozon,yandex_market,compare"
@@ -115,7 +115,7 @@
 
   "plugins": ["oh-my-opencode-slim@3.0.7", "./plugin-v2"],
 
-  "instructions": ["D:\\Obsidian\\agents\\_index.md", "C:\\Users\\USER\\.config\\opencode\\prompts\\glm-rules.md"],
+  "instructions": ["D:\\Vault\\agents\\_index.md", "C:\\Users\\dev\\.config\\opencode\\prompts\\glm-rules.md"],
 
   "watcher": {
     "ignore": ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/graphify-out/**", "**/dogfood-output/**", "**/shots/**"]

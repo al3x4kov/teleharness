@@ -1,4 +1,4 @@
-# Блок для D:\Portal\watchdog.ps1 — надзор за teleharness (вставить в общий скрипт watchdog)
+# Блок для D:\Apps\watchdog.ps1 — надзор за teleharness (вставить в общий скрипт watchdog)
 
 if (-not (Get-NetTCPConnection -LocalPort 4170 -State Listen -ErrorAction SilentlyContinue)) {
   if (CanRestart 'teleharness-web') { Start-ScheduledTask -TaskName 'teleharness-web'; Log 'teleharness web (4170) not listening -> started' }
@@ -10,4 +10,4 @@ if (-not (Get-NetTCPConnection -LocalPort 4196 -State Listen -ErrorAction Silent
 }
 
 # Создание задачи teleharness-web (запустить один раз от имени пользователя):
-# schtasks /create /tn "teleharness-web" /tr "D:\nodejs\node.exe D:\Portal\teleharness\server.js" /sc onlogon /f
+# schtasks /create /tn "teleharness-web" /tr "D:\tools\node\node.exe D:\Apps\teleharness\server.js" /sc onlogon /f

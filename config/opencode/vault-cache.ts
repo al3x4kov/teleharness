@@ -1,5 +1,5 @@
 /**
- * vault-cache — Obsidian как активный кэш opencode (сервер 192.168.0.10).
+ * vault-cache — Obsidian как активный кэш opencode (сервер 192.0.2.10).
  *
  * Жизненный цикл, полностью нативный (без команд пользователя):
  *  1. Начало сессии: chat.message на первом сообщении → снапшот базы знаний
@@ -7,7 +7,7 @@
  *     части; текст пользователя не меняется (FEAT-01.32, 2026-11-04). Модель
  *     получает «снапшот --- текст» через experimental.chat.messages.transform.
  *  2. В течение диалога: агент сам читает/пишет заметки по правилам из
- *     D:\Obsidian\agents\_index.md (admin) или по правилам своей tenant-зоны.
+ *     D:\Vault\agents\_index.md (admin) или по правилам своей tenant-зоны.
  *  3. Конец итерации: событие session.idle → в <зона>/sessions/<дата>-<id>.md
  *     автоматически дописывается компактный дайджест хода.
  *  4. Компакция: experimental.session.compacting → контекст-указатель на
@@ -26,7 +26,7 @@
  *     намеренный китайский текст и повтор того же вызова проходят.
  *
  * Зоны (2026-11-02, FEAT-12.15 / BUG-12.14):
- *  - admin (любая директория вне тенантов): VAULT_CACHE_ROOT (по умолчанию D:/Obsidian/agents);
+ *  - admin (любая директория вне тенантов): VAULT_CACHE_ROOT (по умолчанию D:/Vault/agents);
  *  - тенант (директория сессии входит в directories пользователя из users.json портала
  *    или лежит под TELEHARNESS_TENANT_HOME/<имя>): только его obsidianRoot
  *    (по умолчанию TELEHARNESS_TENANT_VAULT/<имя>). Снапшот читается и дайджест пишется
@@ -37,7 +37,7 @@
  *    сообщении (проверка по истории, а не только по in-memory Set — после рестарта
  *    serve старые сессии повторно не получают снапшот); содержимое чужих
  *    дайджестов в снапшот больше не попадает (источник BUG-12.14: все чаты в
- *    C:\Users\USER имели slug «user» и получали хвост последнего ЧУЖОГО дайджеста).
+ *    C:\Users\dev имели slug «user» и получали хвост последнего ЧУЖОГО дайджеста).
  *
  * Плагин никогда не ломает чат: любая ошибка пишется в лог (кроме намеренной
  * блокировки инструмента тенанта).
@@ -60,7 +60,7 @@ const LOG = env.VAULT_CACHE_LOG || `${USER_HOME}/.config/opencode/vault-cache.lo
 const TENANT_HOME = fwd(env.TELEHARNESS_TENANT_HOME || `${USER_HOME}/.teleharness-tenants`)
 const TENANT_VAULT = fwd(env.TELEHARNESS_TENANT_VAULT || `${USER_HOME}/.teleharness/tenants-vault`)
 // The portal's <TELEHARNESS_DATA_DIR>/users.json — set TELEHARNESS_USERS_FILE for opencode serve.
-const USERS_FILE = env.TELEHARNESS_USERS_FILE || "D:/Portal/teleharness/data/users.json"
+const USERS_FILE = env.TELEHARNESS_USERS_FILE || "D:/Apps/teleharness/data/users.json"
 // Everything under these roots is off-limits for tenant tools, except the tenant's own zone.
 const PROTECTED_ROOTS = [fwd(env.VAULT_CACHE_PROTECT || `${USER_HOME}/.teleharness`), VAULT, TENANT_VAULT]
 const ADMIN_INDEX = `${VAULT}/_index.md`
@@ -262,7 +262,7 @@ function tenantRules(z: Zone): string {
   return [
     `Твоя база знаний (Obsidian) — только ${r}. Подпапки: projects\\, tasks\\, decisions\\, lessons\\, sessions\\ (создавай при необходимости).`,
     `Дайджест диалога пишется автоматически в ${r}\\sessions — рутину не логируй; задачи/решения/уроки оформляй заметками в своей зоне.`,
-    `Другие разделы D:\\Obsidian (в том числе D:\\Obsidian\\agents и зоны других пользователей) тебе недоступны: не читай и не пиши туда.`,
+    `Другие разделы D:\\Vault (в том числе D:\\Vault\\agents и зоны других пользователей) тебе недоступны: не читай и не пиши туда.`,
     personalRule(r),
   ].join(" ")
 }
@@ -768,7 +768,7 @@ async function urlViolation(url: string): Promise<string | null> {
 // tokens, so Git Bash, cmd.exe and PowerShell all pass it verbatim — no quotes,
 // no `&|"$`, nothing that MSYS path conversion rewrites (base64url has no '/').
 // Fail-closed: no launcher or no Python environment → the call is refused.
-const JAIL_EXE = fwd(env.TELEHARNESS_JAIL_EXE || "D:/Portal/teleharness/ops/sandbox/teleharness-jail.exe")
+const JAIL_EXE = fwd(env.TELEHARNESS_JAIL_EXE || "D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe")
 const SANDBOX_PY = fwd(env.TELEHARNESS_SANDBOX_PY || "D:/teleharness-sandbox/python")
 const SHELL_SAFE_PATH = /^[A-Za-z]:\/[A-Za-z0-9_.\/-]*$/
 // macOS / Linux: no tenant sandbox exists (teleharness-jail is a Windows AppContainer).
@@ -803,7 +803,7 @@ async function jailCommand(command: unknown, z: Zone, workdir: string): Promise<
 }
 
 // FEAT-04.12 (2026-11-06): «cd /d <folder> && rest» — the container cannot walk
-// C:\Users\USER, so cmd's own cd died with «Access is denied»; the folder becomes
+// C:\Users\dev, so cmd's own cd died with «Access is denied»; the folder becomes
 // the jail --cwd (checked like any workdir) and only the rest runs.
 // Same rule as lib/claude-jail-hook.mjs splitCd (Claude tenant chats).
 function splitCd(command: unknown, cwd: string): { cwd: string; command: unknown } {
@@ -821,7 +821,7 @@ const RENDER_CMD = /^\s*teleharness-render(?:\s+([^&|<>^\r\n]*))?\s*$/i
 async function renderCommand(args: string, z: Zone, workdir: string): Promise<{ command: string } | { error: string }> {
   if (NO_SANDBOX) return { error: NO_SANDBOX }
   if (!z.tenant || !z.home) return { error: "у сессии нет папки пользователя" }
-  const script = fwd(env.TELEHARNESS_RENDER_SCRIPT || "D:/Portal/teleharness/ops/render/teleharness_render.py")
+  const script = fwd(env.TELEHARNESS_RENDER_SCRIPT || "D:/Apps/teleharness/ops/render/teleharness_render.py")
   const python = `${SANDBOX_PY}/Scripts/python.exe`
   if (!existsSync(python) || !existsSync(script)) return { error: "просмотр документов (teleharness-render) недоступен на сервере" }
   const root = fwd(z.home)
@@ -1258,7 +1258,7 @@ export default (async ({ client }: PluginInput) => {
         const v = await effectiveZone(input.sessionID)
         if (!v || !v.zone.tenant) return
         const n = stripAdminRules(output.system)
-        output.system.push(v.zone.root ? tenantRules(v.zone) : "База знаний Obsidian в этой сессии недоступна: не читай и не пиши в D:\\Obsidian.")
+        output.system.push(v.zone.root ? tenantRules(v.zone) : "База знаний Obsidian в этой сессии недоступна: не читай и не пиши в D:\\Vault.")
         // FEAT-04.12 stage B: the model must know its chat folder (the env block says the root).
         const cd = await chatDirOf(input.sessionID, v)
         if (cd)
@@ -1401,7 +1401,7 @@ export default (async ({ client }: PluginInput) => {
         output.context.push(
           z.tenant
             ? `Активный кэш этой сессии: ${file}. При компакции сохрани ссылки на заметки из своей зоны ${z.root}.`
-            : `Активный кэш этой сессии: ${file}. Ключевые файлы и итоги ходов там; при компакции сохрани ссылки на задачи/решения/уроки из D:\\Obsidian\\agents\\, упомянутые в диалоге.`,
+            : `Активный кэш этой сессии: ${file}. Ключевые файлы и итоги ходов там; при компакции сохрани ссылки на задачи/решения/уроки из D:\\Vault\\agents\\, упомянутые в диалоге.`,
         )
       } catch (e) {
         await log(`compacting error: ${String(e)}`)

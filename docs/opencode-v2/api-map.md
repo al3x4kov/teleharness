@@ -58,7 +58,7 @@
 | 22 | `GET /provider` | lib/claude.js:1439 (каталог моделей портала) | `GET /api/provider` (+ `GET /api/provider/{providerID}`) | `{location, data:[Provider.Info]}` (`{id, name, activation: auto\|enabled\|disabled, …}`); живьём после подключения ключа: `providers: zai-coding-plan:auto` | **есть аналог** (форма другая: в 1.x `{all, default, connected}`; подключённость теперь через credentials — см. раздел «Провайдеры») |
 | 23 | `GET /config` (config-объект: `default_agent`, `model`, `snapshot`) | server.js:573 (default_agent), server.js:593 (model по умолчанию), server.js:1219 (`snapshot: false` для реверта) | `GET /api/config?location[directory]=…` | ответ — **массив документов конфига**: `[{type:"document", path, info:{…}}, {type:"directory", path}]` (живьём: 2 записи; в `info` ключи `update, share, policies, mcp`); `default_agent`/`model` из него не получены — см. раздел «Конфиг» | **есть аналог (другая семантика)** — слоёный конфиг вместо одного объекта |
 | 24 | `GET /config/providers?directory=` | lib/instance-health.js:41,68 (прогрев папки) | **нет** (`GET /api/config/providers` → 404 живьём) | заменяется парой `GET /api/provider` + `GET /api/model?location[directory]=…` (для прогрева папки — любой «дорогой» instance-запрос, например `/api/mcp`) | **нет аналога** (функциональная замена есть, маршрута нет) |
-| 25 | `GET /project?…` | routes/catalog.js:165-167 | `GET /api/project` | параметры `?archived=`; ответ — массив `Project` без конверта: `[{"id":"…","canonical":"D:\\Portal\\teleharness","vcs":"git","time":{…},"sandboxes":[]}]` (живьём); проект определяется по `canonical`, не по `worktree` 1.x | **есть аналог** (форма другая; фильтр по папке — сравнением `canonical`) |
+| 25 | `GET /project?…` | routes/catalog.js:165-167 | `GET /api/project` | параметры `?archived=`; ответ — массив `Project` без конверта: `[{"id":"…","canonical":"D:\\Apps\\teleharness","vcs":"git","time":{…},"sandboxes":[]}]` (живьём); проект определяется по `canonical`, не по `worktree` 1.x | **есть аналог** (форма другая; фильтр по папке — сравнением `canonical`) |
 | 26 | `GET /global/health` | lib/host.js:125 (версия для «О приложении») | `GET /api/info` | `{version, pid, hostname, urls, paths:{tmp}, capabilities}`; живой фрагмент: `{"version":"2.2.6","pid":2632,…}` | **есть аналог** |
 | 27 | `GET /command` + `POST /session/:id/command` (BUG-188: server.js:246 список, server.js:1353 ход) | lib/oc-client.js listCommands/runCommand | `GET /api/command` + `POST /api/session/{sessionID}/command` | список: deepObject-location, конверт `{location, data:[{name, description}]}` (живьём); ход: тело **`{name, text}`** (не `{command, arguments}` 1.x), ответ **204 сразу**, execution в фоне; 404 `{_tag:"CommandNotFoundError"}` на неизвестную команду (живьём). Подробно — раздел «Команды» | **есть аналог (тело переводит адаптер; ход асинхронный — не как в 1.x)** |
 
@@ -122,14 +122,14 @@
 
 ## 2. SSE-поток событий v2 (живой эксперимент)
 
-Эксперимент: сессия создана в `…\Temp\opencode\apimap\ws`, ход моделью `zai-coding-plan/glm-5.3-flash` (variant max) через `POST /api/session/{sid}/prompt {"text":"ответь одним словом: привет"}`; слушатель — node-скрипт на `GET /api/event` (скрипты в `C:\Users\USER\AppData\Local\Temp\opencode\apimap\`, не в репозитории).
+Эксперимент: сессия создана в `…\Temp\opencode\apimap\ws`, ход моделью `zai-coding-plan/glm-5.3-flash` (variant max) через `POST /api/session/{sid}/prompt {"text":"ответь одним словом: привет"}`; слушатель — node-скрипт на `GET /api/event` (скрипты в `C:\Users\dev\AppData\Local\Temp\opencode\apimap\`, не в репозитории).
 
 **Конверт события** (живой пример):
 
 ```json
 {"id":"evt_1b695e4c9001jnDa5Z9bU7Rpz2","created":1794064639233,
  "type":"session.inbox.enqueued",
- "location":{"directory":"C:\\Users\\USER\\AppData\\Local\\Temp\\opencode\\apimap\\ws"},
+ "location":{"directory":"C:\\Users\\dev\\AppData\\Local\\Temp\\opencode\\apimap\\ws"},
  "data":{…}}
 ```
 

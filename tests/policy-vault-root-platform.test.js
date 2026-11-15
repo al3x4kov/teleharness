@@ -8,13 +8,13 @@ const before = tenantVaultRoots();
 after(() => setTenantVaultRoots(before));
 
 test("BUG-17.14: underVaultRoot на win32 — без учёта регистра и вида слэшей (поведение прода)", () => {
-  setTenantVaultRoots(["D:\\Obsidian\\tenants"]);
-  assert.equal(underVaultRoot("D:\\Obsidian\\tenants\\alice\\*", "win32"), true);
-  assert.equal(underVaultRoot("d:/obsidian/TENANTS/alice/*", "win32"), true);
-  assert.equal(underVaultRoot("D:\\Obsidian\\tenants\\*", "win32"), true, "сам корень");
-  assert.equal(underVaultRoot("D:\\Obsidian\\tenants2\\alice\\*", "win32"), false, "общий префикс имени — не вложенность");
-  assert.equal(underVaultRoot("D:\\Obsidian\\tenants\\alice", "win32"), false, "без \\* — не шаблон зоны");
-  assert.equal(underVaultRoot("D:\\Obsidian\\tenants\\..\\agents\\*", "win32"), false);
+  setTenantVaultRoots(["D:\\Vault\\tenants"]);
+  assert.equal(underVaultRoot("D:\\Vault\\tenants\\alice\\*", "win32"), true);
+  assert.equal(underVaultRoot("d:/vault/TENANTS/alice/*", "win32"), true);
+  assert.equal(underVaultRoot("D:\\Vault\\tenants\\*", "win32"), true, "сам корень");
+  assert.equal(underVaultRoot("D:\\Vault\\tenants2\\alice\\*", "win32"), false, "общий префикс имени — не вложенность");
+  assert.equal(underVaultRoot("D:\\Vault\\tenants\\alice", "win32"), false, "без \\* — не шаблон зоны");
+  assert.equal(underVaultRoot("D:\\Vault\\tenants\\..\\agents\\*", "win32"), false);
 });
 
 test("BUG-17.14: underVaultRoot на linux — «/», регистр значим", () => {

@@ -54,7 +54,7 @@
     "parts": [
      {
       "type": "reasoning",
-      "text": "The user asks me to delegate to a subagent (explorer) to find all files in the current folder and return their list (the folder may be empty — it should say so). Then summarize its answer in one line.\n\nThe task is straightforward: dispatch a subagent with agent \"explorer\" in the foreground (since the result is the direct input to my next step), asking it to list all files in D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze and report if empty.\n\nThen I report one line.",
+      "text": "The user asks me to delegate to a subagent (explorer) to find all files in the current folder and return their list (the folder may be empty — it should say so). Then summarize its answer in one line.\n\nThe task is straightforward: dispatch a subagent with agent \"explorer\" in the foreground (since the result is the direct input to my next step), asking it to list all files in D:\\th-stage\\tmp\\w2-fixture-mwbohnze and report if empty.\n\nThen I report one line.",
       "native": {
        "reasoningField": "reasoning_content"
       },
@@ -78,12 +78,12 @@
         "agent": "explorer",
         "background": false,
         "description": "Список файлов в текущей папке",
-        "prompt": "Перечисли ВСЕ файлы и папки в каталоге D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые). Используй glob с паттерном \"**/*\" (с hidden: true) и, если нужно, чтение корневой директории для полноты. Если каталог пуст — так и скажи явно: «каталог пуст». Верни просто список путей (или сообщение о пустоте), без анализа."
+        "prompt": "Перечисли ВСЕ файлы и папки в каталоге D:\\th-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые). Используй glob с паттерном \"**/*\" (с hidden: true) и, если нужно, чтение корневой директории для полноты. Если каталог пуст — так и скажи явно: «каталог пуст». Верни просто список путей (или сообщение о пустоте), без анализа."
        },
        "content": [
         {
          "type": "text",
-         "text": "<subagent sessionID=\"ses_e36eb8e5cffeiN1GF5pBbIeL7U\" state=\"completed\">\n<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>\n</subagent>"
+         "text": "<subagent sessionID=\"ses_e36eb8e5cffeiN1GF5pBbIeL7U\" state=\"completed\">\n<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\th-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>\n</subagent>"
         }
        ],
        "metadata": {
@@ -91,7 +91,7 @@
         "status": "completed",
         "truncated": false
        },
-       "output": "<subagent sessionID=\"ses_e36eb8e5cffeiN1GF5pBbIeL7U\" state=\"completed\">\n<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>\n</subagent>"
+       "output": "<subagent sessionID=\"ses_e36eb8e5cffeiN1GF5pBbIeL7U\" state=\"completed\">\n<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\th-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>\n</subagent>"
       },
       "time": {
        "created": 1794374920201,
@@ -145,7 +145,7 @@
      },
      {
       "type": "text",
-      "text": "@explorer проверил каталог D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые файлы) — он пуст: ни файлов, ни папок."
+      "text": "@explorer проверил каталог D:\\th-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые файлы) — он пуст: ни файлов, ни папок."
      }
     ]
    }
@@ -160,7 +160,7 @@
    "created": 1794374908800,
    "type": "session.created",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -168,7 +168,7 @@
     "version": "2.2.6",
     "projectID": "dd653b7409c9000a791f73d7a7c20793c764c143",
     "location": {
-     "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+     "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
     },
     "subpath": ""
    },
@@ -202,7 +202,7 @@
    "created": 1794374914454,
    "type": "session.inbox.enqueued",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "inboxID": "msg_1c9143e2d001ZvUa11Qdqk1olx",
@@ -249,7 +249,7 @@
    },
    "type": "session.instructions.updated",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -273,7 +273,7 @@
    "created": 1794374914606,
    "type": "session.inbox.delivered",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -291,7 +291,7 @@
    "created": 1794374917256,
    "type": "session.step.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -316,7 +316,7 @@
    "created": 1794374917267,
    "type": "session.reasoning.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -338,7 +338,7 @@
    "created": 1794374919339,
    "type": "session.text.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -376,7 +376,7 @@
    "created": 1794374919607,
    "type": "session.renamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -394,7 +394,7 @@
    "created": 1794374920201,
    "type": "session.tool.input.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -414,13 +414,13 @@
    "created": 1794374922611,
    "type": "session.reasoning.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
     "assistantMessageID": "msg_1c91452a40016tX6wFEsTXdkF9",
     "ordinal": 0,
-    "text": "The user asks me to delegate to a subagent (explorer) to find all files in the current folder and return their list (the folder may be empty — it should say so). Then summarize its answer in one line.\n\nThe task is straightforward: dispatch a subagent with agent \"explorer\" in the foreground (since the result is the direct input to my next step), asking it to list all files in D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze and report if empty.\n\nThen I report one line.",
+    "text": "The user asks me to delegate to a subagent (explorer) to find all files in the current folder and return their list (the folder may be empty — it should say so). Then summarize its answer in one line.\n\nThe task is straightforward: dispatch a subagent with agent \"explorer\" in the foreground (since the result is the direct input to my next step), asking it to list all files in D:\\th-stage\\tmp\\w2-fixture-mwbohnze and report if empty.\n\nThen I report one line.",
     "native": {
      "reasoningField": "reasoning_content"
     }
@@ -437,7 +437,7 @@
    "created": 1794374922617,
    "type": "session.tool.input.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -457,7 +457,7 @@
    "created": 1794374922621,
    "type": "session.tool.called",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -467,7 +467,7 @@
      "agent": "explorer",
      "background": false,
      "description": "Список файлов в текущей папке",
-     "prompt": "Перечисли ВСЕ файлы и папки в каталоге D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые). Используй glob с паттерном \"**/*\" (с hidden: true) и, если нужно, чтение корневой директории для полноты. Если каталог пуст — так и скажи явно: «каталог пуст». Верни просто список путей (или сообщение о пустоте), без анализа."
+     "prompt": "Перечисли ВСЕ файлы и папки в каталоге D:\\th-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые). Используй glob с паттерном \"**/*\" (с hidden: true) и, если нужно, чтение корневой директории для полноты. Если каталог пуст — так и скажи явно: «каталог пуст». Верни просто список путей (или сообщение о пустоте), без анализа."
     },
     "executed": false
    },
@@ -483,7 +483,7 @@
    "created": 1794374922626,
    "type": "session.text.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -503,7 +503,7 @@
    "created": 1794374922631,
    "type": "session.step.streamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -521,7 +521,7 @@
    "created": 1794374922669,
    "type": "session.created",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -530,7 +530,7 @@
     "projectID": "dd653b7409c9000a791f73d7a7c20793c764c143",
     "parentID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
     "location": {
-     "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+     "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
     },
     "subpath": "",
     "title": "Список файлов в текущей папке",
@@ -894,7 +894,7 @@
    "created": 1794374922769,
    "type": "session.inbox.enqueued",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "inboxID": "msg_1c91471d90012nV3n4nVmM4A88",
@@ -902,7 +902,7 @@
     "item": {
      "type": "user",
      "payload": {
-      "text": "You are a subagent spawned by another session.\nПеречисли ВСЕ файлы и папки в каталоге D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые). Используй glob с паттерном \"**/*\" (с hidden: true) и, если нужно, чтение корневой директории для полноты. Если каталог пуст — так и скажи явно: «каталог пуст». Верни просто список путей (или сообщение о пустоте), без анализа."
+      "text": "You are a subagent spawned by another session.\nПеречисли ВСЕ файлы и папки в каталоге D:\\th-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые). Используй glob с паттерном \"**/*\" (с hidden: true) и, если нужно, чтение корневой директории для полноты. Если каталог пуст — так и скажи явно: «каталог пуст». Верни просто список путей (или сообщение о пустоте), без анализа."
      },
      "delivery": "steer"
     }
@@ -938,7 +938,7 @@
    },
    "type": "session.instructions.updated",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -962,7 +962,7 @@
    "created": 1794374922830,
    "type": "session.inbox.delivered",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -980,7 +980,7 @@
    "created": 1794374928025,
    "type": "session.step.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1005,7 +1005,7 @@
    "created": 1794374928042,
    "type": "session.tool.input.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1025,7 +1025,7 @@
    "created": 1794374928218,
    "type": "session.tool.input.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1045,7 +1045,7 @@
    "created": 1794374928496,
    "type": "session.tool.input.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1065,7 +1065,7 @@
    "created": 1794374928503,
    "type": "session.tool.called",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1089,7 +1089,7 @@
    "created": 1794374928509,
    "type": "session.tool.input.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1109,14 +1109,14 @@
    "created": 1794374928513,
    "type": "session.tool.called",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
     "assistantMessageID": "msg_1c9147261001VjGx8Aa2igjirx",
     "id": "call_34feeceb0c8346298c7300ca",
     "input": {
-     "path": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+     "path": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
     },
     "executed": false
    },
@@ -1132,7 +1132,7 @@
    "created": 1794374928518,
    "type": "session.step.streamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1150,7 +1150,7 @@
    "created": 1794374928586,
    "type": "session.tool.success",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1159,7 +1159,7 @@
     "content": [
      {
       "type": "text",
-      "text": "Read directory D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze, 0 entries"
+      "text": "Read directory D:\\th-stage\\tmp\\w2-fixture-mwbohnze, 0 entries"
      }
     ],
     "metadata": {
@@ -1179,7 +1179,7 @@
    "created": 1794374928626,
    "type": "session.tool.success",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1209,7 +1209,7 @@
    "created": 1794374928631,
    "type": "session.step.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1258,7 +1258,7 @@
    "created": 1794374936951,
    "type": "session.step.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1283,7 +1283,7 @@
    "created": 1794374936958,
    "type": "session.text.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1302,13 +1302,13 @@
    "created": 1794374938039,
    "type": "session.text.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
     "assistantMessageID": "msg_1c9148914001h48YIr4PmC7oiZ",
     "ordinal": 0,
-    "text": "<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>"
+    "text": "<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\th-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>"
    },
    "durable": {
     "aggregateID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1322,7 +1322,7 @@
    "created": 1794374938045,
    "type": "session.step.streamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1340,7 +1340,7 @@
    "created": 1794374938050,
    "type": "session.step.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36eb8e5cffeiN1GF5pBbIeL7U",
@@ -1403,7 +1403,7 @@
    "created": 1794374938087,
    "type": "session.tool.success",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1412,7 +1412,7 @@
     "content": [
      {
       "type": "text",
-      "text": "<subagent sessionID=\"ses_e36eb8e5cffeiN1GF5pBbIeL7U\" state=\"completed\">\n<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>\n</subagent>"
+      "text": "<subagent sessionID=\"ses_e36eb8e5cffeiN1GF5pBbIeL7U\" state=\"completed\">\n<results>\n<files></files>\n<answer>\nкаталог пуст — ни файлов, ни папок (включая скрытые) в D:\\th-stage\\tmp\\w2-fixture-mwbohnze не найдено.\n</answer>\n</results>\n</subagent>"
      }
     ],
     "metadata": {
@@ -1434,7 +1434,7 @@
    "created": 1794374938094,
    "type": "session.step.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1483,7 +1483,7 @@
    "created": 1794374938136,
    "type": "session.instructions.updated",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1505,7 +1505,7 @@
    "created": 1794374940062,
    "type": "session.step.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1530,7 +1530,7 @@
    "created": 1794374940069,
    "type": "session.reasoning.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1552,7 +1552,7 @@
    "created": 1794374940538,
    "type": "session.text.started",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1571,7 +1571,7 @@
    "created": 1794374941137,
    "type": "session.reasoning.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1594,13 +1594,13 @@
    "created": 1794374941144,
    "type": "session.text.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
     "assistantMessageID": "msg_1c914ae2a001ySqLuld6ueWN0R",
     "ordinal": 0,
-    "text": "@explorer проверил каталог D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые файлы) — он пуст: ни файлов, ни папок."
+    "text": "@explorer проверил каталог D:\\th-stage\\tmp\\w2-fixture-mwbohnze (включая скрытые файлы) — он пуст: ни файлов, ни папок."
    },
    "durable": {
     "aggregateID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1614,7 +1614,7 @@
    "created": 1794374941150,
    "type": "session.step.streamed",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",
@@ -1632,7 +1632,7 @@
    "created": 1794374941154,
    "type": "session.step.ended",
    "location": {
-    "directory": "D:\\teleharness-stage\\tmp\\w2-fixture-mwbohnze"
+    "directory": "D:\\th-stage\\tmp\\w2-fixture-mwbohnze"
    },
    "data": {
     "sessionID": "ses_e36ebc49cffeSMv8Sa6uFpRlhy",

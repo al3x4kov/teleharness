@@ -137,8 +137,8 @@ test("childEnv: allow-list only, TELEHARNESS_* secrets never pass, owner CLAUDE_
 test("permissionArgs: admin bypass + portal dir, tenant restricted, unspecified legacy", async () => {
   const { permissionArgs } = await import("../lib/claude.js");
   assert.deepEqual(permissionArgs(undefined), []);
-  const admin = permissionArgs("admin", { addDirs: ["D:\\Portal\\teleharness"], mcpConfig: "D:\\mcp.json" });
-  assert.deepEqual(admin, ["--permission-mode", "bypassPermissions", "--add-dir", "D:\\Portal\\teleharness", "--mcp-config", "D:\\mcp.json"]);
+  const admin = permissionArgs("admin", { addDirs: ["D:\\Apps\\teleharness"], mcpConfig: "D:\\mcp.json" });
+  assert.deepEqual(admin, ["--permission-mode", "bypassPermissions", "--add-dir", "D:\\Apps\\teleharness", "--mcp-config", "D:\\mcp.json"]);
   assert.deepEqual(permissionArgs("admin", { adminMode: "acceptEdits", addDirs: [] }), ["--permission-mode", "acceptEdits"]);
   const tenant = permissionArgs("tenant");
   // BUG-144: dontAsk denied Edit/Write even inside the chat folder; acceptEdits + --restricted
@@ -270,12 +270,12 @@ test("runner: prompt via stdin — UTF-8, option-looking text, 100K chars, clean
 test("runner: access profile reaches the CLI flags (FEAT-13.9)", async () => {
   const { ClaudeRunner } = await import("../lib/claude.js");
   const hub = stubHub();
-  const runner = new ClaudeRunner({ hub, storePath: freshStore(), binPath: FIXTURE, keepaliveMs: 1000, addDirs: ["D:\\Portal\\teleharness"] });
+  const runner = new ClaudeRunner({ hub, storePath: freshStore(), binPath: FIXTURE, keepaliveMs: 1000, addDirs: ["D:\\Apps\\teleharness"] });
   await runner.dispatch({ res: fakeRes(), sid: "p1", dir: TMP, body: body("ECHO"), access: "admin" });
   await waitIdle(hub);
   const a = JSON.parse(answerOf(runner, "p1")).argv;
   assert.equal(a[a.indexOf("--permission-mode") + 1], "bypassPermissions");
-  assert.equal(a[a.indexOf("--add-dir") + 1], "D:\\Portal\\teleharness");
+  assert.equal(a[a.indexOf("--add-dir") + 1], "D:\\Apps\\teleharness");
   await runner.dispatch({ res: fakeRes(), sid: "p2", dir: TMP, body: body("ECHO"), access: "tenant" });
   await waitIdle(hub, 10_000, 2);
   const t = JSON.parse(answerOf(runner, "p2")).argv;
@@ -796,7 +796,7 @@ test("runner: tenant turn gets --add-dir of its OWN knowledge-base zone only (BU
   const b = JSON.parse(answerOf(runner, "z2")).argv;
   assert.equal(b.includes("--add-dir"), false);
   // admin: the zone is NOT added (admin add-dirs come from its own profile)
-  await runner.dispatch({ res: fakeRes(), sid: "z3", dir: TMP, body: body("ECHO"), access: "admin", kbZone: { tenant: null, root: "D:/Obsidian/agents" } });
+  await runner.dispatch({ res: fakeRes(), sid: "z3", dir: TMP, body: body("ECHO"), access: "admin", kbZone: { tenant: null, root: "D:/Vault/agents" } });
   await waitIdle(hub, 10_000, 3);
   const c = JSON.parse(answerOf(runner, "z3")).argv;
   assert.equal(c.some((x) => /Obsidian[\\/]agents/.test(x)), false);
@@ -806,7 +806,7 @@ test("runner: tenant turn gets --add-dir of its OWN knowledge-base zone only (BU
 // PreToolUse hook (not in --allowedTools), teleharness skills plugin, marketplace MCP.
 test("runner: tenant kit — Bash only through the jail hook, skills, marketplace (FEAT-04.11)", async () => {
   const { ClaudeRunner } = await import("../lib/claude.js");
-  const kit = { pluginDir: "D:/data/claude-tenant-plugin", mcpConfig: "D:/Portal/teleharness/ops/claude/tenant-mcp.json", promptFile: "D:/Portal/teleharness/ops/claude/tenant-prompt.md", jailExe: "D:/j/teleharness-jail.exe", sandboxPy: "D:/py", nodePath: "D:/nodejs/node.exe" };
+  const kit = { pluginDir: "D:/data/claude-tenant-plugin", mcpConfig: "D:/Apps/teleharness/ops/claude/tenant-mcp.json", promptFile: "D:/Apps/teleharness/ops/claude/tenant-prompt.md", jailExe: "D:/j/teleharness-jail.exe", sandboxPy: "D:/py", nodePath: "D:/tools/node/node.exe" };
   const hub = stubHub();
   const runner = new ClaudeRunner({ hub, storePath: freshStore(), binPath: FIXTURE, keepaliveMs: 1000, tenantKit: kit });
   await runner.dispatch({ res: fakeRes(), sid: "k1", dir: TMP, body: body("ECHO"), access: "tenant", jail: { name: "teleharness-t-alice", home: TMP } });

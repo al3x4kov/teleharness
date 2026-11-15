@@ -29,8 +29,8 @@ test("TASK-01.81 (кадр 2): чтение ПАПКИ инструментом 
 
 test("TASK-01.81 (кадр 2): чтение папки в формате opencode 2.2.6 («Read directory …, entries 1-2») — запись стенда 2026-11-11", () => {
   const feed = feedWith([
-    { id: "p1", callID: "p1", type: "tool", tool: "read", state: { status: "completed", input: { path: "D:\\teleharness-stage\\tmp\\rd-x" }, metadata: { truncated: false }, output: "Read directory D:\\teleharness-stage\\tmp\\rd-x, entries 1-2\na.txt\nb.txt" } },
-    { id: "p2", callID: "p2", type: "tool", tool: "read", state: { status: "completed", input: { path: "D:\\teleharness-stage\\tmp\\rd-x\\a.txt" }, metadata: { truncated: false }, output: "Read file D:\\teleharness-stage\\tmp\\rd-x\\a.txt, lines 1-1\n1: alpha" } },
+    { id: "p1", callID: "p1", type: "tool", tool: "read", state: { status: "completed", input: { path: "D:\\th-stage\\tmp\\rd-x" }, metadata: { truncated: false }, output: "Read directory D:\\th-stage\\tmp\\rd-x, entries 1-2\na.txt\nb.txt" } },
+    { id: "p2", callID: "p2", type: "tool", tool: "read", state: { status: "completed", input: { path: "D:\\th-stage\\tmp\\rd-x\\a.txt" }, metadata: { truncated: false }, output: "Read file D:\\th-stage\\tmp\\rd-x\\a.txt, lines 1-1\n1: alpha" } },
   ]);
   const run = agentRun(ocPart, { ...OC_CTX, childFeed: () => feed });
   assert.equal(stepLabel(run.steps[0]).verb, "Список файлов");

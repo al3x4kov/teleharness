@@ -51,12 +51,12 @@ const M = (db, id, sid, seq, type = "user") =>
 // Сконвертированный снимок: admin (2 сообщения), Alice, Carol; водяной знак только у admin.
 function converted(dir) {
   return makeDb(path.join(dir, "conv.db"), V2_SCHEMA, (db) => {
-    P(db, "pa", "C:/Users/USER");
-    P(db, "pj", "C:/Users/USER/.teleharness-tenants/Alice");
-    P(db, "pn", "C:/Users/USER/.teleharness-tenants/Carol");
-    S(db, "ses_admin", "pa", "C:/Users/USER", "Старый чат admin", 30);
-    S(db, "ses_alice", "pj", "C:/Users/USER/.teleharness-tenants/Alice", "Утюг", 20);
-    S(db, "ses_nat", "pn", "C:/Users/USER/.teleharness-tenants/Carol", "Презентация", 10);
+    P(db, "pa", "C:/Users/dev");
+    P(db, "pj", "C:/Users/dev/.teleharness-tenants/Alice");
+    P(db, "pn", "C:/Users/dev/.teleharness-tenants/Carol");
+    S(db, "ses_admin", "pa", "C:/Users/dev", "Старый чат admin", 30);
+    S(db, "ses_alice", "pj", "C:/Users/dev/.teleharness-tenants/Alice", "Утюг", 20);
+    S(db, "ses_nat", "pn", "C:/Users/dev/.teleharness-tenants/Carol", "Презентация", 10);
     M(db, "m1", "ses_admin", 0);
     M(db, "m2", "ses_admin", 1, "assistant");
     M(db, "m3", "ses_alice", 0);
@@ -68,8 +68,8 @@ function converted(dir) {
 // Рабочая база v2 прода: один чат, созданный после переключения.
 function target(dir) {
   return makeDb(path.join(dir, "target.db"), V2_SCHEMA, (db) => {
-    P(db, "pa", "C:/Users/USER");
-    S(db, "ses_new", "pa", "C:/Users/USER", "Новый чат на v2", 99);
+    P(db, "pa", "C:/Users/dev");
+    S(db, "ses_new", "pa", "C:/Users/dev", "Новый чат на v2", 99);
     M(db, "mn", "ses_new", 0);
     db.prepare("INSERT INTO event_sequence VALUES ('ses_new', 0, NULL)").run();
   });
@@ -86,10 +86,10 @@ test("BUG-189: вливание переносит сессии admin и тен�
   assert.deepEqual(st, { projects: 2, sessions: 3, skipped: 0, messages: 3, parts: 1, sequences: 3 });
   const rows = all(path.join(dir, "target.db"), "SELECT id, directory, title, time_updated FROM session_v2 ORDER BY time_updated DESC");
   assert.deepEqual(rows.map((r) => [r.id, r.directory, r.title, r.time_updated]), [
-    ["ses_new", "C:/Users/USER", "Новый чат на v2", 99],
-    ["ses_admin", "C:/Users/USER", "Старый чат admin", 30],
-    ["ses_alice", "C:/Users/USER/.teleharness-tenants/Alice", "Утюг", 20],
-    ["ses_nat", "C:/Users/USER/.teleharness-tenants/Carol", "Презентация", 10],
+    ["ses_new", "C:/Users/dev", "Новый чат на v2", 99],
+    ["ses_admin", "C:/Users/dev", "Старый чат admin", 30],
+    ["ses_alice", "C:/Users/dev/.teleharness-tenants/Alice", "Утюг", 20],
+    ["ses_nat", "C:/Users/dev/.teleharness-tenants/Carol", "Презентация", 10],
   ]);
   const msgs = all(path.join(dir, "target.db"), "SELECT id, session_id, seq FROM session_message ORDER BY id");
   assert.deepEqual(msgs.map((m) => m.id), ["m1", "m2", "m3", "mn"]);
@@ -156,10 +156,10 @@ test("BUG-189: цель без таблиц v2 — ошибка, ничего н
 test("BUG-189: снимок 1.x — сброс следа прошлого пробного запуска, исходник не меняется (критерий 6)", (t) => {
   const dir = tmp(t);
   const src = makeDb(path.join(dir, "v1.db"), V2_SCHEMA + V1_EXTRA, (db) => {
-    P(db, "pa", "C:/Users/USER");
-    db.prepare("INSERT INTO session VALUES ('ses_a', 'pa', 'C:/Users/USER', 'A', 1), ('ses_b', 'pa', 'C:/Users/USER', 'B', 2)").run();
+    P(db, "pa", "C:/Users/dev");
+    db.prepare("INSERT INTO session VALUES ('ses_a', 'pa', 'C:/Users/dev', 'A', 1), ('ses_b', 'pa', 'C:/Users/dev', 'B', 2)").run();
     db.prepare("INSERT INTO message VALUES ('m1', 'ses_a', 1, 1, '{}')").run();
-    S(db, "ses_a", "pa", "C:/Users/USER", "A (устаревшая копия)");
+    S(db, "ses_a", "pa", "C:/Users/dev", "A (устаревшая копия)");
     M(db, "old1", "ses_a", 0);
     db.prepare("INSERT INTO event_sequence VALUES ('ses_a', 0, NULL), ('other', 3, NULL)").run();
     db.prepare("INSERT INTO kv VALUES ('migration.v1-v2', '{\"phase\":\"completed\"}'), ('keep', '1')").run();

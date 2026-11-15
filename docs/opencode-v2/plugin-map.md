@@ -195,4 +195,4 @@ await ctx.session.hook("context", (event) => {
 - Типы: dist/promise/plugin.d.ts (Plugin, define, Context), dist/promise/registration.d.ts (Hooks/Transform/Registration), dist/promise/tool.d.ts (ToolHooks, ToolDomain), dist/promise/session.d.ts (SessionHooks, SessionRequest/Context/Prompt/Compaction/Idle, SessionDomain), dist/promise/event.d.ts (EventDomain), dist/promise/storage.d.ts (StorageDomain), dist/options.d.ts (PluginOptions) — все по базовому URL https://unpkg.com/@opencode/plugin@2.2.6/
 - Схема сессии: https://unpkg.com/@opencode/schema@2.2.6/dist/session.d.ts (Session.Info: parentID, location.directory, model.variant)
 - Доки: https://opencode.ai/docs/plugins (конфигурация/дискавери), https://opencode.ai/docs/build/plugins (части пакета, загрузка), https://opencode.ai/docs/build/plugins/migrate-v1 (таблица миграции, примеры блокировки), https://opencode.ai/docs/build/plugins/server (домены, session hooks, provider options, tool hooks)
-- Исходник 1.x: `D:\Portal\teleharness\ops\opencode\vault-cache.ts` (строки в тексте)
+- Исходник 1.x: `D:\Apps\teleharness\ops\opencode\vault-cache.ts` (строки в тексте)

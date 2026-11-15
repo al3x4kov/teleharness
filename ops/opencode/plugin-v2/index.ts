@@ -29,7 +29,7 @@
 // Точка входа: bare-объект {id, setup} (проверено живьём Э8); если пакет
 // @opencode/plugin резолвится, объект оборачивается в Plugin.define — форма та
 // же, но каноничная по документации. Пакет может отсутствовать рядом с плагином
-// (в D:\Portal\teleharness\node_modules его нет) — поэтому динамический import с
+// (в D:\Apps\teleharness\node_modules его нет) — поэтому динамический import с
 // fallback, статический импорт уронил бы загрузку всего плагина.
 import os from "node:os"
 import path from "node:path"
@@ -197,7 +197,7 @@ const spec: Any = {
           const texts: string[] = event.system.map((p: Any) => (p && typeof p.text === "string" ? p.text : ""))
           const stripped = hooks.stripAdminRules(texts)
           for (let i = 0; i < texts.length; i++) if (typeof (event.system[i] as Any)?.text === "string") (event.system[i] as Any).text = texts[i]
-          event.system.push({ type: "text", text: v.zone.root ? hooks.tenantRules(v.zone) : "База знаний Obsidian в этой сессии недоступна: не читай и не пиши в D:\\Obsidian." })
+          event.system.push({ type: "text", text: v.zone.root ? hooks.tenantRules(v.zone) : "База знаний Obsidian в этой сессии недоступна: не читай и не пиши в D:\\Vault." })
           const cd = await sb.chatDirOf(event.sessionID, v)
           if (cd) event.system.push({ type: "text", text: hooks.chatDirLine(cd) })
           await core.log(`system: tenant ${v.zone.tenant} (${String(event.sessionID).slice(0, 12)}): admin rules blocks stripped=${stripped}`)

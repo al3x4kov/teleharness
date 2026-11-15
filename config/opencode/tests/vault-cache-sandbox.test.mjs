@@ -1,5 +1,5 @@
 // Tenant sandbox of vault-cache.ts (2026-11-04). Run:
-//   node --test C:\Users\USER\.config\opencode\tests\vault-cache-sandbox.test.mjs
+//   node --test C:\Users\dev\.config\opencode\tests\vault-cache-sandbox.test.mjs
 // Uses a throwaway layout under %TEMP%; never touches the real vault or users.json.
 import { test, before, after } from "node:test"
 import assert from "node:assert/strict"

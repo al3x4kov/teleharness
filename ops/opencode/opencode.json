@@ -10,7 +10,7 @@
   "share": "disabled",
   "snapshot": false,
 
-  "instructions": ["D:\\Obsidian\\agents\\_index.md", "C:\\Users\\USER\\.config\\opencode\\prompts\\glm-rules.md"],
+  "instructions": ["D:\\Vault\\agents\\_index.md", "C:\\Users\\dev\\.config\\opencode\\prompts\\glm-rules.md"],
 
   "plugin": ["oh-my-opencode-slim@3.0.7", "./vault-cache.ts"],
 
@@ -67,7 +67,7 @@
         },
         "external_directory": {
           "*": "deny",
-          "D:\\Obsidian\\tenants\\*": "allow"
+          "D:\\Vault\\tenants\\*": "allow"
         },
         "bash": "allow",
         "task": "deny"
@@ -83,7 +83,7 @@
     },
     "marketplace": {
       "type": "local",
-      "command": ["C:\\Users\\USER\\AppData\\Local\\ru-marketplace-mcp\\Scripts\\python.exe", "-m", "marketplace_connector"],
+      "command": ["C:\\Users\\dev\\AppData\\Local\\ru-marketplace-mcp\\Scripts\\python.exe", "-m", "marketplace_connector"],
       "enabled": true,
       "environment": {
         "MARKETPLACE_SOURCES": "wildberries,ozon,yandex_market,compare"

@@ -1,9 +1,9 @@
 ---
 type: architecture
 updated: 2026-11-11
-version: teleharness 1.16.5 (src/lib/version.js, package.json → /teleharness/api/healthz); прод = рабочее дерево D:\Portal\teleharness (задача teleharness-web, действие ops\web-v2.cmd); upstream opencode serve 2.2.6 :4196 (задача teleharness-opencode-v2, с 1.16.0 = 2026-11-08); claude CLI 2.1.322; стенд v2 — D:\teleharness-stage\stand-v2.ps1 (:4174/:4101); до 2026-11-08 — opencode 1.19.5 :4096, выведен
+version: teleharness 1.16.5 (src/lib/version.js, package.json → /teleharness/api/healthz); прод = рабочее дерево D:\Apps\teleharness (задача teleharness-web, действие ops\web-v2.cmd); upstream opencode serve 2.2.6 :4196 (задача teleharness-opencode-v2, с 1.16.0 = 2026-11-08); claude CLI 2.1.322; стенд v2 — D:\th-stage\stand-v2.ps1 (:4174/:4101); до 2026-11-08 — opencode 1.19.5 :4096, выведен
 graph: graphify (update 2026-11-03 после финальных фиксов) — весь граф 3554 узла / 5803 ребра / 304 сообщества; god-узлы handleApi() 89, EventHub 69, ClaudeRunner 36, reduce() 24. Цифры §2.1 — снимок 2026-11-02 (1.6.1), оставлены для сравнения
-source: server.js, lib/*.js, shared/engine.js, ops/portal-server.js, ops/watchdog-teleharness.ps1, D:\Portal\watchdog.ps1, ops/web-v2.cmd, ops/opencode/serve-v2.cmd, ops/deploy/oc2-install.ps1, D:\teleharness-stage/stand-v2.ps1, D:\teleharness-stage/deploy-1.16.x.ps1 (шапки), build.mjs, src/lib/*.js, src/lib/store/*.js, ключевые .jsx; ревью и реализация docs/reviews/2026-11-02/* (impl-G1…G8, integration.md, final-fixes.md), docs/reviews/2026-11-10/ops.md; docs/ops-runbook.md
+source: server.js, lib/*.js, shared/engine.js, ops/portal-server.js, ops/watchdog-teleharness.ps1, D:\Apps\watchdog.ps1, ops/web-v2.cmd, ops/opencode/serve-v2.cmd, ops/deploy/oc2-install.ps1, D:\th-stage/stand-v2.ps1, D:\th-stage/deploy-1.16.x.ps1 (шапки), build.mjs, src/lib/*.js, src/lib/store/*.js, ключевые .jsx; ревью и реализация docs/reviews/2026-11-02/* (impl-G1…G8, integration.md, final-fixes.md), docs/reviews/2026-11-10/ops.md; docs/ops-runbook.md
 supersedes: редакция «UI 1.6.1» того же файла (2026-11-02)
 ---
 
@@ -14,7 +14,7 @@ supersedes: редакция «UI 1.6.1» того же файла (2026-11-02)
 > - Хаб: id событий `<epoch>.<seq>` и resync (ADR-005), персист счётчика повторов, детектор цикла, `teleharness.turn.incomplete`, снятие молчащего хода перед промптом, диалоги не отклоняются по таймеру, пагинация истории, отчёт `admin/sessions`, backpressure SSE.
 > - Claude CLI: промпт через stdin, чистое окружение, профили прав admin/tenant, очередь досылок вместо 409, idle-таймаут и `teleharness.keepalive`, восстановление после рестарта (ADR-010), единый каталог моделей `shared/engine.js`.
 > - Клиент: `store.js` разнесён на `src/lib/store/*`, самовосстанавливающийся поток событий и плашка связи, баннеры ошибки хода, статус доставки, загрузка через XHR с прогрессом и отменой, просмотр xlsx/docx, хранилище префов/проектов/черновиков по пользователю.
-> - Edge: XFP/XFF выставляет сам, кука `Path=/teleharness` + `Secure`, свой access-лог (ADR-009). Стенд — `D:\teleharness-stage` со своим opencode :4097 (ADR-003).
+> - Edge: XFP/XFF выставляет сам, кука `Path=/teleharness` + `Secure`, свой access-лог (ADR-009). Стенд — `D:\th-stage` со своим opencode :4097 (ADR-003).
 > - Ниже разделы обновлены по коду 1.7.0; места, где описано поведение 1.6.1, помечены «(до 1.7.0)».
 
 teleharness — мобильный веб-портал (UI в стиле Claude) над двумя движками агентов:
@@ -56,7 +56,7 @@ flowchart LR
   subgraph Edge["ops/portal-server.js — задача teleharness-portal"]
     E80[":80 http<br/>/teleharness* → 308 https<br/>кроме /teleharness/ca.pem"]
     E443[":443 https (mkcert)"]
-    ST["статика: allow-list<br/>только D:\Portal\tv"]
+    ST["статика: allow-list<br/>только D:\Apps\tv"]
   end
   subgraph Portal["server.js 127.0.0.1:4170 — задача teleharness-web"]
     API["handleApi()<br/>/teleharness/api/*"]
@@ -69,14 +69,14 @@ flowchart LR
     BS["BindingStore (lib/binding.js)"]
     STA["lib/static.js → public/"]
   end
-  OC["opencode serve 2.2.6<br/>127.0.0.1:4196<br/>задача teleharness-opencode-v2<br/>зона D:\Portal\teleharness-oc2"]
-  OCS["opencode serve стенда v2<br/>127.0.0.1:4101<br/>D:\teleharness-stage\oc2"]
+  OC["opencode serve 2.2.6<br/>127.0.0.1:4196<br/>задача teleharness-opencode-v2<br/>зона D:\Apps\teleharness-oc2"]
+  OCS["opencode serve стенда v2<br/>127.0.0.1:4101<br/>D:\th-stage\oc2"]
   CLI["claude.exe -p …<br/>stream-json, cwd = каталог чата"]
   TELEHARNESS["api.z.ai<br/>квота Coding Plan"]
   TV["TV API 127.0.0.1:8099"]
   DATA[("data/*.json")]
-  STAND["Стенд server.js<br/>127.0.0.1:4172<br/>D:\teleharness-stage"]
-  WD["watchdog (каждые 2 мин)<br/>D:\Portal\watchdog.ps1"]
+  STAND["Стенд server.js<br/>127.0.0.1:4172<br/>D:\th-stage"]
+  WD["watchdog (каждые 2 мин)<br/>D:\Apps\watchdog.ps1"]
 
   B -- HTTPS --> E443
   B -- HTTP --> E80
@@ -110,7 +110,7 @@ flowchart LR
 
 | Граница | Кто по ту сторону | Что защищает |
 |---|---|---|
-| LAN/Интернет → edge :80/:443 | любой клиент без авторизации | edge: `/teleharness*` по http — 308 на https; статика — allow-list `D:\Portal\tv`; отказ путям с `:`, `~`, управляющими символами и хвостовыми точками/пробелами; try/catch вокруг маршрутизации (§6.2) |
+| LAN/Интернет → edge :80/:443 | любой клиент без авторизации | edge: `/teleharness*` по http — 308 на https; статика — allow-list `D:\Apps\tv`; отказ путям с `:`, `~`, управляющими символами и хвостовыми точками/пробелами; try/catch вокруг маршрутизации (§6.2) |
 | edge → server.js :4170 | только 127.0.0.1 | server.js слушает `127.0.0.1`; авторизация — sid-кука/Bearer в каждом `/teleharness/api/*`, кроме `auth/login|logout|me` и `healthz` (только прямой loopback); мутирующие запросы с `Sec-Fetch-Site: cross-site` или чужим `Origin` → 403 (1.7.0); edge перезаписывает `x-forwarded-*` (ADR-009) |
 | server.js → opencode :4196 | доверенный локальный сервис, Basic `opencode:<пароль из data\oc2-password.txt>` | все вызовы идут через адаптер `lib/oc-client.js` (`TELEHARNESS_OC_API=v2`); каталог сессии — из серверного индекса, а не из запроса; кука и `authorization` портала в opencode не уходят |
 | server.js → claude.exe | процесс с правами владельца | 1.7.0: промпт через stdin, окружение по allow-list без `TELEHARNESS_*`; профиль прав по роли — admin `bypassPermissions` + `--add-dir`, tenant `--restricted --strict-mcp-config` (ADR-004). OS-изоляции нет: тенанту Claude закрыт, пока admin не включит `engines` |
@@ -124,7 +124,7 @@ flowchart LR
 - Внешние процессы: `opencode serve` 2.2.6 на `:4196` (портал ходит через
   адаптер `lib/oc-client.js`; контракт 1.19.5 зафиксирован в
   `fixtures/`), `claude.exe` (по умолчанию
-  `C:\Users\USER\.local\bin\claude.exe`), PowerShell CIM (lib/host.js).
+  `C:\Users\dev\.local\bin\claude.exe`), PowerShell CIM (lib/host.js).
 - Внешние сервисы: `api.z.ai` (квота), подписка Anthropic (через CLI).
 
 ---
@@ -166,7 +166,7 @@ regenerateToken`, `isAbsoluteDir`, `EventHub.syncDirectories`. Путь
 | **`lib/accesslog.js`** | 84 | JSON-строка на запрос (`ts, rid, method, path без query, status, ms, user, ip`), `access-YYYYMMDD.log`, ротация 10 МБ, хранение 14 дней; `errLog` с троттлингом для бывших «тихих» catch; `x-request-id` (ADR-007) | `requestId, accessLogger, errLog, clientIp` |
 | **`lib/gc.js`** | 61 | план сборки мусора (только dry-run): осиротевшие привязки и Claude-истории, `.teleharness-uploads` старше N дней, пустые чаты | `planGc` |
 | **`lib/json-store.js`** | 62 | `readJsonStore` (битый файл → `.corrupt-<ts>`, старт с пустого без затирания), `writeJsonAtomic` (tmp + rename с повтором при EPERM/EBUSY) — ADR-002 | `readJsonStore, writeJsonAtomic` |
-| `lib/paths.js` | 100 | политика путей (было 13 строк): `dirProblem` — запрет относительных, `..`, `\\?\` `\\.\` `\??\`, UNC, корней дисков, `:`/`~`/wildcards, системных каталогов на **любом** диске (Windows, Program Files, ProgramData, $Recycle.Bin, System Volume Information, Recovery, $Windows.~BT/~WS); для тенантов ещё D:\Portal, DATA_DIR, корень профиля; `driveProblem` (несуществующий диск, final-fixes ISSUE-006); `isUnderAny` (скрытие TEMP-сессий) | `isAbsoluteDir, dirProblem, driveProblem, isUnderAny, dirProblemText` |
+| `lib/paths.js` | 100 | политика путей (было 13 строк): `dirProblem` — запрет относительных, `..`, `\\?\` `\\.\` `\??\`, UNC, корней дисков, `:`/`~`/wildcards, системных каталогов на **любом** диске (Windows, Program Files, ProgramData, $Recycle.Bin, System Volume Information, Recovery, $Windows.~BT/~WS); для тенантов ещё D:\Apps, DATA_DIR, корень профиля; `driveProblem` (несуществующий диск, final-fixes ISSUE-006); `isUnderAny` (скрытие TEMP-сессий) | `isAbsoluteDir, dirProblem, driveProblem, isUnderAny, dirProblemText` |
 | `lib/hub.js` | 1352 | `EventHub`: SSE-коннект к upstream на каталог, ring 1000, id `<epoch>.<seq>`, replay/`teleharness.resync` по `Last-Event-ID` (чужая эпоха, legacy-число, мусор, будущий или устаревший seq), keepalive 15 с, backoff 1–30 с, `transform` для тенантов; backpressure (буфер > 16 МБ → отключение), ≤ 8 потоков на ключ; watchdog: stall-abort, dialog-timeout (по умолчанию выкл.), stall-replay с персистом счётчика в `data/hub-pending.json`, pending снимается только ответом на свой messageID; детектор цикла (`teleharness.loop`), `teleharness.turn.incomplete`, `prepareForPrompt` (снятие молчащего хода), `sessionsReport()` | `EventHub` |
 | `lib/claude.js` | 836 | `ClaudeRunner`: процесс `claude.exe -p --input-format text --output-format stream-json` на ход, промпт в stdin UTF-8, `childEnv()` по allow-list; профили прав по `access`; FIFO-очередь досылок (до 5); `AnswerText` (многошаговый ответ); idle-таймаут `TELEHARNESS_CLAUDE_IDLE_MS` и `teleharness.keepalive {startedAt,lastOutputAt,lastAction,queued}`; `data/claude-runs.json` + убийство своих сирот при старте и «[Прервано рестартом портала]»; `liveness()`, `shutdown()`; история — атомарно, картинки ссылками; каталог моделей — из `shared/engine.js` + `data/claude-models.json`, неизвестный `modelID` → 400 | `ClaudeRunner, providerPatch, buildPrompt, translateLine, childEnv, permissionArgs, …` |
 | **`shared/engine.js`** | 52 | единый модуль движков для сервера и клиента (`src/lib/engine.js` — реэкспорт): провайдер Claude, `engineOf`, каталог моделей и дефолт (`claude-opus-5-5`), `normalizeCatalog`, `isClaudeModel` | `CLAUDE_PROVIDER, engineOf, CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL, normalizeCatalog, isClaudeModel` |
@@ -269,7 +269,7 @@ store-фасад (integration.md §1); `globalThis.__teleharnessActiveId` уда
 | `src/lib/store/session.js` | история страницами (`limit`/`before`), догрузка вверх; «Чат не найден» без запроса истории | BUG-08.8, BUG-01.19 |
 | `src/lib/store/state.js` `sanitizePrefs` | недоступная сохранённая модель → дефолт + предупреждение | BUG-03.15 |
 
-**Окружение прода (1.9.0).** Переменная пользователя `TELEHARNESS_CLAUDE_MCP_CONFIG=D:\Portal\teleharness\ops\claude\mcp-playwright.json` (Playwright MCP для Claude-чатов admin). `TELEHARNESS_KB_ROOT` по умолчанию `D:\Obsidian\agents`.
+**Окружение прода (1.9.0).** Переменная пользователя `TELEHARNESS_CLAUDE_MCP_CONFIG=D:\Apps\teleharness\ops\claude\mcp-playwright.json` (Playwright MCP для Claude-чатов admin). `TELEHARNESS_KB_ROOT` по умолчанию `D:\Vault\agents`.
 
 ## 3. Потоки данных
 
@@ -463,8 +463,8 @@ keepalive подделывался событием `busy`, запись ист�
 
 ## 4. Хранение данных
 
-Каталог `TELEHARNESS_DATA_DIR` (прод: `D:\Portal\teleharness\data`, стенд:
-`D:\teleharness-stage\stand-data`).
+Каталог `TELEHARNESS_DATA_DIR` (прод: `D:\Apps\teleharness\data`, стенд:
+`D:\th-stage\stand-data`).
 
 | Файл | Владелец | Формат | Запись | При порче | Размер (прод, 2026-11-02) |
 |---|---|---|---|---|---|
@@ -518,8 +518,8 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_LOG_DIR` | `<TELEHARNESS_DATA_DIR>\logs` | журнал запросов |
 | `TELEHARNESS_ACCESS_LOG` | `true` | `0` — выключить журнал запросов |
 | `TELEHARNESS_COOKIE_NAME` | `teleharness_t` | имя куки (стенд — `teleharness_t_stage`) |
-| `TELEHARNESS_TENANT_HOME` | `<TELEHARNESS_HOME>/.teleharness-tenants` | каталог чатов нового тенанта (стенд — `D:\teleharness-stage\tenants\home`) |
-| `TELEHARNESS_TENANT_VAULT` | `~/.teleharness/tenants-vault` | Obsidian-зона нового тенанта (стенд — `D:\teleharness-stage\tenants\vault`) |
+| `TELEHARNESS_TENANT_HOME` | `<TELEHARNESS_HOME>/.teleharness-tenants` | каталог чатов нового тенанта (стенд — `D:\th-stage\tenants\home`) |
+| `TELEHARNESS_TENANT_VAULT` | `~/.teleharness/tenants-vault` | Obsidian-зона нового тенанта (стенд — `D:\th-stage\tenants\vault`) |
 | `TELEHARNESS_TENANT_AGENT` | пусто | агент тенанта по умолчанию; пусто — первый shell-free primary (сейчас `Prometheus - Plan Builder`) |
 | `TELEHARNESS_FILE_ROOTS` | `<TELEHARNESS_HOME>` | extraRoots admin для `/file` (через `;`) |
 | `TELEHARNESS_STALL_ABORT_MS` | `900000` | abort хода без событий; 0 — выкл. |
@@ -534,7 +534,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_CLAUDE_IDLE_MS` | `0` | таймаут по бездействию Claude-хода; 0 — выкл. Решение владельца 2026-11-02: ходы живут до завершения, idle-kill только явно (комментарий в `lib/config.js`) |
 | `TELEHARNESS_CLAUDE_BIN` | пусто | бинарник CLI; пусто → `%USERPROFILE%\.local\bin\claude.exe` |
 | `TELEHARNESS_CLAUDE_MCP_CONFIG` | пусто | `--mcp-config` admin-ходов Claude; пусто — нет; битый файл игнорируется с логом (FEAT-13.10) |
-| `TELEHARNESS_KB_ROOT` | `D:\Obsidian\agents` | база знаний admin для снапшота первого хода Claude-чата; `off` — выкл. (FEAT-13.11) |
+| `TELEHARNESS_KB_ROOT` | `D:\Vault\agents` | база знаний admin для снапшота первого хода Claude-чата; `off` — выкл. (FEAT-13.11) |
 | `TELEHARNESS_GC_EMPTY_MIN` | `30` | пустые чаты старше N минут удаляет gc; 0 — выкл. (BUG-01.48) |
 | `TELEHARNESS_INSTANCE_IDLE_MIN` | `30` | opencode-экземпляр папки чата освобождается после N минут простоя; 0 — никогда; HOME/каталог владельца не освобождаются (BUG-195) |
 | `TELEHARNESS_INSTANCE_SWEEP_MS` | `300000` | период обхода простаивающих экземпляров |
@@ -569,10 +569,10 @@ keepalive подделывался событием `busy`, запись ист�
 
 | Переменная | Читает | Назначение |
 |---|---|---|
-| `TELEHARNESS_JAIL_EXE` | `server.js` → `lib/claude-tenant.js` | бинарник песочницы (jail) тенанта; пусто → `D:/Portal/teleharness/ops/sandbox/teleharness-jail.exe` |
+| `TELEHARNESS_JAIL_EXE` | `server.js` → `lib/claude-tenant.js` | бинарник песочницы (jail) тенанта; пусто → `D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe` |
 | `TELEHARNESS_SANDBOX_PY` | `server.js` → `lib/claude-tenant.js` | python песочницы тенанта; пусто → `D:/teleharness-sandbox/python` |
 | `TELEHARNESS_OC_CONFIG_FILE` | `lib/host.js` | конфиг opencode для «О приложении» (версия slim/claude); прод и стенд v2 задают конфиг зоны v2 (`ops\web-v2.cmd`, BUG-190) |
-| `TELEHARNESS_PUBLIC_DIR` | `lib/static.js` | каталог статики; пусто → `<repo>\public` (стенд v2 — `D:\teleharness-stage\public`) |
+| `TELEHARNESS_PUBLIC_DIR` | `lib/static.js` | каталог статики; пусто → `<repo>\public` (стенд v2 — `D:\th-stage\public`) |
 | `TELEHARNESS_FIXTURES` | `lib/mock.js` | каталог фикстур мока; пусто → `<repo>\fixtures` |
 | `TELEHARNESS_QUOTA_BASE` | `lib/usage.js` | база API квот z.ai; пусто → `https://api.z.ai` |
 | `TELEHARNESS_AUTH_FILE` | `lib/usage.js` | `auth.json` для ключа провайдера (usage); пусто → `%USERPROFILE%\.local\share\opencode\auth.json` |
@@ -591,7 +591,7 @@ keepalive подделывался событием `busy`, запись ист�
 `lib/proxy.js` и `lib/host.js` (перенос на `config` — остаток ADR-006). Плагины opencode
 (sandbox-core, vault-cache) читают свой env (`TELEHARNESS_USERS_FILE`, `VAULT_CACHE_*`, `OPENCODE_*`) —
 его задаёт не сервер, а задачи запуска: `ops\web-v2.cmd`, `ops\opencode\serve-v2.cmd`,
-`D:\teleharness-stage\stand-v2.ps1`.
+`D:\th-stage\stand-v2.ps1`.
 
 Константы в коде: индекс сессий 10 с, кэш `/status` 3 с, тела 2 МБ / промпт 64 МБ / загрузка 100 МБ, дедлайн прокси 30 с до заголовков + idle-таймаут, таймаут промпта opencode 600 с (oc-client), ring 1000, keepalive хаба 15 с, опрос каталогов 20 с, backoff 1–30 с, кука на год, буфер SSE 16 МБ, 8 потоков на пользователя, очередь Claude 5. Каталог Claude-моделей и дефолт — один раз, в `shared/engine.js` (было продублировано в binding.js и claude.js).
 
@@ -599,7 +599,7 @@ keepalive подделывался событием `busy`, запись ист�
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `TELEHARNESS_OUT_DIR` | `<repo>\public` | куда собрать `app.js`/`app.css` (стенд: `D:\teleharness-stage\public`) |
+| `TELEHARNESS_OUT_DIR` | `<repo>\public` | куда собрать `app.js`/`app.css` (стенд: `D:\th-stage\public`) |
 
 ### 5.3. ops/portal-server.js (edge)
 
@@ -607,13 +607,13 @@ keepalive подделывался событием `busy`, запись ист�
 |---|---|---|
 | `PORT` | `80` | http-листенер |
 | `TLS_PORT` | `443` | https-листенер (если есть сертификаты) |
-| `TELEHARNESS_TLS_CERT` / `TELEHARNESS_TLS_KEY` | `<repo>/ops/certs/192.168.0.10(-key).pem` | mkcert-сертификат |
+| `TELEHARNESS_TLS_CERT` / `TELEHARNESS_TLS_KEY` | `<repo>/ops/certs/192.0.2.10(-key).pem` | mkcert-сертификат |
 | `TELEHARNESS_TLS_CA` | `<repo>/ops/certs/ca/rootCA.pem` | root CA, отдаётся по `/teleharness/ca.pem` |
 | `TELEHARNESS_HTTPS_ONLY` | включено при наличии TLS | `0` — не перенаправлять `/teleharness*` с http |
 | `TELEHARNESS_EDGE_LOG_DIR` | `<repo>/data/logs` | **1.7.0**: access-лог edge `edge-YYYYMMDD.log`; `0` — выкл. |
 | `TELEHARNESS_EDGE_ROOT`, `TELEHARNESS_EDGE_UPSTREAM`, `TELEHARNESS_EDGE_TV_UPSTREAM`, `TELEHARNESS_EDGE_PORTAL_COOKIES` | папка над `<repo>` (отдаётся только `tv/`), `127.0.0.1:4170`, `127.0.0.1:8099`, `teleharness_t,teleharness_t_stage` | **1.7.0**: оверрайды для тестов edge (`tests/helpers/spawn-edge.mjs`) и список кук портала, вырезаемых на `/tv/api` |
 
-Edge валидирует свои env сам (без импорта `lib/`). Хост `192.168.0.10` для
+Edge валидирует свои env сам (без импорта `lib/`). Хост `192.0.2.10` для
 редиректа задан в коде.
 
 ---
@@ -624,10 +624,10 @@ Edge валидирует свои env сам (без импорта `lib/`). Х
 
 | Компонент | Как запускается | Адрес |
 |---|---|---|
-| edge | задача `teleharness-portal`: `D:\nodejs\node.exe D:\Portal\teleharness\ops\portal-server.js` | 0.0.0.0:80, 0.0.0.0:443; снаружи `https://teleharness.home.example.net/teleharness/` |
-| портал | задача `teleharness-web` (onlogon): `D:\nodejs\node.exe D:\Portal\teleharness\server.js` | 127.0.0.1:4170 |
+| edge | задача `teleharness-portal`: `D:\tools\node\node.exe D:\Apps\teleharness\ops\portal-server.js` | 0.0.0.0:80, 0.0.0.0:443; снаружи `https://teleharness.home.example.net/teleharness/` |
+| портал | задача `teleharness-web` (onlogon): `D:\tools\node\node.exe D:\Apps\teleharness\server.js` | 127.0.0.1:4170 |
 | opencode | задача `teleharness-opencode-serve`: `opencode.exe serve --hostname 127.0.0.1 --port 4096` (1.19.5) | 127.0.0.1:4096 |
-| watchdog | задача `watchdog` раз в 2 мин: `D:\Portal\watchdog.ps1` (блок teleharness — из шаблона `ops/watchdog-teleharness.ps1`) | проверяет только, что слушаются порты 80, 443, 4170, 4096, и стартует задачу через `CanRestart` |
+| watchdog | задача `watchdog` раз в 2 мин: `D:\Apps\watchdog.ps1` (блок teleharness — из шаблона `ops/watchdog-teleharness.ps1`) | проверяет только, что слушаются порты 80, 443, 4170, 4096, и стартует задачу через `CanRestart` |
 | QA-mock | задача `teleharness-mock-4171` (`ops/mock-4171.cmd`) | 127.0.0.1:4171, `TELEHARNESS_MOCK=1` |
 
 После перезапуска watchdog'ом opencode работает с cwd=system32, поэтому
@@ -643,7 +643,7 @@ Edge валидирует свои env сам (без импорта `lib/`). Х
 Правки в `ops/portal-server.js` (по ревью безопасности, находки SEC-1, 3, 4, 6
 и R2, R3). Edge перезапущен в 15:37 — правки действуют на проде.
 
-- Статика: **allow-list** — раздаётся только дерево `D:\Portal\tv`
+- Статика: **allow-list** — раздаётся только дерево `D:\Apps\tv`
   (первый сегмент пути должен быть `tv`), всё прочее — 404
   (portal-server.js:129-133).
 - Отказ любому пути с `:` (NTFS-потоки `::$INDEX_ALLOCATION`, `::$DATA`),
@@ -651,7 +651,7 @@ Edge валидирует свои env сам (без импорта `lib/`). Х
   а также с хвостовыми точками или пробелами в сегменте (portal-server.js:125).
   Этим закрыт обход BUG-001 и утечка без авторизации `teleharness\data\admin-token.txt`,
   `users.json`, `claude-sessions.json`, файлов из `secrets/` и содержимого
-  `D:\Portal\teleharness-stage` (включая токен стенда).
+  `D:\th-stage` (включая токен стенда).
 - `HIDE` сравнивается без учёта регистра; `SEGMENT_BLOCK` дополнен
   `teleharness-stage` — второй эшелон за allow-list.
 - Вся маршрутизация обёрнута в `handler()` с try/catch: битый request-target
@@ -677,22 +677,22 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 
 ### 6.3. Стенд v2 (stand-v2.ps1, FEAT-16.3)
 
-| Параметр | Значение (`D:\teleharness-stage\stand-v2.ps1`) |
+| Параметр | Значение (`D:\th-stage\stand-v2.ps1`) |
 |---|---|
-| Код | тот же `D:\Portal\teleharness\server.js` (рабочее дерево) |
+| Код | тот же `D:\Apps\teleharness\server.js` (рабочее дерево) |
 | Порт | 4174 (127.0.0.1), `TELEHARNESS_ENV=stand`, `TELEHARNESS_OC_API=v2` |
-| Данные | `TELEHARNESS_DATA_DIR=D:\teleharness-stage\stand2-data` |
-| Статика | `TELEHARNESS_PUBLIC_DIR=D:\teleharness-stage\public` (сборка с `TELEHARNESS_OUT_DIR`) |
+| Данные | `TELEHARNESS_DATA_DIR=D:\th-stage\stand2-data` |
+| Статика | `TELEHARNESS_PUBLIC_DIR=D:\th-stage\public` (сборка с `TELEHARNESS_OUT_DIR`) |
 | Кука | `TELEHARNESS_COOKIE_NAME=teleharness_t_stage` |
-| Тенанты | `D:\teleharness-stage\tenants\{home,vault}`; QA-тенант `qa` |
-| Токены | в `D:\teleharness-stage\secrets\*` с ACL владельца; `TELEHARNESS_ADMIN_TOKEN` выставляется только при первом старте; в `stand.cmd` секретов нет |
-| Upstream | **свой `opencode serve` 1.19.5 на 127.0.0.1:4097** (`XDG_CONFIG_HOME=D:\teleharness-stage\opencode\config`, свои data/state, `HOME=D:\teleharness-stage\home` для `.omo`); 0 пересечений с прод-сессиями |
-| Запуск | `stand.ps1 -Detach / -Stop / -RestartOpencode`; логи `D:\teleharness-stage\logs`; задачи и watchdog нет |
+| Тенанты | `D:\th-stage\tenants\{home,vault}`; QA-тенант `qa` |
+| Токены | в `D:\th-stage\secrets\*` с ACL владельца; `TELEHARNESS_ADMIN_TOKEN` выставляется только при первом старте; в `stand.cmd` секретов нет |
+| Upstream | **свой `opencode serve` 1.19.5 на 127.0.0.1:4097** (`XDG_CONFIG_HOME=D:\th-stage\opencode\config`, свои data/state, `HOME=D:\th-stage\home` для `.omo`); 0 пересечений с прод-сессиями |
+| Запуск | `stand.ps1 -Detach / -Stop / -RestartOpencode`; логи `D:\th-stage\logs`; задачи и watchdog нет |
 | Кандидаты в прод | `opencode\config\opencode\vault-cache.ts` (изоляция тенанта, BUG-12.14), `home\.omo\omo.jsonc` (`multimodal-looker` → `glm-5.3-flash`) — переносит владелец по runbook п.8 |
-| Откаты | `D:\teleharness-stage\rollback\{1.5.2,1.6.0}`, `archive\` |
+| Откаты | `D:\th-stage\rollback\{1.5.2,1.6.0}`, `archive\` |
 
 Стенд 1.x (`stand.cmd`/`stand.ps1`, :4172/:4097) выведен 2026-11-08. До 1.7.0
-стенд жил в web-root `D:\Portal` и работал с прод-upstream :4096 (R18, SEC-10).
+стенд жил в web-root `D:\Apps` и работал с прод-upstream :4096 (R18, SEC-10).
 
 ---
 
@@ -705,15 +705,15 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 | `x-request-id` в каждом ответе; `rid` в тексте внутренней ошибки | server.js, edge (1.7.0) |
 | `errLog` с троттлингом в бывших «тихих» catch (индекс, fan-out статусов, agentList, mkdir, usage, mock, flush хранилищ) | lib/accesslog.js (1.7.0) |
 | `GET /teleharness/api/healthz` (только loopback): версия, upstream, возраст индекса; 503 при индексе старше 60 с | server.js (1.7.0) |
-| Access-лог edge | `D:\Portal\teleharness\data\logs\edge-YYYYMMDD.log` (1.7.0) |
+| Access-лог edge | `D:\Apps\teleharness\data\logs\edge-YYYYMMDD.log` (1.7.0) |
 | Лог хаба `[teleharness-hub]` (auto-abort, replay, loop, ошибки) | lib/hub.js, stdout задачи |
 | Отчёт активных ходов | `GET /teleharness/api/admin/sessions`, карточка «Активные ходы» в Настройках |
-| Лог watchdog | `D:\Portal\watchdog.log` |
-| Лог стенда | `D:\teleharness-stage\oc2\logs\*` (стенд v2; выведенный 1.x писал в `D:\teleharness-stage\logs`) |
+| Лог watchdog | `D:\Apps\watchdog.log` |
+| Лог стенда | `D:\th-stage\oc2\logs\*` (стенд v2; выведенный 1.x писал в `D:\th-stage\logs`) |
 
 Чего ещё нет (остаток R20/ADR-007):
 
-- watchdog (`ops/watchdog-teleharness.ps1` / `D:\Portal\watchdog.ps1`) всё ещё
+- watchdog (`ops/watchdog-teleharness.ps1` / `D:\Apps\watchdog.ps1`) всё ещё
   проверяет только открытые порты; опрос `healthz` (таймаут 5 с, два провала
   → перезапуск) не подключён;
 - уровней логов; хвост stderr claude CLI в лог (ADR-007 п.4) не проверен.
@@ -732,7 +732,7 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 | L2 Компонент | happy-dom + esbuild (`tests/components/`) | **1.7.0**: Composer, DialogBar, ModelBar, HomeView, ChatView — 47 тестов (C1–C5); Pickers, FileViewer, Access/Login (C6–C8) — нет; плюс g5-views |
 | L3 Server-контракт | `server.js` против fake upstream / fake claude (`tests/helpers/spawn-server.mjs`, `fake-opencode.mjs`, tmp-данные, env по белому списку) | server, auth, claude-server, hub, hub-recovery, proxy, static, mock, claude |
 | L3e Edge | `ops/portal-server.js` на копии со свободными портами (`tests/helpers/spawn-edge.mjs`) | **1.7.0**: edge.test (allow-list, NTFS-алиасы, битые URL, ADR-009, access-лог), edge-routing.test (10) |
-| L4 UI-e2e | Playwright `D:\Portal\teleharness-qa` (`qa-matrix.mjs --serve`, exit-код, `runs/<id>/summary.md`), кейсы `qa-manage/cases/` | 84 кейса; профили CSS×DPR, включая `iphone-webkit` (WebKit) |
+| L4 UI-e2e | Playwright `D:\Apps\teleharness-qa` (`qa-matrix.mjs --serve`, exit-код, `runs/<id>/summary.md`), кейсы `qa-manage/cases/` | 84 кейса; профили CSS×DPR, включая `iphone-webkit` (WebKit) |
 | L5 Live read-only | стенд по умолчанию, прод только `--allow-prod` | live-smoke, smoke-auth (тенант `qa-smoke-*` удаляется) |
 | L6 Устройство | iPhone, клавиатура, микрофон, LTE | вручную |
 
@@ -761,7 +761,7 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 |---|---|---|
 | ADR-001 | шаги 1–3 сделаны (1.9.0, 2026-11-04): все `/teleharness/api` в `routes/*`, гейт `?directory=` | общая проверка прав на сессию и шаг 4 — не делаются (решение владельца 2026-11-04) |
 | ADR-002 | сделано: `lib/json-store.js`, атомарная запись и карантин для claude-sessions, bindings, claude-runs; users.json — fail-fast | файл-на-сессию для Claude-истории (S6) |
-| ADR-003 | сделано: стенд `D:\teleharness-stage`, свой opencode :4097, guard `TELEHARNESS_ENV`, секреты вне `stand.cmd` | удалить `D:\Portal\teleharness-stage`; OAuth Claude из `opencode.json` в env (владелец) |
+| ADR-003 | сделано: стенд `D:\th-stage`, свой opencode :4097, guard `TELEHARNESS_ENV`, секреты вне `stand.cmd` | удалить `D:\th-stage`; OAuth Claude из `opencode.json` в env (владелец) |
 | ADR-004 | сделано: stdin, `childEnv`, профили прав, 400 на неизвестную модель, гейт тенанта в server.js | OS-изоляция тенантов — вне скоупа |
 | ADR-005 | сделано: эпоха в id, `x-teleharness-epoch`, resync, переоткрытие EventSource, busy↔idle | — |
 | ADR-006 | сделано для server.js/lib (схема, fail-fast, лог) | proxy.js и host.js читают `TELEHARNESS_UPSTREAM` напрямую |
@@ -783,7 +783,7 @@ impl-G1, impl-G3). Код на диске консистентен; планов
 | [ADR-005](adr/ADR-005-sse-epoch-resync.md) | Восстановление SSE после рестарта: эпоха сервера в id события, resync при смене эпохи, переоткрытие EventSource, сверка busy→idle | S7; R8, R9; COR-3, COR-4, COR-6 | после любого рестарта чат сам приходит в актуальное состояние | низкий-средний | accepted | 1.6.2 |
 | [ADR-006](adr/ADR-006-config-validation.md) | Единый `lib/config.js` с валидацией env и логом эффективной конфигурации | S12; R19 | опечатка в env больше не выключает защиту молча; один источник `UPSTREAM` | низкий | accepted | 1.6.2 (чтение и валидация), 1.7 (перенос констант) |
 | [ADR-007](adr/ADR-007-observability-healthz.md) | Наблюдаемость: `GET /teleharness/api/healthz`, однострочный журнал запросов, логи в тихих catch, watchdog по healthz | S13; R20 | разбор инцидентов становится возможным; watchdog видит зависание, а не только закрытый порт | низкий | accepted | 1.6.2 |
-| [ADR-008](adr/ADR-008-edge-static-allowlist.md) | Edge: allow-list статики `D:\Portal\tv`, отказ Windows-алиасам путей, защитный обработчик | S2; R2, R3; SEC-1, SEC-3, SEC-4, SEC-6 | закрыт неаутентифицированный доступ к данным портала и стенда | — (сделано) | accepted, реализовано 2026-11-02 | в проде |
+| [ADR-008](adr/ADR-008-edge-static-allowlist.md) | Edge: allow-list статики `D:\Apps\tv`, отказ Windows-алиасам путей, защитный обработчик | S2; R2, R3; SEC-1, SEC-3, SEC-4, SEC-6 | закрыт неаутентифицированный доступ к данным портала и стенда | — (сделано) | accepted, реализовано 2026-11-02 | в проде |
 | [ADR-009](adr/ADR-009-edge-forwarded-headers-cookie.md) | Edge выставляет `x-forwarded-proto/for` (клиентские удаляются); кука `Secure` и `Path=/teleharness` | S4; R4; SEC-12, SEC-13 | токен не уходит по http и в `/tv`; появляется IP для журнала | средний — одноразовая очистка старой куки `Path=/` | accepted | 1.6.2 |
 
 Порядок внутри 1.6.2: перевыпуск токенов (§6.2) → ADR-001 шаг 1 (DELETE) →
@@ -843,7 +843,7 @@ P2 — плановое; P3 — по случаю.
 | Риск | Ссылки | Статус |
 |---|---|---|
 | Утечка без авторизации через NTFS-потоки и регистр путей в edge (admin-токен, users.json, claude-sessions.json, secrets) | SEC-1, SEC-4, R2 | закрыто в edge, в проде (ADR-008) |
-| Edge отдаёт `D:\Portal\teleharness-stage` | SEC-3, R3 | закрыто в edge, в проде |
+| Edge отдаёт `D:\th-stage` | SEC-3, R3 | закрыто в edge, в проде |
 | Падение edge на битом request-target | SEC-6 | закрыто в edge, в проде |
 | Падение server.js на битой куке | R1, SEC-5 | закрыто в коде; на проде — после планового рестарта `teleharness-web` |
 
@@ -889,7 +889,7 @@ P2 — плановое; P3 — по случаю.
 |---|---|---|
 | 2026-11-02 (утро) | 1.5.2 | Первая редакция: топология, модули, маршруты, граф (562/1257/26), фронтенд, тесты (13 файлов), риски §9 |
 | 2026-11-02 | 1.6.1 | Полная переработка по ревью `docs/reviews/2026-11-02/architecture.md` (D1–D22) и `docs/architecture-review.md` §1.1. Добавлены: второй движок (claude CLI) и привязка чата; маршрут `PATCH /session/:id/binding`; поле `teleharness` в списке сессий; Claude-ветки `/message`, `/status`, `/provider`, DELETE; стенд 4172 и его общий upstream; хранилища `data/*.json` с политикой записи; полная таблица env (21 переменная сервера + 1 сборки + 6 edge); задачи планировщика и watchdog (порты 80/443/4170/4096, 2 мин); правки edge 2026-11-02 (allow-list, отказ алиасам путей, try/catch) и `parseCookies`; mermaid-диаграммы компонентов и последовательностей промпта для обоих движков; раздел ADR (ADR-001…010) и риски с приоритетами и ссылками на R/SEC/COR. Исправлены факт-ошибки прежней редакции: edge не срезает префикс `/teleharness`; http → https — 308 и только для `/teleharness*`; граф 1638/2658/131 (код 664 узла); god-узлы handleApi 55, EventHub 50; 21 тест-файл. Удалены устаревшие разделы о матрице вьюпортов (см. tests.md §4.3) |
-| 2026-11-02 (вечер) | 1.6.1 → 1.7.0 | Группа Г8: пути стенда заменены на `D:\teleharness-stage` (10 вхождений) |
+| 2026-11-02 (вечер) | 1.6.1 → 1.7.0 | Группа Г8: пути стенда заменены на `D:\th-stage` (10 вхождений) |
 | 2026-11-03 | 1.7.0 | Актуализация по реализации полного ревью (impl-G1…G8, integration.md, final-fixes.md; TASK-15.4): шапка «Что изменилось в 1.7.0»; диаграмма компонентов (config/policy/accesslog, стенд на своём opencode :4097); границы доверия (sid-кука, CSRF, профили прав Claude, guard стенда); таблица модулей бэкенда с новыми `lib/config.js`, `lib/policy.js`, `lib/accesslog.js`, `lib/gc.js`, `lib/json-store.js`, расширенным `lib/paths.js` и `shared/engine.js`; фронтенд — `src/lib/store/{state,session,events,stream,dialogs,catalog}.js`, `turn.js`, `office.js`, `clipboard.js`; маршруты `/auth/token`, `/admin/sessions`, `/admin/gc`, `/healthz`, `/about`, `/dircheck`, `DELETE /upload`, admin-only `/mcp`/`/host`; потоки входа (серверные сессии), промпта opencode (`prepareForPrompt`, детектор цикла) и Claude (stdin, очередь, idle, рестарт); SSE (эпоха, resync, backpressure); хранилища (`sessions.json`, `claude-runs.json`, `claude-models.json`, `hub-pending.json`, `logs/`); env по схеме `lib/config.js` (30 переменных) + edge; стенд 1.7.0; наблюдаемость; тестовые уровни (L2/L3e появились, цифры прогонов); статус ADR (§9.0) и рисков (§10.0). Цифры графа обновлены во frontmatter (3554/5803/304), таблица §2.1 оставлена как снимок 1.6.1 |
 | 2026-11-04 | 1.9.0 | §2.5: таблица маршрутов `routes/*`, гейт `?directory=`, kb-cache/kbContext, vision-фолбэк, ранний заголовок Claude, MCP, постраничная история; ADR-001 — шаги 1–3 (закрытие FEAT-09.6, openspec closure-2026-11-04) |
 | 2026-11-11 | 1.16.5 | TASK-15.9 (ревью 2026-11-10, OPS-01/OPS-03): документы сведены к факту opencode 2.x — frontmatter, §1.1–§1.3 (диаграмма, границы доверия, внешние процессы: `teleharness-opencode-v2` :4196, адаптер `lib/oc-client.js`), §3.3 (промпт `POST /api/session/:id/prompt`), §5.1 (61 переменных схемы `lib/config.js` + таблица «вне схемы», тест `tests/docs-env-schema.test.js`), §6.1/§6.3 (прод-задачи, стенд v2 `stand-v2.ps1` :4174/:4101), §7–§8 (логи стенда, запрещённые порты тестов +:4196). Упоминания 1.x оставлены только как история |

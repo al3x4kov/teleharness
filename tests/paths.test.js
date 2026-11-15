@@ -14,7 +14,7 @@ test("экспорт модуля: isAbsoluteDir, dirProblem, dirProblemText —
 });
 
 test("диск: X:\\ и X:/ в любом регистре — абсолютные", () => {
-  for (const d of ["C:\\", "C:/", "c:\\", "d:/Portal/teleharness", "D:\\Portal\\teleharness", "Z:\\a b\\c", "D:\\Проекты\\teleharness", "C:\\Users\\USER\\", "D:\\Portal/teleharness"]) {
+  for (const d of ["C:\\", "C:/", "c:\\", "D:/Apps/teleharness", "D:\\Apps\\teleharness", "Z:\\a b\\c", "D:\\Проекты\\teleharness", "C:\\Users\\dev\\", "D:\\Apps/teleharness"]) {
     assert.equal(isAbsoluteDir(d), true, d);
   }
 });
@@ -48,7 +48,7 @@ test("точки внутри имени — не traversal", () => {
 });
 
 test("пробелы по краям обрезаются; пустое/не-строка → false", () => {
-  assert.equal(isAbsoluteDir("  D:\\Portal  "), true);
+  assert.equal(isAbsoluteDir("  D:\\Apps  "), true);
   assert.equal(isAbsoluteDir("\tC:/x\n"), true);
   for (const d of ["", "   ", null, undefined, 0, 42, {}, []]) assert.equal(isAbsoluteDir(d), false, String(d));
 });
@@ -60,7 +60,7 @@ test("не-строка приводится через String(): объект �
 
 // ---- dirProblem (BUG-12.11: единая политика каталогов чата/тенанта) ------------
 const { dirProblemText } = paths;
-const dirProblem = (d, o = {}) => paths.dirProblem(d, { platform: "win32", portalRoot: "D:\\Portal", ...o });
+const dirProblem = (d, o = {}) => paths.dirProblem(d, { platform: "win32", portalRoot: "D:\\Apps", ...o });
 
 test("dirProblem: пусто → empty", () => {
   for (const d of ["", "  ", null, undefined]) assert.equal(dirProblem(d), "empty", String(d));
@@ -109,25 +109,25 @@ test("dirProblem: системное дерево C: → system, регистр 
 });
 
 test("dirProblem: похожие, но не системные имена допустимы", () => {
-  for (const d of ["C:\\Windows2", "C:\\WindowsApps-mirror", "C:\\Program Filesx", "D:\\Windowsy", "C:\\Users\\USER\\Windows"]) {
+  for (const d of ["C:\\Windows2", "C:\\WindowsApps-mirror", "C:\\Program Filesx", "D:\\Windowsy", "C:\\Users\\dev\\Windows"]) {
     // D:\Windows is a system tree since 1.7.0 (G7 finding 3: any drive).
     assert.equal(dirProblem(d), null, d);
   }
 });
 
 test("dirProblem: обычные рабочие каталоги (кириллица, пробелы, обрезка пробелов) → null", () => {
-  for (const d of ["D:\\Проекты\\teleharness", "C:\\Users\\USER\\My Project", "  D:\\work  ", "D:/work/sub"]) {
+  for (const d of ["D:\\Проекты\\teleharness", "C:\\Users\\dev\\My Project", "  D:\\work  ", "D:/work/sub"]) {
     assert.equal(dirProblem(d), null, d);
   }
 });
 
-test("dirProblem: портал D:\\Portal — только для тенанта (owner может)", () => {
-  assert.equal(dirProblem("D:\\Portal\\teleharness"), null, "владелец");
-  assert.equal(dirProblem("D:\\Portal\\teleharness", { tenant: true }), "portal");
-  assert.equal(dirProblem("d:/portal", { tenant: true }), "portal", "регистр/разделитель");
-  assert.equal(dirProblem("D:\\Portal\\", { tenant: true }), "portal", "хвостовой слэш");
+test("dirProblem: портал D:\\Apps — только для тенанта (owner может)", () => {
+  assert.equal(dirProblem("D:\\Apps\\teleharness"), null, "владелец");
+  assert.equal(dirProblem("D:\\Apps\\teleharness", { tenant: true }), "portal");
+  assert.equal(dirProblem("d:/apps", { tenant: true }), "portal", "регистр/разделитель");
+  assert.equal(dirProblem("D:\\Apps\\", { tenant: true }), "portal", "хвостовой слэш");
   assert.equal(dirProblem("D:\\PortalX", { tenant: true }), null, "префикс имени — не вложенность");
-  assert.equal(dirProblem("D:\\Portal", { tenant: true, portalRoot: null }), null, "portalRoot отключён");
+  assert.equal(dirProblem("D:\\Apps", { tenant: true, portalRoot: null }), null, "portalRoot отключён");
   assert.equal(dirProblem("E:\\site", { tenant: true, portalRoot: "E:\\site\\" }), "portal");
 });
 
@@ -140,11 +140,11 @@ test("dirProblem: DATA_DIR портала — portal-data только если 
 });
 
 test("dirProblem: корень профиля владельца запрещён тенанту, подпапки разрешены", () => {
-  const opts = { tenant: true, profileRoot: "C:\\Users\\USER" };
-  assert.equal(dirProblem("C:\\Users\\USER", opts), "profile-root");
-  assert.equal(dirProblem("c:/users/user/", opts), "profile-root");
-  assert.equal(dirProblem("C:\\Users\\USER\\.teleharness-tenants\\bob", opts), null);
-  assert.equal(dirProblem("C:\\Users\\USER", { profileRoot: "C:\\Users\\USER" }), null, "не тенант");
+  const opts = { tenant: true, profileRoot: "C:\\Users\\dev" };
+  assert.equal(dirProblem("C:\\Users\\dev", opts), "profile-root");
+  assert.equal(dirProblem("c:/users/dev/", opts), "profile-root");
+  assert.equal(dirProblem("C:\\Users\\dev\\.teleharness-tenants\\bob", opts), null);
+  assert.equal(dirProblem("C:\\Users\\dev", { profileRoot: "C:\\Users\\dev" }), null, "не тенант");
 });
 
 test("dirProblem: порядок проверок — device раньше unc, unc раньше not-absolute, system раньше tenant-зон", () => {
@@ -235,9 +235,9 @@ test("BUG-17.14: fsKey — нижний регистр только на win32",
 });
 
 test("BUG-17.14: значения по умолчанию путей к бинарникам заданы по платформе", () => {
-  const w = paths.binDefaults({ platform: "win32", home: "C:\\Users\\USER", portalDir: "D:\\Portal\\teleharness" });
-  assert.equal(w.claudeBin, "C:\\Users\\USER\\.local\\bin\\claude.exe");
-  assert.equal(w.jailExe, "D:/Portal/teleharness/ops/sandbox/teleharness-jail.exe");
+  const w = paths.binDefaults({ platform: "win32", home: "C:\\Users\\dev", portalDir: "D:\\Apps\\teleharness" });
+  assert.equal(w.claudeBin, "C:\\Users\\dev\\.local\\bin\\claude.exe");
+  assert.equal(w.jailExe, "D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe");
   assert.equal(w.sandboxPy, "D:/teleharness-sandbox/python");
   const l = paths.binDefaults({ platform: "linux", home: "/home/teleharness", portalDir: "/opt/teleharness" });
   assert.equal(l.claudeBin, "/home/teleharness/.local/bin/claude");

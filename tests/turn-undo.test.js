@@ -35,10 +35,10 @@ test("hook: the real script keeps the first state of a file, records a new file 
 });
 
 test("hook settings: PreToolUse on Write|Edit|MultiEdit|NotebookEdit, quoted forward-slash command", () => {
-  const undo = new TurnUndo({ root: "C:\\data dir\\turn-undo", nodePath: "C:\\Program Files\\nodejs\\node.exe", hookPath: "D:\\Portal\\teleharness\\lib\\turn-undo-hook.mjs" });
+  const undo = new TurnUndo({ root: "C:\\data dir\\turn-undo", nodePath: "C:\\Program Files\\nodejs\\node.exe", hookPath: "D:\\Apps\\teleharness\\lib\\turn-undo-hook.mjs" });
   const h = undo.hookSettings("ses_1", "msgc_u1");
   assert.equal(h.PreToolUse[0].matcher, "Write|Edit|MultiEdit|NotebookEdit");
-  assert.equal(h.PreToolUse[0].hooks[0].command, '"C:/Program Files/nodejs/node.exe" "D:/Portal/teleharness/lib/turn-undo-hook.mjs" "C:/data dir/turn-undo/ses_1/msgc_u1"');
+  assert.equal(h.PreToolUse[0].hooks[0].command, '"C:/Program Files/nodejs/node.exe" "D:/Apps/teleharness/lib/turn-undo-hook.mjs" "C:/data dir/turn-undo/ses_1/msgc_u1"');
   assert.equal(undo.hookSettings("../x", "msgc_u1"), null, "unsafe ids never become paths");
   assert.equal(targetOf({ cwd: "C:\\w", tool_input: {} }), null);
 });
@@ -83,7 +83,7 @@ test("TurnUndo: preview lists only changed files; revert/unrevert round-trip; a 
 });
 
 test("transcript: slug like the CLI, the cut copy ends before the dropped prompt, legacy cut = before the last prompt", () => {
-  assert.equal(slugOf("D:\\Portal\\teleharness\\.claude\\w"), "D--Portal-teleharness--claude-w");
+  assert.equal(slugOf("D:\\Apps\\teleharness\\.claude\\w"), "D--Apps-teleharness--claude-w");
   assert.equal(projectsRoot({ CLAUDE_CONFIG_DIR: "C:\\cfg" }), path.join("C:\\cfg", "projects"));
   const root = path.join(TMP, "projects");
   const cwd = "D:\\chat dir";

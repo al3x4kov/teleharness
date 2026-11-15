@@ -69,7 +69,7 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File ops\sandbox\setup-python.ps1
     powershell -NoProfile -ExecutionPolicy Bypass -File ops\sandbox\build.ps1
 
-Плагин ищет `TELEHARNESS_JAIL_EXE` (по умолчанию `D:/Portal/teleharness/ops/sandbox/teleharness-jail.exe`) и
+Плагин ищет `TELEHARNESS_JAIL_EXE` (по умолчанию `D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe`) и
 `TELEHARNESS_SANDBOX_PY` (по умолчанию `D:/teleharness-sandbox/python`). Нет любого из них — shell тенанту
 запрещён (fail-closed).
 
@@ -77,7 +77,7 @@
 
     node --test ops/sandbox/tests/jail-live.test.mjs
 
-Тест создаёт временные папки двух тенантов и проверяет: запись в `D:\Portal\teleharness` и `C:\Windows`,
-чтение `data\users.json`, `admin-token.txt`, `C:\Users\USER\Documents`, чужой папки и
+Тест создаёт временные папки двух тенантов и проверяет: запись в `D:\Apps\teleharness` и `C:\Windows`,
+чтение `data\users.json`, `admin-token.txt`, `C:\Users\dev\Documents`, чужой папки и
 `127.0.0.1:4096` — отказ; своя запись, `pandas.read_excel`, https — работают.
 Путь к exe — `TELEHARNESS_JAIL_EXE` или `ops\sandbox\teleharness-jail.exe` рядом с тестом.

@@ -111,7 +111,7 @@ test("endpoint policy: only https push services (+ explicit extra origins) — n
   assert.equal(endpointProblem("https://wns2-db5p.notify.windows.com/w/?token=x"), null);
   assert.ok(endpointProblem("http://fcm.googleapis.com/x"));
   assert.ok(endpointProblem("https://127.0.0.1:4170/teleharness/api/x"));
-  assert.ok(endpointProblem("https://192.168.0.10/teleharness/"));
+  assert.ok(endpointProblem("https://192.0.2.10/teleharness/"));
   assert.ok(endpointProblem("https://evilfcm.googleapis.com.evil.io/x"));
   assert.ok(endpointProblem("https://u:p@fcm.googleapis.com/x"));
   assert.ok(endpointProblem("not a url"));

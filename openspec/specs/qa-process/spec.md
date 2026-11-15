@@ -13,7 +13,7 @@
 - сборка `node build.mjs`;
 - юнит-тесты `node --test`;
 - Playwright-проверка на изолированном стенде :4172 (сборка в staging через TELEHARNESS_OUT_DIR/TELEHARNESS_PUBLIC_DIR, копия данных TELEHARNESS_DATA_DIR, своя cookie teleharness_t_stage);
-- QA-матрица D:\Portal\teleharness-qa (msedge) со скриншотами для look_at-верификации;
+- QA-матрица D:\Apps\teleharness-qa (msedge) со скриншотами для look_at-верификации;
 - RUN-отчёт в qa-manage/runs.
 
 (трекер: FEAT-09.1, BUG-09.2, FEAT-09.7, TASK-11.9)
@@ -44,7 +44,7 @@
 
 ### Requirement: Рабочее пространство и трекер
 
-Процесс SHALL вести работу в git-репозитории D:\Portal\teleharness. Секреты и рабочие данные (data/, ops/certs/) не попадают под трекинг. Управление работой — в tracker/: BACKLOG с легендой статусов, эпики, карточки багов и корпус пользовательских требований, где каждый REQ замаплен ровно в один item. Тест-планы, кейсы и прогоны лежат в qa-manage/, граф кода — в graphify-out/. (трекер: FEAT-09.8, FEAT-09.12, TASK-15.3)
+Процесс SHALL вести работу в git-репозитории D:\Apps\teleharness. Секреты и рабочие данные (data/, ops/certs/) не попадают под трекинг. Управление работой — в tracker/: BACKLOG с легендой статусов, эпики, карточки багов и корпус пользовательских требований, где каждый REQ замаплен ровно в один item. Тест-планы, кейсы и прогоны лежат в qa-manage/, граф кода — в graphify-out/. (трекер: FEAT-09.8, FEAT-09.12, TASK-15.3)
 
 #### Scenario: Сводка трекера
 
@@ -104,7 +104,7 @@
 
 ### Requirement: Тесты изолированы от прода
 
-Процесс SHALL запускать юнит-тесты и QA-скрипты только против временных данных, белого списка env и явно заданного upstream. QA-харнесс D:\Portal\teleharness-qa ходит только на стенд. (трекер: TASK-14.4)
+Процесс SHALL запускать юнит-тесты и QA-скрипты только против временных данных, белого списка env и явно заданного upstream. QA-харнесс D:\Apps\teleharness-qa ходит только на стенд. (трекер: TASK-14.4)
 
 #### Scenario: Тест без upstream
 
@@ -113,7 +113,7 @@
 
 ### Requirement: Стенд со своим upstream
 
-Процесс SHALL держать стенд в D:\teleharness-stage вне web-root: у него свой upstream (мок :4171 или отдельный opencode serve), токены не хранятся в .cmd, есть QA-токен тенанта qa (ADR-003). (трекер: BUG-12.8, FEAT-12.4)
+Процесс SHALL держать стенд в D:\th-stage вне web-root: у него свой upstream (мок :4171 или отдельный opencode serve), токены не хранятся в .cmd, есть QA-токен тенанта qa (ADR-003). (трекер: BUG-12.8, FEAT-12.4)
 
 #### Scenario: Чат на стенде
 

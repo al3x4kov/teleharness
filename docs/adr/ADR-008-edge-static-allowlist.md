@@ -11,15 +11,15 @@ sources: docs/reviews/2026-11-02/architecture.md S2 (R2, R3); code-security.md #
 
 ## Контекст
 
-`ops/portal-server.js` раздавал файлы из всего `D:\Portal` и защищался
+`ops/portal-server.js` раздавал файлы из всего `D:\Apps` и защищался
 deny-list'ом (`HIDE`, `SEGMENT_BLOCK = {teleharness, teleharness-qa, .git}`). Ревью
 2026-11-02 показало, что любой deny-list на NTFS обходится:
 
 - NTFS-поток: `GET /teleharness::$INDEX_ALLOCATION/data/admin-token.txt` открывал
-  каталог `D:\Portal\teleharness` и отдавал без авторизации admin-токен прода,
+  каталог `D:\Apps\teleharness` и отдавал без авторизации admin-токен прода,
   `users.json`, `claude-sessions.json` (SEC-1);
 - регистр и ADS: `/API.PS1`, `/api.ps1::$DATA`, `/SECRETS/…` (SEC-4, R2);
-- новый каталог по умолчанию открыт: `D:\Portal\teleharness-stage` с
+- новый каталог по умолчанию открыт: `D:\th-stage` с
   `stand.cmd` (токен стенда), `stand-data\*` (SEC-3, R3);
 - `new URL` без try на absolute-form request-target ронял edge целиком
   (SEC-6).
@@ -28,7 +28,7 @@ deny-list'ом (`HIDE`, `SEGMENT_BLOCK = {teleharness, teleharness-qa, .git}`). 
 
 Реализовано 2026-11-02:
 
-1. **Allow-list**: статика раздаётся только из `D:\Portal\tv` (первый
+1. **Allow-list**: статика раздаётся только из `D:\Apps\tv` (первый
    сегмент пути — `tv`). Всё прочее вне `/teleharness/*`, `/tv/api/*` и
    `/teleharness/ca.pem` — 404.
 2. **Отказ алиасам** до любой работы с ФС: путь с `:` (потоки), `~`
@@ -42,11 +42,11 @@ deny-list'ом (`HIDE`, `SEGMENT_BLOCK = {teleharness, teleharness-qa, .git}`). 
 ## Последствия
 
 - Закрыт неаутентифицированный доступ к данным портала, стенда и
-  `secrets`. Любой новый каталог в `D:\Portal` по умолчанию закрыт.
+  `secrets`. Любой новый каталог в `D:\Apps` по умолчанию закрыт.
 - Остаточный риск: до 15:37 2026-11-02 данные были доступны из LAN —
   admin-токен прода и токен стенда перевыпустить, `data/admin-token.txt`
   удалить.
-- Если в `D:\Portal` понадобится раздавать что-то кроме `tv`, это
+- Если в `D:\Apps` понадобится раздавать что-то кроме `tv`, это
   делается явным добавлением в allow-list (а не исключением из блока).
 - Не покрыто тестом: нужен `tests/edge.test.js` (L3e, tests.md §4.1) —
   потоки, 8.3, регистр, хвостовые точки, `teleharness-stage`, absolute-form URL,

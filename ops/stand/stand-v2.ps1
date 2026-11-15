@@ -1,6 +1,6 @@
 ﻿# Стенд v2 портала teleharness (FEAT-16.3, tasks 5.2/6.1; design §8–§9).
 # Поднимает пару «opencode 2.2.6 serve :4101 + портал :4174» со своими папками
-# под D:\teleharness-stage\oc2 (XDG) и D:\teleharness-stage\stand2-data (users.json). Прод
+# под D:\th-stage\oc2 (XDG) и D:\th-stage\stand2-data (users.json). Прод
 # (:4096/:4170) и стенд v1 (:4097/:4172) не трогает — только свои порты.
 #
 # Режимы:
@@ -16,8 +16,8 @@ param(
   [switch]$Detach,
   [switch]$Stop,
   [switch]$RestartOpencode,
-  [string]$RepoRoot = "D:\Portal\teleharness",
-  [string]$StageRoot = "D:\teleharness-stage",
+  [string]$RepoRoot = "D:\Apps\teleharness",
+  [string]$StageRoot = "D:\th-stage",
   [string]$DownloadRoot = "D:\teleharness-tmp-scripts\oc2-dl"
 )
 $ErrorActionPreference = "Stop"
@@ -111,15 +111,15 @@ function Install-Config {
   # маркера нет — конфиг изменился, падаем, а не молча оставляем прод-пути.
   $raw = Get-Content (Join-Path $ops "opencode.v2.json") -Raw
   $jsonDir = $ConfigOc.Replace("\", "\\")
-  $rulesMarker = 'C:\\Users\\USER\\.config\\opencode\\prompts\\glm-rules.md'
-  $vaultMarker = 'D:\\Obsidian\\tenants\\*'
+  $rulesMarker = 'C:\\Users\\dev\\.config\\opencode\\prompts\\glm-rules.md'
+  $vaultMarker = 'D:\\Vault\\tenants\\*'
   foreach ($m in @($rulesMarker, $vaultMarker)) {
     if (-not $raw.Contains($m)) { throw "маркер не найден в opencode.v2.json: $m — обновите stand-v2.ps1" }
   }
   $raw = $raw.Replace($rulesMarker, "$jsonDir\\prompts\\glm-rules.md")
   $raw = $raw.Replace($vaultMarker, ($VaultRoot.Replace("\", "\\") + "\\*"))
   # стенд: инструкции из копии базы стенда, а не из базы владельца (как stand.ps1 v1)
-  $indexMarker = 'D:\\Obsidian\\agents\\_index.md'
+  $indexMarker = 'D:\\Vault\\agents\\_index.md'
   if (-not $raw.Contains($indexMarker)) { throw "маркер не найден в opencode.v2.json: $indexMarker" }
   $raw = $raw.Replace($indexMarker, ((Join-Path $StageRoot 'vault\agents\_index.md').Replace('\', '\\')))
   [IO.File]::WriteAllText((Join-Path $ConfigOc "opencode.json"), $raw)
