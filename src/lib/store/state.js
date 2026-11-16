@@ -48,6 +48,7 @@ const LEGACY_DEFAULTS = {
 // claudeAgent (FEAT-13.17): the Claude agent for NEW Claude chats; null =
 // «Без агента». Never seeded by a default or a migration — only an explicit
 // pick in Настройки sets it.
+const codexAgentOf = (saved) => (isClaudeAgentId(saved?.codexAgent) ? saved.codexAgent : null);
 const claudeAgentOf = (saved) => (isClaudeAgentId(saved?.claudeAgent) ? saved.claudeAgent : null);
 
 // FEAT-03.19: «Детализация выполнения» — off unless the user turned it on.
@@ -78,7 +79,7 @@ const voiceOf = (saved) => (saved?.voice && typeof saved.voice === "object" ? { 
 export const voicePrefs = (p) => sanitizeVoicePrefs(p?.voice);
 
 function loadPrefs(key = PREFS_KEY) {
-  const fresh = { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null };
+  const fresh = { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null };
   try {
     const saved = JSON.parse(globalThis.localStorage?.getItem?.(key) ?? "null");
     if (
@@ -92,6 +93,7 @@ function loadPrefs(key = PREFS_KEY) {
       model: saved?.model?.modelID ? saved.model : DEFAULT_MODEL,
       agent: saved?.agent ?? DEFAULT_AGENT,
       claudeAgent: claudeAgentOf(saved),
+      codexAgent: codexAgentOf(saved),
       ...execDetailOf(saved),
       ...voiceOf(saved),
     };
@@ -251,17 +253,19 @@ export function sanitizePrefs(p, { user = null, agents: list = [], claudeAgents:
   const model = stale ? DEFAULT_MODEL : saved;
   const staleMark = stale ? { staleModel: saved } : {};
   const agent = p?.agent ?? DEFAULT_AGENT;
+  let codexAgent = codexAgentOf(p);
+  if (codexAgent && Array.isArray(cAgents) && !cAgents.some((a) => a?.id === codexAgent)) codexAgent = null;
   let claudeAgent = claudeAgentOf(p);
   if (claudeAgent && Array.isArray(cAgents) && !cAgents.some((a) => a?.id === claudeAgent)) claudeAgent = null;
-  if (!user) return { model, agent, claudeAgent, ...staleMark };
+  if (!user) return { model, agent, claudeAgent, codexAgent, ...staleMark };
   if (user.role === "admin") {
     // FEAT-16.2: a saved agent gone from the loaded catalog → the server default
     // (opencode default_agent), else the first primary; catalog unknown → kept.
     const names = (Array.isArray(list) ? list : []).map((a) => a?.name).filter(Boolean);
-    if (names.length === 0 || names.includes(agent)) return { model, agent, claudeAgent, ...staleMark };
+    if (names.length === 0 || names.includes(agent)) return { model, agent, claudeAgent, codexAgent, ...staleMark };
     const primary = list.find((x) => x?.mode === "primary")?.name ?? null;
     const a = user.defaultAgent && names.includes(user.defaultAgent) ? user.defaultAgent : primary ?? agent;
-    return { model, agent: a, claudeAgent, ...staleMark };
+    return { model, agent: a, claudeAgent, codexAgent, ...staleMark };
   }
   const engines = Array.isArray(user.engines) && user.engines.length > 0 ? user.engines : ["opencode"];
   const m = engines.includes(engineOf(model.providerID)) ? model : DEFAULT_MODEL;
@@ -275,7 +279,7 @@ export function sanitizePrefs(p, { user = null, agents: list = [], claudeAgents:
   } else if (a !== user.defaultAgent) {
     a = user.defaultAgent ?? null;
   }
-  return { model: m, agent: a, claudeAgent: null, ...staleMark };
+  return { model: m, agent: a, claudeAgent: null, codexAgent: null, ...staleMark };
 }
 
 // Live effective defaults (reads the signals): every new chat / unbound send

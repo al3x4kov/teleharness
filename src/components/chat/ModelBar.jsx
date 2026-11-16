@@ -31,13 +31,14 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
   if (!b) return null;
   const locked = Boolean(bound?.prompted) || hasMessages;
   const claude = b.engine === "claude";
-  const codex = b.engine === "codex"; // FEAT-18.7: у Codex-чата нет агентов
+  const codex = b.engine === "codex";
   // BUG-160: Claude agents are admin-only (GET /claude/agents → 403 for a
   // tenant; Settings tells tenants «У Claude-чатов агентов нет») — no pill.
   const tenant = Boolean(me.value?.role) && me.value.role !== "admin";
-  const claudeAgentPill = claude && !tenant;
+  const claudeAgentPill = (claude || codex) && !tenant;
+  const roleEngine = codex ? "Codex" : "Claude";
   const name = modelName(providerCfg.value, b.model);
-  const agentLabel = claude ? claudeAgentName(b.agent, claudeAgents.value ?? []) ?? t("modelBar.noAgent") : null;
+  const agentLabel = (claude || codex) ? claudeAgentName(b.agent, claudeAgents.value ?? []) ?? t("modelBar.noAgent") : null;
   const admin = !tenant;
   const showMode = permModeAvailable({ engine: b.engine, admin });
   const mode = PERM_MODES.find((x) => x.id === permModeOf(session, { admin }));
@@ -50,7 +51,7 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
     // Crossing engines (only possible before the first message): the agent
     // follows the engine — the Settings default of that engine (Claude: none
     // unless the user picked one, FEAT-13.17).
-    if (engineOf(m.providerID) !== b.engine) patch.agent = engineOf(m.providerID) === "claude" ? defs.claudeAgent ?? null : engineOf(m.providerID) === "codex" ? null : defs.agent ?? null;
+    if (engineOf(m.providerID) !== b.engine) patch.agent = engineOf(m.providerID) === "claude" ? defs.claudeAgent ?? null : engineOf(m.providerID) === "codex" ? defs.codexAgent ?? null : defs.agent ?? null;
     else if (!bound) patch.agent = b.agent;
     await setSessionBinding(sessionId, patch);
   }
@@ -77,13 +78,13 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
           <span class="pill-label">{name}</span>
           <span class="pill-chev"><Glyph name="chevron" size={14} /></span>
         </button>
-        {claude ? (claudeAgentPill && (
+        {(claude || codex) ? (claudeAgentPill && (
           <button class="model-pill" type="button" aria-haspopup="dialog" onClick={() => setSheet("claude-agent")}
-            aria-label={b.agent ? t("modelBar.claudeAgentLabel", { name: agentLabel }) : t("modelBar.claudeAgentNone")}>
+            aria-label={b.agent ? t("modelBar.claudeAgentLabel", { engine: roleEngine, name: agentLabel }) : t("modelBar.claudeAgentNone", { engine: roleEngine })}>
             <span class="pill-label">{agentLabel}</span>
             <span class="pill-chev"><Glyph name="chevron" size={14} /></span>
           </button>
-        )) : codex ? null : (
+        )) : (
           <button class="model-pill" type="button" onClick={() => setSheet("agent")}
             aria-label={t("modelBar.agentLabel", { name: b.agent ?? t("modelBar.agentDefault") })}>
             <span class="pill-label">{b.agent ?? t("modelBar.agentPill")}</span>
@@ -100,10 +101,10 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
       </div>
       {!locked && (
         <div class="model-bar-note">
-          {(claude && !claudeAgentPill) || codex
+          {(claude || codex) && !claudeAgentPill
             ? t("modelBar.note.model")
-            : claude
-            ? t("modelBar.note.claude")
+            : (claude || codex)
+            ? t("modelBar.note.claude", { engine: roleEngine })
             : t("modelBar.note.opencode")}
         </div>
       )}
@@ -115,7 +116,7 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
       )}
       {sheet === "claude-agent" && claudeAgentPill && (
         <PickerSheet title={t("modelBar.agentSheet")} onClose={() => setSheet(null)}>
-          <ClaudeAgentPicker value={b.agent} onPick={pickAgent} />
+          <ClaudeAgentPicker engine={b.engine} value={b.agent} onPick={pickAgent} />
         </PickerSheet>
       )}
       {sheet === "mode" && showMode && (

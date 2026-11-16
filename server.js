@@ -41,6 +41,7 @@ import { dispatchRoute, validateTable } from "./routes/router.js";
 import { fileRoutes } from "./routes/files.js";
 import { catalogRoutes } from "./routes/catalog.js";
 import { adminRoutes } from "./routes/admin.js";
+import { gitRoutes } from "./routes/git.js"; // FEAT-18.8
 import { PORTAL_FILE_RULE, SYSTEM_PROMPT_MAX, cleanSystemPrompt, withUserSystem, withUserSystemBody } from "./lib/user-prompt.js";
 import { withGlmVariant, withGlmVariantBody } from "./lib/glm-variant.js";
 import { commandBody, parseSlash } from "./lib/slash.js";
@@ -67,6 +68,9 @@ import {
   dropPinEverywhere,
   getAutoRelay,
   setAutoRelay,
+  getGitSettings, // FEAT-18.8
+  setGitSettings,
+  cleanGitSettings,
   PINS_MAX,
   engineAllowed,
   enginesOf,
@@ -1280,6 +1284,23 @@ const API_ROUTES = validateTable([
     createPairCode, publicUrl: config.TELEHARNESS_PUBLIC_URL,
     getAutoRelay, setAutoRelay, cleanAutoRelay, readAutoRelay, AUTO_RELAY_ORDER_MAX, autoRelayModelOk, // FEAT-18.6
     storeKbTrace: (t) => storeKbTrace(config.TELEHARNESS_LOG_DIR, t),
+  }),
+  // FEAT-18.8: /teleharness/api/git/* and /teleharness/api/me/git (routes/git.js)
+  ...gitRoutes({
+    sendJson, readJsonBody, apiError, errLog, dirAllowed, existingChatFolder, isUnderAny,
+    // the chat's folder: the runner's record for Claude/Codex chats, else the upstream index
+    chatDirOf: async (sid) => claude.dirOf(sid) ?? (await resolveSessionDir(sid)),
+    tenantDir: (dir) => listUsers().some((u) => u.role !== "admin" && dirAllowed(u, dir)),
+    bindingOf: async (sid) => bindingFor(sid, await sessionRecord(sid, true).catch(() => null)),
+    engineAllowed,
+    tenantAgent: async () => defaultTenantAgent(await agentList(), config.TELEHARNESS_TENANT_AGENT),
+    getGitSettings, setGitSettings, cleanGitSettings,
+    suggest: {
+      claudeBin: process.env.TELEHARNESS_CLAUDE_BIN || CLAUDE_DEFAULT_BIN,
+      codexShim: process.env.TELEHARNESS_CODEX_SHIM || path.join(ROOT, "lib", "codex-shim.mjs"),
+      token: process.env.CLAUDE_CODE_OAUTH_TOKEN || null,
+      oc: OC,
+    },
   }),
   ...pushRoutes({ sendJson, readJsonBody, push: () => webPush }),
   ...voiceRoutes({ sendJson, readBody, readJsonBody, voice: voiceService, quota: voiceQuota }),

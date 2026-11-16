@@ -47,7 +47,17 @@ const RelayIcon = () => (
   </svg>
 );
 
-export function menuItems({ pinned = false, empty = false, offline = false, pinning = false, relay = false, running = false } = {}) {
+// Git: a branch glyph (circles and a branch line)
+const GitIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="6" cy="5" r="2" />
+    <circle cx="6" cy="19" r="2" />
+    <circle cx="18" cy="8" r="2" />
+    <path d="M6 7v10M18 10c0 4-6 3-11.5 7.5" />
+  </svg>
+);
+
+export function menuItems({ pinned = false, empty = false, offline = false, pinning = false, relay = false, running = false, git = false } = {}) {
   const off = offline ? t("chatMenu.offline") : null;
   return [
     {
@@ -59,6 +69,8 @@ export function menuItems({ pinned = false, empty = false, offline = false, pinn
     { id: "rename", label: t("common.rename"), note: off, disabled: offline || empty },
     // FEAT-11.18: передача чата на другой движок или модель (в любой момент, пока ход не идёт)
     ...(relay ? [{ id: "relay", label: t("relay.title"), note: off ?? (empty ? t("chatMenu.sendFirst") : running ? t("chatMenu.waitTurn") : null), disabled: offline || empty || running }] : []),
+    // «⋯ → Git»: the git screen of the chat folder (a folder outside git says so on the screen)
+    ...(git ? [{ id: "git", label: t("chatMenu.git"), note: off, disabled: offline }] : []),
     { id: "delete", label: t("common.delete"), note: off, disabled: offline, danger: true },
   ];
 }
@@ -74,7 +86,7 @@ export function menuPlacement(rect, { vw, vh, width = 248, height = 168, gap = 6
   return { left, top, width: w };
 }
 
-export default function ChatMenu({ sessionId, busy = null, empty = false, variant = "header", onDeleted = null, onRelay = null }) {
+export default function ChatMenu({ sessionId, busy = null, empty = false, variant = "header", onDeleted = null, onRelay = null, onGit = null }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [renaming, setRenaming] = useState(false);
@@ -86,7 +98,7 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
   const pinned = pins.value.includes(sessionId);
   const running = busy ?? !!busyMap.value[sessionId];
   const offline = isOffline();
-  const items = menuItems({ pinned, empty, offline, pinning: pinBusy.value === sessionId, relay: typeof onRelay === "function", running });
+  const items = menuItems({ pinned, empty, offline, pinning: pinBusy.value === sessionId, relay: typeof onRelay === "function", running, git: typeof onGit === "function" });
 
   const close = (focusBtn = true) => {
     setOpen(false);
@@ -155,6 +167,7 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
     if (it.id === "pin") togglePin(sessionId);
     else if (it.id === "rename") setRenaming(true);
     else if (it.id === "relay") onRelay?.(sessionId);
+    else if (it.id === "git") onGit?.(sessionId);
     else if (it.id === "delete") setDeleting("ask");
   };
 
@@ -206,7 +219,7 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
                 onClick={() => pick(it)}
               >
                 <span class="chat-menu-ico" aria-hidden="true">
-                  {it.id === "pin" ? <PinIcon off={pinned} size={20} /> : it.id === "relay" ? <RelayIcon /> : <Glyph name={it.id === "rename" ? "pencil" : "trash"} size={20} />}
+                  {it.id === "pin" ? <PinIcon off={pinned} size={20} /> : it.id === "relay" ? <RelayIcon /> : it.id === "git" ? <GitIcon /> : <Glyph name={it.id === "rename" ? "pencil" : "trash"} size={20} />}
                 </span>
                 <span class="chat-menu-text">
                   <span class="chat-menu-label">{it.label}</span>

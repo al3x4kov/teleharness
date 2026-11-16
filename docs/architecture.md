@@ -239,6 +239,11 @@ store-фасад (integration.md §1); `globalThis.__teleharnessActiveId` уда
 | `/file` | GET/HEAD | все | `serveWorkspaceFile` (скоуп, containment, realpath, CSP sandbox для html/svg) |
 | `/(permission\|question)/:id/reply` | POST | все | тенант: id обязан быть открытым диалогом в его скоупе; upstream получает `scopedQuery`; на shell-разрешения — только `reject` |
 | `/event` | GET | все | SSE-хаб: `visible(dir)`, для тенанта `transform` (редакция), ≤ 8 потоков на пользователя |
+| `/git/status`, `/git/diff` | GET | все (тенант — свои папки) | FEAT-18.8, `routes/git.js` + `lib/git.js`: папка — `?sid=` (папка чата, права как у чата; тенант — только свои чаты: 404/403) или `?directory=` (admin — любая, тенант — `dirAllowed`); git только через `spawn("git", args)` без оболочки, `GIT_TERMINAL_PROMPT=0`, тайм-ауты 20/60 с, вывод ≤ 2 МБ; путь файла — относительный и внутри корня репозитория (иначе 400); папка тенанта — недоверенный репозиторий (хуки и fsmonitor выключены, конфиг с командами → 409); репозиторий выше папок тенанта для тенанта — «не под git». status → `{repo:false}` или `{repo:true, root, branch, detached, upstream, ahead, behind, lastCommit, files, pushAllowed}`; diff → `{file, patch, additions, deletions, binary, truncated}` (400 строк, `?full=1` — 20 000) |
+| `/git/commit` | POST | все (тенант — свои папки) | `{files, message}` → `{hash, subject, files}`: коммитятся ровно выбранные файлы (`commit --only`, отмеченные новые — тоже), автор — из `/me/git` |
+| `/git/push` | POST | admin при `pushAllowed` | в upstream ветки; ошибка → `{error, kind: auth\|rejected\|no-upstream\|network\|unknown}` (409/502) без путей сервера; тенант → 403 |
+| `/git/suggest-message` | POST | все (свой чат) | `{files, sid, lang}` → `{message}` (язык: `messageLang: en` — английский, `ui` — язык интерфейса из `lang`, без него русский): разовый запрос к модели чата (`lib/oneshot.js`) — Claude `claude -p --output-format json --tools ""` без `--resume`, Codex — посредник `--teleharness-oneshot` (эфемерный тред, read-only, approval never), opencode — временная сессия в TEMP (скрыта из списков) и её удаление; дифф ≤ 30 тыс. знаков; 90 с; ошибка → 502 |
+| `/me/git` | GET/PUT | все (своя УЗ) | Настройки → Git `{authorName, authorEmail, messageLang: ui\|en, preselect: modified\|none, pushAllowed}` в `users.json` (поле `git`); по умолчанию имя УЗ и `<имя латиницей>@teleharness.local`; у тенанта `pushAllowed` всегда false |
 
 Прочие `GET/HEAD /teleharness/*` — статика. Префикс `/teleharness` edge **не срезает**: он
 передаёт путь целиком, срезает `lib/static.js`.
@@ -580,7 +585,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_ANTHROPIC_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора Anthropic API — карточка трат «Anthropic API»; пусто → карточки нет |
 | `TELEHARNESS_JOURNAL_DEBOUNCE_MS` | `server.js` | пауза перед пересборкой журнала чата после конца хода; пусто → 3000 |
 | `TELEHARNESS_AUTO_RELAY_DELAY_MS` | `server.js` | пауза перед автоматической передачей чата при лимите (FEAT-18.6), чтобы ход успел закрыться; пусто → 1500 |
-| `TELEHARNESS_CODEX_SHIM` | `lib/claude.js` | посредник Codex, который раннер запускает для моделей Codex (FEAT-18.7); пусто → `lib/codex-shim.mjs` |
+| `TELEHARNESS_CODEX_SHIM` | `lib/claude.js`, `server.js` | посредник Codex, который раннер запускает для моделей Codex (FEAT-18.7), и разовый запрос «Предложить сообщение» (`--teleharness-oneshot`, FEAT-18.8); пусто → `lib/codex-shim.mjs` |
 | `TELEHARNESS_CODEX` | `lib/codex-catalog.js` | `off` — движок Codex выключен, посредник не запускается (FEAT-18.7); пусто → Codex предлагается, когда codex установлен и в нём выполнен вход |
 | `TELEHARNESS_CODEX_BIN` | `lib/codex-shim.mjs` | путь к бинарю codex или его `bin/codex.js` (JS — через node); пусто → нативный codex из глобального пакета npm `@openai/codex` (npm prefix, папка node, `%APPDATA%\npm` на Windows, `/usr/local/lib`, `~/.npm-global` на macOS/Linux), затем `codex` в `PATH` |
 | `TELEHARNESS_JOURNAL_DEBUG` | `server.js`, `lib/chat-journal.js` | непусто → причины пропуска журнала чата пишутся в stderr |

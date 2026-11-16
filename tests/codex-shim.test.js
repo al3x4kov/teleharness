@@ -7,6 +7,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -80,6 +81,93 @@ function runShim({ args = [], prompt = "hi", stream = false, env = {}, onControl
 }
 const sentTo = (received, method) => received.filter((m) => m.method === method);
 const answersTo = (received, id) => received.find((m) => m.id === id && m.method === undefined);
+
+test("expected instructions hash accepts matching text and rejects changed catalog before native thread", async () => {
+  const { parseArgs, codexPolicy, renderDeveloperInstructions } = await import("../lib/codex-shim.mjs");
+  const file = path.join(TMP, "hash-handshake.json");
+  writeFileSync(file, JSON.stringify({ workflow: { prompt: "ORIGINAL_ROLE" } }));
+  const args = ["--agents", file, "--agent", "workflow"];
+  const parsed = parseArgs([...BASE, ...args]);
+  const expected = createHash("sha256").update(renderDeveloperInstructions(parsed, codexPolicy(parsed))).digest("hex");
+  const matching = await runShim({ args: [...args, "--teleharness-instructions-hash", expected] });
+  assert.equal(matching.result.is_error, false);
+  writeFileSync(file, JSON.stringify({ workflow: { prompt: "CHANGED_ROLE" } }));
+  const mismatch = await runShim({ args: [...args, "--teleharness-instructions-hash", expected] });
+  assert.equal(mismatch.result.is_error, true);
+  assert.match(mismatch.result.result, /instructions.*changed|инструкци.*измен/i);
+  assert.ok(!JSON.stringify(mismatch.result).includes("CHANGED_ROLE"), "do not expose prompt text");
+  assert.equal(sentTo(mismatch.received, "thread/start").length, 0);
+  assert.equal(sentTo(mismatch.received, "turn/start").length, 0);
+});
+
+test("shim serializes native profile instructions; thread replacement belongs to runner", async () => {
+  const file = path.join(TMP, "profiles.json");
+  const portal = path.join(TMP, "portal.md");
+  writeFileSync(file, JSON.stringify({ workflow: { prompt: "ROLE_WORKFLOW", model: "wrong-model" } }));
+  writeFileSync(portal, "PORTAL_AND_USER");
+  for (const [method, history] of [["thread/start", []], ["thread/resume", ["--resume", "old"]], ["thread/fork", ["--resume", "old", "--fork-session"]]]) {
+    const r = await runShim({ args: [...history, "--agents", file, "--agent", "workflow", "--append-system-prompt-file", portal, ...ASK], stream: true });
+    assert.equal(sentTo(r.received, "initialize")[0].params.capabilities?.experimentalApi, undefined);
+    const p = sentTo(r.received, method)[0].params;
+    assert.match(p.developerInstructions, /ROLE_WORKFLOW/);
+    assert.match(p.developerInstructions, /PORTAL_AND_USER/);
+    assert.match(p.developerInstructions, /Codex/);
+    assert.equal(p.config, undefined);
+    assert.equal(sentTo(r.received, "turn/start")[0].params.collaborationMode, undefined);
+    assert.equal(p.model, "gpt-6.1-sol");
+    assert.equal(p.approvalPolicy, "untrusted");
+    assert.equal(p.sandbox, "workspace-write");
+  }
+  const cleared = await runShim({ args: ["--resume", "old"] });
+  assert.equal(sentTo(cleared.received, "thread/resume")[0].params.developerInstructions, "");
+  writeFileSync(file, JSON.stringify({ workflow: { prompt: "ROLE_CHANGED" } }));
+  const changed = await runShim({ args: ["--resume", "old", "--agents", file, "--agent", "workflow"] });
+  const update = sentTo(changed.received, "thread/resume")[0].params.developerInstructions;
+  assert.match(update, /ROLE_CHANGED/);
+  assert.ok(!update.includes("ROLE_WORKFLOW"));
+});
+
+test("Codex fails closed for unavailable, malformed and tool-restricted profiles", async () => {
+  const file = path.join(TMP, "bad-profiles.json");
+  for (const content of ["{", "{}", JSON.stringify({ workflow: { prompt: "ok", tools: ["Read"] } }), JSON.stringify({ workflow: { prompt: 123 } })]) {
+    writeFileSync(file, content);
+    const r = await runShim({ args: ["--agents", file, "--agent", "workflow"] });
+    assert.equal(r.result?.is_error, true, content);
+    assert.match(r.result.result, /profile|профил|tools/i);
+    assert.equal(sentTo(r.received, "turn/start").length, 0);
+  }
+  const missing = await runShim({ args: ["--agents", `${file}.missing`, "--agent", "workflow"] });
+  assert.equal(missing.result?.is_error, true);
+});
+
+test("turn uses the resolved server model; no model fails before the turn", async () => {
+  const r = await runShim({ args: ["--model", ""], env: { CODEX_FAKE_MODEL: "resolved-model", CODEX_FAKE_EFFORT: "low" } });
+  const t = sentTo(r.received, "turn/start")[0].params;
+  assert.equal(t.model, "resolved-model");
+  assert.equal(t.collaborationMode, undefined);
+  const missing = await runShim({ args: ["--model", ""], env: { CODEX_FAKE_MODEL: "" } });
+  assert.equal(missing.result.is_error, true);
+  assert.match(missing.result.result, /модель/);
+  assert.equal(sentTo(missing.received, "turn/start").length, 0);
+});
+
+test("shipped Workflow keeps its rules with truthful Codex context and preserved portal prompt", async () => {
+  const { renderDeveloperInstructions, parseArgs, codexPolicy } = await import("../lib/codex-shim.mjs");
+  const { parseAgentFile, compileAgentsJson } = await import("../lib/claude-agents.js");
+  const { body } = parseAgentFile(readFileSync(path.join(ROOT, "shared/claude-agents/workflow.md"), "utf8"));
+  const catalog = JSON.stringify(compileAgentsJson([{ id: "workflow", prompt: body, description: "Workflow" }]));
+  const o = parseArgs(["--agents", "catalog", "--agent", "workflow", "--append-system-prompt-file", "portal", ...ASK]);
+  const read = (f) => f === "catalog" ? catalog : "PORTAL_USER_RULES";
+  const rendered = renderDeveloperInstructions(o, codexPolicy(o), read);
+  assert.match(rendered, /# Главные правила/);
+  assert.match(rendered, /Approval policy: untrusted/);
+  assert.match(rendered, /Sandbox: workspace-write/);
+  assert.ok(!rendered.includes("claude -p"));
+  assert.ok(!rendered.includes("Права хода широкие (без запросов разрешений)"));
+  assert.ok(rendered.endsWith("PORTAL_USER_RULES"));
+  const cleared = { ...o, agent: undefined, agentsFile: undefined };
+  assert.equal(renderDeveloperInstructions(cleared, codexPolicy(cleared), read), "PORTAL_USER_RULES");
+});
 
 test("parseArgs + codexPolicy: every mode permissionArgs() emits", async () => {
   const { parseArgs, codexPolicy } = await import("../lib/codex-shim.mjs");

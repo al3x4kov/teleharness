@@ -114,3 +114,22 @@ test("агент пропал из каталога: событие teleharness.
   assert.equal(ui.store.sessions.value[0].title, "x", "частичная запись не теряет полей");
   ui.store.notice.value = null;
 });
+
+test("Codex settings default is independent, persisted and hidden from tenants", async () => {
+  installFetch([{ method: "GET", path: "/teleharness/api/claude/agents", reply: () => AGENTS }]);
+  ui.store.me.value = ADMIN;
+  ui.store.setPrefs({ claudeAgent: null, codexAgent: null });
+  const h = t$.mount(ui.SettingsView, { section: "models", sub: "codex-agent" });
+  await t$.waitFor(() => h.root.querySelectorAll("button.picker-row").length === 2);
+  assert.match(h.root.textContent, /Агенты портала · Codex/);
+  t$.click([...h.root.querySelectorAll("button.picker-row")].find(r => r.textContent.includes("Workflow")));
+  assert.equal(ui.store.prefs.value.codexAgent, "workflow");
+  assert.equal(ui.store.prefs.value.claudeAgent, null);
+  h.rerender({ section: "models", sub: null });
+  await t$.flush();
+  assert.match(h.root.querySelector('[href="#/settings/models/codex-agent"]').textContent, /Workflow/);
+  ui.store.me.value = { id: "tenant", role: "user" };
+  await t$.flush();
+  assert.equal(h.root.querySelector('[href="#/settings/models/codex-agent"]'), null);
+  assert.equal(ui.store.effectivePrefs().codexAgent, null);
+});

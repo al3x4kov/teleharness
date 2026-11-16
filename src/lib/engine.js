@@ -51,7 +51,7 @@ export function bindingOf(session) {
   const zm = pickModel(z?.model);
   if (zm) {
     const engine = engineOf(zm.providerID);
-    return { engine, model: zm, agent: engine === "claude" ? claudeAgent(z.agent) : engine === "codex" ? null : z.agent ?? null, prompted: Boolean(z.prompted) };
+    return { engine, model: zm, agent: engine === "claude" ? claudeAgent(z.agent) : engine === "codex" ? claudeAgent(z.agent) : z.agent ?? null, prompted: Boolean(z.prompted) };
   }
   const um = pickModel(session?.model);
   if (um) {
@@ -96,7 +96,7 @@ export function defaultBinding(prefs) {
   const m = pickModel(prefs?.model);
   if (!m) return null;
   const engine = engineOf(m.providerID);
-  return { engine, model: m, agent: engine === "claude" ? claudeAgent(prefs?.claudeAgent) : engine === "codex" ? null : prefs?.agent ?? null, prompted: false };
+  return { engine, model: m, agent: engine === "claude" ? claudeAgent(prefs?.claudeAgent) : engine === "codex" ? claudeAgent(prefs?.codexAgent) : prefs?.agent ?? null, prompted: false };
 }
 
 // Display name of a Claude agent id from the catalog ([{id, name}]); the id
@@ -197,6 +197,6 @@ export function bindingLine(binding, cfg, claudeAgents = []) {
   if (!binding) return "";
   const name = modelName(cfg, binding.model);
   if (binding.engine === "claude") return `${name} · ${claudeAgentName(claudeAgent(binding.agent), claudeAgents) ?? "Claude Code"}`;
-  if (binding.engine === "codex") return `${name} · Codex`; // FEAT-18.7
+  if (binding.engine === "codex") return `${name} · ${claudeAgentName(claudeAgent(binding.agent), claudeAgents) ?? "Codex"}`;
   return [binding.agent, name].filter(Boolean).join(" · ");
 }

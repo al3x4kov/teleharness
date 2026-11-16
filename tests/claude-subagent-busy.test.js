@@ -56,7 +56,7 @@ test("FEAT-01.77: между result и уведомлением о задаче 
   await runner.dispatch({ res: fakeRes(), sid: "sa1", dir: TMP, body: body("SUBAGENT700 запусти") });
   // первый ответ готов (result пришёл), субагент ещё работает в хвосте
   assert.ok(await waitUntil(() => (runner.messages("sa1")?.length ?? 0) >= 2, 8000), "первый ответ сохранён");
-  assert.deepEqual(runner.busySnapshot(), { sa1: { type: "busy" } }, "чат занят между result и уведомлением (busySnapshot — тот же признак, что у healthz)");
+  assert.deepEqual(runner.busySnapshot(), { sa1: { type: "busy", bg: true } }, "чат занят между result и уведомлением (busySnapshot — тот же признак, что у healthz); BUG-237: bg — только фоновые агенты");
   assert.equal(hub.events.filter((x) => x.event.type === "session.idle").length, 0, "в idle между раундами CLI не мигает");
 
   // хвост: субагент завершился → запуск completed; затем раунд CLI → busy → idle
@@ -97,5 +97,66 @@ test("FEAT-01.77: «Стоп» посреди работы субагента �
   );
   assert.ok(await waitUntil(() => !runner.busySnapshot()["sa2"], 8000), "после остановки чат свободен");
   assert.equal(hub.events.some((x) => x.event.type === "session.idle"), true, "idle пришёл после остановки");
+  runner.shutdown();
+});
+
+// BUG-237: ввод stream-json — фоновый субагент живёт после `result` (stdin открыт); новое сообщение
+// не гасит его, а ждёт в очереди и уходит после раунда-уведомления.
+test("BUG-237: сообщение, пока фоновый субагент работает, — в очереди; субагент доработал, затем новый ход", async () => {
+  const { hub, runner } = mk();
+  await runner.dispatch({ res: fakeRes(), sid: "sa3", dir: TMP, body: body("SUBAGENT2000 запусти") });
+  assert.ok(await waitUntil(() => (runner.messages("sa3")?.length ?? 0) >= 2, 8000), "первый ответ сохранён");
+  assert.ok(runner.busySnapshot()["sa3"], "субагент работает — чат занят");
+  const res = fakeRes();
+  await runner.dispatch({ res, sid: "sa3", dir: TMP, body: body("ECHO второй вопрос") });
+  assert.equal(res.code, 204, "сообщение принято");
+  await sleep(300);
+  assert.equal(teleharnessOf(runner.messages("sa3")[1])?.status, "running", "субагент не остановлен новым сообщением");
+  // субагент доработал → раунд-уведомление → процесс вышел → очередь: ход на «второй вопрос»
+  assert.ok(await waitUntil(() => runner.messages("sa3").some((m) => m.info.role === "assistant" && textOf(m).includes("второй вопрос")), 20_000), "новый ход ответил на второе сообщение");
+  const msgs = runner.messages("sa3");
+  assert.equal(teleharnessOf(msgs[1])?.status, "completed", "субагент доведён до конца, а не убит");
+  assert.ok(msgs.some((m) => m.info.role === "assistant" && /В папке два файла/.test(textOf(m))), "ответ по уведомлению на месте");
+  await waitIdle(hub, 1, 15_000);
+  runner.shutdown();
+});
+
+test("BUG-237: stdin закрывается после ответа, когда фоновых задач нет — процесс не висит", async () => {
+  const { hub, runner } = mk();
+  const started = Date.now();
+  await runner.dispatch({ res: fakeRes(), sid: "sa4", dir: TMP, body: body("ECHO просто ответ") });
+  await waitIdle(hub, 1, 8000);
+  assert.ok(await waitUntil(() => !runner.liveness()["sa4"] && !runner.busySnapshot()["sa4"], 8000), "ход завершён, чат свободен");
+  assert.ok(Date.now() - started < 8000, "процесс CLI не ждал 30 с закрытия stdin");
+  runner.shutdown();
+});
+
+test("BUG-237: CLI открыл свой раунд, пока субагент работает, — чат всё ещё занят, новое сообщение ждёт в очереди", async () => {
+  const { hub, runner } = mk();
+  await runner.dispatch({ res: fakeRes(), sid: "sa5", dir: TMP, body: body("SUBAGENT3000 MIDROUND запусти") });
+  // первый ответ и раунд CLI «Субагент ещё работает.» — оба до завершения субагента
+  assert.ok(await waitUntil(() => runner.messages("sa5")?.some((m) => textOf(m).includes("Субагент ещё работает")), 10_000), "раунд CLI посреди работы субагента");
+  await sleep(200);
+  assert.ok(runner.busySnapshot()["sa5"], "после такого раунда чат занят — субагент работает по списку задач CLI");
+  const res = fakeRes();
+  await runner.dispatch({ res, sid: "sa5", dir: TMP, body: body("ECHO третий вопрос") });
+  await sleep(300);
+  const agentMsg = runner.messages("sa5").find((m) => teleharnessOf(m));
+  assert.equal(teleharnessOf(agentMsg)?.status, "running", "сообщение не убило субагента");
+  assert.ok(await waitUntil(() => runner.messages("sa5").some((m) => m.info.role === "assistant" && textOf(m).includes("третий вопрос")), 20_000), "сообщение из очереди отвечено");
+  const msgs = runner.messages("sa5");
+  assert.ok(msgs.some((m) => /В папке два файла/.test(textOf(m))), "ответ по уведомлению пришёл раньше очереди");
+  assert.equal(teleharnessOf(msgs.find((m) => teleharnessOf(m)))?.status, "completed");
+  await waitIdle(hub, 1, 15_000);
+  runner.shutdown();
+});
+
+test("BUG-237: после ответа, пока работает только фоновый субагент, — статус busy с признаком bg (клиенту — полоса, а не «Работает»)", async () => {
+  const { hub, runner } = mk();
+  await runner.dispatch({ res: fakeRes(), sid: "sa6", dir: TMP, body: body("SUBAGENT1500 запусти") });
+  assert.ok(await waitUntil(() => (runner.messages("sa6")?.length ?? 0) >= 2, 8000), "первый ответ сохранён");
+  assert.ok(hub.events.some((x) => x.event.type === "session.status" && x.event.properties.sessionID === "sa6" && x.event.properties.status?.bg === true), "событие busy+bg после ответа");
+  assert.deepEqual(runner.busySnapshot().sa6, { type: "busy", bg: true }, "в /status тоже bg");
+  await waitIdle(hub, 1, 15_000);
   runner.shutdown();
 });

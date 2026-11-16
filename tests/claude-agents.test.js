@@ -212,7 +212,8 @@ test("runner: no agent → argv exactly as before agents (regression); agent →
   const argv = argvOf(answers(runner, "n1")[0]);
   const settings = JSON.parse(argv[argv.indexOf("--settings") + 1]);
   assert.deepEqual(argv.map((a, i) => (argv[i - 1] === "--settings" ? "<settings>" : a)), [
-    "-p", "--input-format", "text", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
+    "-p", "--input-format", "stream-json", // BUG-237: every Claude turn reads stream-json
+    "--output-format", "stream-json", "--verbose", "--include-partial-messages",
     "--model", "claude-opus-5-5",
     // FEAT-13.19: thinking summaries ride every turn (no agent flags added)
     "--settings", "<settings>",

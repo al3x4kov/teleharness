@@ -159,6 +159,22 @@ if (streamIn) {
   process.stdin.on("data", (c) => chunks.push(c));
   process.stdin.on("end", () => main(Buffer.concat(chunks).toString("utf8")));
 }
+// BUG-237: like the real CLI 2.1.322 — with stream-json input a background subagent keeps working after
+// `result` while stdin is open; stdin closed early → the CLI kills it (task_updated killed) and exits.
+function napOrKilled(ms, toolUseId) {
+  return new Promise((resolve) => {
+    if (streamIn && stdinEnded) return resolve(killNow(toolUseId, resolve));
+    const t = setTimeout(() => resolve(false), ms);
+    if (streamIn) onStdinEnd.push(() => { clearTimeout(t); killNow(toolUseId, resolve); });
+  });
+}
+function killNow(toolUseId, resolve) {
+  process.stdout.write(JSON.stringify({ type: "system", subtype: "task_updated", task_id: "t1", patch: { status: "killed", end_time: Date.now() } }) + "\n");
+  process.stdout.write(JSON.stringify({ type: "system", subtype: "background_tasks_changed", tasks: [] }) + "\n");
+  setTimeout(() => process.exit(0), 20);
+  resolve(true);
+  return true;
+}
 // The real CLI in stream-json mode lives until its stdin closes.
 function finish(code = 0) {
   if (!streamIn || stdinEnded) return exit(code);
@@ -227,24 +243,33 @@ async function main(prompt) {
     line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: a1, used_model: model });
     // the subagent works in the tail: its traffic carries parent_tool_use_id
     const pause = Math.max(150, /SUBAGENT(\d+)/.exec(prompt)?.[1] | 0);
-    await sleep(Math.round(pause * 0.4));
+    if (await napOrKilled(Math.round(pause * 0.4), AG)) return;
     line({ type: "assistant", parent_tool_use_id: AG, message: { id: "s1", content: [{ type: "tool_use", id: "toolu_p1", name: "PowerShell", input: { command: "Get-ChildItem | Select-Object Name", description: "List all files" } }] } });
     line({ type: "user", parent_tool_use_id: AG, message: { content: [{ tool_use_id: "toolu_p1", type: "tool_result", content: "a.txt\nb.txt", is_error: false }] } });
     line({ type: "assistant", parent_tool_use_id: AG, message: { id: "s2", content: [{ type: "text", text: "Результаты: в папке a.txt и b.txt." }] } });
+    if (prompt.includes("MIDROUND")) {
+      // BUG-237: a round the CLI opens by itself while the subagent still works
+      line({ type: "system", subtype: "init", session_id: sid, model });
+      const am = "Субагент ещё работает.";
+      line({ type: "stream_event", event: { type: "message_start", message: { id: "m5" } } });
+      delta(am);
+      line({ type: "assistant", message: { id: "m5", content: [{ type: "text", text: am }] } });
+      line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: am, used_model: model });
+    }
     if (prompt.includes("SUBAGENTSTOP")) {
       await sleep(30_000);
       process.exit(0);
     }
-    await sleep(Math.round(pause * 0.4));
+    if (await napOrKilled(Math.round(pause * 0.4), AG)) return;
     line({ type: "system", subtype: "task_updated", task_id: "t1", patch: { status: "completed", end_time: Date.now() } });
-    line({ type: "system", subtype: "task_notification", task_id: "t1", tool_use_id: AG, status: "completed", summary: "Результаты: в папке a.txt и b.txt." });
+    line({ type: "system", subtype: "task_notification", task_id: "t1", tool_use_id: AG, status: "completed", summary: "Результаты: в папке a.txt и b.txt." }); line({ type: "system", subtype: "background_tasks_changed", tasks: [] });
     line({ type: "system", subtype: "init", session_id: sid, model });
     const a2 = "В папке два файла (a.txt и b.txt).";
     line({ type: "stream_event", event: { type: "message_start", message: { id: "m9" } } });
     delta(a2);
     line({ type: "assistant", message: { id: "m9", content: [{ type: "text", text: a2 }] } });
     line({ type: "result", subtype: "success", session_id: sid, is_error: false, result: a2, used_model: model });
-    process.exit(0);
+    finish(0); // BUG-237: stream-json — lives until stdin closes
   }
   // FEAT-18.5: "USAGE" → usage как у CLI 2.1.322 (claude-stream-subagent-2.1.322.jsonl):
   // два вызова основного разговора и вызов субагента с message.usage, затем

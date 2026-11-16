@@ -530,7 +530,7 @@ async function sendParts(parts, { agent, model, sessionId } = {}) {
   // ISSUE-001/002: unbound chats fall back to the defaults this user may
   // really run (never a stored engine/agent the server would refuse).
   const defs = effectivePrefs();
-  const binding = bound ?? defaultBinding({ model: model ?? defs.model, agent: agent ?? defs.agent });
+  const binding = bound ?? defaultBinding({ ...defs, model: model ?? defs.model, agent: agent ?? defs.agent });
   const queued = act.status === "busy" || act.status === "stopping";
   const hold =
     queued && binding?.engine !== "claude" && binding?.engine !== "codex" && (heldCount(act.id) > 0 || releasing.has(act.id) || awaitingAnswer(act.messages));
@@ -797,7 +797,7 @@ export async function setSessionBinding(id, patch) {
   const model = patch?.model ?? cur?.model;
   const nextAgent = "agent" in (patch ?? {}) ? patch.agent : cur?.agent;
   // claudeAgent: the same agent when the chat is (or becomes) a Claude chat.
-  const optimistic = defaultBinding({ model, agent: nextAgent, claudeAgent: nextAgent });
+  const optimistic = defaultBinding({ model, agent: nextAgent, claudeAgent: nextAgent, codexAgent: nextAgent });
   // FEAT-18.4: the permission mode rides the binding too.
   const permMode = "permMode" in (patch ?? {}) ? patch.permMode : prev?.permMode ?? null;
   if (optimistic) sessions.value = upsertSession(sessions.value, { id, teleharness: { ...optimistic, prompted: cur?.prompted ?? false, ...(permMode ? { permMode } : {}) } });

@@ -6,6 +6,41 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [1.22.0] — 2026-11-16
+
+### Added
+- **Turn changes.** An answer that edited files shows a *Changes · N files* row with the totals. It opens a list of
+  files (a sheet on a phone, two panes on a desktop) and a diff per file: *This turn* — the edit as the agent made it,
+  or *Now vs commit* — the file in the working folder against the last commit, when the chat folder is a git
+  repository. Copy the diff or download it as a patch; large diffs show the first 400 lines.
+- **Git screen** (chat menu → *Git*, or *Project Git* under the changes): branch, ahead/behind, last commit and the
+  changed files. Tick the files to commit, *Suggest message* asks the chat's own model (Claude, Codex or opencode)
+  in a separate short request that never lands in the chat history, *Commit* commits exactly the ticked files, and
+  *Push* sends the branch to its upstream with a readable error when it fails. Push is admin-only and can be turned
+  off; other users commit in their own folders only, without push or branch switching. git runs without a shell,
+  with timeouts and no prompts; repositories in other users' folders run with hooks and configured programs off.
+- **Settings → Git:** commit author (name and e-mail), the language of a suggested message (the interface language or
+  always English), which files are ticked by default, and the push switch for the admin.
+- **Background subagents keep working after the answer.** Claude turns now talk to the CLI over stream-json, so
+  subagents started in the background are no longer killed when the main answer ends. A band above the composer
+  shows them; a new message waits in the queue and Claude answers again once they finish.
+
+### API
+- `GET /teleharness/api/git/status`, `GET /teleharness/api/git/diff`, `POST /teleharness/api/git/commit`, `POST /teleharness/api/git/push`,
+  `POST /teleharness/api/git/suggest-message` (folder by `?sid=` or `?directory=`), `GET/PUT /teleharness/api/me/git` — see
+  [docs/architecture.md](docs/architecture.md).
+
+### Notes
+- git must be on the server's `PATH`. Error texts from the server side of Git are in Russian for now; an English UI
+  shows its own wording for push errors.
+
+## [1.21.1] — 2026-11-16
+
+### Added
+- **Agent roles for Codex chats.** A Codex chat can run with a portal agent (for example *Workflow*) or with none;
+  the role is chosen in the chat like a Claude agent and applies from the next answer. Settings → Model & agents has
+  a separate default agent for new Codex chats.
+
 ## [1.21.0] — 2026-11-16
 
 ### Added

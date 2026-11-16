@@ -347,6 +347,17 @@ test("FEAT-01.77 (д): полоса «Фоном работает агент» �
     ui.store.active.value = { ...ui.store.active.value, status: "busy" };
   });
   await t$.waitFor(() => $(root, ".bg-bar") == null);
+  // BUG-237: чат занят только фоновыми агентами (status busy + bg) — полоса видна, строки «Работает» нет
+  t$.act(() => {
+    ui.store.active.value = { ...ui.store.active.value, status: "busy", bgAgents: true };
+  });
+  await t$.waitFor(() => $(root, ".bg-bar") != null);
+  assert.equal($(root, ".msg-preloader:not(.is-agents)"), null, "строки хода основного агента нет");
+  assert.equal(/Работает d/.test(root.textContent), false, "строки живости «Работает Nс» нет — её заменяет полоса");
+  t$.act(() => {
+    ui.store.active.value = { ...ui.store.active.value, status: "idle", bgAgents: false };
+  });
+  await t$.waitFor(() => $(root, ".bg-bar") != null);
   t$.act(() => {
     ui.store.active.value = { ...ui.store.active.value, status: "idle" };
   });

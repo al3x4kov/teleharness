@@ -10,6 +10,25 @@ import { BindingStore, applyBinding, cleanModel, engineOf, makeBinding, patchBin
 
 const GLM = { providerID: "zai-coding-plan", modelID: "glm-5.3-flash" };
 const OPUS = { providerID: "anthropic", modelID: "claude-opus-5-5" };
+const CODEX = { providerID: "openai-codex", modelID: "gpt-6.1-sol" };
+
+test("Codex roles require the portal catalog and never inherit an opencode agent", () => {
+  assert.equal(makeBinding({ model: CODEX, agent: "orchestrator" }).agent, null);
+  const options = { claudeAgentOk: (id) => id === "workflow" };
+  const binding = makeBinding({ model: CODEX, agent: "workflow" }, options);
+  assert.equal(binding.agent, "workflow");
+  assert.equal(makeBinding({ model: CODEX, agent: "missing" }, options).agent, null);
+  assert.equal(patchBinding(binding, { agent: null }, options).binding.agent, null);
+  assert.equal(patchBinding(binding, { agent: "missing" }, options).binding.agent, null);
+  assert.equal(resolveBinding({ stored: binding, ...options }).agent, "workflow");
+});
+
+test("Codex role comes from the binding, not the user prompt agent field", () => {
+  const binding = makeBinding({ model: CODEX, agent: "workflow" }, { claudeAgentOk: (id) => id === "workflow" });
+  const body = { agent: "untrusted", parts: [{ type: "text", text: "hi" }] };
+  assert.equal("agent" in applyBinding(body, binding), false);
+  assert.equal(body.agent, "untrusted");
+});
 
 test("engineOf: anthropic is the claude CLI, everything else opencode", () => {
   assert.equal(engineOf("anthropic"), "claude");

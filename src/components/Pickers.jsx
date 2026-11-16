@@ -406,7 +406,9 @@ export function AgentPicker({ value, onPick }) {
 // portal's Claude agents with descriptions. value: agent id or null.
 export const claudeAgentFoot = () => t("pickers.claudeAgentFoot");
 
-export function ClaudeAgentPicker({ value = null, onPick }) {
+export function ClaudeAgentPicker({ value = null, onPick, engine = "claude" }) {
+  const codex = engine === "codex";
+  const label = codex ? "Codex" : "Claude";
   const list = claudeAgents.value;
   useEffect(() => {
     if (list == null) refreshClaudeAgents();
@@ -430,9 +432,9 @@ export function ClaudeAgentPicker({ value = null, onPick }) {
   const items = Array.isArray(list) ? list : [];
   return (
     <div class="picker">
-      {row(null, t("pickers.noAgent"), t("pickers.noAgentDesc"))}
-      <section aria-label={t("pickers.claudeAgents")}>
-        <h3 class="agent-group-label">{t("pickers.claudeAgents")}</h3>
+      {row(null, t("pickers.noAgent"), codex ? t("pickers.noAgentDescCodex") : t("pickers.noAgentDesc"))}
+      <section aria-label={codex ? t("pickers.codexAgents") : t("pickers.claudeAgents")}>
+        <h3 class="agent-group-label">{codex ? t("pickers.codexAgents") : t("pickers.claudeAgents")}</h3>
         {list == null && claudeAgentsError.value ? (
           <div class="picker-fail" role="alert">
             <strong>{t("pickers.agentsFailed")}</strong>
@@ -447,7 +449,7 @@ export function ClaudeAgentPicker({ value = null, onPick }) {
           items.map((a) => row(a.id, a.name, a.description))
         )}
       </section>
-      <p class="picker-foot">{claudeAgentFoot()}</p>
+      <p class="picker-foot">{codex ? t("pickers.codexAgentFoot") : claudeAgentFoot()}</p>
     </div>
   );
 }

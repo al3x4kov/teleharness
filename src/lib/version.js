@@ -1,5 +1,7 @@
 // Single source of truth for the UI version shown in Настройки → «О приложении».
 // Bump together with the project-note status entry in the vault.
+// 1.22.0 (2026-11-16): turn changes and Git — a «Changes · N files» row under an answer that edited files (per-file diff: this turn or now vs the last commit; one column on a phone, two panes on a desktop), a Git screen for the chat folder (branch, ahead/behind, commit of chosen files, a commit message suggested by the chat's own model in a separate short request, push for the admin), Settings → Git (author, message language, preselect, push switch); Claude turns read stream-json, so background subagents keep working after the answer — the chat shows a band, a new message waits in the queue, and Claude answers again when they finish.
+// 1.21.1 (2026-11-16): Codex chats can use portal agent roles (no agent / a portal agent such as Workflow) with a separate default for new Codex chats in Settings.
 // 1.21.0 (2026-11-16): Codex CLI as a third engine — Codex models appear in the model picker once codex is installed and signed in; turns run through codex app-server (lib/codex-shim.mjs) on the same CLI runner as Claude: history, queue, in-chat permission requests and push, context and usage, Relay and auto-handoff across all three engines. Codex is admin-only by default; an admin can allow it per user. Undo/edit are off for Codex turns.
 // 1.20.0 (2026-11-15): permission mode per chat (“Ask” with in-chat approval through a Claude permission bridge), a push and a “Waiting for you” filter when an agent needs your decision, phone pairing by QR code (one-time 10-minute link, TELEHARNESS_PUBLIC_URL), context fill and cost per turn and chat, optional auto-handoff to another engine on a usage limit, one-command install via npx.
 // 1.19.4 (2026-11-14): a new user no longer sees «MCP servers: not configured» while its MCP servers are still connecting (an empty or pending /mcp answer is retried for ~45 s; Settings re-ask on open); the sign-in note after a 401 no longer claims the token is dead.
@@ -206,4 +208,4 @@
 // 1.3.0 (2026-10-31): artifacts preview/download, orchestration-directive cards,
 // typing indicator, multi-agent AgentCard, theme boot fix, overlay fill-mode
 // hardening, home junk filter, subscription credit units.
-export const VERSION = "1.21.0";
+export const VERSION = "1.22.0";

@@ -21,6 +21,7 @@ import AccessSection from "./AccessSection.jsx";
 import NotificationsRow from "./NotificationsRow.jsx";
 import PhoneSection from "./PhoneSection.jsx";
 import AutoRelayRow from "./AutoRelayRow.jsx";
+import GitSection from "../git/GitSection.jsx";
 import { promptHint, SystemPromptEditor, loadPrompt, promptState } from "./SystemPromptRow.jsx";
 import { disablePush, pushState } from "../../lib/push.js";
 import { Modal } from "./HomeView.jsx";
@@ -396,6 +397,7 @@ const ICONS = {
   notifications: ["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M10.3 21a1.94 1.94 0 0 0 3.4 0"],
   phone: ["M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5Z", "M11 18.5h2"],
   mcp: ["M9 2v6", "M15 2v6", "M6 8h12v4a6 6 0 0 1-12 0Z", "M12 18v4"],
+  git: ["M6 3v12", "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M18 9a9 9 0 0 1-9 9"],
   subscription: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 7v5l3 2"],
   computer: ["M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z", "M8 20h8", "M12 16v4"],
   users: ["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z", "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"],
@@ -429,6 +431,7 @@ export const SECTIONS = [
   { id: "phone", group: "app" }, // every user, own account
   { id: "mcp", group: "features" },
   { id: "subscription", group: "features" },
+  { id: "git", group: "features" }, // every user, own defaults
   { id: "computer", group: "features", admin: true },
   { id: "users", group: "admin", admin: true },
   { id: "active", group: "admin", admin: true },
@@ -452,6 +455,7 @@ export const SUBS = {
       return t("settings.sub.agent");
     },
     "claude-agent": withTitle("settings.sub.claudeAgent", { admin: true }),
+    "codex-agent": withTitle("settings.sub.codexAgent", { admin: true }),
   },
 };
 
@@ -568,6 +572,9 @@ function ModelsSection({ sub, done }) {
   if (sub === "claude-agent") {
     return <ClaudeAgentPicker value={eff.claudeAgent ?? null} onPick={(a) => { setPrefs({ claudeAgent: a }); done(); }} />;
   }
+  if (sub === "codex-agent") {
+    return <ClaudeAgentPicker engine="codex" value={eff.codexAgent ?? null} onPick={(a) => { setPrefs({ codexAgent: a }); done(); }} />;
+  }
   return (
     <ul class="card-list">
       <NavRow href="#/settings/models/model" title={t("settings.sub.model")}
@@ -587,6 +594,11 @@ function ModelsSection({ sub, done }) {
         <NavRow href="#/settings/models/claude-agent" title={<>{t("settings.models.agentTitle")} <span class="engine-tag">· Claude</span></>}
           value={claudeAgentSub}
           hint={t("settings.models.claudeHint")} />
+      )}
+      {isAdminUser && (
+        <NavRow href="#/settings/models/codex-agent" title={<>{t("settings.models.agentTitle")} <span class="engine-tag">· Codex</span></>}
+          value={claudeAgentName(eff.codexAgent, claudeAgents.value ?? []) ?? t("pickers.noAgent")}
+          hint={t("settings.models.codexHint")} />
       )}
       <AutoRelayRow />
     </ul>
@@ -1148,6 +1160,7 @@ export default function SettingsView({ section = null, sub = null } = {}) {
       : id === "phone" ? <PhoneSection />
       : id === "mcp" ? <McpSection />
       : id === "subscription" ? <SubscriptionSection />
+      : id === "git" ? <GitSection />
       : id === "computer" ? <ComputerSection />
       : id === "active" ? <ul class="card-list"><BusySessions /></ul>
       : id === "users" ? <AccessSection />

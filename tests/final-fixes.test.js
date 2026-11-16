@@ -45,7 +45,7 @@ test("ISSUE-001: a tenant never gets a refused agent or engine as default", () =
   assert.equal(store.sanitizePrefs({ ...p, agent: "multimodal-looker" }, { user: TENANT, agents: AGENTS }).agent, "multimodal-looker");
   // admin keeps a catalog agent and the model (no Claude agent unless picked — FEAT-13.17)
   const pa = { ...p, agent: "Prometheus - Plan Builder" };
-  assert.deepEqual(store.sanitizePrefs(pa, { user: { id: "admin", role: "admin" }, agents: AGENTS }), { ...pa, claudeAgent: null });
+  assert.deepEqual(store.sanitizePrefs(pa, { user: { id: "admin", role: "admin" }, agents: AGENTS }), { ...pa, claudeAgent: null, codexAgent: null });
 });
 
 test("FEAT-16.2: admin's saved agent gone from the catalog (OmO → slim) → server default, else first primary; unknown catalog → kept", () => {

@@ -1,0 +1,232 @@
+/* FEAT-18.8 «Изменения хода и git» — design/mockups-v2/changes-git.html.
+   Everything is scoped (.chg, .chg-sheet, .dv, .git-page, .gset): global
+   .card/.seg belong to other screens. Colour is never the only carrier:
+   status letter + word, «+»/«−» in their own column. Tap targets ≥ 44 px
+   (file rows 52 px). Dark is the default theme; light overrides below. */
+:root {
+  --add: #57d07a;
+  --add-bg: color-mix(in srgb, #2ea043 22%, transparent);
+  --del: #ff8a80;
+  --del-bg: color-mix(in srgb, #f85149 20%, transparent);
+  --mod: #e0b057;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+:root[data-theme="light"] {
+  --add: #1f7a3d;
+  --add-bg: color-mix(in srgb, #2da44e 14%, transparent);
+  --del: #b42318;
+  --del-bg: color-mix(in srgb, #d1242f 12%, transparent);
+  --mod: #b26b00;
+}
+
+/* ---- shared bits ---- */
+.dnum { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.dnum .p { color: var(--add); }
+.dnum .m { color: var(--del); }
+.chev { color: var(--text-3); flex: none; }
+.st {
+  width: 24px; height: 24px; border-radius: 6px; flex: none;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  border: 1px solid currentColor; font-family: var(--font-ui);
+}
+.st-M { color: var(--mod); }
+.st-A { color: var(--add); }
+.st-D { color: var(--del); }
+.st-R, .st-U { color: var(--text-2); }
+
+.frow {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px;
+  padding: 6px 8px; border: 0; border-radius: 12px; background: transparent;
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.frow + .frow { border-top: 1px solid var(--border); border-radius: 0; }
+.frow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fn { flex: 1; min-width: 0; display: block; }
+.fn b { display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the folder is cut from the START — the end (closest to the name) stays */
+.fn-sub {
+  display: block; font-size: 12.5px; color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  direction: rtl; text-align: left;
+}
+.fn-sub bdi { direction: ltr; unicode-bidi: isolate; }
+
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.gbtn {
+  min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border);
+  background: transparent; font: inherit; font-size: 15px; font-weight: 550; color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.gbtn.pri { background: var(--brand); border-color: transparent; color: #fff; }
+.gbtn:disabled { opacity: 0.45; cursor: default; }
+.gbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.gcard {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.gcard > b { font-size: 15px; }
+.gcard.warn { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.gcard.warn > b { display: flex; gap: 8px; align-items: center; }
+.gcard.warn > b i {
+  width: 22px; height: 22px; border-radius: 50%; flex: none; font-style: normal; font-size: 13px;
+  background: color-mix(in srgb, var(--warning) 22%, transparent); color: var(--warning);
+  display: grid; place-items: center;
+}
+.muted { font-size: 13.5px; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* ---- frame 1: the row under an answer ---- */
+.chg {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin: 10px 0 4px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+  color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.chg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chg .ic {
+  width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center;
+  background: var(--accent-wash); color: var(--accent); font-weight: 700;
+}
+.chg .ct { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; font-family: var(--font-ui); }
+.chg .ct small {
+  display: block; font-size: 12.5px; color: var(--text-2); font-weight: 400;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- frame 2: the sheet ---- */
+.chg-sheet { display: flex; flex-direction: column; gap: 4px; padding: 0 2px 8px; }
+.chg-sheet .sub, .dv .sub { margin: 0 4px 8px; font-size: 13.5px; color: var(--text-2); }
+.chg-sheet .note, .dv .note { font-size: 13px; color: var(--text-2); padding: 6px 4px 0; margin: 0; }
+.chg-actions { padding-top: 8px; }
+
+/* ---- frames 3, 7, 8: the diff layer ---- */
+.dv {
+  position: fixed; inset: 0; z-index: 44; background: var(--bg); color: var(--text);
+  display: flex; outline: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.dv-side { display: none; }
+.dv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dv-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+.dv-top .icon-btn { width: 44px; height: 44px; font-size: 20px; flex: none; }
+.dv-top .tt { flex: 1; min-width: 0; text-align: center; }
+.dv-top .tt b { display: block; font-size: 16px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dv-top .tt > span { font-size: 12.5px; color: var(--text-2); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dhead { padding: 0 16px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dseg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.dseg button {
+  min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--text);
+  font: inherit; font-size: 13.5px; cursor: pointer;
+}
+.dseg button.on { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
+.dv-next {
+  min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--text-2);
+  font: inherit; font-size: 13.5px; cursor: pointer;
+}
+.dv-copied { font-size: 12.5px; color: var(--text-2); }
+.dv-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: 0 10px 16px; display: flex; flex-direction: column; gap: 10px; }
+.dv-partial { margin: 0 4px; font-size: 12.5px; }
+.big-note .btns { padding-top: 4px; }
+
+.diff {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.55; min-width: 0;
+}
+.diff .hunk { background: var(--input); color: var(--text-2); padding: 4px 10px; font-size: 12px; }
+.diff .ln {
+  display: grid; grid-template-columns: 34px 16px minmax(0, 1fr); padding: 0 8px 0 0;
+  white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+}
+.diff .ln .n { color: var(--text-3); text-align: right; padding-right: 6px; user-select: none; }
+.diff .ln .s { text-align: center; font-weight: 700; user-select: none; }
+.diff .ln.add { background: var(--add-bg); }
+.diff .ln.add .s { color: var(--add); }
+.diff .ln.del { background: var(--del-bg); }
+.diff .ln.del .s { color: var(--del); }
+.diff .ln.del .c { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--del) 45%, transparent); }
+.diff .gap {
+  display: block; width: 100%; min-height: 44px; text-align: center; color: var(--accent);
+  font-family: var(--font-ui); font-size: 13px; padding: 8px; background: transparent; border: 0;
+  border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); cursor: pointer;
+}
+.diff .gap.is-static { color: var(--text-2); cursor: default; min-height: 0; }
+.diff.is-loading {
+  min-height: 220px; opacity: 0.6;
+  background: linear-gradient(90deg, var(--input) 25%, transparent 50%, var(--input) 75%);
+  background-size: 200% 100%; animation: dv-shimmer 1.4s linear infinite;
+}
+@keyframes dv-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .diff.is-loading { animation: none; } }
+
+/* frame 8: ≥ 1024 px — files on the left, the diff on the right */
+@media (min-width: 1024px) {
+  .dv { display: grid; grid-template-columns: 300px minmax(0, 1fr); }
+  .dv-side {
+    display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--border);
+    padding: 14px 10px; overflow-y: auto; min-height: 0;
+  }
+  .dv-side-title { margin: 4px 8px 8px; font-size: 16px; font-weight: 650; }
+  .dv-side .frow.on { background: var(--accent-wash); border-radius: 10px; }
+  .dv-side .frow.on + .frow { border-top-color: transparent; }
+  .dv-aside { padding: 8px 4px 0; display: flex; flex-direction: column; gap: 8px; }
+  .dv-main { padding: 0 8px; }
+}
+
+/* ---- frames 4–6: the Git screen ---- */
+.git-page .set, .gset { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; min-width: 0; }
+.git-page .project-heading { min-width: 0; }
+.git-page .br { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; flex-wrap: wrap; min-width: 0; }
+.git-page .br em {
+  font-style: normal; font-size: 12.5px; font-weight: 500; color: var(--text-2);
+  border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
+}
+.git-page .br .bname { min-width: 0; overflow-wrap: anywhere; }
+.git-files { padding: 0 6px; gap: 0; }
+.git-file { display: flex; align-items: center; gap: 4px; min-height: 52px; }
+.git-file + .git-file { border-top: 1px solid var(--border); }
+.git-file .frow { flex: 1; min-width: 0; padding-left: 4px; }
+.git-file .frow + .frow { border-top: 0; }
+.chk-btn {
+  width: 44px; height: 44px; flex: none; border: 0; background: transparent; display: grid; place-items: center;
+  cursor: pointer; padding: 0;
+}
+.chk-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
+.chk {
+  width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--text-3);
+  display: grid; place-items: center; color: #fff; font-size: 14px; line-height: 1;
+}
+.chk.on { background: var(--accent); border-color: var(--accent); }
+.git-msg {
+  width: 100%; min-height: 76px; box-sizing: border-box; resize: vertical;
+  border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px;
+  font: inherit; font-size: 16px; background: var(--bg); color: var(--text);
+}
+.git-msg:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.git-err { color: var(--error); font-size: 13.5px; margin: 0; }
+.git-tenant { margin: 0; }
+.git-toast {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 46;
+  bottom: calc(16px + env(safe-area-inset-bottom)); width: min(520px, calc(100% - 28px));
+  background: var(--text); color: var(--bg); border-radius: 14px; padding: 12px 14px; font-size: 14.5px;
+  box-shadow: var(--shadow-float); overflow-wrap: anywhere;
+}
+.git-skel { min-height: 64px; border-radius: 18px; background: var(--input); opacity: 0.6; }
+.git-open { margin: 0 0 12px; }
+
+/* ---- frame 9: Настройки → Git ---- */
+.gset .gfield { display: flex; flex-direction: column; gap: 4px; }
+.gset .gfield input {
+  min-height: 44px; box-sizing: border-box; width: 100%; border: 1px solid var(--border); border-radius: 14px;
+  padding: 0 12px; font: inherit; font-size: 16px; background: var(--bg); color: var(--text);
+}
+.gset .gfield input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gset .gopt {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 6px 4px;
+  border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.gset .gopt + .gopt { border-top: 1px solid var(--border); }
+.gset .gopt .chk.radio { border-radius: 50%; }
+.gset .gopt .fn span { display: block; font-size: 12.5px; color: var(--text-2); white-space: normal; }
+.gset .br { font-size: 15px; font-weight: 600; }
+.gset .git-saved { margin: 0; min-height: 1.4em; }
+.gset .git-saved.is-error { color: var(--error); }
+.gset .gopt .fn b { white-space: normal; overflow-wrap: anywhere; }

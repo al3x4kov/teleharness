@@ -77,7 +77,7 @@ test("askSummary: command, file, description, else JSON", async () => {
   assert.equal(askSummary("X", { a: 1 }), '{"a":1}');
 });
 
-test("bridge: ask mode argv — stream-json input, host prompts; edits mode stays on text input", async () => {
+test("bridge: ask mode argv — stream-json input, host prompts; edits mode — stream-json input (BUG-237) without host prompts", async () => {
   const { ClaudeRunner } = await import("../lib/claude.js");
   const hub = stubHub();
   const runner = new ClaudeRunner({ hub, storePath: freshStore(), binPath: FIXTURE, keepaliveMs: 1000, addDirs: [] });
@@ -91,7 +91,7 @@ test("bridge: ask mode argv — stream-json input, host prompts; edits mode stay
   await runner.dispatch({ res: fakeRes(), sid: "a2", dir: workDir(), body: body("ECHO"), access: "admin", permMode: "edits" });
   await waitFor(() => ofType(hub, "session.idle").length >= 2, "idle 2");
   const e = JSON.parse(textOf(runner.messages("a2")[1]));
-  assert.equal(e.argv[e.argv.indexOf("--input-format") + 1], "text");
+  assert.equal(e.argv[e.argv.indexOf("--input-format") + 1], "stream-json", "BUG-237: every Claude turn reads stream-json");
   assert.equal(e.argv[e.argv.indexOf("--permission-mode") + 1], "acceptEdits");
   assert.equal(e.argv.includes("--permission-prompt-tool"), false);
 });

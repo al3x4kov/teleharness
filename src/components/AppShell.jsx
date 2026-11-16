@@ -20,10 +20,11 @@ import SettingsView from "./views/SettingsView.jsx";
 import LoginView from "./views/LoginView.jsx";
 import PairView from "./views/PairView.jsx";
 import ChatView from "./views/ChatView.jsx";
+import GitView from "./views/GitView.jsx"; // FEAT-18.8
 import Drawer from "./Drawer.jsx";
 import { t } from "../lib/i18n.js";
 
-const VIEWS = { home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView };
+const VIEWS = { home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView };
 
 export default function AppShell() {
   const { view, path, params } = useRoute();

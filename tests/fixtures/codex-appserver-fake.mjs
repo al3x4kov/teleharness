@@ -202,7 +202,7 @@ function handle(m) {
       threadMethod = m.method;
       threadParams = p;
       threadId = m.method === "thread/resume" ? p.threadId : m.method === "thread/fork" ? `fork-of-${p.threadId}` : REC_THREAD.accept;
-      reply({ thread: { id: threadId, status: { type: "idle" } }, model: p.model ?? "gpt-6.1-sol", approvalPolicy: p.approvalPolicy ?? "on-request", sandbox: { type: "workspaceWrite" }, cwd: p.cwd ?? process.cwd() });
+      reply({ thread: { id: threadId, status: { type: "idle" } }, model: process.env.CODEX_FAKE_MODEL ?? p.model ?? "gpt-6.1-sol", reasoningEffort: process.env.CODEX_FAKE_EFFORT ?? null, approvalPolicy: p.approvalPolicy ?? "on-request", sandbox: { type: "workspaceWrite" }, cwd: p.cwd ?? process.cwd() });
       return note("thread/started", { thread: { id: threadId } });
     }
     case "turn/start": {

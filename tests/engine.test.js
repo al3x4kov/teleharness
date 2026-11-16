@@ -185,3 +185,12 @@ test("queuedLabel/queuedSendLabel: Claude — очередь после хода
     assert.doesNotMatch(queuedLabel(e), /после текущего хода/);
   }
 });
+
+const CODEX_ROLE_MODEL = { providerID: "openai-codex", modelID: "gpt-6.1-sol" };
+test("Codex portal role: binding and isolated default preserve valid ids", () => {
+  assert.equal(bindingOf({ teleharness: { model: CODEX_ROLE_MODEL, agent: "workflow" } }).agent, "workflow");
+  assert.equal(defaultBinding({ model: CODEX_ROLE_MODEL, claudeAgent: "workflow" }).agent, null);
+  assert.equal(defaultBinding({ model: CODEX_ROLE_MODEL, codexAgent: "workflow" }).agent, "workflow");
+  assert.equal(defaultBinding({ model: CODEX_ROLE_MODEL, codexAgent: SIS }).agent, null);
+  assert.match(bindingLine({ engine: "codex", model: CODEX_ROLE_MODEL, agent: "workflow" }, null, [{ id: "workflow", name: "Workflow" }]), / · Workflow$/);
+});

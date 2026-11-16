@@ -130,6 +130,26 @@ test("FEAT-18.7: в Codex-чате admin «Правки без вопросов�
   assert.equal((await api(`/teleharness/api/session/${c.id}/binding${q}`, { method: "PATCH", body: { permMode: "full" } })).status, 200);
 });
 
+test("admin Codex: Workflow selected at creation and changed between turns through binding", async () => {
+  const catalog = await (await api("/teleharness/api/claude/agents")).json();
+  assert.ok(catalog.agents.some((a) => a.id === "workflow"));
+  const c = await (await api(`/teleharness/api/session${q}`, { method: "POST", body: { model: CODEX, agent: "workflow" } })).json();
+  assert.equal(c.teleharness.agent, "workflow");
+  const missing = await api(`/teleharness/api/session/${c.id}/binding${q}`, { method: "PATCH", body: { agent: "missing-profile" } });
+  assert.equal(missing.status, 200);
+  assert.equal((await missing.json()).teleharness.agent, null, "unknown role cannot persist");
+  const pick = await api(`/teleharness/api/session/${c.id}/binding${q}`, { method: "PATCH", body: { agent: "workflow" } });
+  assert.equal((await pick.json()).teleharness.agent, "workflow");
+  const r = await api(`/teleharness/api/session/${c.id}/prompt${q}`, { method: "POST", body: { model: CODEX, agent: "injected", parts: [{ type: "text", text: "ECHO selected role" }] } });
+  assert.equal(r.status, 204);
+  const a = await lastAnswer(c.id, 1);
+  assert.ok(a);
+  const echo = JSON.parse(textOf(a));
+  assert.equal(echo.argv[echo.argv.indexOf("--agent") + 1], "workflow");
+  const clear = await api(`/teleharness/api/session/${c.id}/binding${q}`, { method: "PATCH", body: { agent: null } });
+  assert.equal((await clear.json()).teleharness.agent, null);
+});
+
 test("Relay Codex → Claude: Claude получает пропущенный ход Codex", async () => {
   const c = await (await api(`/teleharness/api/session${q}`, { method: "POST", body: { model: CODEX } })).json();
   assert.equal((await api(`/teleharness/api/session/${c.id}/prompt${q}`, { method: "POST", body: { model: CODEX, parts: [{ type: "text", text: "ECHO меня зовут Алекс" }] } })).status, 204);

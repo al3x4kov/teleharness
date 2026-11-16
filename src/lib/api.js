@@ -2,7 +2,7 @@
 // fetch/EventSource are referenced lazily inside functions only.
 // prompt treats 204 as success; abort/delete just need an ok status
 // (the hub answers {data:true} or plain true — both fine, we return true).
-import { t } from "./i18n.js";
+import { lang, t } from "./i18n.js";
 
 const BASE = "/teleharness/api";
 
@@ -110,6 +110,16 @@ function idPath(id) {
 // directory read from the session record; the server falls back to HOME.
 function withDir(directory) {
   return directory ? `?${new URLSearchParams({ directory })}` : "";
+}
+
+// FEAT-18.8: {sid} | {directory} (+ extra params) → «?sid=…&file=…».
+export function gitQuery(where = {}, extra = {}) {
+  const q = new URLSearchParams();
+  if (where?.sid) q.set("sid", where.sid);
+  else if (where?.directory) q.set("directory", where.directory);
+  for (const [k, v] of Object.entries(extra)) if (v != null && v !== "") q.set(k, String(v));
+  const s = q.toString();
+  return s ? `?${s}` : "";
 }
 
 export const api = {
@@ -261,6 +271,14 @@ export const api = {
   // FEAT-18.6: «Продолжать автоматически при лимите» — {on, order:[{providerID, modelID}]}
   getAutoRelay: () => json("GET", "/me/auto-relay"),
   setAutoRelay: (value) => json("PUT", "/me/auto-relay", value),
+  // FEAT-18.8: git of a chat folder (?sid=) or a project (?directory=) — design.md «API».
+  gitStatus: (where) => json("GET", `/git/status${gitQuery(where)}`),
+  gitDiff: (where, file, { full = false } = {}) => json("GET", `/git/diff${gitQuery(where, { file, ...(full ? { full: "1" } : {}) })}`),
+  gitCommit: (where, files, message) => json("POST", `/git/commit${gitQuery(where)}`, { files, message }),
+  gitPush: (where) => json("POST", `/git/push${gitQuery(where)}`, {}),
+  gitSuggest: (where, files) => json("POST", `/git/suggest-message${gitQuery(where)}`, { files, lang: lang.value, ...(where?.sid ? { sid: where.sid } : {}) }),
+  getGitSettings: () => json("GET", "/me/git"),
+  setGitSettings: (value) => json("PUT", "/me/git", value),
   getPins: () => json("GET", "/me/pins"),
   setPins: (ids) => json("PUT", "/me/pins", { ids }),
   // Authoritative per-session run status from upstream /session/status:

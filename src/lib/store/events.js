@@ -245,7 +245,10 @@ function reduce(evt) {
       if (!st) return;
       if (st === "idle") noteIdle(p.sessionID);
       setBusyTracked(p.sessionID, st !== "idle");
-      patchActive(p.sessionID, (act) => ({ ...act, status: st === "idle" ? "idle" : act.status === "stopping" ? "stopping" : "busy" }));
+      // BUG-237: {type:"busy", bg:true} — the main turn is over, only background agents of the chat
+      // work: the chat stays busy (queue, «Стоп»), the band replaces the «Работает» line
+      const bgAgents = st !== "idle" && typeof p.status === "object" && p.status?.bg === true;
+      patchActive(p.sessionID, (act) => ({ ...act, bgAgents, status: st === "idle" ? "idle" : act.status === "stopping" ? "stopping" : "busy" }));
       // The turn ended: a held follow-up (ISSUE-002) starts the next one.
       if (st === "idle") releaseHeld(p.sessionID, { idle: true });
       return;

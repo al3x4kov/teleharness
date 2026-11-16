@@ -77,12 +77,12 @@ afterEach(() => {
 
 test("чистый браузер без localStorage вообще (node / приватный режим) → glm-5.3-flash + orchestrator", async () => {
   const { prefs } = await freshStore(undefined);
-  assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
 });
 
 test("чистый браузер: пустой localStorage → glm-5.3-flash + orchestrator", async () => {
   const { prefs } = await freshStore(makeStorage());
-  assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
 });
 
 test("дефолт никогда не glm-5.3-highspeed (зависал у провайдера 2026-10-31)", async () => {
@@ -92,19 +92,19 @@ test("дефолт никогда не glm-5.3-highspeed (зависал у пр
 
 test("битый JSON / getItem бросает → дефолты, без падения импорта", async () => {
   let s = await freshStore(makeStorage({ [KEY]: "{not json" }));
-  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
   s = await freshStore({
     getItem() {
       throw new Error("SecurityError");
     },
   });
-  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
 });
 
 test("prefs = JSON null / не-объект → дефолты", async () => {
   for (const raw of ["null", "42", '"str"', "[]"]) {
     const { prefs } = await freshStore(makeStorage({ [KEY]: raw }));
-    assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null }, raw);
+    assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null }, raw);
   }
 });
 
@@ -113,7 +113,7 @@ test("prefs = JSON null / не-объект → дефолты", async () => {
 test("миграция: точная старая пара glm-5.3 + build → новые дефолты", async () => {
   const legacy = { model: { providerID: "zai-coding-plan", modelID: "glm-5.3" }, agent: "build" };
   const { prefs } = await freshStore(makeStorage({ [KEY]: JSON.stringify(legacy) }));
-  assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
 });
 
 test("миграция: частичное совпадение со старой парой — это явный выбор, остаётся", async () => {
@@ -124,32 +124,32 @@ test("миграция: частичное совпадение со старо�
   ];
   for (const saved of cases) {
     const { prefs } = await freshStore(makeStorage({ [KEY]: JSON.stringify(saved) }));
-    assert.deepEqual(prefs.value, { ...saved, claudeAgent: null }, JSON.stringify(saved));
+    assert.deepEqual(prefs.value, { ...saved, claudeAgent: null, codexAgent: null }, JSON.stringify(saved));
   }
 });
 
 test("явный выбор пользователя (Claude) сохраняется", async () => {
   const saved = { model: { providerID: "anthropic", modelID: "claude-opus-5-5" }, agent: "build" };
   const { prefs } = await freshStore(makeStorage({ [KEY]: JSON.stringify(saved) }));
-  assert.deepEqual(prefs.value, { ...saved, claudeAgent: null });
+  assert.deepEqual(prefs.value, { ...saved, claudeAgent: null, codexAgent: null });
 });
 
 test("частичные prefs: нет model.modelID → модель по умолчанию; нет agent → orchestrator", async () => {
   let s = await freshStore(makeStorage({ [KEY]: JSON.stringify({ agent: "plan" }) }));
-  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: "plan", claudeAgent: null });
+  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: "plan", claudeAgent: null, codexAgent: null });
   s = await freshStore(makeStorage({ [KEY]: JSON.stringify({ model: { providerID: "zai-coding-plan" }, agent: null }) }));
-  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(s.prefs.value, { model: DEFAULT_MODEL, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
   s = await freshStore(makeStorage({ [KEY]: JSON.stringify({ model: { providerID: "zai-coding-plan", modelID: "glm-5.3" } }) }));
-  assert.deepEqual(s.prefs.value, { model: { providerID: "zai-coding-plan", modelID: "glm-5.3" }, agent: DEFAULT_AGENT, claudeAgent: null });
+  assert.deepEqual(s.prefs.value, { model: { providerID: "zai-coding-plan", modelID: "glm-5.3" }, agent: DEFAULT_AGENT, claudeAgent: null, codexAgent: null });
 });
 
 test("setPrefs пишет в teleharness.prefs, следующая загрузка читает сохранённое", async () => {
   const storage = makeStorage();
   const s1 = await freshStore(storage);
   s1.setPrefs({ agent: "plan" });
-  assert.deepEqual(JSON.parse(storage.getItem(KEY)), { model: DEFAULT_MODEL, agent: "plan", claudeAgent: null });
+  assert.deepEqual(JSON.parse(storage.getItem(KEY)), { model: DEFAULT_MODEL, agent: "plan", claudeAgent: null, codexAgent: null });
   const s2 = await freshStore(storage);
-  assert.deepEqual(s2.prefs.value, { model: DEFAULT_MODEL, agent: "plan", claudeAgent: null });
+  assert.deepEqual(s2.prefs.value, { model: DEFAULT_MODEL, agent: "plan", claudeAgent: null, codexAgent: null });
 });
 
 test("setPrefs без localStorage / с бросающим setItem — prefs обновляются в памяти", async () => {
@@ -161,6 +161,17 @@ test("setPrefs без localStorage / с бросающим setItem — prefs о�
   });
   s.setPrefs({ agent: "x" });
   assert.equal(s.prefs.value.agent, "x");
+});
+
+test("Codex role default survives reload separately from Claude and rejects invalid ids", async () => {
+  const storage = makeStorage();
+  const s = await freshStore(storage);
+  s.setPrefs({ codexAgent: "workflow", claudeAgent: null });
+  const reload = await freshStore(storage);
+  assert.equal(reload.prefs.value.codexAgent, "workflow");
+  assert.equal(reload.prefs.value.claudeAgent, null);
+  const bad = await freshStore(makeStorage({ [KEY]: JSON.stringify({ codexAgent: "Sisyphus - ultraworker" }) }));
+  assert.equal(bad.prefs.value.codexAgent, null);
 });
 
 // ---- дефолт доходит до нового чата (FEAT-03.1 мгновенное создание) ----------

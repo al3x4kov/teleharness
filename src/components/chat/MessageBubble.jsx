@@ -23,6 +23,7 @@ import Attachment from "./Attachment.jsx";
 import FileViewer from "./FileViewer.jsx";
 import FileCard from "./FileCard.jsx";
 import { EditButton, RegenerateButton, TurnMenu } from "./TurnActions.jsx";
+import ChangesRow, { changesForTurn } from "../git/Changes.jsx"; // FEAT-18.8
 import { mentionedFiles, serverFilesFor, turnHaystack } from "../../lib/turn-files.js";
 import { probeState, requestProbe } from "../../lib/file-probe.js";
 import { partKbContext } from "../../../shared/title.js";
@@ -520,6 +521,8 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
   const isTurnEnd = (turn ? turn.last === info.id && turn.closed && !streaming : showMeta) && !revealing;
   const meta = turn ? turnMetaLine(turn, { cost: costLabel(turn).text }) : ""; // FEAT-18.5
   const stepError = info.error ? describeTurnError(info.error, { engine: binding?.engine ?? "opencode" }) : null;
+  // FEAT-18.8: files this turn changed (its own tool parts) — the «Изменения» row.
+  const turnChangedFiles = isTurnEnd && turn ? changesForTurn(feed, turn, sessionDir) : [];
 
   return (
     <div
@@ -564,6 +567,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
           <span aria-hidden="true">⚠</span> {stepError.title}
         </div>
       )}
+      {turnChangedFiles.length > 0 && <ChangesRow files={turnChangedFiles} sid={act.id} base={sessionDir} lastTurn={isLastTurn} />}
       {isTurnEnd && (copyPayload() || meta || isLastTurn) && (
         <div class="turn-foot">
           {copyPayload() && (

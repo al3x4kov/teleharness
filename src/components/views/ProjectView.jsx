@@ -12,6 +12,8 @@ import {
 } from "../../lib/store.js";
 import { dirBasename, groupSessionsByDate, isSubagentSession, projectDisplayName } from "../../lib/normalize.js";
 import { navigate } from "../../lib/router.js";
+import { gitHash } from "../../lib/git-client.js"; // FEAT-18.8
+import "../git/git.css";
 import { Glyph } from "../Pickers.jsx";
 import {
   DeleteModal, LoadError, Modal, RenameModal, SessionRow, useSessionList,
@@ -69,6 +71,12 @@ export default function ProjectView({ id }) {
         {creating ? <span class="btn-spin" aria-hidden="true" /> : <Glyph name="plus" />}
         {creating ? t("home.creating") : t("project.newChat", { name })}
       </button>
+      {/* FEAT-18.8: git проекта (не под git — экран так и скажет) */}
+      {dir && (
+        <button class="gbtn git-open" type="button" data-feat="FEAT-18.8" onClick={() => navigate(gitHash({ directory: dir }))}>
+          <span aria-hidden="true">⎇</span> Git
+        </button>
+      )}
       {loadState === "loading" ? (
         <div class="sk-list" role="status" aria-label={t("project.loading")}>
           {[0, 1, 2].map((i) => (

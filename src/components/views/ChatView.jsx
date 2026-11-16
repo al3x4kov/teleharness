@@ -40,6 +40,7 @@ import VoiceModeView from "../chat/VoiceModeView.jsx";
 import { BgAgentsGate } from "../chat/AgentRuns.jsx";
 import { QuotaStrip, RelayActions, RelaySheet } from "../chat/Relay.jsx";
 import ChatMenu from "../ChatMenu.jsx";
+import { gitHash } from "../../lib/git-client.js"; // FEAT-18.8
 import { micSupported, unlockAudio } from "../../lib/voice-audio.js";
 import { greetingText, MenuButton, TeleharnessMark } from "../Menu.jsx";
 import "../chat.css";
@@ -145,6 +146,8 @@ export default function ChatView({ id }) {
   const reverted = Boolean(revert) && (hiddenCount > 0 || !mine?.loading);
   const status = mine?.status ?? "idle";
   const busy = status === "busy" || status === "stopping";
+  // BUG-237: busy only by background agents — no «Работает» line, the band shows them
+  const bgOnly = status === "busy" && Boolean(mine?.bgAgents);
 
   const lastAssistant = [...messages].reverse().find((m) => m.info.role === "assistant");
   const streaming = busy && lastAssistant != null && lastAssistant.info.time?.completed == null;
@@ -214,7 +217,7 @@ export default function ChatView({ id }) {
   const headStop = busy && (composerStopHidden || notFound);
 
   // Liveness line (BUG-13.3 / R-21): how long the turn runs and what it did last.
-  const live = busy && mine
+  const live = busy && !bgOnly && mine // BUG-237: background agents only — the band says it
     ? { since: busyMap.value[id] ?? null, lastAction: mine.lastAction ?? null, lastActivityAt: mine.lastActivityAt ?? null }
     : null;
 
@@ -255,6 +258,7 @@ export default function ChatView({ id }) {
               empty={!hasMessages && !reverted && !(mine?.loading)}
               onDeleted={() => navigate(backTarget, { replace: true })}
               onRelay={() => setRelaySheet({ reason: null, resume: false })}
+              onGit={() => navigate(gitHash({ sid: id }))}
             />
           ) : null}
         </div>
@@ -300,7 +304,7 @@ export default function ChatView({ id }) {
           sessionId={id}
           messages={messages}
           streamingId={streaming ? lastAssistant.info.id : null}
-          busy={status === "busy"}
+          busy={status === "busy" && !bgOnly}
           live={live}
           older={{ has: !!mine?.hasOlder, loading: !!mine?.loadingOlder, error: !!mine?.olderError, paged: !!mine?.olderLoaded }}
           onLoadOlder={() => loadOlder(id)}
@@ -349,7 +353,7 @@ export default function ChatView({ id }) {
             .chat-bottom рядом с DialogBar, высоту резервирует --chat-bottom-h,
             поэтому ленту не перекрывает. У «не найденного» чата её места нет. */}
         {/* открытый диалог (разрешение/вопрос) важнее: полоса уступает место, нижний стек не растёт (qa-matrix: ≤ 50 % высоты) */}
-        {notFound ? null : <BgAgentsGate hidden={busy || Boolean(activeDialog)} />}
+        {notFound ? null : <BgAgentsGate hidden={(busy && !bgOnly) || Boolean(activeDialog)} />}
         {activeDialog && (
           <DialogBar key={activeDialog.id} dialog={activeDialog} queue={queuedDialogs.length} />
         )}

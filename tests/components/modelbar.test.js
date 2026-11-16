@@ -183,20 +183,72 @@ test("UI-ISSUE-01 (BUG-160): тенант в Claude-чате — только п
   }
 });
 
-test("FEAT-18.7: Codex-чат — пилюля модели с меткой Codex, без пилюли агента, режим прав есть", () => {
+test("Codex-чат — модель, агент и режим прав", () => {
   ui.store.providerCfg.value = { models: [...CFG.models, { id: "gpt-6.1-sol", providerID: "openai-codex", label: "GPT-6.1-Sol (openai-codex)" }] };
   ui.store.sessions.value = [{ id: "ses_m", title: "", directory: "C:\\Home", time: { created: 1, updated: 1 }, teleharness: { model: { providerID: "openai-codex", modelID: "gpt-6.1-sol" }, prompted: false } }];
   const { root } = t$.mount(ui.ModelBar, { sessionId: "ses_m", hasMessages: false });
-  assert.deepEqual(pills(root), ["GPT-6.1-Sol"]);
+  assert.deepEqual(pills(root), ["GPT-6.1-Sol", "Без агента"]);
   assert.match($$(root, "button.model-pill")[0].getAttribute("aria-label"), /, Codex\. Сменить/);
   assert.ok($(root, ".engine-dot.is-codex"));
   assert.ok($(root, ".perm-pill"), "режим прав доступен");
   assert.equal(root.textContent.includes("агент opencode"), false);
-  assert.match($(root, ".model-bar-note").textContent, /^Модель закрепится за чатом/);
+  assert.match($(root, ".model-bar-note").textContent, /Агента Codex можно сменить/);
 });
 
 test("FEAT-18.7: выбор режима в Codex-чате — «Спрашивать» и «Без вопросов», без «Правок»", async () => {
   const { permModeChoices } = await import("../../src/lib/engine.js");
   assert.deepEqual(permModeChoices({ admin: true, engine: "codex" }).map((m) => m.id), ["ask", "full"]);
   assert.deepEqual(permModeChoices({ admin: true, engine: "claude" }).map((m) => m.id), ["ask", "edits", "full"]);
+});
+
+test("Codex role selection is optimistic, uses shared catalog, and can be cleared after history", async () => {
+  const model = { providerID: "openai-codex", modelID: "gpt-6.1-sol" };
+  let finish;
+  installFetch([{ method: "PATCH", path: /\/binding$/, reply: (c) => new Promise(resolve => {
+    finish = () => resolve({ teleharness: { model, agent: c.body.agent, prompted: true } });
+  }) }]);
+  ui.store.claudeAgents.value = CLAUDE_AGENTS;
+  seed({ teleharness: { model, agent: null, prompted: true } });
+  const { root } = t$.mount(ui.ModelBar, { sessionId: "ses_m", hasMessages: true });
+  t$.click($$(root, "button.model-pill")[1]);
+  await t$.flush();
+  assert.match(document.querySelector(".sheet").textContent, /Агенты портала · Codex/);
+  t$.click(byText(document.querySelector(".sheet"), "button", "Workflow"));
+  await t$.waitFor(() => finish);
+  assert.equal(ui.store.sessions.value[0].teleharness.agent, "workflow", "optimistic role survives before server response");
+  finish();
+  await t$.waitFor(() => pills(root)[1] === "Workflow");
+  assert.equal($$(root, "button.model-pill")[1].getAttribute("aria-label"), "Агент Codex-чата: Workflow. Сменить");
+  t$.click($$(root, "button.model-pill")[1]);
+  await t$.flush();
+  t$.click(byText(document.querySelector(".sheet"), "button", "Без агента"));
+  await t$.waitFor(() => fetchCalls.filter(c => c.method === "PATCH").length === 2);
+  assert.equal(ui.store.sessions.value[0].teleharness.agent, null);
+  finish();
+});
+
+test("Codex tenant has no portal role picker or catalog request", () => {
+  ui.store.me.value = { id: "tenant", role: "user", engines: ["codex"] };
+  try {
+    seed({ teleharness: { model: { providerID: "openai-codex", modelID: "gpt-6.1-sol" }, prompted: true } });
+    const { root } = t$.mount(ui.ModelBar, { sessionId: "ses_m" });
+    assert.equal(pills(root).length, 1);
+    assert.equal(fetchCalls.some(c => c.path === "/teleharness/api/claude/agents"), false);
+  } finally { ui.store.me.value = null; }
+});
+
+test("switch to Codex selects Codex default independently of Claude", async () => {
+  const model = { providerID: "openai-codex", modelID: "gpt-6.1-sol" };
+  installFetch([{ method: "PATCH", path: /\/binding$/, reply: c => ({ teleharness: { model: c.body.model, agent: c.body.agent } }) }]);
+  ui.store.setPrefs({ claudeAgent: null, codexAgent: "workflow" });
+  ui.store.claudeAgents.value = CLAUDE_AGENTS;
+  seed({ teleharness: { model: GLM, prompted: false } });
+  ui.store.providerCfg.value = { models: [...CFG.models, { id: model.modelID, providerID: model.providerID, label: "Codex model" }] };
+  const { root } = t$.mount(ui.ModelBar, { sessionId: "ses_m" });
+  t$.click($$(root, "button.model-pill")[0]);
+  await t$.flush();
+  t$.click(byText(document.querySelector(".sheet"), "button", "Codex model"));
+  await t$.waitFor(() => fetchCalls.some(c => c.method === "PATCH"));
+  assert.deepEqual(fetchCalls.find(c => c.method === "PATCH").body, { model, agent: "workflow" });
+  ui.store.setPrefs({ codexAgent: null });
 });
