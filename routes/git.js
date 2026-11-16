@@ -30,6 +30,8 @@
 import path from "node:path";
 import { GitError, diffForPrompt, gitCommit, gitDiff, gitPush, gitStatus, openRepo } from "../lib/git.js";
 import { OneshotError, ONESHOT_DIFF_MAX, cleanCommitMessage, commitPrompt, runClaudeOneshot, runCodexOneshot, runOpencodeOneshot } from "../lib/oneshot.js";
+import { realpathSync } from "node:fs";
+const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
 
 const SID_RE = /^[A-Za-z0-9_.-]{1,200}$/;
 const BODY_MAX = 512 * 1024; // a commit of thousands of selected paths
@@ -76,7 +78,9 @@ export function gitRoutes(deps) {
     if (!t.dir) return t;
     const repo = await openRepo(t.dir, { untrusted: t.untrusted });
     if (!repo) return { repo: null };
-    if (!ctx.admin && !deps.isUnderAny(repo.root, ctx.user.directories ?? [])) return { repo: null };
+    // git names the root by its real path (macOS: /var → /private/var) — compare real paths too
+    const dirs = ctx.user.directories ?? [];
+    if (!ctx.admin && !deps.isUnderAny(repo.root, dirs) && !deps.isUnderAny(repo.root, dirs.map(realOrSelf))) return { repo: null };
     return { repo };
   }
 

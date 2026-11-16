@@ -9,7 +9,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import http from "node:http";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -78,7 +78,8 @@ test("status: branch, files with +/−, untracked counted, last commit", async (
   writeFileSync(path.join(dir, "Папка", "файл.txt"), "привет\n");
   writeFileSync(path.join(dir, "bin.dat"), Buffer.from([0, 1, 2, 3, 0]));
   const repo = await openRepo(path.join(dir, "Папка"));
-  assert.equal(repo.root.toLowerCase(), path.resolve(dir).toLowerCase(), "root found from a subfolder");
+  // macOS: the temp dir /var is a link to /private/var — compare real paths
+  assert.equal(realpathSync(repo.root).toLowerCase(), realpathSync(dir).toLowerCase(), "root found from a subfolder");
   const st = await gitStatus(repo);
   assert.equal(st.repo, true);
   assert.equal(st.branch, "main");

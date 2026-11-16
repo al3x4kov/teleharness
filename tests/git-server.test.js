@@ -13,7 +13,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -168,7 +168,7 @@ test("tenant: own chat folder — status, diff, commit with its author; foreign 
   // the newer chat's own subfolder is its folder
   const st2 = await (await api(`/teleharness/api/git/status${q({ sid: "ses_t2" })}`, T)).json();
   assert.equal(st2.repo, true);
-  assert.equal(path.resolve(st2.root).toLowerCase(), path.resolve(aliceDir, "chats", "t2").toLowerCase());
+  assert.equal(realpathSync(st2.root).toLowerCase(), realpathSync(path.join(aliceDir, "chats", "t2")).toLowerCase()); // macOS /var → /private/var
   // foreign
   assert.equal((await api(`/teleharness/api/git/status${dirQ(adminRepo)}`, T)).status, 403);
   assert.equal((await api(`/teleharness/api/git/status${q({ sid: "ses_adm" })}`, T)).status, 403);
