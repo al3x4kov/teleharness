@@ -28,7 +28,7 @@ to another when a subscription hits its usage limit.
 [Contributing](CONTRIBUTING.md) •
 [Русский](README.ru.md)
 
-<img src="docs/screenshots/demo.gif" alt="Teleharness 1.21 on a phone: waiting for approval, Allow, context and subscription, Codex, handoff, phone pairing QR" width="300">
+<img src="docs/screenshots/demo.gif" alt="Teleharness on a phone: Claude Code, Codex and opencode in one app; approve an agent from anywhere; hand a chat to another CLI on a usage limit or automatically; durable Temporal pipelines with Claude, your approval and Codex" width="320">
 
 </div>
 

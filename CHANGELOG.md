@@ -21,6 +21,9 @@ and is shown in Settings → About.
   folders accordingly, update reverse-proxy rules to the new path and sign in again (the cookie and browser storage
   keys were renamed too). Z.ai provider and model ids (`zai-coding-plan`, `zai/glm-*`) are the provider's own names
   and stay as they are.
+- **New README demo GIF** (English and Russian): captioned scenes — three CLIs in one phone app, approving an agent from
+  anywhere, handing a chat to another CLI on a usage limit or automatically, and a Temporal pipeline with Claude, your
+  approval and Codex.
 - **Architecture diagram refreshed** (English and Russian): three CLIs (opencode, Claude Code, Codex), Temporal
   pipelines (server, Python worker, PostgreSQL, model bridge), the sandbox per OS, and the ChatGPT subscription as a
   provider.

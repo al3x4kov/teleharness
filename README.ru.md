@@ -27,7 +27,7 @@ CLI, когда подписка упёрлась в лимит.
 [Конфигурация](#конфигурация) •
 [English](README.md)
 
-<img src="docs/screenshots/ru/demo.gif" alt="Teleharness 1.21 на телефоне: ожидание разрешения, подтверждение, контекст и подписка, Codex, передача, QR-код телефона" width="300">
+<img src="docs/screenshots/ru/demo.gif" alt="Teleharness на телефоне: Claude Code, Codex и opencode в одном приложении; разрешение агенту откуда угодно; передача чата другому CLI при лимите или автоматически; надёжные пайпы Temporal с Claude, вашим одобрением и Codex" width="320">
 
 </div>
 
