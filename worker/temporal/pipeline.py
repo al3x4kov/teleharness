@@ -1,0 +1,163 @@
+"""FEAT-19.5. Durable orchestration over a safe, pinned definition projection."""
+import asyncio
+from datetime import timedelta
+
+from temporalio import workflow
+from temporalio.common import RetryPolicy
+from temporalio.exceptions import ApplicationError
+
+
+def invalid(code: str):
+    return ApplicationError(code, type=code, non_retryable=True)
+
+
+@workflow.defn(name="TeleharnessPipelineV1")
+class Pipeline:
+    def __init__(self):
+        self.paused = False
+        self.pending = {}
+        self.steps = {}
+        self.decisions = {}
+        self.wait_reasons = {}
+        self.conditions = {}
+        self.files = {}
+
+    @workflow.query
+    def state(self) -> dict:
+        return {"paused": self.paused, "pending": sorted(self.pending),
+                "generation": workflow.info().run_id, "steps": dict(self.steps), "waitReasons": dict(self.wait_reasons),
+                "conditions": dict(self.conditions), "files": dict(self.files)}
+
+    @workflow.update
+    def control(self, request: dict) -> dict:
+        action = request.get("action")
+        if action in ("pause", "resume"):
+            self.paused = action == "pause"
+        elif action in ("approve", "reject"):
+            step = request.get("stepId")
+            if request.get("generation") != workflow.info().run_id:
+                raise invalid("stale_generation")
+            if step in self.decisions:
+                if self.decisions[step] != action:
+                    raise invalid("decision_conflict")
+            elif step in self.pending and not self.paused:
+                self.decisions[step] = action
+                del self.pending[step]
+            else:
+                raise invalid("approval_unavailable")
+        else:
+            raise invalid("unknown_command")
+        return self.state()
+
+    async def execute_step(self, step: dict):
+        key = step["id"]
+        await workflow.wait_condition(lambda: not self.paused)
+        self.steps[key] = "running"
+        if step["type"] == "timer":
+            await workflow.sleep(step["seconds"])
+        elif step["type"] == "model":
+            wait_seconds = 30
+            while True:
+                await workflow.wait_condition(lambda: not self.paused)
+                self.steps[key] = "running"
+                outcome = await workflow.execute_activity(
+                    "TeleharnessSubscriptionModelV1", key,
+                    start_to_close_timeout=timedelta(seconds=step["timeoutSeconds"]),
+                    heartbeat_timeout=timedelta(seconds=min(10,step["timeoutSeconds"])),
+                    retry_policy=RetryPolicy(maximum_attempts=step["maxAttempts"]),
+                )
+                if outcome.get("state") == "completed":
+                    break
+                if outcome.get("state") != "quota_wait":
+                    raise invalid("unknown_model_result")
+                self.wait_reasons[key] = outcome.get("reason", "quota_wait")
+                self.steps[key] = "quota_wait"
+                await workflow.sleep(wait_seconds)
+                if workflow.patched("subscription-backoff-v1"):
+                    wait_seconds = min(wait_seconds * 2, 3600)
+        elif step["type"] in ("condition", "artifact"):
+            # FEAT-19.16: the portal evaluates the check / writes the file.
+            outcome = await workflow.execute_activity(
+                "TeleharnessPortalStepV1", key, start_to_close_timeout=timedelta(seconds=60),
+                retry_policy=RetryPolicy(maximum_attempts=3),
+            )
+            if step["type"] == "condition":
+                self.conditions[key] = bool(outcome.get("value"))
+            elif outcome.get("file"):
+                self.files[key] = outcome["file"]
+        elif step["type"] == "approval":
+            self.pending[key] = True
+            await workflow.wait_condition(lambda: key in self.decisions)
+            if self.decisions[key] == "reject":
+                self.steps[key] = "rejected"
+                raise invalid("approval_rejected")
+        self.wait_reasons.pop(key, None)
+        self.steps[key] = "completed"
+
+    @workflow.run
+    async def run(self, request: dict) -> dict:
+        if set(request) != {"launchRef"} or not isinstance(request["launchRef"], str):
+            raise invalid("invalid_launch_reference")
+        projection = await workflow.execute_activity(
+            "prepare_run", request, start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=RetryPolicy(maximum_attempts=3),
+        )
+        steps = projection.get("steps", [])
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 64:
+            raise invalid("invalid_plan")
+        remaining = {}
+        for step in steps:
+            key = step.get("id")
+            if not isinstance(key, str) or key in remaining or not isinstance(step.get("dependsOn"), list):
+                raise invalid("invalid_plan")
+            if step.get("type") not in ("approval", "timer", "parallel", "model", "condition", "artifact"):
+                raise invalid("runtime_unavailable")
+            if step["type"] == "timer" and (type(step.get("seconds")) is not int or not 1 <= step["seconds"] <= 2592000):
+                raise invalid("invalid_duration")
+            if step["type"] == "model":
+                for field, maximum in (("timeoutSeconds", 86400), ("maxAttempts", 10)):
+                    if type(step.get(field)) is not int or not 1 <= step[field] <= maximum:
+                        raise invalid("invalid_model_policy")
+            remaining[key] = step
+            self.steps[key] = "waiting"
+        # Reject the whole snapshot before any branch can trigger an effect.
+        ordered = set()
+        while len(ordered) < len(remaining):
+            ready = [key for key, step in remaining.items() if key not in ordered
+                     and all(isinstance(dep, str) and dep in ordered for dep in step["dependsOn"])]
+            if not ready:
+                raise invalid("invalid_dependencies")
+            ordered.update(ready)
+        running = {}
+        try:
+            while remaining or running:
+                await workflow.wait_condition(lambda: not self.paused)
+                changed = True
+                while changed:
+                    changed = False
+                    for key, step in list(remaining.items()):
+                        deps = step["dependsOn"]
+                        if not all(self.steps.get(dep) in ("completed", "skipped") for dep in deps):
+                            continue
+                        # FEAT-19.16: a false condition (or a skipped step) skips everything after it.
+                        if any(self.steps.get(dep) == "skipped" or self.conditions.get(dep) is False for dep in deps):
+                            self.steps[key] = "skipped"
+                            del remaining[key]
+                            changed = True
+                            continue
+                        running[key] = asyncio.create_task(self.execute_step(step))
+                        del remaining[key]
+                if not running:
+                    if remaining:
+                        raise invalid("invalid_dependencies")
+                    break
+                await workflow.wait_condition(lambda: any(task.done() for task in running.values()))
+                for key, task in list(running.items()):
+                    if task.done():
+                        await task
+                        del running[key]
+            await workflow.wait_condition(lambda: not self.paused)
+            return self.state()
+        finally:
+            for task in running.values():
+                task.cancel()

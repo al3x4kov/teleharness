@@ -11,7 +11,6 @@ import path from "node:path";
 // an admin chat folder outside the tenants (absolute on every OS)
 const ADMIN_DIR = path.join(os.tmpdir(), "teleharness-test-admin");
 import { PORTAL_FILE_RULE } from "../lib/user-prompt.js";
-
 const ADMIN = "a".repeat(24) + "-system-prompt-" + "3".repeat(24);
 const CATALOG = {
   all: [{ id: "zai-coding-plan", name: "Z.AI", models: { "glm-5.3": { id: "glm-5.3", name: "GLM 5.3" } } }],

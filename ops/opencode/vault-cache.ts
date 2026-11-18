@@ -50,6 +50,7 @@ import { lookup } from "node:dns/promises"
 import { isIP } from "node:net"
 import os from "node:os"
 import path from "node:path"
+import { linuxJailLine } from "./sandbox-core/linux-jail.mjs"
 
 const env = process.env
 // Portable defaults under the user's home (the same as the portal's lib/config.js:
@@ -120,8 +121,9 @@ function pointToChat(tool: string, args: any, chatDir: string): void {
 }
 
 function within(p: string, root: string) {
-  const a = lc(fwd(p))
-  const b = lc(fwd(root))
+  const norm = (v: string) => process.platform === "win32" ? lc(v) : v
+  const a = norm(fwd(p))
+  const b = norm(fwd(root))
   return a === b || a.startsWith(b + "/")
 }
 function slugOf(dir: string) {
@@ -258,10 +260,10 @@ function isPrimary(s: Sess | null, msgs: MsgItem[]): boolean {
 // ---------- снапшот на начало сессии ----------
 
 function tenantRules(z: Zone): string {
-  const r = (z.root ?? "").replace(/\//g, "\\")
+  const r = process.platform === "win32" ? (z.root ?? "").replace(/\//g, "\\") : (z.root ?? "")
   return [
     `Твоя база знаний (Obsidian) — только ${r}. Подпапки: projects\\, tasks\\, decisions\\, lessons\\, sessions\\ (создавай при необходимости).`,
-    `Дайджест диалога пишется автоматически в ${r}\\sessions — рутину не логируй; задачи/решения/уроки оформляй заметками в своей зоне.`,
+    `Дайджест диалога пишется автоматически в ${path.join(r, "sessions")} — рутину не логируй; задачи/решения/уроки оформляй заметками в своей зоне.`,
     `Другие разделы D:\\Vault (в том числе D:\\Vault\\agents и зоны других пользователей) тебе недоступны: не читай и не пиши туда.`,
     personalRule(r),
   ].join(" ")
@@ -491,6 +493,9 @@ function forbiddenPaths(args: any, z: Zone, cwd: string): string[] {
   }
   const scanText = (t: string) => {
     for (const m of t.match(ABS_IN_TEXT) ?? []) check(m)
+    if (process.platform !== "win32") {
+      for (const m of t.matchAll(/(?:^|[\s"'`=])(\/[^\s"'`;|&<>()]*)/g)) check(m[1])
+    }
     // relative escapes towards the vault, e.g. ..\..\Obsidian\agents
     if (/\.\.[\\/][\s\S]*obsidian/i.test(t)) bad.push("…/Obsidian (относительный путь)")
   }
@@ -770,10 +775,18 @@ async function urlViolation(url: string): Promise<string | null> {
 // Fail-closed: no launcher or no Python environment → the call is refused.
 const JAIL_EXE = fwd(env.TELEHARNESS_JAIL_EXE || "D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe")
 const SANDBOX_PY = fwd(env.TELEHARNESS_SANDBOX_PY || "D:/teleharness-sandbox/python")
-const SHELL_SAFE_PATH = /^[A-Za-z]:\/[A-Za-z0-9_.\/-]*$/
-// macOS / Linux: no tenant sandbox exists (teleharness-jail is a Windows AppContainer).
-// Fail-closed: every tenant bash call (teleharness-render too) is refused, never run on the host.
-const NO_SANDBOX = process.platform === "win32" ? null : "командная строка недоступна: песочница пользователей (Windows AppContainer) есть только на Windows-сервере, на этом сервере команды пользователей отключены"
+// Drive path; or a single-slash POSIX path, which fwd() never yields on a Windows host
+// (only "X:/…" or "//server/…") — lets the Windows branch be tested on a Linux host.
+const SHELL_SAFE_PATH = /^(?:[A-Za-z]:\/|\/(?!\/))[A-Za-z0-9_.\/-]*$/
+// macOS / Linux: teleharness-jail is a Windows AppContainer. Linux runs tenant commands through the
+// Docker-based teleharness-tenant-run (ops/sandbox/linux) only when the admin installed it; without
+// it every tenant bash call (teleharness-render too) is refused, never run on the host (fail-closed).
+const NO_SANDBOX = "командная строка недоступна: песочница пользователей есть только на Windows-сервере (AppContainer) или на Linux с установленным teleharness-tenant-run (ops/sandbox/linux), на этом сервере команды пользователей отключены"
+const LINUX_TENANT_RUNNER = "/usr/local/libexec/teleharness-tenant-run"
+/** Shell launcher of tenant commands: "win32" (teleharness-jail), "linux" (teleharness-tenant-run) or "none". */
+function shellLauncher(platform: string, linuxRunner: boolean): string {
+  return platform === "win32" || (platform === "linux" && linuxRunner) ? platform : "none"
+}
 const JAIL_ID = /^[A-Za-z0-9_-]{1,40}$/
 
 /** AppContainer name of a tenant: teleharness-t-<name>, or a stable hash for names outside [A-Za-z0-9_-]. */
@@ -782,10 +795,12 @@ function jailName(tenant: string): string {
 }
 
 /** The jailed replacement of a tenant bash command, or `{ error }` when it must not run. */
-async function jailCommand(command: unknown, z: Zone, workdir: string): Promise<{ command: string } | { error: string }> {
+// `platform` (default: the host) picks the launcher: linux → teleharness-tenant-run, else teleharness-jail.
+async function jailCommand(command: unknown, z: Zone, workdir: string, platform: string = process.platform): Promise<{ command: string } | { error: string }> {
+  if (platform === "linux") return linuxJailLine(command, { name: z.tenant ? jailName(z.tenant) : null, home: z.home, cwd: workdir || z.home })
   if (typeof command !== "string" || !command.trim()) return { error: "пустая команда" }
   if (command.includes("\0")) return { error: "недопустимый символ в команде" }
-  if (NO_SANDBOX) return { error: NO_SANDBOX }
+  if (platform !== "win32") return { error: NO_SANDBOX }
   if (!z.tenant || !z.home) return { error: "у сессии нет папки пользователя" }
   const python = `${SANDBOX_PY}/Scripts/python.exe`
   const cafile = `${SANDBOX_PY}/Lib/site-packages/certifi/cacert.pem`
@@ -818,8 +833,9 @@ function splitCd(command: unknown, cwd: string): { cwd: string; command: unknown
 // copy into <folder>\_preview\<name>\page-NN.png. Inside a chain it stays a
 // jailed command (the sandbox stub explains how to call it).
 const RENDER_CMD = /^\s*teleharness-render(?:\s+([^&|<>^\r\n]*))?\s*$/i
-async function renderCommand(args: string, z: Zone, workdir: string): Promise<{ command: string } | { error: string }> {
-  if (NO_SANDBOX) return { error: NO_SANDBOX }
+async function renderCommand(args: string, z: Zone, workdir: string, platform: string = process.platform): Promise<{ command: string } | { error: string }> {
+  if (platform === "linux") return jailCommand(`teleharness-render ${args}`, z, workdir, platform)
+  if (platform !== "win32") return { error: NO_SANDBOX }
   if (!z.tenant || !z.home) return { error: "у сессии нет папки пользователя" }
   const script = fwd(env.TELEHARNESS_RENDER_SCRIPT || "D:/Apps/teleharness/ops/render/teleharness_render.py")
   const python = `${SANDBOX_PY}/Scripts/python.exe`
@@ -912,6 +928,9 @@ function unjailCommand(cmd: unknown): string | null {
     const r = cmd.match(/ --b64 ([A-Za-z0-9_-]+)$/)
     if (!r) return null
     return `teleharness-render ${r[1] === "-" ? "" : Buffer.from(r[1], "base64url").toString("utf8")}`.trim()
+  }
+  if (cmd.startsWith("/usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 ")) {
+    try { return JSON.parse(Buffer.from(cmd.split(" --b64 ")[1], "base64url").toString("utf8")).command ?? null } catch { return null }
   }
   if (!cmd.includes("teleharness-jail")) return null
   const m = cmd.match(/ --b64 ([A-Za-z0-9_-]+)$/)
@@ -1070,7 +1089,11 @@ function undoSeal(sessionID: string, messageID: string): number {
 
 type SessZone = { dir: string; zone: Zone; parentID?: string }
 
-export default (async ({ client }: PluginInput) => {
+// `platform` / `linuxRunner` are not part of opencode's PluginInput: tests pin the shell launcher
+// (win32 → teleharness-jail, linux → teleharness-tenant-run); opencode never passes them → the host and
+// whether the Linux runner is installed.
+export default (async ({ client, platform = process.platform, linuxRunner = existsSync(LINUX_TENANT_RUNNER) }: PluginInput & { platform?: string; linuxRunner?: boolean }) => {
+  const launcher = shellLauncher(platform, linuxRunner)
   const injected = new Set<string>()
   // sessionID → directory/zone (the directory of a session never changes)
   const zones = new Map<string, SessZone>()
@@ -1312,7 +1335,7 @@ export default (async ({ client }: PluginInput) => {
         try {
           const sc = splitCd(output.args?.command, wd)
           const rm = RENDER_CMD.exec(String(sc.command ?? ""))
-          jailed = rm ? await renderCommand(rm[1] ?? "", v.zone, sc.cwd) : await jailCommand(sc.command, v.zone, sc.cwd)
+          jailed = rm ? await renderCommand(rm[1] ?? "", v.zone, sc.cwd, launcher) : await jailCommand(sc.command, v.zone, sc.cwd, launcher)
         } catch (e) {
           jailed = { error: `не удалось подготовить песочницу (${String(e)})` }
         }

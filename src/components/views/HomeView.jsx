@@ -23,7 +23,7 @@ import {
   sessions,
   setNotice,
 } from "../../lib/store.js";
-import { displayTitle, groupSessionsByDate, isHiddenDir, isSubagentSession, parseTime } from "../../lib/normalize.js";
+import { displayTitle, groupSessionsByDate, isHiddenDir, isPipelineStepSession, isSubagentSession, parseTime } from "../../lib/normalize.js";
 import { Glyph, useModalFocus } from "../Pickers.jsx";
 import { MenuButton, PinIcon } from "../Menu.jsx";
 import { bindingOf } from "../../lib/engine.js";
@@ -456,7 +456,7 @@ export default function HomeView() {
   // Temp\oc_*) AND tool-spawned sessions («look_at: …» — subagent machinery
   // that leaked into the list, 2026-11-01 feedback).
   const visible = sessions.value.filter(
-    (s) => !isHiddenDir(s.directory) && !isSubagentSession(s, agents.value),
+    (s) => !isHiddenDir(s.directory) && !isSubagentSession(s, agents.value) && !isPipelineStepSession(s),
   );
   const waiting = waitingChats(visible);
   const base = waitingOnly ? waiting : visible;

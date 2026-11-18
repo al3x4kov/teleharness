@@ -751,3 +751,17 @@ test("BUG-155: paths with * or ? are not artifacts", () => {
   assert.deepEqual(extractFilePaths(text), want);
   assert.deepEqual(collectArtifactEntries([], [text], dir).map((e) => e.path), want);
 });
+
+import { isPipelineStepSession } from "../src/lib/normalize.js";
+test("BUG-256: разговоры шагов пайпа (папка <проект>/pipelines/<имя>) не попадают в списки чатов", () => {
+  assert.equal(isPipelineStepSession({ directory: "/home/u/pipelines/ревью" }), true);
+  assert.equal(isPipelineStepSession({ directory: "C:\\Users\\U\\pipelines\\x" }), true);
+  assert.equal(isPipelineStepSession({ directory: "/home/u/pipelines" }), false);
+  assert.equal(isPipelineStepSession({ directory: "/home/u/pipelines/x/sub" }), false);
+  assert.equal(isPipelineStepSession({ directory: "/home/u/proj" }), false);
+});
+
+test("BUG-257: чат шага тенанта (папка проекта) узнаётся по заголовку «⇄ …»", () => {
+  assert.equal(isPipelineStepSession({ directory: "/home/t", title: "⇄ Ревью · Проверка" }), true);
+  assert.equal(isPipelineStepSession({ directory: "/home/t", title: "Обычный чат" }), false);
+});

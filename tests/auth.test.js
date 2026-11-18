@@ -18,13 +18,13 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-auth-test-"));
+const WIN = process.platform === "win32";
+// The owner's shared vault: an absolute path outside every tenant root.
+const SHARED_VAULT_NOTE = path.join(path.parse(TMP).root, "Obsidian", "_index.md");
 
 const ADMIN_TOKEN = "t".repeat(20) + "-admin-token-" + "9".repeat(24);
 const HOME = mkdtempSync(path.join(TMP, "home-"));
 const DIR_FOREIGN = path.join(TMP, "foreign");
-const WIN = process.platform === "win32";
-// The owner's shared vault: an absolute path outside every tenant root.
-const SHARED_VAULT_NOTE = path.join(path.parse(TMP).root, "Obsidian", "_index.md");
 // Deterministic tenant folder: createUser defaults to TELEHARNESS_TENANT_HOME/<name>.
 // The fake upstream parks ses_own here so the tenant scope tests have a
 // session that genuinely belongs to alice.

@@ -247,8 +247,47 @@ test("classifyPushError / sanitize: kinds and no server paths", () => {
   assert.equal(classifyPushError(" ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs").kind, "rejected");
   assert.equal(classifyPushError("fatal: unable to access 'https://x/': Could not resolve host: x").kind, "network");
   assert.equal(classifyPushError("", { timedOut: true }).kind, "network");
-  const u = classifyPushError("fatal: weird thing at C:\\Users\\USER\\repo and /home/u/repo");
+  const u = classifyPushError("fatal: weird thing at C:\\Users\\dev\\repo and /home/u/repo");
   assert.equal(u.kind, "unknown");
   assert.equal(/Users|home\/u/.test(u.error), false, u.error);
   assert.equal(sanitize("https://user:secret@github.com/a/b.git"), "https://github.com");
+});
+
+// TASK-18.13 D12: a `git mv` rename is a rename diff with its old path, not a
+// whole added file (status limited to the new path never paired the rename).
+test("D12: renamed file — diff is a rename (git diff -M) with oldPath, not a whole-file add", async () => {
+  const dir = makeRepo();
+  writeFileSync(path.join(dir, "README.md"), "line 1\nline 2\nline 3\n");
+  sh(dir, "add", "README.md");
+  sh(dir, "commit", "-q", "-m", "readme");
+  sh(dir, "mv", "README.md", "docs.md");
+  const repo = await openRepo(dir);
+  const st = await gitStatus(repo);
+  const f = st.files.find((x) => x.path === "docs.md");
+  assert.equal(f.status, "R");
+  assert.equal(f.oldPath, "README.md");
+  const d = await gitDiff(repo, "docs.md");
+  assert.equal(d.oldPath, "README.md");
+  assert.match(d.patch, /^rename from README\.md$/m);
+  assert.match(d.patch, /^rename to docs\.md$/m);
+  assert.deepEqual([d.additions, d.deletions], [0, 0], "pure rename: no lines added");
+});
+
+// TASK-18.13 D7: push from a detached HEAD is not «no upstream».
+test("D7: push from a detached HEAD → kind detached with its own text", async () => {
+  const dir = makeRepo();
+  sh(dir, "checkout", "-q", "--detach");
+  const repo = await openRepo(dir);
+  await assert.rejects(gitPush(repo), (e) => e.status === 409 && e.extra.kind === "detached" && /Не выбрана ветка \(detached HEAD\) — отправлять нечего; переключитесь на ветку через агента/.test(e.message) && !/upstream/.test(e.message));
+  assert.equal(classifyPushError("fatal: You are not currently on a branch.\nTo push the history leading to the current (detached HEAD)").kind, "detached");
+  assert.equal(classifyPushError("fatal: The current branch main has no upstream branch.").kind, "no-upstream");
+});
+
+// TASK-18.13 D5: the unknown push error carries the sanitized git line apart,
+// so the client's card does not repeat the server's whole sentence.
+test("D5: unknown push error — detail is the git line alone, no server paths", () => {
+  const u = classifyPushError("fatal: weird thing at C:\\Users\\dev\\repo");
+  assert.equal(u.kind, "unknown");
+  assert.equal(u.detail, "weird thing at …");
+  assert.equal("detail" in classifyPushError(""), false);
 });

@@ -2,6 +2,7 @@
 // fixture mock (TELEHARNESS_MOCK=1) or by the real opencode proxy + SSE hub.
 // Zero runtime dependencies - node stdlib only.
 import http from "node:http";
+import {createHash} from "node:crypto";
 import { tenantJailFor, tenantKit } from "./lib/claude-tenant.js";
 import { ensureChatFolder, existingChatFolder } from "./lib/chat-folder.js";
 import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
@@ -42,6 +43,14 @@ import { fileRoutes } from "./routes/files.js";
 import { catalogRoutes } from "./routes/catalog.js";
 import { adminRoutes } from "./routes/admin.js";
 import { gitRoutes } from "./routes/git.js"; // FEAT-18.8
+import { temporalRoutes } from "./routes/temporal.js"; // FEAT-19.4
+import {chatRoutingForPortal,chatRecoveryGuard} from "./lib/temporal/chat-routing.js";
+import {connectPipeline} from "./lib/temporal/portal-runtime.js";
+import {scheduleRoutes} from "./routes/temporal-schedules.js";
+import { stageTimerStarter } from "./lib/temporal/stage-timer.js";
+import { DefinitionStore } from "./lib/temporal/definitions.js";
+import { chatStepRunner } from "./lib/temporal/chat-step.js";
+import { projectCandidate } from "./lib/temporal/workspace.js";
 import { PORTAL_FILE_RULE, SYSTEM_PROMPT_MAX, cleanSystemPrompt, withUserSystem, withUserSystemBody } from "./lib/user-prompt.js";
 import { withGlmVariant, withGlmVariantBody } from "./lib/glm-variant.js";
 import { commandBody, parseSlash } from "./lib/slash.js";
@@ -106,7 +115,7 @@ import { ClaudeAgentCatalog, isClaudeAgentId } from "./lib/claude-agents.js";
 import { VoiceQuota, VoiceService } from "./lib/voice.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { BindingStore, applyBinding, cleanModel, cleanPermMode, effectivePermMode, engineOf, makeBinding, ocPermRules, patchBinding, resolveBinding } from "./lib/binding.js";
-import { isRunnerEngine } from "./shared/engine.js";
+import { isRunnerEngine, CLAUDE_PROVIDER, CODEX_PROVIDER, CLAUDE_MODELS } from "./shared/engine.js";
 import { createCodexCatalog } from "./lib/codex-catalog.js"; // FEAT-18.7 // FEAT-18.7: claude и codex — ходы раннера CLI
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -516,7 +525,23 @@ const DEFAULT_OPTS = { timeoutMs: 30_000, bodyLimit: 2 * 1024 * 1024 };
 // per-file limit and a total quota (BUG-12.10).
 const UPLOAD_LIMIT = 100 * 1024 * 1024;
 
+// TASK-19.9. Only the staging v2 cohort advertises optional durable inbox IDs.
+const turnIdsFrom=config.TELEHARNESS_ENV==="stand" && OC.api==="v2" ? Date.parse(process.env.TELEHARNESS_TEMPORAL_TURN_IDS_FROM) : NaN;
+const stableTurnIds=session=>Number.isFinite(turnIdsFrom) && Number.isSafeInteger(session?.time?.created) && session.time.created>=turnIdsFrom;
+const recovery=chatRecoveryGuard({
+  checkTurn:(user,sid)=>chatRouting.checkTurn(user,sid),
+  lookup:Number.isFinite(turnIdsFrom) ? async sid=>{
+    const record=await sessionRecord(sid,true);
+    return record && {cohort:stableTurnIds(record),directory:record.directory};
+  } : null,
+  authorize:(id,dir)=>{
+    const user=getUser(id);
+    return user && !user.disabled && dir && dirAllowed(user,dir) && engineAllowed(user,"opencode");
+  }
+});
 const hub = new EventHub({
+  canRecoverChat:sid=>recovery.allowed(sid),
+  replayInboxId:async (sid,id)=>/^msg_19f5[a-f0-9]{28}$/.test(id) && stableTurnIds(await sessionRecord(sid)) ? id : null,
   stallAbortMs: STALL_ABORT_MS,
   dialogTimeoutMs: DIALOG_TIMEOUT_MS,
   stallReplayMs: STALL_REPLAY_MS,
@@ -569,11 +594,13 @@ else if (claudeMcp.file) console.log(`[teleharness-claude] MCP for admin chats: 
 // BUG-146: backups of opencode turns, written by the vault-cache plugin
 // (ops/opencode) into the same root as the Claude ones.
 const ocUndo = new TurnUndo({ root: config.TELEHARNESS_TURN_UNDO_ROOT });
+let temporalChatSteps = null; // FEAT-19.16: model steps of pipes run as chat turns
 const claude = new ClaudeRunner({
   hub,
   storePath: path.join(DATA_DIR, "claude-sessions.json"),
   undoRoot: config.TELEHARNESS_TURN_UNDO_ROOT,
   onTurnEnd: (e) => {
+    if (temporalChatSteps?.owns(e?.sid)) { temporalChatSteps.onTurnEnd(e); return titler?.claudeTurnDone(e); } // a pipe step: no push, no auto-relay
     webPush?.notifier.claudeTurnEnd(e); // FEAT-07.20: «Готово: <чат>»
     // FEAT-18.6: ход Claude упал по лимиту подписки → авто-передача (если включена)
     if (e?.error && isLimitError(e.error, { engine: "claude" })) autoRelayOnLimit(e.sid, e.dir ?? null);
@@ -1018,6 +1045,8 @@ function withBinding(s) {
   // from the portal store.
   const rv = claude.revertOf(s.id) ?? (s.revert?.messageID ? { messageID: s.revert.messageID, ...(s.revert.partID ? { partID: s.revert.partID } : {}) } : null);
   const out = { ...s };
+  if (stableTurnIds(s)) out.stableTurnIds=true;
+  else delete out.stableTurnIds;
   if (rv) out.revert = rv;
   else delete out.revert;
   if (b) out.teleharness = relays.has(s.id) ? { ...b, relays: relays.get(s.id) } : b;
@@ -1254,7 +1283,73 @@ function directoryShapeProblem(url) {
 // TASK-12.18 / ADR-001: the declarative route table (routes/*). Each record
 // declares its scope; the common gate (routes/router.js) runs before the
 // handler. Groups not migrated yet stay in the if-chain of handleApi below.
+const chatRouting=chatRoutingForPortal({directory:DATA_DIR,stage:process.env.TELEHARNESS_ENV==="stand",
+  enabled:process.env.TELEHARNESS_TEMPORAL_NEW_CHATS==="1",service:process.env.TELEHARNESS_TEMPORAL_CHAT_PGSERVICE});
+const temporalDeps={sendJson,readJsonBody,dirAllowed,engineAllowed,getUser,errLog,
+  // BUG-251 / FEAT-19.16: pipe folders and the project picker (no typed paths).
+  ensureDir:(d)=>mkdirSync(d,{recursive:true}),
+  defaultProject:(user)=>defaultDir(user,CHAT_DIR),
+  projectsFor:async(user)=>{
+    if(!isAdmin(user)) return user.directories??[];
+    const counts=new Map();
+    for(const d of (await fetchSessionIndex()).values()) if(typeof d==="string"&&d) counts.set(d,(counts.get(d)??0)+1);
+    return [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([d])=>d)
+      .filter(d=>projectCandidate(d,{tenantHome:config.TELEHARNESS_TENANT_HOME,problem:dirProblem,exists:x=>{try{return statSync(x).isDirectory();}catch{return false;}}}))
+      .slice(0,60); // BUG-253
+  },
+  store:new DefinitionStore({file:path.join(DATA_DIR,"temporal-definitions.json")})};
+if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
+  const stage=process.env.TELEHARNESS_ENV === "stand";
+  const options={socketPath:path.join(DATA_DIR,"temporal-private","worker.sock"),
+    databasePath:path.join(DATA_DIR,"temporal-stage-starts.sqlite"),
+    address:stage?"127.0.0.1:17233":"127.0.0.1:17235",namespace:stage?"teleharness-stage":"teleharness-production",
+    taskQueue:stage && /^qa-[a-z0-9-]{1,72}$/.test(process.env.TELEHARNESS_TEMPORAL_TEST_QUEUE??"")
+      ? process.env.TELEHARNESS_TEMPORAL_TEST_QUEUE : stage?"teleharness-stage-pipeline-v1":"teleharness-prod-pipeline-v1",
+    drain:process.env.TELEHARNESS_TEMPORAL_DRAIN==="1",
+    openCodeDirectory:stage ? process.env.TELEHARNESS_TEMPORAL_OC_DIRECTORY : undefined,openCodeAddress:stage?"http://127.0.0.1:4168":"http://127.0.0.1:4169",
+    subscriptionToken:stage ? process.env.CLAUDE_CODE_OAUTH_TOKEN : undefined};
+  // FEAT-19.15: model steps on the owner's subscriptions, switched on explicitly
+  // (TELEHARNESS_TEMPORAL_MODELS=claude,codex); TELEHARNESS_TEMPORAL_SUBSCRIPTION_ATTESTED=1 —
+  // the owner confirmed subscription-only billing (no usage API for this token).
+  const enabled=new Set(String(process.env.TELEHARNESS_TEMPORAL_MODELS??"").split(",").map(s=>s.trim()).filter(Boolean));
+  // FEAT-19.16: a model step = a portal chat turn in the pipe folder (same engine
+  // runner, tenant jail, permissions and limits as chats).
+  temporalChatSteps=chatStepRunner({
+    // BUG-257: a tenant may open only chats of its own folders (exact match) — its step
+    // chat lives in the project and the agent works in the pipe folder (workDir, FEAT-04.12).
+    createSession:async({user,directory,project,engine,model})=>{
+      mkdirSync(directory,{recursive:true});
+      const created=await OC.createSession({directory:isAdmin(user)||!project?directory:project,timeoutMs:DEFAULT_OPTS.timeoutMs});
+      const binding=makeBinding({model:{providerID:engine==="codex"?CODEX_PROVIDER:CLAUDE_PROVIDER,modelID:model}});
+      if(!created?.id||!binding) throw new Error("step chat not created");
+      bindings.set(created.id,binding);hub.syncDirectories();fetchSessionIndex(true).catch(()=>{});
+      return created.id;
+    },
+    dispatchTurn:async({res,sid,directory,project,user,text})=>{
+      const admin=isAdmin(user),binding=bindings.get(sid);
+      const chatDir=admin||!project?directory:project,workDir=admin||!project?null:directory;
+      const race=await markPrompted(sid,binding);if(race){res.writeHead(409);return res.end(race);}
+      return claude.dispatch({res,sid,dir:chatDir,body:Buffer.from(JSON.stringify(applyBinding({parts:[{type:"text",text}]},binding))),
+        access:admin?"admin":"tenant",agent:null,
+        kbZone:kbZoneForUser(user,{admin,adminRoot:config.TELEHARNESS_KB_ROOT,tenantVault:config.TELEHARNESS_TENANT_VAULT,home:admin?HOME_DIR:null}),
+        jail:admin?null:tenantJailFor(chatDir,config.TELEHARNESS_TENANT_HOME),systemPrompt:getSystemPrompt(user.id),portalNote:"",workDir,permMode:null});
+    },
+    messagesOf:(sid)=>claude.messages(sid),abort:(sid)=>claude.abort(sid),
+    setTitle:(sid,title)=>claude.setTitle(sid,title,"user"),
+    isLimit:(err,engine)=>isLimitError(err,{engine}),
+  });
+  if(enabled.has("claude")) options.chatModels={...options.chatModels,claude:()=>CLAUDE_MODELS.map(m=>m.id)};
+  if(enabled.has("codex")) Object.assign(options,{chatModels:{...options.chatModels,codex:()=>codexCatalog.models().map(m=>m.id)},
+    codexModels:()=>codexCatalog.models().map(m=>m.id),codexHome:process.env.TELEHARNESS_TEMPORAL_CODEX_HOME||undefined});
+  options.chatSteps=temporalChatSteps;
+  Object.assign(temporalDeps,await connectPipeline(temporalDeps,options));
+  Object.defineProperty(temporalDeps,"subscriptionModels",{get:()=>temporalDeps.listSubscriptionModels(),enumerable:true}); // FEAT-19.15: live Codex catalog
+} else if (process.env.TELEHARNESS_ENV==="stand" && process.env.TELEHARNESS_TEMPORAL_STAGE_TIMERS==="1") {
+  Object.assign(temporalDeps,stageTimerStarter(path.join(DATA_DIR,"temporal-stage-starts.sqlite")));
+}
 const API_ROUTES = validateTable([
+  ...temporalRoutes(temporalDeps),
+  ...scheduleRoutes(temporalDeps),
   ...fileRoutes({
     sendJson, homeDir: HOME_DIR, fileRoots, serveWorkspaceFile, workspaceFileExists, turnFiles, parseWindows, errLog,
     dirProblem, driveProblem, dirProblemText, dirAllowed, config, path, defaultDir, chatDir: CHAT_DIR, handleUpload,
@@ -1290,7 +1385,9 @@ const API_ROUTES = validateTable([
     sendJson, readJsonBody, apiError, errLog, dirAllowed, existingChatFolder, isUnderAny,
     // the chat's folder: the runner's record for Claude/Codex chats, else the upstream index
     chatDirOf: async (sid) => claude.dirOf(sid) ?? (await resolveSessionDir(sid)),
-    tenantDir: (dir) => listUsers().some((u) => u.role !== "admin" && dirAllowed(u, dir)),
+    // TASK-18.13 D1 (P1): any folder INSIDE a tenant's folders (chats<id> subfolders) or the tenant home is the
+    // tenant's — its repo config is untrusted for the admin too (a named program must never run as the server)
+    tenantDir: (dir) => isUnderAny(dir, [config.TELEHARNESS_TENANT_HOME, ...listUsers().filter((u) => u.role !== "admin").flatMap((u) => u.directories ?? [])].filter(Boolean)),
     bindingOf: async (sid) => bindingFor(sid, await sessionRecord(sid, true).catch(() => null)),
     engineAllowed,
     tenantAgent: async () => defaultTenantAgent(await agentList(), config.TELEHARNESS_TENANT_AGENT),
@@ -1560,6 +1657,13 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     if (!dirAllowed(user, tenantDir)) return sendJson(res, 403, { error: "outside your scope" });
     upQ = scopedQuery(q, tenantDir);
   }
+  if (req.method === "POST" && (action === "prompt" || action === "abort")) {
+    if (action==="abort" && Number.isFinite(turnIdsFrom) && !await recovery.allowed(id,user.id)) {
+      req.resume();return sendJson(res,403,{error:"Отмена недоступна для текущего владельца хода"});
+    }
+    const problem=await chatRouting.checkTurn(user.id,id);
+    if (problem) {req.resume();return sendJson(res,problem.status ?? 503,problem);}
+  }
   if (action === "message" && req.method === "GET") {
     // BUG-08.8: history pages (?limit=&before=) — opencode 1.19.5 answers
     // 400 on `before`, so the slice is cut here (lib/proxy.js contract).
@@ -1641,7 +1745,15 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     } catch {}
     // Route by the CHAT's binding, never by the body. No binding yet → the
     // first prompt's body becomes the binding and is frozen from now on.
-    let binding = bindingFor(id, await sessionRecord(id));
+    const clientTurnId=req.headers?.["x-teleharness-turn-id"];
+    const record = await sessionRecord(id, Boolean(clientTurnId) && Number.isFinite(turnIdsFrom));
+    if (clientTurnId && !record && Number.isFinite(turnIdsFrom))
+      return sendJson(res,503,{error:"Не удалось проверить принадлежность хода к чату"});
+    if (clientTurnId && !Number.isFinite(turnIdsFrom))
+      return sendJson(res,409,{error:"Режим повторной отправки хода отключён"});
+    const inboxId=stableTurnIds(record) && typeof clientTurnId==="string" && /^[a-f0-9]{32}$/.test(clientTurnId)
+      ? "msg_19f5"+createHash("sha256").update(JSON.stringify([id,user.id,clientTurnId])).digest("hex").slice(0,28) : null;
+    let binding = bindingFor(id, record);
     const boundAgent = binding?.agent ?? null; // the chat's own agent before this prompt
     const boundBefore = Boolean(binding); // BUG-159: only a binding made by this prompt is model-checked
     if (!binding && parsed) {
@@ -1655,6 +1767,9 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       if (model) binding = makeBinding({ model, agent: parsed.agent });
       else errLog("prompt.defaultModel", new Error(`no default model for ${id}; prompt sent without one`));
     }
+    if (inboxId && (isRunnerEngine(binding?.engine) || !Array.isArray(parsed?.parts) ||
+        parsed.parts.some(part => part?.type !== "text" || typeof part.text !== "string" || part.text.trimStart().startsWith("/"))))
+      return sendJson(res,409,{error:"Этот режим повтора доступен для текстового хода OpenCode"});
     if (binding && parsed && binding.engine === "opencode" && !binding.agent && typeof parsed.agent === "string" && parsed.agent) {
       binding = { ...binding, agent: parsed.agent };
     }
@@ -1820,12 +1935,22 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       const parts = Array.isArray(turn?.parts) ? turn.parts : [{ type: "text", text: String(out) }];
       try {
         await OC.enqueueTurn(id, async () => {
+          if (inboxId) {
+            const current=getUser(user.id);
+            if (!current || current.disabled || !dirAllowed(current,dir) || !engineAllowed(current,"opencode") ||
+                await chatRouting.checkTurn(current.id,id)) {
+              const error=new Error("Доступ к ходу отозван");
+              error.status=403;
+              throw error;
+            }
+          }
           if (model) {
             await OC.setSessionModel(id, { model: { providerID: model.providerID, modelID: model.modelID, ...(variant ? { variant } : {}) }, timeoutMs: DEFAULT_OPTS.timeoutMs });
           }
           if (agent) await OC.setSessionAgent(id, { agent, timeoutMs: DEFAULT_OPTS.timeoutMs });
           await applyOcPermMode(id, dir, admin ? binding?.permMode : null);
-          await OC.prompt({ directory: dir ?? null, sessionID: id, parts, ...(sysMeta ? { metadata: sysMeta } : {}), timeoutMs: PROMPT_OPTS.timeoutMs });
+          await OC.prompt({ directory: dir ?? null, sessionID: id, ...(inboxId ? {id:inboxId} : {}), parts, ...(sysMeta ? { metadata: sysMeta } : {}), timeoutMs: PROMPT_OPTS.timeoutMs });
+          if (stableTurnIds(record)) recovery.accepted(id,user.id);
         });
         res.writeHead(204); // тот же ход, что v1 показывал после приёма prompt_async
         res.end();
@@ -2398,6 +2523,8 @@ async function sessionCreateRoute({ req, res, url, user, admin, match }) {
     dir = defaultDir(user, CHAT_DIR);
   }
   const body = await readJsonBody(req, DEFAULT_OPTS.bodyLimit);
+  const enrollmentProblem=chatRouting.checkCreate();
+  if (enrollmentProblem) return sendJson(res,503,enrollmentProblem);
   const { model: wantModel, agent: wantAgent, ...upBody } = body && typeof body === "object" && !Array.isArray(body) ? body : {};
   // ADR-004: the requested binding is policy-checked before the create.
   let want = makeBinding({ model: wantModel, agent: wantAgent }, { claudeAgentOk: (a) => admin && claudeAgents.has(a) });
@@ -2662,6 +2789,7 @@ function emptyChatGcInput(sessions) {
 }
 
 async function gcSweep() {
+  if (!config.TELEHARNESS_GC_ENABLED) return { disabled: true };
   if (gcRunning || MOCK) return null;
   gcRunning = true;
   try {
@@ -2940,9 +3068,11 @@ server.listen(PORT, config.TELEHARNESS_LISTEN_HOST, () => { // TASK-17.1: по �
     hub.syncDirectories(); // subscribe to every directory that has sessions
     // gc sweep (empty chats, leftover tenant folders): once shortly after the
     // start (the hub has seeded busy/dialog state by then), then periodically.
-    const every = config.TELEHARNESS_GC_INTERVAL_MS;
-    setTimeout(() => gcSweep(), Math.min(every, 30_000)).unref();
-    setInterval(() => gcSweep(), every).unref();
+    if (config.TELEHARNESS_GC_ENABLED) {
+      const every = config.TELEHARNESS_GC_INTERVAL_MS;
+      setTimeout(() => gcSweep(), Math.min(every, 30_000)).unref();
+      setInterval(() => gcSweep(), every).unref();
+    }
     // BUG-195: папки индекса чатов — под учёт реапера (экземпляры, поднятые до рестарта портала), проход раз в 5 мин
     if (config.TELEHARNESS_INSTANCE_IDLE_MIN > 0) {
       fetchSessionIndex(true)

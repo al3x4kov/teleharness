@@ -25,7 +25,9 @@ export function StatusBox({ status }) {
   return <span class={"st st-" + (s === "?" ? "U" : s)} aria-hidden="true">{s}</span>;
 }
 
-export function Nums({ a = 0, d = 0, showZero = false }) {
+export function Nums({ a = 0, d = 0, showZero = false, binary = false }) {
+  // TASK-18.13 D12: a binary file has no line counts — not «+0»
+  if (binary) return <span class="dnum"><span class="bin">{t("git.diff.binaryShort")}</span></span>;
   return (
     <span class="dnum">
       {(a > 0 || showZero || d === 0) && <span class="p">+{fmtNum(a)}</span>}
@@ -43,9 +45,9 @@ export function FileRow({ f, onOpen, active = false, short = false, chevron = tr
       <StatusBox status={f.status} />
       <span class="fn">
         <b>{f.name}</b>
-        <span class="fn-sub"><bdi>{fileSub(f, { short })}</bdi></span>
+        <span class={"fn-sub" + (f.dir ? "" : " is-label")}><bdi>{fileSub(f, { short })}</bdi></span>
       </span>
-      <Nums a={f.additions} d={f.deletions} />
+      <Nums a={f.additions} d={f.deletions} binary={f.binary === true} />
       {chevron && <span class="chev" aria-hidden="true">›</span>}
     </button>
   );
@@ -127,6 +129,7 @@ function useGitDiff(where, file, on, client) {
           truncated: r?.truncated === true,
           binary: r?.binary === true || pf?.binary === true,
           patch: r?.patch ?? "",
+          oldPath: typeof r?.oldPath === "string" && r.oldPath ? r.oldPath : null,
         });
       },
       (err) => live && setSt({ phase: "error", text: gitErrorText(err, t("git.diff.loadFailed")) }),
@@ -179,6 +182,8 @@ export default function DiffView({ files, index = 0, mode: mode0 = "turn", where
   const big = gitOn ? g.truncated || (!showAll && total > BIG_LINES) : !showAll && total > BIG_LINES;
   const shown = big && !(gitOn && g.truncated) ? limitHunks(hunks, BIG_LINES) : hunks;
   const changedLines = adds + dels;
+  const isBinary = gitOn ? g.phase === "ready" && g.binary : f.binary === true;
+  const oldPath = gitOn && g.phase === "ready" ? g.oldPath : f.status === "R" ? f.oldPath ?? null : null;
   const patchText = () => (gitOn ? g.patch ?? "" : toUnified(f));
 
   const copy = async () => {
@@ -186,9 +191,11 @@ export default function DiffView({ files, index = 0, mode: mode0 = "turn", where
     setCopied(ok ? "ok" : "fail");
     setTimeout(() => setCopied(null), 1600);
   };
+  // TASK-18.13 D2: one tap — the full diff is fetched AND shown (showAll set
+  // too, or the fetched 900 lines were cut back to 400 until a second tap)
   const showAllNow = () => {
     if (gitOn && g.truncated) loadFull();
-    else setShowAll(true);
+    setShowAll(true);
   };
   const downloadNow = async () => {
     if (gitOn && g.truncated && !isFull) {
@@ -212,6 +219,8 @@ export default function DiffView({ files, index = 0, mode: mode0 = "turn", where
     content = <div class="gcard warn" role="alert"><b><i aria-hidden="true">!</i>{t("git.diff.notLoaded")}</b><div class="muted">{g.text}</div></div>;
   } else if ((gitOn ? g.binary : f.binary)) {
     content = <div class="gcard"><b>{t("git.diff.binary")}</b><div class="muted">{t("git.diff.binaryNote")}</div></div>;
+  } else if (hunks.length === 0 && oldPath) {
+    content = <div class="gcard"><b>{t("git.diff.renameOnly")}</b><div class="muted">{t("git.diff.renameOnlyNote", { path: oldPath })}</div></div>;
   } else if (hunks.length === 0) {
     content = gitOn ? (
       <div class="gcard"><b>{t("git.noChanges")}</b><div class="muted">{t("git.diff.sameAsCommit")}</div></div>
@@ -251,7 +260,8 @@ export default function DiffView({ files, index = 0, mode: mode0 = "turn", where
           <button class="icon-btn float-btn" type="button" aria-label={t("common.back")} onClick={onClose}>‹</button>
           <div class="tt">
             <b>{f.name}</b>
-            <span><bdi>{f.dir || t("git.projectRoot")}</bdi> · <Nums a={adds} d={dels} /></span>
+            <span><bdi>{f.dir || t("git.projectRoot")}</bdi> · <Nums a={adds} d={dels} binary={isBinary} /></span>
+            {oldPath && <span class="dv-renamed">{t("git.diff.renamedFrom")} <bdi>{oldPath}</bdi></span>}
           </div>
           <button class="icon-btn float-btn" type="button" aria-label={t("git.diff.copy")} title={t("git.diff.copy")} onClick={copy}>⧉</button>
         </header>

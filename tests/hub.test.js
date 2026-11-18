@@ -1091,3 +1091,19 @@ test("boot seed rebuilds pending for prompts that died before the hub started", 
   assert.ok(hit, "the seeded pending prompt gets replayed by the sweep");
   assert.deepEqual(JSON.parse(hit.body).parts, [{ type: "text", text: "пропавший вопрос" }]);
 });
+
+test("TASK-19.9: watchdog skips replay and abort when chat ownership refuses legacy work",async()=>{
+  const msgs=[{info:{id:"msg_wait",role:"user",time:{created:1}},parts:[{type:"text",text:"pending"}]}];
+  const up=startAbortUpstream({messagesById:{ses_wait:msgs}});
+  const checked=new Set();
+  const hub=new EventHub({stallAbortMs:80,stallReplayMs:80,stallTickMs:30,
+    canRecoverChat:async sid=>{checked.add(sid);return false;}});
+  hub.start(await up.base,{directory:"C:\\Home"});
+  cleanups.push(async()=>{hub.stop();await up.close();});
+  await sleep(180);
+  up.emitSse(JSON.stringify({type:"session.status",properties:{sessionID:"ses_busy",status:{type:"busy"}}}));
+  up.emitSse(JSON.stringify({type:"message.updated",properties:{sessionID:"ses_wait",info:{id:"msg_wait",role:"user",time:{created:1}}}}));
+  await sleep(600);
+  assert.ok(checked.has("ses_wait")&&checked.has("ses_busy"));
+  assert.ok(!up.posts.some(p=>p.path.endsWith("/abort")||p.path.endsWith("/prompt_async")));
+});

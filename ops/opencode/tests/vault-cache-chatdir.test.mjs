@@ -20,7 +20,7 @@ const JAIL = P("ops", "sandbox", "teleharness-jail.exe")
 const PY = P("teleharness-sandbox", "python")
 const RENDER = P("ops", "render", "teleharness_render.py")
 
-let hooks, hook
+let hooks, hook, linuxHook
 const sessions = {
   ses_new1: { id: "ses_new1", directory: ALICE },
   ses_old1: { id: "ses_old1", directory: ALICE },
@@ -48,8 +48,11 @@ before(async () => {
   })
   const mod = await import(pathToFileURL(path.resolve(import.meta.dirname, "..", "vault-cache.ts")).href)
   const client = { session: { get: async ({ path: { id } }) => ({ data: sessions[id] }), messages: async () => ({ data: [] }) } }
-  hooks = await mod.default({ client })
+  // TASK-17.18: --cwd below is the Windows launcher's (teleharness-jail) on any host;
+  // the Linux launcher (sudo teleharness-tenant-run) carries cwd in its base64-JSON.
+  hooks = await mod.default({ client, platform: "win32" })
   hook = hooks["tool.execute.before"]
+  linuxHook = (await mod.default({ client, platform: "linux", linuxRunner: true }))["tool.execute.before"]
 })
 after(() => fs.rmSync(ROOT, { recursive: true, force: true }))
 
@@ -65,6 +68,21 @@ test("bash без workdir — в подпапке чата; относитель
   assert.equal(cwdOf((await call("ses_old1", "bash", { command: "dir", description: "x" })).command), F(ALICE))
   assert.equal(cwdOf((await call("ses_kid1", "bash", { command: "dir", description: "x" })).command), F(CHAT), "субагент — папка корневого чата")
   assert.equal(cwdOf((await call("ses_new1", "bash", { command: "teleharness-render deck.pptx", description: "x" })).command), F(CHAT), "teleharness-render тоже из подпапки")
+})
+
+test("Linux: bash без workdir — в подпапке чата; относительный workdir — от неё; старый чат — корень", async () => {
+  fs.mkdirSync(path.join(CHAT, "sub"), { recursive: true }) // the Linux runner cds into an existing folder only
+  const RUNNER = "/usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 "
+  const cwd = async (sessionID, args) => {
+    await linuxHook({ tool: "bash", sessionID, callID: "c" }, { args: (args = { description: "x", ...args }) })
+    assert.ok(args.command.startsWith(RUNNER), args.command)
+    return JSON.parse(Buffer.from(args.command.slice(RUNNER.length), "base64url").toString("utf8")).cwd
+  }
+  assert.equal(await cwd("ses_new1", { command: "python a.py" }), CHAT)
+  assert.equal(await cwd("ses_new1", { command: "ls", workdir: "sub" }), path.join(CHAT, "sub"))
+  assert.equal(await cwd("ses_old1", { command: "ls" }), ALICE)
+  assert.equal(await cwd("ses_kid1", { command: "ls" }), CHAT, "субагент — папка корневого чата")
+  assert.equal(await cwd("ses_new1", { command: "teleharness-render deck.pptx" }), CHAT, "teleharness-render тоже из подпапки")
 })
 
 test("файлы: относительный путь → подпапка чата; абсолютный не трогается; вложения через .teleharness-uploads", async () => {

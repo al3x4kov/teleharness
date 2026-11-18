@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import "../views.css";
 import { MenuButton } from "../Menu.jsx";
 import { addUserProject, agents, checkProjectDir, sessions, userProjects } from "../../lib/store.js";
-import { buildProjects, isSubagentSession, projectDisplayName, validateProjectDir } from "../../lib/normalize.js";
+import { buildProjects, isPipelineStepSession, isSubagentSession, projectDisplayName, validateProjectDir } from "../../lib/normalize.js";
 import { navigate } from "../../lib/router.js";
 import { Glyph } from "../Pickers.jsx";
 import { fmtWhen, LoadError, Modal, useSessionList } from "./HomeView.jsx";
@@ -85,7 +85,7 @@ export function AddProjectModal({ projects, onCreate, onClose }) {
       <p class="modal-text">{t("projects.newProjectText")}</p>
       <input
         ref={inputRef} class="modal-input" value={path}
-        placeholder="D:\Projects\my-app" spellcheck="false"
+        placeholder={t("projects.folderPlaceholder")} spellcheck="false"
         aria-label={t("projects.folder")}
         aria-invalid={error ? "true" : undefined}
         aria-describedby={error ? "project-dir-error" : "project-dir-hint"}
@@ -132,7 +132,7 @@ export default function ProjectsView() {
   const [adding, setAdding] = useState(false);
 
   const list = buildProjects(
-    sessions.value.filter((s) => !isSubagentSession(s, agents.value)),
+    sessions.value.filter((s) => !isSubagentSession(s, agents.value) && !isPipelineStepSession(s)),
     { hidden: loadHiddenDirs(), extraDirs: userProjects.value },
   );
   const manual = new Set(userProjects.value.map((d) => d.toLowerCase()));

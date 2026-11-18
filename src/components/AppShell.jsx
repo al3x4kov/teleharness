@@ -21,10 +21,11 @@ import LoginView from "./views/LoginView.jsx";
 import PairView from "./views/PairView.jsx";
 import ChatView from "./views/ChatView.jsx";
 import GitView from "./views/GitView.jsx"; // FEAT-18.8
+import TemporalView from "./views/TemporalView.jsx"; // FEAT-19.1
 import Drawer from "./Drawer.jsx";
 import { t } from "../lib/i18n.js";
 
-const VIEWS = { home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView };
+const VIEWS = { home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView, temporal: TemporalView };
 
 export default function AppShell() {
   const { view, path, params } = useRoute();

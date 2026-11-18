@@ -1296,6 +1296,14 @@ export function resolveRelativePath(baseFile, rel) {
 // GitHub manual QA tester skills…» leaked past a title heuristic on
 // 2026-11-01, user report). Hide on parentID; the agent-mode check covers
 // records without a parent (belt and braces, fires once /agent loads).
+// FEAT-19.16 / BUG-256: a model step of a Temporal pipe runs as a chat in the pipe
+// folder <project>/pipelines/<name>. Those chats are opened from the run, never
+// listed among the user's chats and projects.
+export function isPipelineStepSession(s) {
+  if (typeof s?.title === "string" && s.title.startsWith("⇄ ")) return true; // BUG-257: tenant step chats live in the project
+  return /[\\/]pipelines[\\/][^\\/]+$/.test(String(s?.directory ?? ""));
+}
+
 export function isSubagentSession(s, agentList) {
   if (s?.parentID != null) return true;
   const known = agentList ?? [];

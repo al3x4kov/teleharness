@@ -13,6 +13,7 @@ import {
 import { dirBasename, groupSessionsByDate, isSubagentSession, projectDisplayName } from "../../lib/normalize.js";
 import { navigate } from "../../lib/router.js";
 import { gitHash } from "../../lib/git-client.js"; // FEAT-18.8
+import BranchIcon from "../git/BranchIcon.jsx"; // TASK-18.13 D9
 import "../git/git.css";
 import { Glyph } from "../Pickers.jsx";
 import {
@@ -74,7 +75,7 @@ export default function ProjectView({ id }) {
       {/* FEAT-18.8: git проекта (не под git — экран так и скажет) */}
       {dir && (
         <button class="gbtn git-open" type="button" data-feat="FEAT-18.8" onClick={() => navigate(gitHash({ directory: dir }))}>
-          <span aria-hidden="true">⎇</span> Git
+          <BranchIcon /> Git
         </button>
       )}
       {loadState === "loading" ? (

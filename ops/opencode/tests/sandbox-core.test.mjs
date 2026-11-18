@@ -16,6 +16,10 @@ import path from "node:path"
 import { execFileSync } from "node:child_process"
 import { pathToFileURL } from "node:url"
 
+// Directory junction on Windows, plain directory symlink on POSIX (the "junction"
+// type is ignored there) — both point out of the tenant folder.
+const junction = (link, target) => fs.symlinkSync(target, link, "junction")
+
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "sb-core-"))
 const P = (...x) => path.join(ROOT, ...x)
 const F = (p) => p.replace(/\\/g, "/")
@@ -36,11 +40,11 @@ const sessions = {
   ses_alice: { id: "ses_alice", directory: ALICE },
   ses_alice_sub: { id: "ses_alice_sub", directory: path.join(ALICE, "proj") },
   ses_child: { id: "ses_child", directory: ALICE, parentID: "ses_alice" },
-  ses_nat: { id: "ses_nat", directory: CAROL },
+  ses_carol: { id: "ses_carol", directory: CAROL },
   ses_bad: { id: "ses_bad", directory: P("tenants", "home", "bad name") },
 }
 
-let core, sb
+let core, sb, sbLinux, linuxJailLine
 
 before(async () => {
   for (const d of [
@@ -56,8 +60,8 @@ before(async () => {
     fs.writeFileSync(f, "")
   }
   // junctions inside the tenant folder pointing outside of it
-  execFileSync("cmd", ["/c", "mklink", "/J", path.join(ALICE, "escape"), path.dirname(SECRET)], { stdio: "ignore" })
-  execFileSync("cmd", ["/c", "mklink", "/J", path.join(ALICE, "escape-bob"), BOB], { stdio: "ignore" })
+  junction(path.join(ALICE, "escape"), path.dirname(SECRET))
+  junction(path.join(ALICE, "escape-bob"), BOB)
   fs.writeFileSync(P("users.json"), JSON.stringify({ users: [
     { name: "admin", role: "admin", directories: [] },
     { name: "Carol S.", role: "user", directories: [CAROL] },
@@ -74,10 +78,20 @@ before(async () => {
     TELEHARNESS_TURN_UNDO_ROOT: P("turn-undo"),
   })
   core = await import(pathToFileURL(path.resolve(import.meta.dirname, "..", "sandbox-core", "index.mjs")).href)
+  // TASK-17.18: the jail cases below check the Windows launcher (teleharness-jail.exe) on
+  // any host; the Linux launcher (sudo teleharness-tenant-run) is pinned separately.
   sb = core.createSandbox({
     getSession: async (id) => sessions[id] ?? null,
     getMessages: async () => [],
+    platform: "win32",
   })
+  sbLinux = core.createSandbox({
+    getSession: async (id) => sessions[id] ?? null,
+    getMessages: async () => [],
+    platform: "linux",
+    linuxRunner: true,
+  })
+  ;({ linuxJailLine } = await import(pathToFileURL(path.resolve(import.meta.dirname, "..", "sandbox-core", "linux-jail.mjs")).href))
 })
 
 after(() => {
@@ -295,8 +309,8 @@ test("workdir outside the tenant folder is refused", async () => {
 })
 
 test("portal-defined tenant with a non-ASCII name gets a stable hashed container", async () => {
-  const a = parse((await bash("ses_nat", "ver")).command)
-  const b = parse((await bash("ses_nat", "ver")).command)
+  const a = parse((await bash("ses_carol", "ver")).command)
+  const b = parse((await bash("ses_carol", "ver")).command)
   assert.match(a.opt("--name"), /^teleharness-t-h[0-9a-f]{16}$/)
   assert.equal(a.opt("--name"), b.opt("--name"))
   assert.equal(a.opt("--dir"), F(CAROL))
@@ -515,4 +529,136 @@ test("BUG-200: writeTargets — v2 `path` у write/edit попадает в ре
   assert.deepEqual(core.writeTargets("write", { path: "n.md", content: "x" }, cwd), [path.resolve(cwd, "n.md")])
   assert.deepEqual(core.writeTargets("edit", { path: path.join(ALICE, "e.md"), oldString: "a", newString: "b" }, cwd), [path.join(ALICE, "e.md")])
   assert.deepEqual(core.writeTargets("read", { path: "n.md" }, cwd), [], "чтение — не запись")
+})
+
+// ---- TASK-17.18 (EPIC-17): Linux-ветка shell тенанта — sudo teleharness-tenant-run в контейнере ----
+
+const RUNNER = "/usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 "
+/** payload of a Linux launcher line: { name, home, cwd, command } */
+function linuxPayload(line) {
+  assert.ok(line.startsWith(RUNNER), line)
+  const b64 = line.slice(RUNNER.length)
+  assert.match(b64, /^[A-Za-z0-9_-]+$/, "only base64url reaches the host shell")
+  return JSON.parse(Buffer.from(b64, "base64url").toString("utf8"))
+}
+async function linuxBash(sessionID, command, extra = {}, tool = "bash") {
+  const args = { command, description: "x", ...extra }
+  await sbLinux.before(tool, sessionID, args)
+  return args
+}
+
+test("linuxJailLine: команда и папки уходят в base64-JSON, строка — фиксированной формы", () => {
+  for (const cmd of ['python -c "print(1)"', "a; b && c | d `id` $(id) ${HOME} > /etc/x", "привет\nмир\r\n", "'\"\\"]) {
+    const r = linuxJailLine(cmd, { name: "teleharness-t-alice", home: ALICE, cwd: path.join(ALICE, "proj") })
+    assert.ok(r.command, JSON.stringify(r))
+    assert.deepEqual(linuxPayload(r.command), { name: "teleharness-t-alice", home: ALICE, cwd: path.join(ALICE, "proj"), command: cmd })
+    assert.equal(r.command.split(" ").length, 5, "fixed argv shape")
+  }
+  assert.equal(linuxPayload(linuxJailLine("ls", { name: "teleharness-t-alice", home: ALICE }).command).cwd, ALICE, "cwd по умолчанию — home")
+})
+
+test("linuxJailLine: cwd вне home и симлинк наружу — отказ", () => {
+  const o = { name: "teleharness-t-alice", home: ALICE }
+  for (const cwd of [BOB, path.dirname(ALICE), path.join(ALICE, ".."), ALICE + "2", "/", path.join(ALICE, "escape"), path.join(ALICE, "escape-bob"), path.join(ALICE, "escape", ".")]) {
+    const r = linuxJailLine("ls", { ...o, cwd })
+    assert.equal(r.command, undefined, cwd)
+    assert.match(r.error, /вне вашей папки|недоступна/, cwd)
+  }
+  fs.mkdirSync(ALICE + "2", { recursive: true })
+  try {
+    assert.match(linuxJailLine("ls", { ...o, cwd: ALICE + "2" }).error, /вне вашей папки/, "общий префикс имени — не вложенность")
+  } finally {
+    fs.rmSync(ALICE + "2", { recursive: true, force: true })
+  }
+  assert.match(linuxJailLine("ls", { ...o, cwd: path.join(ALICE, "nope") }).error, /недоступна/, "несуществующая папка")
+})
+
+test("linuxJailLine: пустая, с \\0, длинная команда — отказ", () => {
+  const o = { name: "teleharness-t-alice", home: ALICE }
+  for (const cmd of ["", "   ", "\n\t", undefined, null, 42, ["ls"], "ls\0rm", "a".repeat(65537), "ж".repeat(32769)])
+    assert.match(linuxJailLine(cmd, o).error ?? "", /пустая или недопустимая команда/, JSON.stringify(cmd)?.slice(0, 40))
+  assert.ok(linuxJailLine("a".repeat(65536), o).command, "ровно 64 KiB — допустимо")
+  // JSON-экранирование раздувает команду: строка запуска не должна превышать
+  // MAX_ARG_STRLEN (128 KiB), иначе exec падает с E2BIG вместо понятного отказа.
+  const quotes = linuxJailLine('"'.repeat(60000), o)
+  assert.match(quotes.error ?? "", /недопустимая команда/)
+  const ctl = linuxJailLine("\u0001".repeat(20000), o)
+  assert.match(ctl.error ?? "", /недопустимая команда/)
+})
+
+test("linuxJailLine: плохое имя песочницы или нет home — отказ", () => {
+  for (const name of [null, undefined, "", "alice", "teleharness-t-", "teleharness-t-a b", "teleharness-t-a/b", "teleharness-t-../x", "teleharness-t-" + "a".repeat(41), "teleharness-t-alice\n", "TELEHARNESS-T-alice", "teleharness-t-alice;id"])
+    assert.match(linuxJailLine("ls", { name, home: ALICE }).error ?? "", /имени песочницы/, String(name))
+  assert.ok(linuxJailLine("ls", { name: "teleharness-t-" + "a".repeat(40), home: ALICE }).command, "40 символов — допустимо")
+  assert.match(linuxJailLine("ls", { name: "teleharness-t-alice", home: null }).error, /нет папки/)
+  assert.match(linuxJailLine("ls", { name: "teleharness-t-alice", home: "" }).error, /нет папки/)
+})
+
+test("Linux: tenant bash/shell → sudo teleharness-tenant-run, root — home тенанта, cwd — рабочая папка", async () => {
+  for (const tool of ["bash", "shell"]) {
+    const a = await linuxBash("ses_alice", "whoami && cat notes.md", {}, tool)
+    assert.deepEqual(linuxPayload(a.command), { name: "teleharness-t-alice", home: ALICE, cwd: ALICE, command: "whoami && cat notes.md" }, tool)
+  }
+  assert.equal(linuxPayload((await linuxBash("ses_alice", "ls", { workdir: "proj" })).command).cwd, path.join(ALICE, "proj"))
+  const sub = linuxPayload((await linuxBash("ses_alice_sub", "ls")).command)
+  assert.equal(sub.home, ALICE, "корень — home тенанта, не подпапка сессии")
+  assert.equal(sub.cwd, path.join(ALICE, "proj"))
+  assert.equal(linuxPayload((await linuxBash("ses_child", "ls")).command).name, "teleharness-t-alice", "субагент — тоже в песочнице")
+  const sc = linuxPayload((await linuxBash("ses_alice", `cd "${path.join(ALICE, "proj")}" && python build.py`)).command)
+  assert.equal(sc.cwd, path.join(ALICE, "proj"))
+  assert.equal(sc.command, "python build.py")
+  const carol = linuxPayload((await linuxBash("ses_carol", "ls")).command)
+  assert.match(carol.name, /^teleharness-t-h[0-9a-f]{16}$/)
+  assert.equal(carol.home, CAROL)
+})
+
+test("Linux: workdir вне папки, симлинк наружу, пустая команда — отказ; пробел в папке безопасен", async () => {
+  for (const workdir of [BOB, "../bob", "/etc", "/", path.join(ALICE, "escape"), path.join(ALICE, "escape-bob"), P("tenants", "vault", "alice")])
+    await assert.rejects(linuxBash("ses_alice", "ls", { workdir }), /Доступ запрещён/, workdir)
+  await assert.rejects(linuxBash("ses_alice", "cd .. && ls"), /вне вашей папки/)
+  await assert.rejects(linuxBash("ses_alice", "cd escape && ls"), /вне вашей папки/)
+  await assert.rejects(linuxBash("ses_alice", "   "), /пустая или недопустимая команда/)
+  await assert.rejects(linuxBash("ses_alice", undefined), /пустая или недопустимая команда/)
+  // a space in the tenant folder is shell-inert here (the folder travels inside base64-JSON),
+  // unlike the Windows argv line, which refuses it
+  const bad = linuxPayload((await linuxBash("ses_bad", "ls")).command)
+  assert.equal(bad.home, P("tenants", "home", "bad name"))
+  assert.match(bad.name, /^teleharness-t-h[0-9a-f]{16}$/)
+  const admin = await linuxBash("ses_admin", "ls /etc", { workdir: "/" })
+  assert.equal(admin.command, "ls /etc", "админ не трогается")
+})
+
+test("Linux: renderCommand идёт через песочницу (teleharness-render внутри контейнера)", async () => {
+  const z = await core.zoneOf(ALICE)
+  const r = await core.renderCommand('"Новый дизайн.pptx" --pages 1-3', z, path.join(ALICE, "proj"), { platform: "linux" })
+  assert.deepEqual(linuxPayload(r.command), { name: "teleharness-t-alice", home: ALICE, cwd: path.join(ALICE, "proj"), command: 'teleharness-render "Новый дизайн.pptx" --pages 1-3' })
+  assert.match((await core.renderCommand("a.pptx", z, BOB, { platform: "linux" })).error, /вне вашей папки/)
+  const viaHook = linuxPayload((await linuxBash("ses_alice", "teleharness-render deck.pptx", { workdir: "proj" })).command)
+  assert.equal(viaHook.command, "teleharness-render deck.pptx")
+  assert.equal(viaHook.cwd, path.join(ALICE, "proj"))
+  assert.equal((await linuxBash("ses_admin", "teleharness-render a.pptx")).command, "teleharness-render a.pptx", "админ не трогается")
+})
+
+test("Linux: unjailCommand разворачивает sudo-строку; история модели — своя команда", async () => {
+  const cmd = 'python -c "print(1 & 2)" | grep 0 # привет'
+  const a = await linuxBash("ses_alice", cmd, {}, "shell")
+  assert.equal(core.unjailCommand(a.command), cmd)
+  const stored = { type: "tool", tool: "shell", state: { status: "completed", input: { command: a.command, description: "x" } } }
+  assert.equal(core.unjailPart(stored).state.input.command, cmd)
+  assert.equal(stored.state.input.command, a.command, "сохранённая часть не мутируется")
+  assert.equal(core.unjailCommand(RUNNER + "!!!"), null, "мусор вместо base64 — null")
+  assert.equal(core.unjailCommand(RUNNER + Buffer.from("not json").toString("base64url")), null)
+  assert.equal(core.unjailCommand(RUNNER + Buffer.from('{"x":1}').toString("base64url")), null, "нет command — null")
+  assert.equal(core.unjailCommand("echo /usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 eyJjb21tYW5kIjoieCJ9"), null, "не в начале строки — не наша строка")
+})
+
+test("forbiddenPaths: абсолютные POSIX-пути к хранилищу в тексте команды — отказ, своя зона — можно", async () => {
+  const z = await core.zoneOf(ALICE)
+  const idx = P("vault", "agents", "_index.md")
+  for (const cmd of [`cat ${idx}`, `cat "${idx}"`, `cat '${idx}'`, `X=${idx} sh`, `ls ${P("vault")}`, `cp a ${P("tenants", "vault", "bob", "n.md")}`, `echo 1;cat\t${idx}`])
+    assert.ok(core.forbiddenPaths({ command: cmd }, z, ALICE).length > 0, cmd)
+  assert.deepEqual(core.forbiddenPaths({ command: `cat ${P("tenants", "vault", "alice", "n.md")}` }, z, ALICE), [], "своя зона")
+  assert.deepEqual(core.forbiddenPaths({ command: `cat ${path.join(ALICE, "notes.md")} /etc/hostname` }, z, ALICE), [], "вне хранилища — не дело forbiddenPaths")
+  assert.deepEqual(core.forbiddenPaths({ filePath: idx }, z, ALICE), [idx])
+  await assert.rejects(linuxBash("ses_alice", `cat ${idx}`), /Доступ запрещён/)
 })

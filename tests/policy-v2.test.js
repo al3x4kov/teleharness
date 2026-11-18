@@ -5,12 +5,29 @@
 // `permission` field and treated every v2 agent as unsandboxed — tenants saw
 // nothing. v1 fixtures and expectations stay untouched (g1-units.test.js).
 // Run: node --test tests/policy-v2.test.js
-import { test } from "node:test";
+import { test as nodeTest } from "node:test";
 import assert from "node:assert/strict";
 import { agentCan, agentHasShell, agentIsSandboxed, defaultTenantAgent, setTenantVaultRoots, tenantAgents } from "../lib/policy.js";
 
-// the fixtures below use this tenant knowledge-base root (the default one is ~/.teleharness/tenants-vault)
-setTenantVaultRoots(["D:\\Vault\\tenants"]);
+// TASK-17.18: фикстуры ниже — Windows-формы путей. Корень базы знаний тенантов
+// закреплён явно (умолчание из config — ~/.teleharness/tenants-vault), а платформа закреплена "win32":
+// agentCan не принимает platform, underVaultRoot берёт process.platform — подменяем его на время теста.
+// Linux-формы — отдельные тесты «linux:» в конце файла.
+const WIN_VAULT = "D:\\Vault\\tenants";
+function onPlatform(platform, fn) {
+  const orig = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...orig, value: platform });
+  try {
+    return fn();
+  } finally {
+    Object.defineProperty(process, "platform", orig);
+  }
+}
+const test = (name, fn) =>
+  nodeTest(name, () => {
+    setTenantVaultRoots([WIN_VAULT]);
+    return onPlatform("win32", fn);
+  });
 
 // The live build agent (api-map §9, 2026-11-07): broad allow, everything legal.
 const BUILD = {
@@ -130,4 +147,38 @@ test("v1 ruleset wins when both fields exist (conservative)", () => {
 test("defaultTenantAgent on the live-shaped catalog: the Sandbox primary", () => {
   assert.equal(defaultTenantAgent([BUILD, GENERAL, COMPACT, SANDBOX_V2]), "Sandbox");
   assert.equal(defaultTenantAgent([BUILD, GENERAL, SANDBOX_V2], "Build"), "Sandbox");
+});
+
+// ---- TASK-17.18: те же правила на Linux (POSIX-пути, регистр значим, «\\» — не разделитель) ----
+const LINUX_VAULT = "/srv/kb-vault/tenants";
+const SANDBOX_LINUX = {
+  ...SANDBOX_V2,
+  permissions: [
+    { action: "*", resource: "*", effect: "allow" },
+    { action: "subagent", resource: "*", effect: "deny" },
+    { action: "external_directory", resource: "*", effect: "deny" },
+    { action: "external_directory", resource: `${LINUX_VAULT}/*`, effect: "allow" },
+    { action: "external_directory", resource: "/home/teleharness/.local/share/opencode/tool-output/*", effect: "allow" },
+    { action: "shell", resource: "*", effect: "allow" },
+  ],
+};
+const linuxTest = (name, fn) =>
+  nodeTest(name, () => {
+    setTenantVaultRoots([LINUX_VAULT]);
+    return onPlatform("linux", fn);
+  });
+
+linuxTest("linux: Sandbox с vault/spool-исключениями остаётся песочницей; дефолтный агент тенанта — Sandbox", () => {
+  assert.equal(agentCan(SANDBOX_LINUX, "external_directory"), false);
+  assert.equal(agentIsSandboxed(SANDBOX_LINUX), true);
+  assert.equal(defaultTenantAgent([BUILD, GENERAL, COMPACT, SANDBOX_LINUX]), "Sandbox");
+});
+
+linuxTest("linux: allow вне корня базы знаний (другой регистр, соседнее имя, traversal) открывает external_directory", () => {
+  const withAllow = (resource) => ({ name: "X", mode: "primary", permissions: [{ action: "*", resource: "*", effect: "allow" }, { action: "subagent", resource: "*", effect: "deny" }, { action: "external_directory", resource: "*", effect: "deny" }, { action: "external_directory", resource, effect: "allow" }] });
+  for (const r of ["/srv/kb-vault/Tenants/*", "/srv/kb-vault/tenantsX/*", "/srv/kb-vault/tenants/../x/*", "/home/*", "D:\\Obsidian\\tenants\\*"]) {
+    assert.equal(agentCan(withAllow(r), "external_directory"), true, r);
+    assert.equal(agentIsSandboxed(withAllow(r)), false, r);
+  }
+  assert.equal(agentIsSandboxed(withAllow(`${LINUX_VAULT}/alice/*`)), true, "подпапка корня — исключение");
 });

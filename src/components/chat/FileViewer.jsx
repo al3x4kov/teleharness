@@ -162,7 +162,7 @@ function DocxView({ data }) {
 
 export default function FileViewer({ file, onClose }) {
   const kind = file.dataUrl ? "image" : kindForFile(file.name);
-  const directory = activeSessionDir() ?? "";
+  const directory = file.directory ?? activeSessionDir() ?? ""; // FEAT-19.16: a run folder outside any chat
   const url = file.dataUrl ?? (file.path ? fileUrl(directory, file.path) : "");
   const downloadUrl = file.dataUrl ?? (file.path ? fileUrl(directory, file.path, true) : "");
   const fetchBody = ["md", "text", "csv", "xlsx", "docx"].includes(kind);

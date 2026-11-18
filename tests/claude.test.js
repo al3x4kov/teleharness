@@ -920,3 +920,22 @@ test("runner: user system prompt — file, tenant kit merged, snapshot off on re
   await waitIdle(hub, 10_000, 5);
   assert.equal(JSON.parse(answerOf(runner, "sp3")).argv.includes("--append-system-prompt-file"), false);
 });
+
+// TASK-17.18: на Linux имя процесса — бинарник из /proc/<pid>/exe (comm у Node 24 — «MainThread»,
+// имя потока, а не исполняемого файла); startMs на POSIX не определяется.
+test("inspectProcess: linux читает /proc/<pid>/exe; нет процесса / мусорный pid → null", { skip: process.platform !== "linux" && "только Linux: /proc" }, async () => {
+  const { inspectProcess } = await import("../lib/claude.js");
+  const { readlinkSync } = await import("node:fs");
+  const exe = readlinkSync(`/proc/${process.pid}/exe`);
+  const me = inspectProcess(process.pid);
+  assert.deepEqual(me, { name: path.basename(exe).replace(/\.exe$/i, "").toLowerCase(), startMs: null });
+  assert.equal(me.name, "node");
+  const child = spawn(process.execPath, ["-e", "process.title='MainThread'; setTimeout(() => {}, 5000)"], { stdio: "ignore" });
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(inspectProcess(child.pid)?.name, "node", "имя потока/заголовок не подменяют бинарник");
+  } finally {
+    child.kill();
+  }
+  for (const pid of [0, -1, 1.5, "1", null, 2 ** 22 + 12345]) assert.equal(inspectProcess(pid), null, String(pid));
+});

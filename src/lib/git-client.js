@@ -7,8 +7,31 @@ import { locale, t as tr } from "./i18n.js";
 
 // sid → true (repo) | false (not a repo / no access) ; missing = unknown.
 export const gitRepo = signal({});
-// sid → the repo root (to turn a chat file into the path the git API takes).
+// sid → the repo root (to turn a chat file into the path the git API takes):
+// the absolute root (admin) or {rel} — the root relative to the chat's
+// directory (a tenant gets no server path, TASK-18.13 D4); resolveGitRoot().
 export const gitRoot = signal({});
+
+// A /git/status answer → what gitRoot keeps (null when nothing usable).
+export function rootInfo(r) {
+  if (typeof r?.root === "string" && r.root) return r.root;
+  if (typeof r?.rootRel === "string") return { rel: r.rootRel };
+  return null;
+}
+
+// gitRoot entry + the chat's directory → the absolute repo root (or null).
+export function resolveGitRoot(info, base = "") {
+  if (typeof info === "string") return info || null;
+  if (!info || typeof info.rel !== "string" || !base) return null;
+  const parts = String(base).replace(/\\/g, "/").replace(/\/+$/, "").split("/");
+  for (const seg of info.rel.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") {
+      if (parts.length > 1) parts.pop();
+    } else parts.push(seg);
+  }
+  return parts.join("/");
+}
 const inflight = new Map();
 
 export function probeGitRepo(sid, { client = api, force = false } = {}) {
@@ -18,7 +41,8 @@ export function probeGitRepo(sid, { client = api, force = false } = {}) {
   const p = client
     .gitStatus({ sid })
     .then((r) => {
-      if (r?.repo === true && typeof r.root === "string") gitRoot.value = { ...gitRoot.value, [sid]: r.root };
+      const info = r?.repo === true ? rootInfo(r) : null;
+      if (info != null) gitRoot.value = { ...gitRoot.value, [sid]: info };
       return r?.repo === true;
     })
     .catch(() => false)
@@ -34,28 +58,40 @@ export function probeGitRepo(sid, { client = api, force = false } = {}) {
 export function setGitRepo(sid, repo, root = null) {
   if (!sid) return;
   gitRepo.value = { ...gitRepo.value, [sid]: repo === true };
-  if (repo === true && typeof root === "string") gitRoot.value = { ...gitRoot.value, [sid]: root };
+  if (repo === true && root != null) gitRoot.value = { ...gitRoot.value, [sid]: root };
 }
 
 const serverLang = () => locale() === "ru-RU";
 
-// Push errors (frame 6): the server's kind → title + what to do. The server's
-// own text (no server paths) is used for the kinds without a fixed wording.
+// Push errors (frame 6): the server's kind → ONE title + ONE explanation
+// (TASK-18.13 D5: the server's own sentence is not appended — it repeated the
+// title and «commits are kept locally»). Only the unknown kind quotes git's
+// line (body.detail, already free of server paths).
 export function pushErrorView(err) {
   const body = err?.body ?? {};
-  const kind = body.kind ?? (err?.status === 403 ? "forbidden" : !err?.status ? "network" : "unknown");
-  if (kind === "auth") {
-    return { kind, title: tr("git.push.failed"), text: tr("git.push.auth") };
-  }
-  if (kind === "rejected") {
-    return { kind, title: tr("git.push.rejectedTitle"), text: tr("git.push.rejected") };
-  }
-  if (kind === "forbidden") return { kind, title: tr("git.push.failed"), text: tr("git.push.forbidden") };
-  // The server explains in Russian; an English UI uses its own fixed wording.
-  const own = typeof body.error === "string" && body.error.trim() && serverLang() ? body.error.trim() : null;
-  if (kind === "no-upstream") return { kind, title: tr("git.push.failed"), text: (own ?? tr("git.push.noUpstream")) + tr("git.push.keptLocal") };
-  if (kind === "network") return { kind, title: tr("git.push.failed"), text: (own ?? tr("git.push.network")) + tr("git.push.keptLocalLater") };
-  return { kind: "unknown", title: tr("git.push.failed"), text: (own ?? tr("git.push.unknown")) + tr("git.push.keptLocal") };
+  const kind = body.kind ?? (err?.status === 403 ? "forbidden" : !err?.status ? "offline" : "unknown");
+  const title = tr("git.push.failed");
+  if (kind === "auth") return { kind, title, text: tr("git.push.auth") };
+  if (kind === "rejected") return { kind, title: tr("git.push.rejectedTitle"), text: tr("git.push.rejected") };
+  if (kind === "forbidden") return { kind, title, text: tr("git.push.forbidden") };
+  if (kind === "detached") return { kind, title, text: tr("git.push.detached") };
+  if (kind === "no-upstream") return { kind, title, text: tr("git.push.noUpstream") };
+  if (kind === "network") return { kind, title, text: tr("git.push.network") };
+  if (kind === "offline") return { kind: "network", title, text: tr("git.push.offline") };
+  const detail = typeof body.detail === "string" && body.detail.trim() ? body.detail.trim() : null;
+  return { kind: "unknown", title, text: detail ? tr("git.push.unknownDetail", { detail }) : tr("git.push.unknown") };
+}
+
+// «Suggest message» failed → {text, detail}. A 502 from the model carries one
+// ready Russian sentence and its kind (TASK-18.13 D6) — shown as is in a Russian
+// UI (an English UI words the kind itself), no prefix; the provider's raw text
+// (detail) only collapsed under it.
+const SUGGEST_KINDS = { limit: "limit", timeout: "timeout", start: "start", "no-model": "noModel", model: "model" };
+export function suggestErrorView(err) {
+  const own = typeof err?.body?.error === "string" && err.body.error.trim() ? err.body.error.trim() : null;
+  const detail = typeof err?.body?.detail === "string" && err.body.detail.trim() ? err.body.detail.trim() : null;
+  if (err?.status === 502 && own) return { text: serverLang() ? own : tr(`git.suggestErr.${SUGGEST_KINDS[err.body.kind] ?? "model"}`), detail };
+  return { text: gitErrorText(err, tr("git.view.suggestFailed")), detail: null };
 }
 
 // Any other git error → one line (the server's text when it has one).

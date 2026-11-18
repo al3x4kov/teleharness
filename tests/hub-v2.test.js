@@ -203,3 +203,15 @@ test("v1 через адаптер: per-directory /event?directory=, событ�
   await up.waitForSubscription("C:\\Home");
   await client.waitFor((e) => e.type === "teleharness.resync"); // v1: resync на реконнекте (как раньше)
 });
+
+test("TASK-19.9: одобренный повтор в v2 повторно использует прежний inbox ID",async()=>{
+  const now=Date.now(),id='msg_19f5'+'b'.repeat(28);
+  const {up}=await hubWithOc({directories:[DIR_A],
+    hubOpts:{stallReplayMs:100,stallTickMs:40,maxPromptReplays:1,
+      canRecoverChat:sid=>sid==='ses_stable',replayInboxId:(sid,tail)=>sid==='ses_stable' && tail===id?id:null},
+    upOpts:{sessions:[{id:'ses_stable',location:{directory:DIR_A},time:{created:now}}],
+      messages:{ses_stable:[{id,type:'user',text:'Тест',time:{created:now-60000}}]}}});
+  await waitForCondition(()=>up.requests.some(r=>r.path==='/api/session/ses_stable/prompt'),5000);
+  const post=up.requests.find(r=>r.path==='/api/session/ses_stable/prompt');
+  assert.equal(post.body.id,id);
+});

@@ -1,0 +1,12 @@
+#!/opt/venv/bin/python
+"""Run the shared hardened renderer inside this user's offline container."""
+import base64
+import os
+import shlex
+import sys
+from pathlib import Path
+root=str(Path(os.environ['HOME']).resolve())
+cwd=str(Path.cwd().resolve())
+raw=shlex.join(sys.argv[1:])
+b64=base64.urlsafe_b64encode(raw.encode()).decode().rstrip('=') or '-'
+os.execv(sys.executable,[sys.executable,'-I','/opt/render-engine/teleharness_render.py','--root',root,'--cwd',cwd,'--b64',b64])

@@ -8,7 +8,26 @@ import assert from "node:assert/strict"
 import fs from "node:fs"
 import path from "node:path"
 
-import { agentCan, agentIsSandboxed, tenantAgents, setTenantVaultRoots } from "../../../lib/policy.js"
+import { agentCan, agentIsSandboxed, tenantAgents, setTenantVaultRoots, tenantVaultRoots } from "../../../lib/policy.js"
+
+// TASK-17.18: opencode.v2.json — конфиг Windows-прода (зона тенантов D:\Vault\tenants\*).
+// lib/policy.js сравнивает пути по process.platform (BUG-17.14: на POSIX «\» не
+// разделитель), параметра platform у agentCan нет — поэтому Windows-семантику
+// закрепляем на время проверки: platform=win32 и корень зоны тенантов из конфига.
+// На Windows-хосте это ровно поведение прода; на Linux — та же Windows-ветка.
+const WIN_VAULT = "D:\\Vault\\tenants"
+function asWindowsProd(fn) {
+  const desc = Object.getOwnPropertyDescriptor(process, "platform")
+  const roots = tenantVaultRoots()
+  Object.defineProperty(process, "platform", { ...desc, value: "win32" })
+  setTenantVaultRoots([WIN_VAULT])
+  try {
+    return fn()
+  } finally {
+    Object.defineProperty(process, "platform", desc)
+    setTenantVaultRoots(roots)
+  }
+}
 
 const DIR = path.resolve(import.meta.dirname, "..")
 const read = (f) => fs.readFileSync(path.join(DIR, f), "utf8")
@@ -125,7 +144,7 @@ test("permissions (общие): broad allow первыми, 21 ask-паттер�
   }
 })
 
-test("Sandbox: правила v2 эквивалентны 1.x; агент изолирован по форме /api/agent v2", () => {
+test("Sandbox: правила v2 эквивалентны 1.x; агент изолирован по форме /api/agent v2", () => asWindowsProd(() => {
   const s = cfg.agents.Sandbox
   assert.equal(s.mode, "primary")
   assert.equal(s.model, "zai-coding-plan/glm-5.3#high")
@@ -150,9 +169,9 @@ test("Sandbox: правила v2 эквивалентны 1.x; агент изо
   assert.equal(agentCan(live, "external_directory"), false, "внешние папки закрыты (allow только зона тенантов — BUG-171 исключение)")
   assert.equal(agentIsSandboxed(live), true)
   assert.ok(tenantAgents(agentListView()).some((a) => a.name === "Sandbox"), "Sandbox виден тенантам")
-})
+}))
 
-test("Sandbox изолирован и на стенде v2 (своя зона тенантов после патча скрипта)", () => {
+test("Sandbox изолирован и на стенде v2 (своя зона тенантов после патча скрипта)", () => asWindowsProd(() => {
   const standVault = "D:\\th-stage\\oc2\\tenants\\vault"
   const prev = read("opencode.v2.json")
   setTenantVaultRoots([standVault])
@@ -165,9 +184,9 @@ test("Sandbox изолирован и на стенде v2 (своя зона т
   } finally {
     setTenantVaultRoots(["D:\\Vault\\tenants"])
   }
-})
+}))
 
-test("Hephaestus и orchestrator не видны тенантам (admin-only); их агентные поля перенесены", () => {
+test("Hephaestus и orchestrator не видны тенантам (admin-only); их агентные поля перенесены", () => asWindowsProd(() => {
   const h = cfg.agents["Hephaestus - deep worker"]
   assert.equal(h.mode, "primary")
   assert.equal(h.model, `${v1.agent["Hephaestus - deep worker"].model}#${v1.agent["Hephaestus - deep worker"].variant}`)
@@ -176,7 +195,7 @@ test("Hephaestus и orchestrator не видны тенантам (admin-only); 
   assert.ok(fs.existsSync(path.join(DIR, "prompts", "sandbox.md")))
   const tenant = tenantAgents(agentListView()).map((a) => a.name)
   assert.deepEqual(tenant, ["Sandbox"], `из конфига тенантам виден только Sandbox (получили: ${tenant})`)
-})
+}))
 
 test("плагины: slim пиннут точной версией, наш плагин директорией, порядок «slim, потом наш»", () => {
   assert.deepEqual(cfg.plugins, ["oh-my-opencode-slim@3.0.7", "./plugin-v2"])

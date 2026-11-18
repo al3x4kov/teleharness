@@ -9,6 +9,10 @@ import path from "node:path"
 import { execFileSync } from "node:child_process"
 import { pathToFileURL } from "node:url"
 
+// Directory junction on Windows, plain directory symlink on POSIX (the "junction"
+// type is ignored there) — both point out of the tenant folder.
+const junction = (link, target) => fs.symlinkSync(target, link, "junction")
+
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "vc-sandbox-"))
 const P = (...x) => path.join(ROOT, ...x)
 const HOME_T = P("tenants", "home")
@@ -31,7 +35,7 @@ before(async () => {
   fs.writeFileSync(SECRET, "{}")
   fs.writeFileSync(path.join(ALICE, "notes.md"), "hi")
   // a junction inside the tenant folder that points outside of it
-  execFileSync("cmd", ["/c", "mklink", "/J", path.join(ALICE, "escape"), path.dirname(SECRET)], { stdio: "ignore" })
+  junction(path.join(ALICE, "escape"), path.dirname(SECRET))
   fs.writeFileSync(P("users.json"), JSON.stringify({ users: [{ name: "admin", role: "admin", directories: [] }] }))
   Object.assign(process.env, {
     TELEHARNESS_TENANT_HOME: HOME_T,

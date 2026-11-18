@@ -23,14 +23,14 @@ export function onEpoch(fn) {
 }
 
 // raw: send `body` as-is (a File/Blob upload) with `contentType`.
-async function request(method, path, body, { signal, raw = false, contentType } = {}) {
+async function request(method, path, body, { signal, raw = false, contentType, headers } = {}) {
   const res = await fetch(BASE + path, {
     method,
     signal,
     ...(body !== undefined
       ? raw
         ? { headers: { "content-type": contentType || "application/octet-stream" }, body }
-        : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
+        : { headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }
       : {}),
   });
   try {
@@ -103,6 +103,11 @@ function idPath(id) {
   return encodeURIComponent(id);
 }
 
+// The schedule timestamp is part of the Temporal workflow ID. The router matches URL.pathname.
+function workflowPath(id) {
+  return idPath(id).replace(/%3A/gi, ":").replace(/%2B/gi, "+");
+}
+
 // Session-scoped upstream routes are directory-scoped: a session that lives
 // outside the server's default directory silently answers EMPTY (live 1.19.5:
 // GET /session/:id/message?directory=HOME for a Temp-dir session → 200 [])
@@ -123,6 +128,24 @@ export function gitQuery(where = {}, extra = {}) {
 }
 
 export const api = {
+  // FEAT-19.4: definitions use CAS revisions; execution is separately negotiated.
+  temporalStart: body => json("POST", "/temporal/runs", body),
+  temporalRunAction: (id,body) => json("POST", "/temporal/runs/" + workflowPath(id) + "/actions", body),
+  temporalSchedules: () => json("GET","/temporal/schedules"),
+  temporalCreateSchedule: body => json("POST","/temporal/schedules",body),
+  temporalScheduleAction: (id,action) => json("POST","/temporal/schedules/"+idPath(id)+"/"+idPath(action),{}),
+  temporalResult: (id,step) => json("GET", "/temporal/runs/" + workflowPath(id) + "/results/" + idPath(step)),
+  temporalRun: id => json("GET", "/temporal/runs/" + workflowPath(id)),
+  temporalRuns: () => json("GET", "/temporal/runs"),
+  temporalAttention: () => json("GET", "/temporal/attention"), // FEAT-19.14
+  temporalProjects: () => json("GET", "/temporal/projects"), // BUG-251
+  temporalCapabilities: () => json("GET", "/temporal/capabilities"),
+  temporalDefinitions: () => json("GET", "/temporal/definitions"),
+  temporalDefinition: (id) => json("GET", "/temporal/definitions/" + idPath(id)),
+  temporalCreate: (draft) => json("POST", "/temporal/definitions", { draft }),
+  temporalSave: (id, revision, draft) => json("PUT", "/temporal/definitions/" + idPath(id), { revision, draft }),
+  temporalValidate: (id) => json("POST", "/temporal/definitions/" + idPath(id) + "/validate", {}),
+  temporalPublish: (id, revision) => json("POST", "/temporal/definitions/" + idPath(id) + "/publish", { revision }),
   // ---- auth: the long token IS the credential; a match mints the year-long
   // HttpOnly cookie (the device-stays-logged-in part). All later calls ride
   // the cookie automatically (same-origin fetch + EventSource).
@@ -213,8 +236,9 @@ export const api = {
     await request("DELETE", `/session/${idPath(id)}${withDir(directory)}`);
     return true;
   },
-  prompt: async (id, payload, { directory } = {}) => {
-    const res = await request("POST", `/session/${idPath(id)}/prompt${withDir(directory)}`, payload);
+  prompt: async (id, payload, { directory, turnId } = {}) => {
+    const res = await request("POST", `/session/${idPath(id)}/prompt${withDir(directory)}`, payload,
+      turnId ? { headers: { "x-teleharness-turn-id": turnId } } : {});
     if (res.status === 204) return true;
     try {
       return await res.json();

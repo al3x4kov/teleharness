@@ -13,7 +13,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -168,7 +168,8 @@ test("tenant: own chat folder — status, diff, commit with its author; foreign 
   // the newer chat's own subfolder is its folder
   const st2 = await (await api(`/teleharness/api/git/status${q({ sid: "ses_t2" })}`, T)).json();
   assert.equal(st2.repo, true);
-  assert.equal(realpathSync(st2.root).toLowerCase(), realpathSync(path.join(aliceDir, "chats", "t2")).toLowerCase()); // macOS /var → /private/var
+  assert.equal(st2.root, null, "TASK-18.13 D4: no absolute server path for a tenant");
+  assert.equal(st2.rootRel, "chats/t2", "the repo root relative to the chat's directory");
   // foreign
   assert.equal((await api(`/teleharness/api/git/status${dirQ(adminRepo)}`, T)).status, 403);
   assert.equal((await api(`/teleharness/api/git/status${q({ sid: "ses_adm" })}`, T)).status, 403);
@@ -194,6 +195,25 @@ test("tenant: own chat folder — status, diff, commit with its author; foreign 
   // push
   r = await api(`/teleharness/api/git/push${q({ sid: "ses_t1" })}`, { ...T, method: "POST", body: {} });
   assert.equal(r.status, 403);
+});
+
+// TASK-18.13 D4: /git/status never hands a tenant an absolute server path;
+// admin keeps root. rootRel / name are enough for the client.
+test("D4: status — tenant gets root:null + rootRel/name (no server path anywhere); admin keeps root", async () => {
+  const aliceDir = alice.user.directories[0];
+  const T = { token: alice.token };
+  for (const query of [q({ sid: "ses_t1" }), q({ sid: "ses_t2" }), dirQ(aliceDir)]) {
+    const text = await (await api(`/teleharness/api/git/status${query}`, T)).text();
+    const st = JSON.parse(text);
+    assert.equal(st.repo, true, query);
+    assert.equal(st.root, null, query);
+    assert.equal(text.includes(path.basename(TMP)), false, `no temp folder name in ${query}`);
+    assert.equal(st.name, path.basename(aliceDir), "display name = the folder the client asked about");
+  }
+  assert.equal((await (await api(`/teleharness/api/git/status${q({ sid: "ses_t1" })}`, T)).json()).rootRel, "");
+  const adm = await (await api(`/teleharness/api/git/status${dirQ(adminRepo)}`)).json();
+  assert.equal(path.resolve(adm.root).toLowerCase(), path.resolve(adminRepo).toLowerCase(), "admin keeps the absolute root");
+  assert.equal(adm.rootRel, "");
 });
 
 test("tenant folder inside the owner's checkout is not a repository for the tenant", async (t) => {
@@ -262,7 +282,15 @@ test("suggest-message: Claude chat — one-shot CLI call, diff in the prompt, no
   writeFileSync(path.join(adminRepo, "a.txt"), "one\nFAIL\n");
   const f = await api(`/teleharness/api/git/suggest-message${q({ sid: "ses_cl" })}`, { method: "POST", body: { files: ["a.txt"] } });
   assert.equal(f.status, 502);
-  assert.match((await f.json()).error, /модел/);
+  const fb = await f.json();
+  assert.match(fb.error, /модел/i);
+  assert.doesNotMatch(fb.error, /Не удалось получить сообщение от модели/, "TASK-18.13 D6: no stacked prefix");
+  assert.equal(fb.detail, "boom", "the provider's raw text apart");
+  // a subscription limit → its own Russian sentence (D6)
+  writeFileSync(path.join(adminRepo, "a.txt"), "one\nLIMIT\n");
+  const lim = await (await api(`/teleharness/api/git/suggest-message${q({ sid: "ses_cl" })}`, { method: "POST", body: { files: ["a.txt"] } })).json();
+  assert.equal(lim.kind, "limit");
+  assert.equal(lim.error, "Лимит модели этого чата исчерпан — напишите сообщение сами или попробуйте позже.");
   // nothing selected / unchanged
   assert.equal((await api(`/teleharness/api/git/suggest-message${q({ sid: "ses_cl" })}`, { method: "POST", body: { files: [] } })).status, 400);
   assert.equal((await api(`/teleharness/api/git/suggest-message${q({ sid: "ses_cl" })}`, { method: "POST", body: { files: ["b.txt"] } })).status, 400);
@@ -308,4 +336,24 @@ test("suggest-message: opencode chat — temporary session with the chat's model
   const foreign = await api(`/teleharness/api/git/suggest-message${q({ sid: "ses_t1" })}`, { method: "POST", token: alice.token, body: { files: ["keep.md"], sid: "ses_oc" } });
   assert.equal(foreign.status, 403);
   sh(adminRepo, "checkout", "--", "a.txt");
+});
+
+// TASK-18.13 D1 (P1): admin opening git of a tenant's chat SUBFOLDER (chats\<id>) — the tenant's repo
+// config must stay untrusted: a program it names (core.fsmonitor) never runs; the admin gets 409 like the tenant.
+test("admin + tenant chat subfolder: dangerous repo config refused (409), the program never runs", async () => {
+  const aliceDir = alice.user.directories[0];
+  const sub = path.join(aliceDir, "chats", "t2");
+  const marker = path.join(sub, "fsmonitor-ran.txt");
+  const script = path.join(sub, "mon.cmd");
+  writeFileSync(script, `@echo ran> "${marker}"\r\n`);
+  execFileSync("git", ["config", "core.fsmonitor", script.split(path.sep).join("/")], { cwd: sub });
+  try {
+    for (const p of [`/teleharness/api/git/status${q({ sid: "ses_t2" })}`, `/teleharness/api/git/status${dirQ(sub)}`]) {
+      const r = await api(p);
+      assert.equal(r.status, 409, `admin ${p}`);
+    }
+    assert.equal(existsSync(marker), false, "fsmonitor program did not run");
+  } finally {
+    execFileSync("git", ["config", "--unset", "core.fsmonitor"], { cwd: sub });
+  }
 });

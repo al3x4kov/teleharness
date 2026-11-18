@@ -11,6 +11,9 @@ import { signal } from "@preact/signals";
 const ROUTES = [
   { path: "/", view: "home" },
   { path: "/projects", view: "projects" },
+  { path: "/temporal", view: "temporal" }, // FEAT-19.1
+  { path: "/temporal/:section", view: "temporal" },
+  { path: "/temporal/:section/:id", view: "temporal" },
   { path: "/project/:id", view: "project" },
   { path: "/settings", view: "settings" },
   { path: "/settings/:section", view: "settings" },

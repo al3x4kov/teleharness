@@ -138,3 +138,30 @@ test("JournalWriter: конец хода → журнал записан; доч
   assert.equal(new JournalWriter({ resolve: async () => null }).fileOf("ses_1", zone), f);
   assert.equal(await w.flush("ses_child"), null);
 });
+
+test("BUG-248: удаление во время чтения отменяет запись и повтор; другой чат завершает запись", async t => {
+  t.mock.timers.enable({apis:["setTimeout"]});
+  const zone=path.join(TMP,"delete-race");
+  const history={zoneRoot:zone,dir:"d",title:"t",messages:MESSAGES};
+  const pending=[];
+  const writer=new JournalWriter({resolve:sid=>new Promise(resolve=>pending.push({sid,resolve}))});
+  const initial=writer.flush("ses_deleted");
+  pending.shift().resolve(history);
+  const oldFile=await initial;
+  assert.ok(existsSync(oldFile));
+
+  const first=writer.flush("ses_deleted");
+  const second=writer.flush("ses_deleted");
+  const other=writer.flush("ses_keep");
+  writer.forget("ses_deleted");
+  rmSync(oldFile);
+  pending[0].resolve(history);
+  pending[1].resolve({retry:true});
+  pending[2].resolve(history);
+  const results=await Promise.all([first,second,other]);
+  assert.ok(!existsSync(oldFile),"устаревшая пересборка вернула удалённый файл");
+  assert.deepEqual(results.slice(0,2),[null,null]);
+  assert.ok(existsSync(results[2]));
+  t.mock.timers.tick(20000);
+  assert.equal(pending.length,3,"устаревшее чтение назначило повтор");
+});

@@ -10,16 +10,28 @@
 // note that sending and branches are the admin's.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
-import { me, sessions } from "../../lib/store.js";
+import { me, refreshSessions, sessions } from "../../lib/store.js";
 import { navigate } from "../../lib/router.js";
 import { t } from "../../lib/i18n.js";
-import { dirBasename } from "../../lib/normalize.js";
-import { agoLabel, gitErrorText, hashDirectory, preselected, pushErrorView, remoteOf, setGitRepo } from "../../lib/git-client.js";
+import { dirBasename, projectDisplayName } from "../../lib/normalize.js";
+import { agoLabel, gitErrorText, hashDirectory, preselected, pushErrorView, remoteOf, rootInfo, setGitRepo, suggestErrorView } from "../../lib/git-client.js";
 import { filesLabel, splitPath } from "../../lib/diff.js";
 import DiffView, { FileRow } from "../git/DiffView.jsx";
+import BranchIcon from "../git/BranchIcon.jsx";
 import "../git/git.css";
 
 export const tenantNote = () => t("git.tenantNote");
+
+// The subtitle under «Git» (TASK-18.13 D10): the chat's title / the project's
+// name — never the internal folder of a tenant chat (chats\<id>) and never a
+// second «Git» (also on the error screens, where there is no status yet).
+export function gitSubtitle({ sid, directory, session, data, admin }) {
+  if (sid) {
+    const title = typeof session?.title === "string" ? session.title.trim() : "";
+    return title || (admin && data?.root ? dirBasename(data.root) : "") || projectDisplayName(session?.directory) || t("common.chat");
+  }
+  return projectDisplayName(directory) || (typeof data?.name === "string" ? data.name : "") || t("git.view.projectFallback");
+}
 
 const short = (s, n = 24) => (s.length > n ? s.slice(0, n).trimEnd() + "…" : s);
 
@@ -73,7 +85,7 @@ export default function GitView({ id = null, directory: dirProp = null, client =
     setSt((s) => ({ ...s, phase: s.data ? "refreshing" : "loading", error: null }));
     try {
       const r = await client.gitStatus(where);
-      if (sid) setGitRepo(sid, r?.repo === true, r?.root ?? null);
+      if (sid) setGitRepo(sid, r?.repo === true, rootInfo(r));
       if (reseed) seeded.current = false;
       setSt({ phase: "ready", data: r ?? { repo: false }, error: null });
     } catch (err) {
@@ -88,6 +100,9 @@ export default function GitView({ id = null, directory: dirProp = null, client =
       (r) => setPreselect(r?.preselect === "none" ? "none" : "modified"),
       () => setPreselect("modified"),
     );
+    // a deep link (#/git/<sid>) before any list was loaded: the chat's title
+    // for the subtitle comes from the session list (D10)
+    if (sid && !sessions.value.some((s) => s.id === sid)) refreshSessions();
     return () => clearTimeout(toastTimer.current);
   }, [sid, directory]);
 
@@ -133,9 +148,9 @@ export default function GitView({ id = null, directory: dirProp = null, client =
       const r = await client.gitSuggest({ ...where, ...(askSid ? { sid: askSid } : {}) }, ticked);
       const text = typeof r?.message === "string" ? r.message.trim() : "";
       if (text) setMsg(text);
-      setSuggest({ busy: false, error: text ? null : t("git.view.noSuggestion") });
+      setSuggest({ busy: false, error: text ? null : { text: t("git.view.noSuggestion"), detail: null } });
     } catch (err) {
-      setSuggest({ busy: false, error: gitErrorText(err, t("git.view.suggestFailed")) });
+      setSuggest({ busy: false, error: suggestErrorView(err) });
     }
   };
 
@@ -172,7 +187,7 @@ export default function GitView({ id = null, directory: dirProp = null, client =
   };
 
   const data = st.data;
-  const folder = dirBasename(data?.root || directory || session?.directory || "") || "Git";
+  const folder = gitSubtitle({ sid, directory, session, data, admin: isAdmin });
   const loading = st.phase === "loading";
 
   let body;
@@ -214,7 +229,7 @@ export default function GitView({ id = null, directory: dirProp = null, client =
         {st.phase === "error" && <div class="gcard warn" role="alert"><b><i aria-hidden="true">!</i>{t("git.view.notRefreshed")}</b><div class="muted">{st.error}</div></div>}
         <div class="gcard">
           <div class="br">
-            <span class="bname">⎇ {data.detached ? (data.lastCommit?.hash ?? "HEAD").slice(0, 7) : data.branch}</span>
+            <span class="bname"><BranchIcon /> {data.detached ? (data.lastCommit?.hash ? data.lastCommit.hash.slice(0, 7) : "HEAD") : data.branch}</span>
             {data.detached && <em>{t("git.view.detached")}</em>}
             {data.upstream && ahead > 0 && <em>{t("git.view.ahead", { n: ahead, remote })}</em>}
             {data.upstream && behind > 0 && <em>{t("git.view.behind", { n: behind, remote })}</em>}
@@ -223,6 +238,7 @@ export default function GitView({ id = null, directory: dirProp = null, client =
           {data.lastCommit?.subject && (
             <div class="muted">{t("git.view.lastCommit", { subject: data.lastCommit.subject })}{data.lastCommit.at ? ` · ${agoLabel(data.lastCommit.at)}` : ""}</div>
           )}
+          {data.detached && <div class="muted">{t("git.view.detachedNote")}</div>}
         </div>
         {files.length === 0 ? (
           <div class="gcard">
@@ -262,14 +278,24 @@ export default function GitView({ id = null, directory: dirProp = null, client =
               </button>
             </div>
             {suggest.busy && <p class="muted" role="status">{t("git.view.suggesting")}</p>}
-            {suggest.error && <p class="git-err" role="alert">{suggest.error}</p>}
+            {suggest.error && (
+              <div class="git-err" role="alert">
+                <p>{suggest.error.text}</p>
+                {suggest.error.detail && (
+                  <details class="git-detail">
+                    <summary>{t("git.view.modelAnswer")}</summary>
+                    <span lang="en">{suggest.error.detail}</span>
+                  </details>
+                )}
+              </div>
+            )}
             {commit.error && <div class="gcard warn" role="alert"><b><i aria-hidden="true">!</i>{t("git.view.commitFailed")}</b><div class="muted">{commit.error}</div></div>}
           </>
         )}
         {canPush && (
           <div class="gcard">
             <div class="br">{t("git.view.push")}</div>
-            <div class="muted">{data.upstream} · {t("git.view.pushAccess")}</div>
+            <div class="muted">{t("git.view.pushTo", { upstream: data.upstream })}</div>
             <div class="btns">
               <button type="button" class="gbtn" disabled={push.busy} aria-busy={push.busy ? "true" : undefined} onClick={doPush}>{t("git.view.pushBtn", { n: ahead })}</button>
             </div>

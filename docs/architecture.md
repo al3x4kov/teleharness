@@ -466,6 +466,26 @@ keepalive подделывался событием `busy`, запись ист�
 
 ---
 
+### 3.8. Пайпы Temporal (1.23–1.24, по умолчанию выключено)
+
+Раздел «Temporal» (`#/temporal`, `src/components/views/TemporalView.jsx`, `src/components/temporal/*`)
+— пайпы из шагов (модельный шаг, решение человека, таймер, условие, артефакт), их версии, запуски,
+расписания и входы запуска (`{{input.*}}`, `{{steps.*}}`). Определения пайпов хранит портал
+(`lib/temporal/definitions.js` → `<TELEHARNESS_DATA_DIR>/temporal-definitions.json`, общая валидация —
+`shared/temporal-definition.js`); маршруты — `routes/temporal.js`, `routes/temporal-schedules.js`,
+проверка владельца и проекта — на сервере.
+
+Исполнение — внешний Temporal-сервер и Python-воркер (`worker/temporal/*`, пакет `temporalio`),
+включается только `TELEHARNESS_TEMPORAL_PIPELINES=1`: портал поднимает приватный сокет воркера
+(`<TELEHARNESS_DATA_DIR>/temporal-private/worker.sock`, `lib/temporal/portal-runtime.js`,
+`lib/temporal/model-bridge.js`), журнал намерений запуска — SQLite (`node:sqlite`), учёт операций и
+лимитов — `lib/temporal/ledger.sql`, `permits.sql` (PostgreSQL контрольной плоскости). Без флага
+определения пайпов редактируются, а экран запусков объясняет, что исполнение не подключено.
+Модельный шаг (`TELEHARNESS_TEMPORAL_MODELS=claude,codex`) — обычный ход чата портала в папке пайпа
+`<проект>/pipelines/<имя>` (`lib/temporal/chat-step.js`): тот же раннер движка, песочница тенанта,
+права и лимиты; каждый запуск пишет файлы в `runs/<дата>-<id>`. Чаты шагов скрыты из «Чатов» и
+«Проектов» (`isPipelineStepSession`) и открываются из запуска.
+
 ## 4. Хранение данных
 
 Каталог `TELEHARNESS_DATA_DIR` (прод: `D:\Apps\teleharness\data`, стенд:
@@ -504,7 +524,7 @@ keepalive подделывался событием `busy`, запись ист�
 эффективная конфигурация с источником каждого значения и `***` у секретов.
 До 1.7.0 env читался в 10 файлах без проверки, и `NaN` тихо выключал защиту (R19).
 
-### 5.1. server.js и lib/* (схема `lib/config.js`, 62 переменных)
+### 5.1. server.js и lib/* (схема `lib/config.js`, 64 переменных)
 
 Таблица сверяется тестом `tests/docs-env-schema.test.js` со схемой `lib/config.js` (TASK-15.9):
 каждое имя схемы должно быть в таблице, дефолт — равен `def` из схемы (секреты и вычисляемые
@@ -527,6 +547,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_TENANT_VAULT` | `~/.teleharness/tenants-vault` | Obsidian-зона нового тенанта (стенд — `D:\th-stage\tenants\vault`) |
 | `TELEHARNESS_TENANT_AGENT` | пусто | агент тенанта по умолчанию; пусто — первый shell-free primary (сейчас `Prometheus - Plan Builder`) |
 | `TELEHARNESS_FILE_ROOTS` | `<TELEHARNESS_HOME>` | extraRoots admin для `/file` (через `;`) |
+| `TELEHARNESS_LEGACY_PATH_ROOT` | пусто | только после переноса Windows → Linux: абсолютный каталог, под который `/file` переводит старые ссылки вложений `C:\…` / `D:\…` и `file:///C:/…` (→ `<корень>/C/…`, `<корень>/D/…`); `..`, UNC, `file://host`, NUL и другие диски — отказ. Корней доступа не добавляет: переведённый путь проходит обычную проверку области (`TELEHARNESS_FILE_ROOTS`, realpath). Пусто — выкл. (TASK-17.18) |
 | `TELEHARNESS_STALL_ABORT_MS` | `900000` | abort хода без событий; 0 — выкл. |
 | `TELEHARNESS_DIALOG_TIMEOUT_MS` | **`0`** (было 600000) | авто-отказ по открытому диалогу; по умолчанию выкл. (FEAT-07.15) |
 | `TELEHARNESS_STALL_REPLAY_MS` / `TELEHARNESS_STALL_REPLAY_MAX` | `180000` / `2` | повтор неотвеченного промпта и лимит за эпизод |
@@ -540,6 +561,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_CLAUDE_BIN` | пусто | бинарник CLI; пусто → `%USERPROFILE%\.local\bin\claude.exe` |
 | `TELEHARNESS_CLAUDE_MCP_CONFIG` | пусто | `--mcp-config` admin-ходов Claude; пусто — нет; битый файл игнорируется с логом (FEAT-13.10) |
 | `TELEHARNESS_KB_ROOT` | `D:\Vault\agents` | база знаний admin для снапшота первого хода Claude-чата; `off` — выкл. (FEAT-13.11) |
+| `TELEHARNESS_GC_ENABLED` | `true` | `0` — gc выключен целиком (значения — `0`/`1`, как у всех bool схемы; `false` — ошибка конфигурации и отказ старта): ни стартового, ни периодического прохода, `POST /teleharness/api/admin/gc` отвечает `{disabled: true}` и ничего не удаляет (пустые чаты, остатки папок тенантов). Ставится на время восстановления/миграции, пока импортированные данные не проверены (TASK-17.18) |
 | `TELEHARNESS_GC_EMPTY_MIN` | `30` | пустые чаты старше N минут удаляет gc; 0 — выкл. (BUG-01.48) |
 | `TELEHARNESS_INSTANCE_IDLE_MIN` | `30` | opencode-экземпляр папки чата освобождается после N минут простоя; 0 — никогда; HOME/каталог владельца не освобождаются (BUG-195) |
 | `TELEHARNESS_INSTANCE_SWEEP_MS` | `300000` | период обхода простаивающих экземпляров |
@@ -574,6 +596,17 @@ keepalive подделывался событием `busy`, запись ист�
 
 | Переменная | Читает | Назначение |
 |---|---|---|
+| `TELEHARNESS_TEMPORAL_TURN_IDS_FROM` | `server.js` | На стенде OpenCode v2 включает стабильный ID повторной отправки для новых текстовых чатов, созданных с указанной даты. Пустое значение выключает режим. |
+| `TELEHARNESS_TEMPORAL_NEW_CHATS` | `server.js` | Стендовый флаг проверки возможности закрепить новый чат за подписочным исполнителем. |
+| `TELEHARNESS_TEMPORAL_CHAT_PGSERVICE` | `server.js` | Имя сервиса PostgreSQL для проверки сохранённого назначения чатов. |
+| `TELEHARNESS_TEMPORAL_DRAIN` | `server.js` | При значении 1 включить режим завершения активных запусков. |
+| `TELEHARNESS_TEMPORAL_TEST_QUEUE` | `server.js` | Отдельная очередь qa-* только для изолированных стендовых прогонов. |
+| `TELEHARNESS_TEMPORAL_OC_DIRECTORY` | `server.js` | Приватный каталог выделенного подписочного opencode с password и work. При отсутствии движок выключен. |
+| `TELEHARNESS_TEMPORAL_PIPELINES` | `server.js` | Включает защищённый сокет worker, исполнение, управление и расписания. По умолчанию выключено. |
+| `TELEHARNESS_TEMPORAL_MODELS` | `server.js` | FEAT-19.16: движки модельных шагов пайпов (`claude,codex`); шаг выполняется ходом чата портала. По умолчанию пусто — модельных шагов нет. |
+| `TELEHARNESS_TEMPORAL_SUBSCRIPTION_ATTESTED` | `server.js` | FEAT-19.16: `1` — владелец подтвердил, что Claude работает только по подписке (у токена сервера нет usage API). |
+| `TELEHARNESS_TEMPORAL_CODEX_HOME` | `server.js` | FEAT-19.16: домашняя папка с входом Codex для текстового шага тенанта; по умолчанию — домашняя папка портала. |
+| `TELEHARNESS_TEMPORAL_STAGE_TIMERS` | `server.js` | FEAT-19.6. Значение 1 включает запуск таймеров и журнал только при TELEHARNESS_ENV=stand. По умолчанию выключено. |
 | `TELEHARNESS_JAIL_EXE` | `server.js` → `lib/claude-tenant.js` | бинарник песочницы (jail) тенанта; пусто → `D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe` |
 | `TELEHARNESS_SANDBOX_PY` | `server.js` → `lib/claude-tenant.js` | python песочницы тенанта; пусто → `D:/teleharness-sandbox/python` |
 | `TELEHARNESS_OC_CONFIG_FILE` | `lib/host.js` | конфиг opencode для «О приложении» (версия slim/claude); прод и стенд v2 задают конфиг зоны v2 (`ops\web-v2.cmd`, BUG-190) |

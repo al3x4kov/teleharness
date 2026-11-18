@@ -1,0 +1,39 @@
+{
+  "model": "zai-coding-plan/glm-5.3-flash",
+  "update": "disable",
+  "policies": [
+    {
+      "action": "provider.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "provider.use",
+      "resource": "zai-coding-plan",
+      "effect": "allow"
+    }
+  ],
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "deny"
+    }
+  ],
+  "agents": {
+    "temporal-text": {
+      "mode": "primary",
+      "description": "Text-only subscription call",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "title": {
+      "model": "zai-coding-plan/glm-5.3-flash"
+    }
+  }
+}

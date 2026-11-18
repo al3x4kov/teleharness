@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  OneshotError, ONESHOT_DIFF_MAX, claudeOneshotArgs, cleanCommitMessage, codexOneshotArgs, commitPrompt, finishedAnswer, resultText, runOpencodeOneshot,
+  OneshotError, ONESHOT_DIFF_MAX, claudeOneshotArgs, cleanCommitMessage, codexOneshotArgs, commitPrompt, finishedAnswer, resultText, runOpencodeOneshot, suggestFailure,
 } from "../lib/oneshot.js";
 import { cleanGitSettings, emailLocalPart, gitDefaults } from "../lib/auth.js";
 import { codexPolicy, parseArgs } from "../lib/codex-shim.mjs";
@@ -124,4 +124,42 @@ test("codex shim --teleharness-oneshot: read-only, approval never, whatever else
   assert.equal(pol.approvalPolicy, "never");
   assert.equal(pol.canAsk, false);
   assert.equal(codexPolicy(parseArgs(["-p", "--permission-mode", "bypassPermissions"])).sandbox === "read-only", false, "a normal turn keeps its policy");
+});
+
+// TASK-18.13 D6: «Предложить сообщение» failed → one Russian sentence, the
+// provider's English text only as a detail.
+test("D6: suggestFailure — limit / timeout / start / other: one Russian sentence, raw text apart", () => {
+  const lim = suggestFailure(new OneshotError("модель вернула ошибку: Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-11-21 02:20:48."));
+  assert.equal(lim.kind, "limit");
+  assert.equal(lim.error, "Лимит модели этого чата исчерпан — напишите сообщение сами или попробуйте позже.");
+  assert.equal(lim.detail, "Weekly/Monthly Limit Exhausted. Your limit will reset at 2026-11-21 02:20:48.");
+  const t = suggestFailure(new OneshotError("модель не ответила за 90 с"));
+  assert.equal(t.kind, "timeout");
+  assert.equal(t.error, "Модель не ответила за 90 с — напишите сообщение сами или попробуйте ещё раз.");
+  assert.equal("detail" in t, false);
+  assert.equal(suggestFailure(new OneshotError("модель не запустилась (ENOENT)")).kind, "start");
+  const other = suggestFailure(new OneshotError("модель вернула ошибку: Internal server error (код выхода 1)"));
+  assert.equal(other.kind, "model");
+  assert.equal(other.detail, "Internal server error");
+  for (const f of [lim, t, other]) {
+    assert.doesNotMatch(f.error, /[A-Za-z]{3}/, "no English in the sentence");
+    assert.doesNotMatch(f.error, /:.*:/, "no stacked prefixes");
+  }
+});
+
+// TASK-18.13 D12: the validation text names the field in Russian, not by its API key.
+test("D12: cleanGitSettings errors name the field in Russian", () => {
+  const msg = (body) => {
+    try {
+      cleanGitSettings(body);
+    } catch (e) {
+      return e.message;
+    }
+    return null;
+  };
+  assert.equal(msg({ authorEmail: "nope" }), "Почта: нужен адрес вида имя@домен");
+  assert.match(msg({ authorName: "a\nb" }), /^Имя: /);
+  for (const body of [{ authorEmail: "nope" }, { authorName: 5 }, { messageLang: "de" }, { preselect: "all" }, { pushAllowed: "yes" }]) {
+    assert.doesNotMatch(msg(body), /authorName|authorEmail|messageLang|preselect|pushAllowed/, JSON.stringify(body));
+  }
 });

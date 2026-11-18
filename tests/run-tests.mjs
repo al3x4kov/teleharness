@@ -51,7 +51,7 @@ const envMs = (name, def) => {
   return Number.isFinite(n) && n > 0 ? n : def;
 };
 
-const WINDOWS_ONLY_OPS_TESTS = new Set(["sandbox-core.test.mjs", "vault-cache-jail.test.mjs", "vault-cache-sandbox.test.mjs", "vault-cache-chatdir.test.mjs"]);
+const SANDBOX_OPS_TESTS = new Set(["sandbox-core.test.mjs", "vault-cache-jail.test.mjs", "vault-cache-sandbox.test.mjs", "vault-cache-chatdir.test.mjs"]);
 
 // BUG-222: spawn + дедлайн вместо spawnSync без timeout; при срабатывании —
 // печатаем набор/партию и файлы, добиваем дерево, возвращаем 1.
@@ -130,8 +130,9 @@ async function main() {
   // раньше в npm test не входили — регрессии плагина ловились только живьём (BUG-193/194).
   const opsTests = readdirSync(path.join(ROOT, "ops", "opencode", "tests"))
     .filter((f) => f.endsWith(".test.mjs"))
-    // the tenant sandbox (AppContainer jail, NTFS junctions) exists on Windows only — so do its tests
-    .filter((f) => process.platform === "win32" || !WINDOWS_ONLY_OPS_TESTS.has(f))
+    // the tenant sandbox tests pin the launcher platform (win32 teleharness-jail / linux teleharness-tenant-run) and run
+    // on Windows and Linux; macOS has no tenant sandbox (its temp paths are symlinked) — skipped there
+    .filter((f) => process.platform !== "darwin" || !SANDBOX_OPS_TESTS.has(f))
     .map((f) => path.join("ops", "opencode", "tests", f));
   const all = [...list(""), ...list("components"), ...opsTests];
   const isServer = (f) => classifySuite(readFileSync(path.join(ROOT, f), "utf8")) === "server";

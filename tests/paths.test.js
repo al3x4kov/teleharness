@@ -174,7 +174,7 @@ test("dirProblem ↔ dirProblemText: любой код из dirProblem имее�
 });
 
 // ---- POSIX (macOS / Linux) -----------------------------------------------------------
-const posix = (d, o = {}) => paths.dirProblem(d, { platform: "linux", portalRoot: "/srv/teleharness", ...o });
+const posix = (d, o = {}) => paths.dirProblem(d, { platform: "linux", portalRoot: "/srv/portal", ...o });
 
 test("POSIX: isAbsoluteDir — только «/…», без «..» и «//»", () => {
   for (const d of ["/", "/home/u", "/tmp/a b", "/Users/u/Проекты"]) assert.equal(paths.isAbsoluteDir(d, { platform: "linux" }), true, d);
@@ -189,13 +189,38 @@ test("POSIX: dirProblem — корень, системные деревья, т�
   for (const d of ["/etc", "/usr/local/x", "/proc/1", "/System/Library", "/dev"]) assert.equal(posix(d), "system", d);
   assert.equal(posix("/etcetera"), null, "граница сегмента");
   for (const d of ["/a*b", "/a?b", "/a\\b"]) assert.equal(posix(d), "alias", d);
-  assert.equal(posix("/srv/teleharness/data"), null, "владелец может");
+  assert.equal(posix("/srv/portal/data"), null, "владелец может");
   const t = { tenant: true, dataDir: "/srv/data", profileRoot: "/home/owner" };
-  assert.equal(posix("/srv/teleharness/x", t), "portal");
+  assert.equal(posix("/srv/portal/x", t), "portal");
   assert.equal(posix("/srv/data/users", t), "portal-data");
   assert.equal(posix("/home/owner/", t), "profile-root");
   assert.equal(posix("/home/owner/.teleharness-tenants/alice", t), null);
+});
 
+test("POSIX (Linux): dirProblem — Windows-путь, «..», управляющие символы, регистр", () => {
+  assert.equal(posix(""), "empty");
+  assert.equal(posix("/home/u/proj"), null);
+  assert.equal(posix("/"), "drive-root");
+  assert.equal(posix("relative/x"), "not-absolute");
+  assert.equal(posix("D:\\Apps"), "not-absolute", "Windows-путь на Linux не каталог");
+  assert.equal(posix("/a/../etc"), "not-absolute");
+  assert.equal(posix("/tmp/a\nb"), "alias", "управляющие символы");
+  for (const d of ["/etc", "/usr/local/x", "/proc/1", "/dev", "/var/lib/x", "/root"]) assert.equal(posix(d), "system", d);
+  assert.equal(posix("/etcetera"), null, "граница сегмента");
+  assert.equal(posix("/srv/portal/data"), null, "владелец может");
+  const t = { tenant: true, dataDir: "/srv/data", profileRoot: "/home/owner" };
+  assert.equal(posix("/srv/portal/x", t), "portal");
+  assert.equal(posix("/srv/portalx", t), null, "префикс имени — не вложенность");
+  assert.equal(posix("/srv/data/users", t), "portal-data");
+  assert.equal(posix("/home/owner/", t), "profile-root");
+  assert.equal(posix("/home/Owner", t), null, "регистр на POSIX значим");
+  assert.equal(posix("/home/owner/.teleharness-tenants/alice", t), null);
+});
+
+test("POSIX: driveProblem не применяется (дисков нет), Windows — проверяет букву", () => {
+  assert.equal(paths.driveProblem("/home/u", { platform: "linux", exists: () => false }), null);
+  assert.equal(paths.driveProblem("Z:\\x", { platform: "win32", exists: () => false }), "no-drive");
+  assert.equal(paths.driveProblem("C:\\x", { platform: "win32", exists: () => true }), null);
 });
 
 // ---- BUG-17.14 (BUG-220): сравнение префиксов путей по платформе ----
@@ -244,4 +269,33 @@ test("BUG-17.14: значения по умолчанию путей к бина
   assert.equal(l.jailExe, "/opt/teleharness/ops/sandbox/teleharness-jail");
   assert.equal(l.sandboxPy, "/opt/teleharness-sandbox/python");
   for (const v of Object.values(l)) assert.ok(!/\\|\.exe$|^[A-Za-z]:/.test(v), v);
+});
+
+test("BUG-17.14: в lib/, routes/ и server.js нет склейки пути с литералом обратного слэша для сравнения", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const nodePath = (await import("node:path")).default;
+  const root = nodePath.dirname(nodePath.dirname(fileURLToPath(import.meta.url)));
+  const list = (d) => readdirSync(nodePath.join(root, d)).filter((f) => f.endsWith(".js")).map((f) => nodePath.join(d, f));
+  const files = [...list("lib"), ...list("routes"), "server.js"];
+  const glue = '+ "' + "\\".repeat(2) + '"'; // исходный текст: + "\\"
+  const bad = [];
+  for (const f of files) {
+    if (f === nodePath.join("lib", "paths.js")) continue; // единственное место, где разделитель выбирается по платформе
+    readFileSync(nodePath.join(root, f), "utf8").split("\n").forEach((line, i) => {
+      if (line.includes("startsWith(") && line.includes(glue)) bad.push(`${f}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(bad, []);
+});
+
+// TASK-17.18 (класс B ревью тестов на Linux): UNC/device распознаются и на POSIX,
+// запрещённые в имени символы — те же, что на Windows.
+test("POSIX: UNC, device-namespace и символы-маски — как на Windows", () => {
+  assert.equal(posix("\\\\evil\\share"), "unc");
+  assert.equal(posix("//host/share"), "unc");
+  assert.equal(posix("\\\\?\\C:\\x"), "device-namespace");
+  assert.equal(posix("//./pipe/x"), "device-namespace");
+  for (const d of ["/home/u/file*stream", "/home/u/a?b", "/home/u/a\"b", "/home/u/a<b", "/home/u/a|b", "/home/u/a\\b"]) assert.equal(posix(d), "alias", d);
+  assert.equal(posix("/home/u/a b-c_d.e"), null, "обычные символы допустимы");
 });

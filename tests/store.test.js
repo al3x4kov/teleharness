@@ -93,7 +93,7 @@ function stubFetch(handler) {
   const calls = [];
   const real = globalThis.fetch;
   globalThis.fetch = async (url, opts = {}) => {
-    const c = { url: String(url), method: opts.method ?? "GET", body: opts.body };
+    const c = { url: String(url), method: opts.method ?? "GET", headers: opts.headers, body: opts.body };
     calls.push(c);
     return handler(c);
   };
@@ -345,4 +345,30 @@ test("stall banner: 2min of silence while busy raises it; any event or idle clea
   assert.equal(stalled.value, true);
   handleEvent({ type: "session.idle", properties: { sessionID: SES } });
   assert.equal(stalled.value, false, "turn end must clear the banner");
+});
+
+test("TASK-19.9: opt-in retry сохраняет ID хода, новая отправка получает другой",async()=>{
+  const {createAndOpen,closeSession,send,retryFailed,active,sessions}=await import("../src/lib/store.js");
+  const captured=[];
+  const stub=stubFetch(c=>{
+    const route=c.url.split("?")[0];
+    if(c.method==="POST" && route.endsWith("/session"))
+      return {ok:true,status:200,json:async()=>({id:"ses_turn_id",directory:"C:\\H",stableTurnIds:true})};
+    if(route.endsWith("/prompt")){
+      captured.push(c.headers?.["x-teleharness-turn-id"]);
+      if(captured.length===1)throw TypeError("network");
+      return {ok:true,status:204};
+    }
+    return {ok:true,status:200,json:async()=>[]};
+  });
+  try{
+    sessions.value=[];
+    await createAndOpen({directory:"C:\\H"});
+    await send({text:"1"});
+    await retryFailed(active.value.messages.find(m=>m.info.failed).info.id);
+    active.value={...active.value,status:"idle"};
+    await send({text:"2"});
+    assert.match(captured[0]??"",/^[a-f0-9]{32}$/);
+    assert.equal(captured[1],captured[0]);assert.notEqual(captured[2],captured[0]);
+  }finally{closeSession();stub.restore();sessions.value=[];}
 });

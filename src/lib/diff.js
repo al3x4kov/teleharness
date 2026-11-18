@@ -580,7 +580,10 @@ export function statusWord(f) {
 export function fileSub(f, { short = false } = {}) {
   const dir = f?.dir ?? splitPath(f?.path ?? "").dir;
   const where = dir || (short ? t("git.root") : t("git.projectRoot"));
-  return short ? where : `${where} · ${statusWord(f)}`;
+  if (short) return where;
+  // TASK-18.13 D12: a rename says where from
+  if (f?.status === "R" && f.oldPath) return `${where} · ${t("git.renamedFrom", { name: splitPath(f.oldPath).name })}`;
+  return `${where} · ${statusWord(f)}`;
 }
 
 // The line number shown in the single column: old for «−», new otherwise.

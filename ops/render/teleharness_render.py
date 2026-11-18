@@ -26,6 +26,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -33,9 +34,9 @@ import time
 import zipfile
 from pathlib import Path
 
-LO = os.environ.get("TELEHARNESS_RENDER_SOFFICE") or r"D:\teleharness-sandbox\libreoffice\program\soffice.com"
+LO = os.environ.get("TELEHARNESS_RENDER_SOFFICE") or (r"D:\teleharness-sandbox\libreoffice\program\soffice.com" if os.name == "nt" else "/usr/bin/libreoffice")
 TEMPLATE = Path(__file__).with_name("lo-profile.xcu")
-WORK_ROOT = Path(os.environ.get("TELEHARNESS_RENDER_TMP") or r"D:\teleharness-sandbox\render-tmp")
+WORK_ROOT = Path(os.environ.get("TELEHARNESS_RENDER_TMP") or (r"D:\teleharness-sandbox\render-tmp" if os.name == "nt" else str(Path(tempfile.gettempdir()) / f"teleharness-render-{os.getuid()}")))
 OFFICE = {".pptx", ".docx", ".xlsx", ".odp", ".odt", ".ods", ".csv", ".pptm", ".docm", ".xlsm", ".ppt", ".doc", ".xls"}
 OOXML = {".pptx", ".docx", ".xlsx", ".pptm", ".docm", ".xlsm"}
 ODF = {".odp", ".odt", ".ods"}
@@ -58,7 +59,7 @@ def within(p: Path, root: Path) -> bool:
 
 def parse_args(raw: str):
     try:
-        toks = shlex.split(raw, posix=False)
+        toks = shlex.split(raw, posix=os.name != "nt")
     except ValueError as e:
         fail(f"не разобрал аргументы ({e})")
     toks = [t[1:-1] if len(t) >= 2 and t[0] == t[-1] == '"' else t for t in toks]
@@ -196,18 +197,27 @@ def keep_warm(work: Path):
 
 def kill_tree(p):
     try:
-        subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True, timeout=30)
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True, timeout=30)
+        else:
+            os.killpg(p.pid, signal.SIGKILL)
     except Exception:
         pass
+
+
+def child_env():
+    # Renderer subprocesses need paths/locales, never provider or portal credentials.
+    names = {"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TMP", "TEMP", "TMPDIR", "LANG", "XDG_RUNTIME_DIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "PLAYWRIGHT_BROWSERS_PATH", "PROGRAMFILES", "PROGRAMFILES(X86)", "COMMONPROGRAMFILES", "LOCALAPPDATA", "APPDATA", "COMSPEC", "PATHEXT"}
+    return {k: v for k, v in os.environ.items() if k.upper() in names or k.upper().startswith(("LC_", "TELEHARNESS_RENDER_"))}
 
 
 def office_to_pdf(copy: Path, work: Path) -> Path:
     out = work / "pdf"
     out.mkdir()
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("TELEHARNESS_", "OPENCODE", "ANTHROPIC", "CLAUDE"))}
+    env = child_env()
     args = [LO, "--headless", "--norestore", "--nolockcheck", "--nologo", "--nodefault", "-env:UserInstallation=" + lo_profile(work),
             "--convert-to", "pdf", "--outdir", str(out), str(copy)]
-    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(work))
+    p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(work), start_new_session=os.name != "nt")
     try:
         log, _ = p.communicate(timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -222,7 +232,7 @@ def office_to_pdf(copy: Path, work: Path) -> Path:
 
 
 HTML2PDF = Path(__file__).with_name("html2pdf.mjs")
-NODE = os.environ.get("TELEHARNESS_RENDER_NODE") or r"D:\tools\node\node.exe"
+NODE = os.environ.get("TELEHARNESS_RENDER_NODE") or (r"D:\tools\node\node.exe" if os.name == "nt" else "node")
 
 
 def web_to_pdf(src: Path, work: Path) -> Path:
@@ -234,8 +244,8 @@ def web_to_pdf(src: Path, work: Path) -> Path:
         if f.is_file() and not f.is_symlink() and f.stat().st_size < 50 * 1024 * 1024:
             shutil.copyfile(f, site / f.name)
     pdf = work / (src.stem + ".pdf")
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("OPENCODE", "ANTHROPIC", "CLAUDE"))}
-    p = subprocess.Popen([NODE, str(HTML2PDF), str(site), src.name, str(pdf)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(work))
+    env = child_env()
+    p = subprocess.Popen([NODE, str(HTML2PDF), str(site), src.name, str(pdf)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=str(work), start_new_session=os.name != "nt")
     try:
         log, _ = p.communicate(timeout=TIMEOUT)
     except subprocess.TimeoutExpired:
@@ -285,7 +295,9 @@ def main():
     except Exception:
         fail("внутренняя ошибка: аргументы не декодируются")
     files, pages, scale = parse_args(raw)
-    WORK_ROOT.mkdir(parents=True, exist_ok=True)
+    WORK_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if WORK_ROOT.is_symlink() or (os.name != "nt" and WORK_ROOT.stat().st_uid != os.geteuid()):
+        fail("небезопасная временная папка рендерера")
     rc = 0
     for name in files:
         src = (cwd / name).resolve()

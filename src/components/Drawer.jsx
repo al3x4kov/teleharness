@@ -4,11 +4,12 @@
 // и сменой роута. ≥900px: закреплённая левая панель, кнопка ☰ скрыта CSS.
 // Содержимое: знак teleharness, разделы, «Недавние» (те же фильтры, что «Чаты»),
 // «Показать все», инициалы → Настройки, тёмная пилюля «Новый чат».
+import { startTemporalAttention, stopTemporalAttention, temporalAttention } from "../lib/temporal-attention.js";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { agents, createAndOpen, explainApiError, me, pins, PINNED_FOLD, sessions, setNotice, splitPinned } from "../lib/store.js";
 import { navigate } from "../lib/router.js";
 import ChatMenu from "./ChatMenu.jsx";
-import { isHiddenDir, isSubagentSession, parseTime } from "../lib/normalize.js";
+import { isHiddenDir, isPipelineStepSession, isSubagentSession, parseTime } from "../lib/normalize.js";
 import { chatTitle } from "./views/HomeView.jsx";
 import { Glyph, restoreFocus } from "./Pickers.jsx";
 import { closeDrawer, drawerOpen, PinIcon, TeleharnessMark } from "./Menu.jsx";
@@ -39,7 +40,7 @@ export function initials(name) {
 export function recentSessions(list, agentList, limit = RECENT_LIMIT) {
   const when = (s) => parseTime(s?.time?.updated ?? s?.time?.created) || 0;
   return (list ?? [])
-    .filter((s) => !isHiddenDir(s.directory) && !isSubagentSession(s, agentList))
+    .filter((s) => !isHiddenDir(s.directory) && !isSubagentSession(s, agentList) && !isPipelineStepSession(s))
     .slice()
     .sort((a, b) => when(b) - when(a))
     .slice(0, limit);
@@ -48,6 +49,7 @@ export function recentSessions(list, agentList, limit = RECENT_LIMIT) {
 const NAV = [
   { view: "home", href: "#/", labelKey: "common.chats", icon: <><path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.5L4 19.5l1.5-4.3A7.5 7.5 0 1 1 20 11.5Z" /></> },
   { view: "projects", href: "#/projects", labelKey: "common.projects", icon: <><path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" /><path d="M4 9h16" /><path d="M7 5.5h10" /></> },
+  { view: "temporal", href: "#/temporal", labelKey: "nav.temporal", icon: <><path d="M5 7h14l-3-3M19 17H5l3 3M19 7v4M5 17v-4" /></> }, // FEAT-19.1
   { view: "settings", href: "#/settings", labelKey: "common.settings", icon: <><circle cx="12" cy="12" r="3" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" /></> },
 ];
 
@@ -55,6 +57,7 @@ export default function Drawer({ view, chatId }) {
   const open = drawerOpen.value;
   const [creating, setCreating] = useState(false);
   const panelRef = useRef(null);
+  useEffect(() => { startTemporalAttention(); return stopTemporalAttention; }, []); // FEAT-19.14
 
   // Смена экрана закрывает панель (выбор пункта = переход).
   useEffect(() => {
@@ -166,6 +169,9 @@ export default function Drawer({ view, chatId }) {
                   aria-current={view === n.view ? "page" : null}>
                   <Svg>{n.icon}</Svg>
                   <span>{t(n.labelKey)}</span>
+                  {n.view === "temporal" && temporalAttention.value > 0 && (
+                    <span class="drawer-count" aria-label={t("temporal.view.waitingAria", { count: temporalAttention.value })}>{temporalAttention.value}</span>
+                  )}
                 </a>
               </li>
             ))}

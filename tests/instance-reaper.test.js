@@ -23,6 +23,18 @@ function setup({ busy = new Set(), protectedDirs = ["C:\\Users\\dev"], failDispo
 
 const MIN = 60_000;
 
+// TASK-17.18: ключ папки берёт process.platform (параметра нет) — Windows-семантику (регистр и вид
+// слэша не важны) проверяем подменой платформы на время синхронных touch/seed; Linux-пара — ниже.
+function onPlatform(platform, fn) {
+  const orig = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...orig, value: platform });
+  try {
+    return fn();
+  } finally {
+    Object.defineProperty(process, "platform", orig);
+  }
+}
+
 test("BUG-195: папка без активности дольше idle освобождается, свежая — нет", async () => {
   const { r, disposed } = setup();
   r.touch("C:\\Users\\dev\\.teleharness-tenants\\Alice\\chat-1", 0);
@@ -64,7 +76,7 @@ test("BUG-195: папка владельца по умолчанию не осв
 
 test("BUG-195: seed — папки индекса чатов с временем старта; пустые и дубли игнорируются", async () => {
   const { r, disposed } = setup();
-  r.seed(["C:/a", "C:\\a", "", null, "C:/b"], 0);
+  onPlatform("win32", () => r.seed(["C:/a", "C:\\a", "", null, "C:/b"], 0));
   assert.equal(r.size(), 2);
   await r.sweep(31 * MIN);
   assert.equal(disposed.length, 2);
@@ -84,4 +96,33 @@ test("BUG-195: параллельный sweep не освобождает два
   r.touch("C:/y", 0);
   await Promise.all([r.sweep(31 * MIN), r.sweep(31 * MIN)]);
   assert.equal(disposed.length, 1);
+});
+
+// ---- TASK-17.18: Linux — регистр значим, «\\» не разделитель; пустая папка не учитывается ----
+test("TASK-17.18: linux — одна папка с хвостовым слэшем/лишними «/» — одна запись; регистр различает папки", async () => {
+  const { r, disposed } = setup({ protectedDirs: [] });
+  onPlatform("linux", () => {
+    r.touch("/home/dev/.teleharness-tenants/alice", 0);
+    r.touch("/home/dev/.teleharness-tenants/alice/", 25 * MIN);
+    r.touch("/home/dev//.teleharness-tenants/alice", 25 * MIN);
+  });
+  assert.equal(r.size(), 1);
+  onPlatform("linux", () => r.touch("/home/dev/.teleharness-tenants/Alice", 0));
+  assert.equal(r.size(), 2, "ext4: /Alice ≠ /alice");
+  onPlatform("linux", () => r.seed(["C:/a", "C:\\a"], 0));
+  // public copy: a Windows-shaped path keeps Windows semantics on any OS (platformOfPath)
+  assert.equal(r.size(), 3, "«C:/a» и «C:\\a» — одна Windows-папка на любой ОС");
+  await r.sweep(56 * MIN);
+  assert.equal(disposed.length, 3);
+});
+
+test("TASK-17.18: пустая папка (\"\", null, undefined) не попадает в учёт ни на одной платформе", () => {
+  for (const platform of ["linux", "win32"]) {
+    const { r } = setup({ protectedDirs: [] });
+    onPlatform(platform, () => {
+      for (const d of ["", null, undefined]) r.touch(d, 0);
+      r.seed(["", null, undefined], 0);
+    });
+    assert.equal(r.size(), 0, platform);
+  }
 });

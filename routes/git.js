@@ -28,13 +28,25 @@
 //         getGitSettings, setGitSettings, cleanGitSettings,
 //         suggest: {claudeBin, codexShim, token, oc, timeoutMs?} }
 import path from "node:path";
-import { GitError, diffForPrompt, gitCommit, gitDiff, gitPush, gitStatus, openRepo } from "../lib/git.js";
-import { OneshotError, ONESHOT_DIFF_MAX, cleanCommitMessage, commitPrompt, runClaudeOneshot, runCodexOneshot, runOpencodeOneshot } from "../lib/oneshot.js";
+import { GitError, diffForPrompt, gitCommit, gitDiff, gitPush, gitStatus, openRepo, sanitize } from "../lib/git.js";
+import { OneshotError, ONESHOT_DIFF_MAX, cleanCommitMessage, commitPrompt, runClaudeOneshot, runCodexOneshot, runOpencodeOneshot, suggestFailure } from "../lib/oneshot.js";
 import { realpathSync } from "node:fs";
 const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
 
 const SID_RE = /^[A-Za-z0-9_.-]{1,200}$/;
 const BODY_MAX = 512 * 1024; // a commit of thousands of selected paths
+
+// TASK-18.13 D4: no absolute server path for a tenant. Everyone gets
+// rootRel — the repository root relative to the folder the client asked about
+// (the chat's directory / ?directory=, POSIX slashes, "" = the same folder),
+// enough to map a turn's files to repo paths — and name, the display name of
+// that folder; only admin also gets the absolute root.
+export function publicStatus(st, base, admin) {
+  const rel = base ? path.relative(base, st.root).split(path.sep).join("/") : null;
+  const rootRel = rel != null && !path.isAbsolute(rel) ? rel : null;
+  const name = path.basename(base || st.root) || null;
+  return { ...st, root: admin ? st.root : null, rootRel, name };
+}
 
 export function gitRoutes(deps) {
   const { sendJson } = deps;
@@ -52,7 +64,7 @@ export function gitRoutes(deps) {
     if (dir == null) return { status: 404, error: "session not found" };
     if (!admin && !deps.dirAllowed(user, dir)) return { status: 403, error: "outside your scope" };
     const own = deps.tenantDir(dir) ? deps.existingChatFolder(dir, sid) : null;
-    return { dir: own ?? dir };
+    return { dir: own ?? dir, base: dir };
   }
 
   // The folder of this request (?sid= | ?directory=) → {dir, untrusted} | {status, error}.
@@ -60,16 +72,19 @@ export function gitRoutes(deps) {
     const sid = url.searchParams.get("sid");
     const asked = url.searchParams.get("directory");
     let dir;
+    let base; // the folder the client knows: the chat's directory / ?directory=
     if (sid) {
       const c = await chatFolder(sid, user, admin);
       if (!c.dir) return c;
       dir = c.dir;
+      base = c.base;
     } else if (asked) {
       if (!path.isAbsolute(asked)) return { status: 400, error: "directory required" };
       if (!deps.dirAllowed(user, asked)) return { status: 403, error: "outside your scope" };
       dir = asked;
+      base = asked;
     } else return { status: 400, error: "sid or directory required" };
-    return { dir, untrusted: !admin || deps.tenantDir(dir) };
+    return { dir, base, untrusted: !admin || deps.tenantDir(dir) };
   }
 
   // → {repo} | {repo: null} (not a repository for this caller) | {status, error}.
@@ -81,7 +96,7 @@ export function gitRoutes(deps) {
     // git names the root by its real path (macOS: /var → /private/var) — compare real paths too
     const dirs = ctx.user.directories ?? [];
     if (!ctx.admin && !deps.isUnderAny(repo.root, dirs) && !deps.isUnderAny(repo.root, dirs.map(realOrSelf))) return { repo: null };
-    return { repo };
+    return { repo, base: t.base };
   }
 
   // Shared prologue: the repo or an answer already sent (null).
@@ -124,7 +139,7 @@ export function gitRoutes(deps) {
           const r = await repoOf(ctx);
           if (r.status) return sendJson(res, r.status, { error: r.error });
           if (!r.repo) return sendJson(res, 200, { repo: false });
-          return sendJson(res, 200, { ...(await gitStatus(r.repo)), pushAllowed: pushAllowedFor(user, admin) });
+          return sendJson(res, 200, { ...publicStatus(await gitStatus(r.repo), r.base, admin), pushAllowed: pushAllowedFor(user, admin) });
         } catch (err) {
           return gitFail(res, err);
         }
@@ -219,8 +234,9 @@ export function gitRoutes(deps) {
         } catch (err) {
           if (err?.status === 403) return sendJson(res, 403, { error: err.message });
           if (!(err instanceof OneshotError)) deps.errLog("git.suggest", err);
-          const why = err instanceof OneshotError ? err.message : "запрос не прошёл";
-          return sendJson(res, 502, { error: `Не удалось получить сообщение от модели: ${why}.` });
+          // one Russian sentence; the provider's own text only as a detail
+          const f = err instanceof OneshotError ? suggestFailure(err) : { kind: "model", error: "Модель не смогла предложить сообщение — напишите его сами или попробуйте позже." };
+          return sendJson(res, 502, { error: f.error, kind: f.kind, ...(f.detail ? { detail: sanitize(f.detail) } : {}) });
         }
       },
     },

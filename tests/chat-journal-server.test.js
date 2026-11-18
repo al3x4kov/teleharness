@@ -23,10 +23,11 @@ before(async () => {
   up = await startFakeOpencode();
   up.route("POST", "/session/ses_j/prompt_async", () => ({ status: 204 }));
   up.state.sessions.push({ id: "ses_j", directory: DIR, title: "Журнальный чат", model }, { id: "ses_kid", directory: DIR, title: "дочерняя", parentID: "ses_j", model });
-  up.state.messages.ses_j = [
-    { info: { id: "u1", role: "user", sessionID: "ses_j", time: { created: T0 } }, parts: [{ id: "p1", type: "text", text: "Собери отчёт" }] },
-    { info: { id: "a1", role: "assistant", sessionID: "ses_j", modelID: "glm-5.3", time: { created: T0 + 1000, completed: T0 + 5000 } }, parts: [{ id: "p2", type: "tool", tool: "write", state: { status: "completed", input: { filePath: path.join(DIR, "report.md") } } }, { id: "p3", type: "text", text: "Отчёт собран." }] },
-  ];
+  // История первого хода появляется у движка только во время хода (ниже, после первого prompt):
+  // портал при приёме хода сам планирует пересборку журнала (markPrompted → journal.schedule) с
+  // задержкой TELEHARNESS_JOURNAL_DEBOUNCE_MS; при готовой истории под нагрузкой журнал успевал записаться
+  // раньше, чем строился системный промпт первого хода (TASK-17.18, гонка на Linux-прогоне).
+  up.state.messages.ses_j = [];
   up.state.messages.ses_kid = [{ info: { id: "k1", role: "user", sessionID: "ses_kid", time: { created: T0 } }, parts: [{ id: "kp", type: "text", text: "подзадача" }] }];
   srv = await spawnPortal({ upstream: up.url, env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_KB_ROOT: KB, TELEHARNESS_JOURNAL_DEBOUNCE_MS: "20" } });
 });
@@ -42,6 +43,12 @@ test("FEAT-11.18: до первого хода строки о журнале н
   assert.ok(r.status < 300, `prompt ${r.status} ${await r.text()}`);
   await waitFor(() => prompts().length === 1, { what: "первый prompt" });
   assert.ok(!String(prompts()[0].body.system ?? "").includes("Журнал этого чата"), "журнала ещё нет — строки нет");
+
+  // ход идёт: движок записал его сообщения
+  up.state.messages.ses_j.push(
+    { info: { id: "u1", role: "user", sessionID: "ses_j", time: { created: T0 } }, parts: [{ id: "p1", type: "text", text: "Собери отчёт" }] },
+    { info: { id: "a1", role: "assistant", sessionID: "ses_j", modelID: "glm-5.3", time: { created: T0 + 1000, completed: T0 + 5000 } }, parts: [{ id: "p2", type: "tool", tool: "write", state: { status: "completed", input: { filePath: path.join(DIR, "report.md") } } }, { id: "p3", type: "text", text: "Отчёт собран." }] },
+  );
 
   up.emit({ type: "session.idle", properties: { sessionID: "ses_j" } }, DIR);
   up.emit({ type: "session.idle", properties: { sessionID: "ses_kid" } }, DIR);

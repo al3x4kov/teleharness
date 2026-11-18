@@ -47,6 +47,7 @@ import { lookup } from "node:dns/promises"
 import { isIP } from "node:net"
 import os from "node:os"
 import path from "node:path"
+import { linuxJailLine } from "./linux-jail.mjs"
 
 const env = process.env
 export const VAULT = fwd(env.VAULT_CACHE_ROOT || "D:/Vault/agents")
@@ -79,8 +80,9 @@ function lc(p) {
 }
 /** true if `p` equals `root` or lies inside it (case-insensitive, Windows) */
 export function within(p, root) {
-  const a = lc(fwd(p))
-  const b = lc(fwd(root))
+  const norm = (v) => process.platform === "win32" ? lc(v) : v
+  const a = norm(fwd(p))
+  const b = norm(fwd(root))
   return a === b || a.startsWith(b + "/")
 }
 function slugOf(dir) {
@@ -175,7 +177,7 @@ export function chatFolderOf(home, sessionID) {
     return null
   }
 }
-const isAbs = (p) => /^[a-zA-Z]:[\\/]/.test(p) || /^[\\/]{2}/.test(p)
+const isAbs = (p) => path.isAbsolute(p) || /^[a-zA-Z]:[\\/]/.test(p) || /^[\\/]{2}/.test(p)
 const SEARCH_TOOLS = new Set(["glob", "grep", "list"])
 
 /** Relative paths of a tenant tool call → the chat folder (args are rewritten in place). */
@@ -375,6 +377,9 @@ export function forbiddenPaths(args, z, cwd) {
   }
   const scanText = (t) => {
     for (const m of t.match(ABS_IN_TEXT) ?? []) check(m)
+    if (process.platform !== "win32") {
+      for (const m of t.matchAll(/(?:^|[\s"'`=])(\/[^\s"'`;|&<>()]*)/g)) check(m[1])
+    }
     // relative escapes towards the vault, e.g. ..\..\Obsidian\agents
     if (/\.\.[\\/][\s\S]*obsidian/i.test(t)) bad.push("…/Obsidian (относительный путь)")
   }
@@ -465,7 +470,9 @@ export async function urlViolation(url) {
 
 export const JAIL_EXE = fwd(env.TELEHARNESS_JAIL_EXE || "D:/Apps/teleharness/ops/sandbox/teleharness-jail.exe")
 export const SANDBOX_PY = fwd(env.TELEHARNESS_SANDBOX_PY || "D:/teleharness-sandbox/python")
-const SHELL_SAFE_PATH = /^[A-Za-z]:\/[A-Za-z0-9_.\/-]*$/
+// Drive path; or a single-slash POSIX path, which fwd() never yields on a Windows host
+// (only "X:/…" or "//server/…") — lets the Windows branch be tested on a Linux host.
+const SHELL_SAFE_PATH = /^(?:[A-Za-z]:\/|\/(?!\/))[A-Za-z0-9_.\/-]*$/
 const JAIL_ID = /^[A-Za-z0-9_-]{1,40}$/
 
 /** AppContainer name of a tenant: teleharness-t-<name>, or a stable hash for names outside [A-Za-z0-9_-]. */
@@ -473,8 +480,16 @@ export function jailName(tenant) {
   return `teleharness-t-${JAIL_ID.test(tenant) ? tenant : "h" + createHash("sha1").update(tenant, "utf8").digest("hex").slice(0, 16)}`
 }
 
+// Linux: tenant commands go through the Docker-based teleharness-tenant-run (ops/sandbox/linux) only when
+// the admin installed it; createSandbox passes platform "none" otherwise → refused (fail-closed).
+export const LINUX_TENANT_RUNNER = "/usr/local/libexec/teleharness-tenant-run"
+export const NO_SANDBOX = "командная строка недоступна: песочница пользователей есть только на Windows-сервере (AppContainer) или на Linux с установленным teleharness-tenant-run (ops/sandbox/linux), на этом сервере команды пользователей отключены"
+
 /** The jailed replacement of a tenant bash command, or `{ error }` when it must not run. */
-export async function jailCommand(command, z, workdir) {
+// `platform` (default: the host) picks the launcher: linux → teleharness-tenant-run, "none" → refused, else teleharness-jail.
+export async function jailCommand(command, z, workdir, { platform = process.platform } = {}) {
+  if (platform === "linux") return linuxJailLine(command, { name: z.tenant ? jailName(z.tenant) : null, home: z.home, cwd: workdir || z.home })
+  if (platform === "none") return { error: NO_SANDBOX }
   if (typeof command !== "string" || !command.trim()) return { error: "пустая команда" }
   if (command.includes("\0")) return { error: "недопустимый символ в команде" }
   if (!z.tenant || !z.home) return { error: "у сессии нет папки пользователя" }
@@ -504,7 +519,9 @@ export function splitCd(command, cwd) {
 // FEAT-04.12: «teleharness-render <file> [--pages …]» as a WHOLE command runs the host
 // renderer (LibreOffice/Edge/pdfium do not run in the container).
 const RENDER_CMD = /^\s*teleharness-render(?:\s+([^&|<>^\r\n]*))?\s*$/i
-export async function renderCommand(args, z, workdir) {
+export async function renderCommand(args, z, workdir, { platform = process.platform } = {}) {
+  if (platform === "linux") return jailCommand(`teleharness-render ${args}`, z, workdir, { platform })
+  if (platform === "none") return { error: NO_SANDBOX }
   if (!z.tenant || !z.home) return { error: "у сессии нет папки пользователя" }
   const script = fwd(env.TELEHARNESS_RENDER_SCRIPT || "D:/Apps/teleharness/ops/render/teleharness_render.py")
   const python = `${SANDBOX_PY}/Scripts/python.exe`
@@ -583,6 +600,9 @@ export function unjailCommand(cmd) {
     const r = cmd.match(/ --b64 ([A-Za-z0-9_-]+)$/)
     if (!r) return null
     return `teleharness-render ${r[1] === "-" ? "" : Buffer.from(r[1], "base64url").toString("utf8")}`.trim()
+  }
+  if (cmd.startsWith("/usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 ")) {
+    try { return JSON.parse(Buffer.from(cmd.split(" --b64 ")[1], "base64url")).command ?? null } catch { return null }
   }
   if (!cmd.includes("teleharness-jail")) return null
   const m = cmd.match(/ --b64 ([A-Za-z0-9_-]+)$/)
@@ -715,7 +735,10 @@ export function undoSeal(sessionID, messageID) {
 
 const INTERNAL_AGENTS = new Set(["title", "summary", "compaction"])
 
-export function createSandbox({ getSession, getMessages } = {}) {
+// `platform` (default: the host) pins the shell launcher — tests run both branches on any host;
+// `linuxRunner` (default: is teleharness-tenant-run installed) gates the Linux one.
+export function createSandbox({ getSession, getMessages, platform: host = process.platform, linuxRunner = existsSync(LINUX_TENANT_RUNNER) } = {}) {
+  const platform = host === "linux" && !linuxRunner ? "none" : host
   const zones = new Map() // sessionID → { dir, zone, parentID }
   const turns = new Map() // root sessionID → messageID of its current question
   const cjkOverrides = new Map() // sessionID → hashes of refused calls
@@ -865,7 +888,7 @@ export function createSandbox({ getSession, getMessages } = {}) {
       try {
         const sc = splitCd(args?.command, wd)
         const rm = RENDER_CMD.exec(String(sc.command ?? ""))
-        jailed = rm ? await renderCommand(rm[1] ?? "", v.zone, sc.cwd) : await jailCommand(sc.command, v.zone, sc.cwd)
+        jailed = rm ? await renderCommand(rm[1] ?? "", v.zone, sc.cwd, { platform }) : await jailCommand(sc.command, v.zone, sc.cwd, { platform })
       } catch (e) {
         jailed = { error: `не удалось подготовить песочницу (${String(e)})` }
       }

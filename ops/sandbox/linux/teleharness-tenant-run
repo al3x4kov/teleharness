@@ -1,0 +1,178 @@
+#!/usr/bin/python3 -I
+"""Root-owned narrow sudo entrypoint. No caller environment or Docker options trusted."""
+import ctypes
+import tempfile
+import base64
+import json
+import os
+import re
+import signal
+import stat
+import subprocess
+import sys
+import uuid
+import time
+
+CONFIG = '/etc/teleharness/tenant-runner.json'
+DOCKER = '/usr/bin/docker'
+ENV = {'PATH': '/usr/bin:/bin', 'HOME': '/root', 'DOCKER_HOST': 'unix:///var/run/docker.sock'}
+
+def trusted_config():
+    # Every config ancestor must be root-owned and not writable by another user.
+    cur = CONFIG
+    while cur != '/':
+        st = os.lstat(cur)
+        if stat.S_ISLNK(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            raise ValueError('unsafe runner configuration permissions')
+        cur = os.path.dirname(cur)
+    with open(CONFIG, encoding='utf-8') as f:
+        cfg = json.load(f)
+    if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_./:@-]{1,240}', cfg['image']):
+        raise ValueError('invalid runner image')
+    for key in ['uid', 'gid']:
+        if type(cfg[key]) is not int or cfg[key] < 1:
+            raise ValueError('runner must use an unprivileged uid/gid')
+    root = cfg['tenant_root']
+    if not os.path.isabs(root) or os.path.realpath(root) != root or ',' in root:
+        raise ValueError('invalid tenant root')
+    return cfg
+
+def prepare(payload, cfg):
+    if set(payload) != {'name', 'home', 'cwd', 'command'} or not all(isinstance(x, str) for x in payload.values()):
+        raise ValueError('invalid request fields')
+    name, home, cwd, command = (payload[k] for k in ['name', 'home', 'cwd', 'command'])
+    root = cfg['tenant_root']
+    if not re.fullmatch(r'teleharness-t-[A-Za-z0-9_-]{1,40}', name):
+        raise ValueError('invalid tenant name')
+    if os.path.dirname(home) != root or os.path.normpath(home) != home or ',' in home:
+        raise ValueError('tenant home is not a direct child of tenant root')
+    if not command.strip() or '\0' in command or len(command.encode()) > 65536:
+        raise ValueError('invalid command')
+    if os.path.normpath(cwd) != cwd or not (cwd == home or cwd.startswith(home + '/')):
+        raise ValueError('cwd outside tenant home')
+    # Pin the directory inode. Docker mounts /proc/<pid>/fd/N, so an attacker
+    # cannot swap the validated path for a symlink between check and mount.
+    fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        homefd = os.open(os.path.basename(home), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+    finally:
+        os.close(fd)
+    try:
+        # Require ownership by the service, refuse root/system data even inside root.
+        if os.fstat(homefd).st_uid != cfg['uid']:
+            raise ValueError('tenant home owner mismatch')
+        curfd = os.dup(homefd)
+        try:
+            for part in cwd[len(home):].split('/'):
+                if not part: continue
+                newfd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=curfd)
+                os.close(curfd)
+                curfd = newfd
+        finally:
+            os.close(curfd)
+        cname = 'teleharness-shell-' + uuid.uuid4().hex
+        argv = [DOCKER, 'run', '--rm', '--pull=never', '--name', cname,
+                '--network=none', '--ipc=private', '--cap-drop=ALL',
+                '--security-opt=no-new-privileges:true', '--read-only',
+                '--user', f"{cfg['uid']}:{cfg['gid']}", '--pids-limit=128',
+                '--memory=512m', '--memory-swap=512m', '--cpus=1',
+                '--ulimit=nofile=1024:1024', '--ulimit=core=0',
+                '--tmpfs=/tmp:rw,nosuid,nodev,size=128m,mode=1777',
+                '--mount', f'type=bind,src=/proc/{os.getpid()}/fd/{homefd},dst={home},bind-propagation=rprivate',
+                '--workdir', cwd, '--env', f'HOME={home}',
+                '--env', f'PATH={home}/.venv/bin:/opt/venv/bin:/usr/local/bin:/usr/bin:/bin',
+                '--env', 'PYTHONNOUSERSITE=1',
+                '--entrypoint=/bin/sh', cfg['image'], '-c', command]
+        return argv, cname, homefd
+    except BaseException:
+        os.close(homefd)
+        raise
+
+def process_identity(pid):
+    # /proc comm can contain spaces/parentheses; fields after final ')' are stable.
+    try:
+        with open(f'/proc/{pid}/stat', encoding='utf-8') as stream:
+            fields = stream.read().rsplit(')', 1)[1].split()
+        return int(fields[1]), fields[19], fields[0]
+    except (OSError, ValueError, IndexError):
+        return None
+
+def caller_chain():
+    chain = []
+    pid = os.getppid()
+    while pid > 1 and len(chain) < 64:
+        identity = process_identity(pid)
+        if identity is None:
+            raise ValueError('caller disappeared')
+        parent, started, state = identity
+        chain.append((pid, started))
+        if parent >= pid and any(item[0] == parent for item in chain):
+            raise ValueError('invalid caller ancestry')
+        pid = parent
+    return chain
+
+def callers_alive(chain):
+    for pid, started in chain:
+        current = process_identity(pid)
+        if current is None or current[1] != started or current[2] in ('Z', 'X'):
+            return False
+    return True
+
+def main():
+    if os.geteuid() != 0 or len(sys.argv) != 3 or sys.argv[1] != '--b64':
+        raise ValueError('usage: teleharness-tenant-run --b64 REQUEST (via sudo)')
+    encoded = sys.argv[2]
+    if len(encoded) > 100000 or not re.fullmatch(r'[A-Za-z0-9_-]+', encoded):
+        raise ValueError('invalid request encoding')
+    ancestors = caller_chain()
+    payload = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
+    argv, cname, fd = prepare(payload, trusted_config())
+    # Docker/runc rejects a proc-fd source directly. Pin it first with a
+    # non-recursive host bind mount in a root-only temporary directory.
+    stage = tempfile.mkdtemp(prefix='teleharness-tenant-', dir='/run')
+    libc = ctypes.CDLL(None, use_errno=True)
+    source = f'/proc/{os.getpid()}/fd/{fd}'
+    if libc.mount(source.encode(), stage.encode(), None, 4096, None) != 0:
+        os.rmdir(stage)
+        os.close(fd)
+        raise OSError(ctypes.get_errno(), 'pin mount failed')
+    mi = argv.index('--mount') + 1
+    argv[mi] = argv[mi].replace(f'src={source},', f'src={stage},')
+    def interrupted(signum, frame):
+        raise SystemExit(128 + signum)
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    signal.signal(signal.SIGHUP, interrupted)
+    child = None
+    try:
+        child = subprocess.Popen(argv, env=ENV)
+        deadline = time.monotonic() + 180
+        while child.poll() is None:
+            if not callers_alive(ancestors):
+                return 130
+            if time.monotonic() >= deadline:
+                print('sandbox command timed out', file=sys.stderr)
+                return 124
+            time.sleep(0.2)
+        return child.returncode
+    finally:
+        try:
+            subprocess.run([DOCKER, 'rm', '-f', cname], env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        finally:
+            if child is not None:
+                try:
+                    child.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+            libc.umount2(stage.encode(), 2)
+            os.rmdir(stage)
+            os.close(fd)
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        # No traceback or command payload: either could contain user secrets.
+        print('sandbox refused: ' + type(exc).__name__, file=sys.stderr)
+        sys.exit(126)

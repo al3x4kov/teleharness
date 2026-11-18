@@ -21,6 +21,8 @@ import { agentCan, agentHasShell, agentIsSandboxed, defaultTenantAgent, provider
 import { realInside, serveWorkspaceFile } from "../lib/file.js";
 import { planGc } from "../lib/gc.js";
 import { isolatedServerEnv, makeTmpRoot } from "./helpers/env.mjs";
+import { spawnPortal } from "./helpers/spawn-server.mjs";
+import { startFakeOpencode } from "./helpers/fake-opencode.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-g1-units-"));
@@ -111,6 +113,7 @@ test("corrupt users.json: server exits 1, file untouched, a .corrupt copy is kep
 });
 
 // ---- BUG-12.11 / BUG-02.5 -----------------------------------------------------------
+
 
 test("path policy: one rule set for every route", () => {
   assert.equal(isAbsoluteDir("C:\\x"), true);
@@ -267,6 +270,11 @@ test("file: a junction inside an allowed root cannot escape it", () => {
   const res = fakeRes();
   serveWorkspaceFile({ method: "GET" }, res, { directory: root, target: "jx/secret.txt", extraRoots: [] });
   assert.equal(res.status, 403);
+  // «\\» — разделитель только на Windows; на POSIX это часть имени (такого файла нет → 404, не утечка)
+  const resBs = fakeRes();
+  serveWorkspaceFile({ method: "GET" }, resBs, { directory: root, target: "jx\\secret.txt", extraRoots: [] });
+  assert.equal(resBs.status, process.platform === "win32" ? 403 : 404);
+  assert.ok(!String(resBs.body ?? "").includes("SECRET"));
 });
 
 test("file: html/svg carry a CSP sandbox; other types do not", () => {
@@ -343,4 +351,54 @@ test("BUG-171: agentIsSandboxed tolerates external_directory allow under the ten
   } finally {
     setTenantVaultRoots([config.TELEHARNESS_TENANT_VAULT]);
   }
+});
+
+// ---- TASK-17.18: TELEHARNESS_GC_ENABLED — выключатель gc на время восстановления/миграции ----
+test("TELEHARNESS_GC_ENABLED: по умолчанию 1; 0 выключает; не 0/1 — ошибка конфигурации", () => {
+  assert.equal(loadConfig({}).config.TELEHARNESS_GC_ENABLED, true);
+  assert.equal(loadConfig({ TELEHARNESS_GC_ENABLED: "0" }).config.TELEHARNESS_GC_ENABLED, false);
+  assert.equal(loadConfig({ TELEHARNESS_GC_ENABLED: "1" }).config.TELEHARNESS_GC_ENABLED, true);
+  const bad = loadConfig({ TELEHARNESS_GC_ENABLED: "false" });
+  assert.equal(bad.errors.length, 1);
+  assert.match(bad.errors[0], /^TELEHARNESS_GC_ENABLED: ожидалось 0 или 1/);
+});
+
+test("TELEHARNESS_GC_ENABLED=0: ни стартовый/периодический проход, ни POST /admin/gc не удаляют чаты; =1 — удаляют", async () => {
+  const ADMIN = "g".repeat(24) + "-g1-gc-gate-" + "7".repeat(24);
+  const old = Date.now() - 2 * 3_600_000;
+  const run = async (enabled) => {
+    const t = makeTmpRoot("teleharness-g1-gc-");
+    const up = await startFakeOpencode({ sessions: [{ id: "ses_gc_empty", directory: t.home, title: "New session - 2026-11-03T08:00:00.000Z", time: { created: old, updated: old } }] });
+    up.fallback((req, body, url) => {
+      const m = /^\/session\/([^/]+)$/.exec(url.pathname);
+      if (!m || req.method !== "DELETE") return undefined;
+      const i = up.state.sessions.findIndex((x) => x.id === decodeURIComponent(m[1]));
+      if (i < 0) return { status: 404, json: {} };
+      up.state.sessions.splice(i, 1);
+      return { json: true };
+    });
+    const srv = await spawnPortal({ upstream: up.url, tmp: t, env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_GC_EMPTY_MIN: "30", TELEHARNESS_GC_INTERVAL_MS: "200", TELEHARNESS_GC_ENABLED: enabled ? "1" : "0" } });
+    const deletes = () => up.requests.filter((x) => x.method === "DELETE").map((x) => x.path);
+    try {
+      if (enabled) {
+        // таймер gc (старт через min(интервал, 30 с) = 200 мс) удаляет пустой старый чат сам
+        const until = Date.now() + 15_000;
+        while (!deletes().length && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
+        assert.deepEqual(deletes(), ["/session/ses_gc_empty"]);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 2000)); // ≥ 10 интервалов gc
+      const r = await fetch(`${srv.base}/teleharness/api/admin/gc`, { method: "POST", headers: { authorization: `Bearer ${ADMIN}` } });
+      assert.equal(r.status, 200);
+      assert.equal((await r.json()).disabled, true);
+      assert.deepEqual(deletes(), [], "gc выключен — ни одного DELETE");
+      assert.deepEqual(up.state.sessions.map((x) => x.id), ["ses_gc_empty"]);
+    } finally {
+      await srv.stop();
+      await up.close();
+      t.cleanup();
+    }
+  };
+  await run(false);
+  await run(true);
 });

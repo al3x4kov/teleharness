@@ -12,7 +12,7 @@ import { decide, jailLine } from "../lib/claude-jail-hook.mjs";
 import { jailName, tenantJailFor, syncTenantPlugin, tenantKitArgs, withJailHook } from "../lib/claude-tenant.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const opts = { name: "teleharness-t-alice", home: "C:/Users/dev/.teleharness-tenants/alice", jail: "D:/j/teleharness-jail.exe", py: "D:/py", exists: () => true, real: (p) => p.replace(/\\/g, "/") };
+const opts = { name: "teleharness-t-alice", home: "C:/Users/dev/.teleharness-tenants/alice", jail: "D:/j/teleharness-jail.exe", py: "D:/py", exists: () => true, real: (p) => p.replace(/\\/g, "/"), platform: "win32" }; // TASK-17.18: Windows-ветка закреплена платформой
 
 // teleharness-jail is a Windows AppContainer: the rewrite itself exists only on Windows.
 const WIN_ONLY = { skip: process.platform !== "win32" && "Windows-only" };
@@ -150,11 +150,61 @@ test("FEAT-04.12: `teleharness-render <файл>` уходит в рендере
 
 test("macOS / Linux: no sandbox — every tenant command (and teleharness-render) is denied with a reason (fail-closed)", async () => {
   const { NO_SANDBOX } = await import("../lib/claude-jail-hook.mjs");
-  const posix = { ...opts, platform: "linux" };
-  for (const command of ["echo hi", "teleharness-render a.pptx", "cd deck && ls"]) {
+  for (const posix of [{ ...opts, platform: "darwin" }, { ...opts, platform: "linux", linuxRunner: false }]) for (const command of ["echo hi", "teleharness-render a.pptx", "cd deck && ls"]) {
     const h = decide({ tool_name: "Bash", tool_input: { command }, cwd: opts.home }, posix).hookSpecificOutput;
     assert.equal(h.permissionDecision, "deny", command);
     assert.equal(h.updatedInput, undefined, "nothing is rewritten");
     assert.ok(h.permissionDecisionReason.includes(NO_SANDBOX), h.permissionDecisionReason);
+  }
+});
+
+// ---- TASK-17.18: Linux-ветка хука и кавычки команды хука ----
+// withJailHook берёт платформу из process.platform (параметра нет) — подменяем её на время вызова.
+const onPlatform = (platform, fn) => {
+  const orig = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...orig, value: platform });
+  try {
+    return fn();
+  } finally {
+    Object.defineProperty(process, "platform", orig);
+  }
+};
+
+test("TASK-17.18: withJailHook — win32 кавычки \"…\" со слэшами, POSIX '…' с экранированием одинарной кавычки", () => {
+  const kit = { pluginDir: null, mcpConfig: null, promptFile: null, jailExe: "D:\\j.exe", sandboxPy: "D:/py", nodePath: "D:\\n\\node.exe" };
+  const w = onPlatform("win32", () => withJailHook({}, kit, { name: "teleharness-t-a", home: "C:\\h\\a" })).PreToolUse[0].hooks[0].command;
+  assert.ok(w.startsWith('"D:/n/node.exe" '), w);
+  assert.ok(w.includes('--home "C:/h/a"'), w);
+  const pkit = { ...kit, jailExe: "/opt/j", sandboxPy: "/opt/py", nodePath: "/usr/bin/node" };
+  const l = onPlatform("linux", () => withJailHook({}, pkit, { name: "teleharness-t-a", home: "/home/o'brien/t" })).PreToolUse[0].hooks[0].command;
+  assert.ok(l.startsWith("'/usr/bin/node' "), l);
+  assert.ok(l.includes(`--home '/home/o'"'"'brien/t' --jail '/opt/j' --py '/opt/py'`), l);
+  if (process.platform !== "win32") {
+    // POSIX-оболочка разбирает строку обратно в исходный аргумент
+    const arg = l.split(" --home ")[1].split(" --jail ")[0];
+    assert.equal(spawnSync("/bin/sh", ["-c", `printf '%s' ${arg}`], { encoding: "utf8" }).stdout, "/home/o'brien/t");
+  }
+});
+
+test("TASK-17.18: jailLine на linux — отдельная Linux-ветка: fail-closed, команда уходит в teleharness-tenant-run base64", () => {
+  const T = mkdtempSync(path.join(tmpdir(), "teleharness-ljail-"));
+  try {
+    mkdirSync(path.join(T, "alice", "sub"), { recursive: true });
+    mkdirSync(path.join(T, "bob"), { recursive: true });
+    const lo = { name: "teleharness-t-alice", home: path.join(T, "alice"), platform: "linux" };
+    assert.equal(jailLine("a\0b", lo).error, "пустая или недопустимая команда");
+    assert.ok(jailLine("echo", { ...lo, cwd: path.join(T, "bob") }).error, "чужая папка");
+    assert.ok(jailLine("echo", { ...lo, cwd: path.join(T, "alice", "..", "bob") }).error, "traversal");
+    assert.ok(jailLine("echo", { ...lo, name: "evil; rm" }).error, "плохое имя");
+    const ok = jailLine("echo 'x'", { ...lo, cwd: path.join(T, "alice", "sub") });
+    assert.match(ok.command, /^\/usr\/bin\/sudo -n \/usr\/local\/libexec\/teleharness-tenant-run --b64 [A-Za-z0-9_-]+$/);
+    const payload = JSON.parse(Buffer.from(ok.command.split(" ").pop(), "base64url").toString("utf8"));
+    assert.deepEqual(payload, { name: "teleharness-t-alice", home: path.join(T, "alice"), cwd: path.join(T, "alice", "sub"), command: "echo 'x'" });
+    // decide: with the runner installed a Linux tenant command is rewritten into it
+    const h = decide({ tool_name: "Bash", tool_input: { command: "ls" }, cwd: path.join(T, "alice") }, { ...lo, linuxRunner: true }).hookSpecificOutput;
+    assert.equal(h.permissionDecision, "allow");
+    assert.match(h.updatedInput.command, /teleharness-tenant-run --b64 /);
+  } finally {
+    rmSync(T, { recursive: true, force: true });
   }
 });

@@ -321,7 +321,7 @@ export async function retryFailed(messageId) {
         ? { type: "text", text: p.text ?? "", ...(p.synthetic ? { synthetic: true } : {}) } // FEAT-06.2: the voice hint stays hidden
         : { type: "file", mime: p.mime, filename: p.filename, url: p.url },
     );
-  return sendParts(parts, { sessionId: act.id });
+  return sendParts(parts, { sessionId: act.id, turnId: failed.info.turnId });
 }
 
 // «Отправить снова» / «Повторить» from a banner: the last real user message,
@@ -513,7 +513,7 @@ export function heldCount(sid) {
   return held.get(sid)?.length ?? 0;
 }
 
-async function sendParts(parts, { agent, model, sessionId } = {}) {
+async function sendParts(parts, { agent, model, sessionId, turnId } = {}) {
   let act = active.value;
   if (!act || (sessionId && act.id !== sessionId)) {
     setNotice(t("store.send.notReady"));
@@ -535,7 +535,11 @@ async function sendParts(parts, { agent, model, sessionId } = {}) {
   const hold =
     queued && binding?.engine !== "claude" && binding?.engine !== "codex" && (heldCount(act.id) > 0 || releasing.has(act.id) || awaitingAnswer(act.messages));
   const tmpId = `tmp-${Date.now()}-${++tmpSeq}`;
-  const bubble = makeMessage({ id: tmpId, role: "user", time: { created: Date.now() }, delivery: hold ? "held" : "sending", queued }, parts);
+  if (!turnId && session?.stableTurnIds && binding?.engine !== "claude" && binding?.engine !== "codex" &&
+      parts.every(part=>part.type==="text" && typeof part.text==="string" && !part.text.trimStart().startsWith("/"))) {
+    turnId ??= Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
+  }
+  const bubble = makeMessage({ id: tmpId, ...(turnId ? {turnId} : {}), role: "user", time: { created: Date.now() }, delivery: hold ? "held" : "sending", queued }, parts);
   active.value = {
     ...act,
     status: "busy",
@@ -550,7 +554,7 @@ async function sendParts(parts, { agent, model, sessionId } = {}) {
     ...(binding ? { model: { providerID: binding.model.providerID, modelID: binding.model.modelID } } : {}),
     parts,
   };
-  const job = { sid: act.id, tmpId, bubble, parts, body, directory: sessionDir(act.id), session, bound, binding, queued, at: Date.now() };
+  const job = { sid: act.id, tmpId, bubble, parts, body, turnId, directory: sessionDir(act.id), session, bound, binding, queued, at: Date.now() };
   if (hold) {
     held.set(act.id, [...(held.get(act.id) ?? []), job]);
     return true;
@@ -559,9 +563,9 @@ async function sendParts(parts, { agent, model, sessionId } = {}) {
 }
 
 // POST one prompt and walk its bubble sending → delivered | failed.
-async function deliver({ sid, tmpId, parts, body, directory, session, bound, binding, queued }) {
+async function deliver({ sid, tmpId, parts, body, turnId, directory, session, bound, binding, queued }) {
   try {
-    await api.prompt(sid, body, { directory });
+    await api.prompt(sid, body, { directory, turnId });
   } catch (err) {
     // The prompt never reached the server: mark THIS bubble failed (it stays
     // for «Повторить»). The bubble itself says what happened via failReason

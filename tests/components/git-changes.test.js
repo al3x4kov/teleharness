@@ -18,6 +18,10 @@ before(async () => {
     GitSection: "src/components/git/GitSection.jsx",
     menuItems: "src/components/ChatMenu.jsx#menuItems",
     withGitPath: "src/components/git/Changes.jsx#withGitPath",
+    pushErrorView: "src/lib/git-client.js#pushErrorView",
+    resolveGitRoot: "src/lib/git-client.js#resolveGitRoot",
+    gitRootSignal: "src/lib/git-client.js#gitRoot",
+    gitRepoSignal: "src/lib/git-client.js#gitRepo",
     lineDiff: "src/lib/diff.js#lineDiff",
   });
   t$ = createHarness(ui);
@@ -233,7 +237,8 @@ test("кадр 4: ветка, ↑2 к origin, последний коммит, �
   const root = await openGit();
   await t$.waitFor(() => boxes(root).length === 3 && boxes(root)[0].getAttribute("aria-checked") === "true");
   const br = $(root, ".br");
-  assert.match(br.textContent, /⎇ main/);
+  assert.match(br.textContent, /^\s*main/);
+  assert.ok($(br, ".bname svg.branch-ic"), "TASK-18.13 D9: the branch glyph is an SVG");
   assert.match(br.textContent, /↑2 к origin/);
   assert.match(br.textContent, /3 изменено/);
   assert.match(root.textContent, /Последний коммит: «Add order index» · 2 ч назад/);
@@ -285,14 +290,14 @@ test("кадр 4: «✦ Предложить сообщение» — POST sugge
   await t$.waitFor(() => boxes(root2)[0]?.getAttribute("aria-checked") === "true");
   t$.click(byText(root2, "button", "Предложить сообщение"));
   const err = await t$.waitFor(() => $(root2, ".git-err"));
-  assert.equal(err.textContent, "Не удалось предложить сообщение: Модель не ответила за 90 с");
+  assert.equal(err.textContent, "Модель не ответила за 90 с", "a 502 sentence is shown as is (TASK-18.13 D6)");
 });
 
 test("кадр 4: «Отправить ↑2» у admin при pushAllowed и upstream; ошибки отправки — карточки по kind (кадр 6)", async () => {
   const root = await openGit({ push: () => ({ status: 502, body: { error: "auth failed", kind: "auth" } }) });
   const pb = await t$.waitFor(() => byText(root, "button", "Отправить ↑2"));
   assert.match(root.textContent, /Отправка/);
-  assert.match(root.textContent, /origin\/main · доступ настроен на сервере/);
+  assert.match(root.textContent, /Отправка в origin\/main/);
   assert.doesNotMatch(root.textContent, /доступны только администратору/);
   t$.click(pb);
   const card = await t$.waitFor(() => $(root, '.gcard.warn[data-kind="auth"]'));
@@ -441,4 +446,208 @@ test("меню чата в ChatView: «Git» ведёт на #/git/<sid>", async
   t$.click(item);
   assert.equal(location.hash, `#/git/${SID}`);
   location.hash = "";
+});
+
+// ---- TASK-18.13: fixes after the full git dogfood -----------------------------
+const bigPatch = (n = 450) => [
+  "diff --git a/big.txt b/big.txt", "--- a/big.txt", "+++ b/big.txt", `@@ -1,${n} +1,${n} @@`,
+  ...Array.from({ length: n }, (_, i) => `-old ${i}`), ...Array.from({ length: n }, (_, i) => `+new ${i}`),
+];
+test("D2: «Показать всё» в «Сейчас vs коммит» — одно нажатие грузит весь дифф и убирает плашку", async () => {
+  const full = bigPatch();
+  installFetch([
+    { method: "GET", path: "/teleharness/api/git/diff", reply: (c) => (c.query.full === "1"
+      ? { file: "big.txt", patch: full.join("\n") + "\n", additions: 450, deletions: 450, binary: false, truncated: false }
+      : { file: "big.txt", patch: full.slice(0, 400).join("\n") + "\n", additions: 450, deletions: 450, binary: false, truncated: true }) },
+  ]);
+  const files = [{ path: "big.txt", gitPath: "big.txt", name: "big.txt", dir: "", status: "M", additions: 450, deletions: 450 }];
+  t$.mount(ui.DiffView, { files, mode: "git", where: { sid: SID }, onClose() {} });
+  const dv = await t$.waitFor(() => $(document.body, ".dv"));
+  await t$.waitFor(() => $(dv, ".big-note"));
+  assert.ok($$(dv, ".ln").length <= 400, "only the first 400 patch lines");
+  t$.click(byText(dv, "button", "Показать всё"));
+  await t$.waitFor(() => $$(dv, ".ln").length === 900);
+  assert.equal($(dv, ".big-note"), null, "the banner is gone after ONE tap");
+  assert.equal(fetchCalls.filter((c) => c.path === "/teleharness/api/git/diff" && c.query.full === "1").length, 1);
+});
+
+test("D4: тенант без абсолютного root — путь хода переводится в путь git через rootRel и папку чата", async () => {
+  assert.equal(ui.resolveGitRoot({ rel: "chats/abc" }, "C:\\t\\alice"), "C:/t/alice/chats/abc");
+  assert.equal(ui.resolveGitRoot({ rel: "" }, "C:\\t\\alice\\"), "C:/t/alice");
+  assert.equal(ui.resolveGitRoot({ rel: ".." }, "C:/t/alice/proj"), "C:/t/alice");
+  assert.equal(ui.resolveGitRoot("D:/abs", "C:/x"), "D:/abs");
+  assert.equal(ui.resolveGitRoot(null, "C:/x"), null);
+  // the repo is the «db» subfolder of the chat's directory (like chats\<id>)
+  ui.gitRootSignal.value = {};
+  ui.gitRepoSignal.value = {};
+  const root = await openChat({ status: { ...STATUS, root: null, rootRel: "db", name: "shop-api" } });
+  t$.click(await t$.waitFor(() => $(root, ".chg")));
+  const sheet = await t$.waitFor(() => $(document.body, ".chg-sheet"));
+  await t$.waitFor(() => byText(sheet, "button", "Git проекта"));
+  t$.click($$(sheet, ".frow")[0]);
+  const dv = await t$.waitFor(() => $(document.body, ".dv"));
+  t$.click(byText($(dv, ".dseg"), "button", "Сейчас vs коммит"));
+  await t$.waitFor(() => fetchCalls.some((c) => c.path === "/teleharness/api/git/diff"));
+  assert.equal(fetchCalls.find((c) => c.path === "/teleharness/api/git/diff").query.file, "orders.sql", "relative to the repo root db/");
+  ui.gitRootSignal.value = {};
+  ui.gitRepoSignal.value = {};
+});
+
+test("D5: карточка ошибки отправки — один заголовок и одно пояснение на каждый kind, без повторов", () => {
+  const serverText = { network: "Отправка не прошла: удалённый репозиторий недоступен (сеть). Коммиты остались локально.", "no-upstream": "У ветки нет upstream — отправлять некуда.", unknown: "Отправка не прошла (git: odd). Коммиты остались локально." };
+  for (const kind of ["auth", "rejected", "no-upstream", "network", "unknown", "detached"]) {
+    const v = ui.pushErrorView({ status: 502, body: { error: serverText[kind] ?? "x", kind, ...(kind === "unknown" ? { detail: "odd" } : {}) } });
+    assert.equal(v.text.includes(v.title), false, `${kind}: the title is not repeated in the text`);
+    assert.ok((v.text.match(/Коммиты (сохранены|остались)/g) ?? []).length <= 1, `${kind}: «коммиты локально» once — ${v.text}`);
+    assert.equal((v.text.match(/Отправка не прошла/g) ?? []).length, 0, `${kind}: ${v.text}`);
+    assert.doesNotMatch(v.text, /остались локально/, `${kind}: the server's own tail is not appended`);
+  }
+  assert.match(ui.pushErrorView({ status: 502, body: { kind: "unknown", detail: "odd" } }).text, /«odd»/);
+  assert.equal(ui.pushErrorView({ status: 502, body: { kind: "network", error: serverText.network } }).text, "Удалённый репозиторий недоступен (нет связи с ним). Коммиты сохранены локально — отправьте позже.");
+});
+
+test("D6: ошибка «Предложить сообщение» — одна русская фраза без двойного префикса, сырой текст свёрнут", async () => {
+  const root = await openGit({ suggest: () => ({ status: 502, body: { error: "Лимит модели этого чата исчерпан — напишите сообщение сами или попробуйте позже.", kind: "limit", detail: "Weekly/Monthly Limit Exhausted." } }) });
+  await t$.waitFor(() => boxes(root)[0]?.getAttribute("aria-checked") === "true");
+  t$.click(byText(root, "button", "Предложить сообщение"));
+  const err = await t$.waitFor(() => $(root, ".git-err"));
+  assert.equal($(err, "p").textContent, "Лимит модели этого чата исчерпан — напишите сообщение сами или попробуйте позже.");
+  const det = $(err, "details");
+  assert.ok(det && !det.open, "the raw text is collapsed");
+  assert.match(det.textContent, /Weekly\/Monthly Limit Exhausted/);
+  assert.doesNotMatch($(err, "p").textContent, /Не удалось/);
+  t$.cleanup();
+  // a 400 (nothing changed) keeps the action prefix once
+  const root2 = await openGit({ suggest: () => ({ status: 400, body: { error: "в выбранных файлах нет изменений" } }) });
+  await t$.waitFor(() => boxes(root2)[0]?.getAttribute("aria-checked") === "true");
+  t$.click(byText(root2, "button", "Предложить сообщение"));
+  const e2 = await t$.waitFor(() => $(root2, ".git-err"));
+  assert.equal(e2.textContent, "Не удалось предложить сообщение: в выбранных файлах нет изменений");
+});
+
+test("D7: detached HEAD — шапка «<hash> без ветки (detached HEAD)», ошибка отправки — свой текст", async () => {
+  const root = await openGit({ status: { ...STATUS, branch: null, detached: true, upstream: null, ahead: 0 } });
+  const br = await t$.waitFor(() => $(root, ".br"));
+  assert.match(br.textContent, /abc1234/);
+  assert.match(br.textContent, /без ветки \(detached HEAD\)/);
+  assert.doesNotMatch(br.textContent, /null|undefined/);
+  assert.match(root.textContent, /Не выбрана ветка/);
+  const v = ui.pushErrorView({ status: 409, body: { kind: "detached", error: "x" } });
+  assert.equal(v.text, "Не выбрана ветка (detached HEAD) — отправлять нечего; переключитесь на ветку через агента.");
+  assert.doesNotMatch(v.text, /upstream/);
+});
+
+test("D8: карточка «Отправка» не утверждает про доступ — «Отправка в origin/main»", async () => {
+  const root = await openGit();
+  await t$.waitFor(() => byText(root, "button", "Отправить ↑2"));
+  assert.match(root.textContent, /Отправка в origin\/main/);
+  assert.doesNotMatch(root.textContent, /доступ настроен/);
+});
+
+test("D9: ветка — SVG-иконка, символа ⎇ в интерфейсе нет", async () => {
+  const { readFileSync } = await import("node:fs");
+  const root = await openGit();
+  const bn = await t$.waitFor(() => $(root, ".bname"));
+  const svg = $(bn, "svg.branch-ic");
+  assert.ok(svg, "inline SVG");
+  assert.equal(svg.getAttribute("width"), "1.1em", "sized with the text");
+  assert.equal(svg.getAttribute("stroke"), "currentColor", "follows the theme");
+  assert.doesNotMatch(root.textContent, /⎇/);
+  for (const f of ["src/components/views/GitView.jsx", "src/components/views/ProjectView.jsx"]) {
+    assert.doesNotMatch(readFileSync(f, "utf8"), /⎇/, f);
+  }
+});
+
+test("D10: подзаголовок экрана Git — название чата, не внутренний id папки; при ошибке — тоже название, не «Git»", async () => {
+  const tenantStatus = { ...STATUS, root: null, rootRel: "chats/e1b0a4a63ffe65UCEiKn5wXiHy", name: "alice", pushAllowed: false };
+  const root = await openGit({ role: "user", status: tenantStatus });
+  await t$.waitFor(() => boxes(root).length === 3);
+  assert.equal($(root, ".project-sub").textContent, SESSION.title);
+  assert.doesNotMatch(root.textContent, /e1b0a4a63ffe65/);
+  t$.cleanup();
+  installFetch([
+    { method: "GET", path: "/teleharness/api/git/status", reply: () => ({ status: 409, body: { error: "в настройках этого репозитория есть команды" } }) },
+    { method: "GET", path: "/teleharness/api/me/git", reply: () => ({ preselect: "modified" }) },
+  ]);
+  ui.store.me.value = { id: "u", name: "u", role: "user" };
+  ui.store.sessions.value = [SESSION];
+  const v = t$.mount(ui.GitView, { id: SID });
+  await t$.waitFor(() => /Git не загрузился/.test(v.root.textContent));
+  assert.equal($(v.root, ".project-sub").textContent, SESSION.title, "error screen: the chat's name, not a second «Git»");
+  t$.cleanup();
+  // a project: its folder name
+  const r3 = await openGit({ props: { directory: DIR } });
+  await t$.waitFor(() => boxes(r3).length === 3);
+  assert.equal($(r3, ".project-sub").textContent, "shop-api");
+});
+
+test("D11: подпись «корень проекта» — без обрезки с начала (только у настоящих путей)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const root = await openGit();
+  await t$.waitFor(() => boxes(root).length === 3);
+  const subs = $$(root, ".git-file .fn-sub");
+  assert.equal(subs[0].classList.contains("is-label"), false, "db — a path: cut from the start");
+  assert.equal(subs[2].classList.contains("is-label"), true, "root label: not a path");
+  assert.match(subs[2].textContent, /^корень проекта · не в git$/);
+  const css = readFileSync("src/components/git/git.css", "utf8");
+  assert.match(css, /\.fn-sub\.is-label\s*\{[^}]*direction:\s*ltr/);
+});
+
+const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const lum = (h) => {
+  const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(h.slice(i, i + 2), 16) / 255));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a, b) => {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+};
+test("D12: выключенная «Коммит» — контраст ≥ 3:1 в тёмной и светлой теме (без полупрозрачного бренда)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync("src/components/git/git.css", "utf8");
+  const rule = /\.gbtn\.pri:disabled\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+  assert.match(rule, /opacity:\s*1/);
+  assert.match(rule, /background:\s*var\(--input\)/);
+  assert.match(rule, /color:\s*var\(--text-2\)/);
+  for (const file of ["src/app.css", "src/claude-look.css"]) {
+    const app = readFileSync(file, "utf8");
+    const v = (block, name) => new RegExp(`${name}:\\s*(#[0-9a-f]{6})`, "i").exec(block)?.[1];
+    const at = app.indexOf(':root[data-theme="light"]');
+    for (const [name, block] of [["dark", app.slice(0, at)], ["light", app.slice(at)]]) {
+      const c = contrast(v(block, "--text-2"), v(block, "--input"));
+      assert.ok(c >= 3, `${file} ${name}: ${c.toFixed(2)}`);
+    }
+  }
+});
+
+test("D12: двоичный файл — «двоичный» вместо «+0»; переименованный — «переименован из …» в списке и в диффе", async () => {
+  const status = {
+    ...STATUS,
+    files: [
+      { path: "img/logo.png", status: "M", staged: false, additions: 0, deletions: 0, binary: true },
+      { path: "docs.md", status: "R", staged: true, additions: 0, deletions: 0, oldPath: "README.md" },
+    ],
+  };
+  const root = await openGit({ status });
+  await t$.waitFor(() => boxes(root).length === 2);
+  const rows = $$(root, ".git-file");
+  assert.equal($(rows[0], ".dnum").textContent, "двоичный");
+  assert.doesNotMatch(rows[0].textContent, /\+0/);
+  assert.match($(rows[1], ".fn-sub").textContent, /переименован из README\.md/);
+  t$.cleanup();
+  installFetch([
+    { method: "GET", path: "/teleharness/api/git/diff", reply: (c) => (c.query.file === "docs.md"
+      ? { file: "docs.md", oldPath: "README.md", patch: "diff --git a/README.md b/docs.md\nsimilarity index 100%\nrename from README.md\nrename to docs.md\n", additions: 0, deletions: 0, binary: false, truncated: false }
+      : { file: "img/logo.png", patch: "diff --git a/img/logo.png b/img/logo.png\nBinary files a/img/logo.png and b/img/logo.png differ\n", additions: 0, deletions: 0, binary: true, truncated: false }) },
+  ]);
+  const files = status.files.map((f) => ({ ...f, gitPath: f.path, name: f.path.split("/").pop(), dir: f.path.includes("/") ? f.path.split("/")[0] : "" }));
+  t$.mount(ui.DiffView, { files, mode: "git", where: { sid: SID }, onClose() {} });
+  const dv = await t$.waitFor(() => $(document.body, ".dv"));
+  await t$.waitFor(() => /Двоичный файл/.test(dv.textContent));
+  assert.equal($(dv, ".dv-top .dnum").textContent, "двоичный");
+  t$.click(byText(dv, "button", "из 2"));
+  await t$.waitFor(() => $(dv, ".dv-renamed"));
+  assert.equal($(dv, ".dv-renamed").textContent, "переименован из README.md");
+  await t$.waitFor(() => /Только переименование/.test(dv.textContent));
+  assert.doesNotMatch(dv.textContent, /Изменений нет/, "a pure rename is not «Изменений нет»");
 });

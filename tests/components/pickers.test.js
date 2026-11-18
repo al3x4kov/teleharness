@@ -263,7 +263,8 @@ test("Новый проект: относительный и системный 
   t$.typeInto(input, "projects\\app");
   t$.click(createBtn);
   await t$.flush();
-  assert.match($(root, ".modal-error").textContent, /Нужен полный путь с диском/);
+  // TASK-17.18: сервер бывает и Linux — подсказка называет обе формы абсолютного пути
+  assert.match($(root, ".modal-error").textContent, /Нужен полный путь: \/home\/user\/project или, например D:\\Projects\\my-app/);
   assert.equal(input.getAttribute("aria-invalid"), "true");
   t$.typeInto(input, "C:\\Windows\\System32\\x");
   assert.equal($(root, ".modal-error"), null, "ввод снимает ошибку");

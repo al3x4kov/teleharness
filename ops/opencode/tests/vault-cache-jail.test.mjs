@@ -11,6 +11,10 @@ import path from "node:path"
 import { execFileSync } from "node:child_process"
 import { pathToFileURL } from "node:url"
 
+// Directory junction on Windows, plain directory symlink on POSIX (the "junction"
+// type is ignored there) — both point out of the tenant folder.
+const junction = (link, target) => fs.symlinkSync(target, link, "junction")
+
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "vc-jail-"))
 const P = (...x) => path.join(ROOT, ...x)
 const F = (p) => p.replace(/\\/g, "/")
@@ -23,7 +27,7 @@ const PY = P("teleharness-sandbox", "python")
 const PY_EXE = path.join(PY, "Scripts", "python.exe")
 const CAFILE = path.join(PY, "Lib", "site-packages", "certifi", "cacert.pem")
 
-let hook, hooks
+let hook, hooks, linuxHooks
 const sessions = {
   ses_admin: { id: "ses_admin", directory: ADMIN_DIR },
   ses_alice: { id: "ses_alice", directory: ALICE },
@@ -39,7 +43,7 @@ before(async () => {
     fs.mkdirSync(path.dirname(f), { recursive: true })
     fs.writeFileSync(f, "")
   }
-  execFileSync("cmd", ["/c", "mklink", "/J", path.join(ALICE, "escape"), BOB], { stdio: "ignore" })
+  junction(path.join(ALICE, "escape"), BOB)
   fs.writeFileSync(P("users.json"), JSON.stringify({ users: [
     { name: "admin", role: "admin", directories: [] },
     { name: "Тенант Н.", role: "user", directories: [CAROL] },
@@ -56,8 +60,11 @@ before(async () => {
   })
   const mod = await import(pathToFileURL(path.resolve(import.meta.dirname, "..", "vault-cache.ts")).href)
   const client = { session: { get: async ({ path: { id } }) => ({ data: sessions[id] }), messages: async () => ({ data: [] }) } }
-  hooks = await mod.default({ client })
+  // TASK-17.18: the cases below check the Windows launcher (teleharness-jail.exe) on any
+  // host; `platform` is a test-only plugin input (opencode never passes it → host).
+  hooks = await mod.default({ client, platform: "win32" })
   hook = hooks["tool.execute.before"]
+  linuxHooks = await mod.default({ client, platform: "linux", linuxRunner: true })
 })
 
 after(() => {
@@ -258,4 +265,57 @@ test("FEAT-04.12: teleharness-render <файл> → рендерер на хос
   await assert.rejects(bash("ses_alice", "teleharness-render x.pptx", { workdir: BOB }), /вне вашей/)
   const admin = await bash("ses_admin", "teleharness-render a.pptx")
   assert.equal(admin.command, "teleharness-render a.pptx", "admin не трогается")
+})
+
+// ---- TASK-17.18 (EPIC-17): Linux — sudo teleharness-tenant-run (паритет с sandbox-core) ----
+
+const RUNNER = "/usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 "
+function linuxPayload(line) {
+  assert.ok(line.startsWith(RUNNER), line)
+  const b64 = line.slice(RUNNER.length)
+  assert.match(b64, /^[A-Za-z0-9_-]+$/)
+  return JSON.parse(Buffer.from(b64, "base64url").toString("utf8"))
+}
+async function linuxBash(sessionID, command, extra = {}) {
+  const args = { command, description: "x", ...extra }
+  await linuxHooks["tool.execute.before"]({ tool: "bash", sessionID, callID: "c" }, { args })
+  return args
+}
+
+test("Linux: tenant bash → sudo teleharness-tenant-run с командой и папками в base64-JSON", async () => {
+  const cmd = "echo a & type x | y; $(id) `id` 'q' \"w\""
+  assert.deepEqual(linuxPayload((await linuxBash("ses_alice", cmd)).command), { name: "teleharness-t-alice", home: ALICE, cwd: ALICE, command: cmd })
+  assert.equal(linuxPayload((await linuxBash("ses_alice", "ls", { workdir: "proj" })).command).cwd, path.join(ALICE, "proj"))
+  const sub = linuxPayload((await linuxBash("ses_alice_sub", "ls")).command)
+  assert.equal(sub.home, ALICE)
+  assert.equal(sub.cwd, path.join(ALICE, "proj"))
+  assert.equal(linuxPayload((await linuxBash("ses_child", "ls")).command).name, "teleharness-t-alice")
+  assert.match(linuxPayload((await linuxBash("ses_carol", "ls")).command).name, /^teleharness-t-h[0-9a-f]{16}$/)
+  const sc = linuxPayload((await linuxBash("ses_alice", `cd "${path.join(ALICE, "proj")}" && make`)).command)
+  assert.deepEqual([sc.cwd, sc.command], [path.join(ALICE, "proj"), "make"])
+  assert.equal((await linuxBash("ses_admin", "ls /")).command, "ls /", "админ не трогается")
+})
+
+test("Linux: вне папки, симлинк наружу, пустая/с \\0/длинная команда — отказ", async () => {
+  for (const workdir of [BOB, "../bob", "/etc", path.join(ALICE, "escape"), P("tenants", "vault", "alice")])
+    await assert.rejects(linuxBash("ses_alice", "ls", { workdir }), /Доступ запрещён/, workdir)
+  await assert.rejects(linuxBash("ses_alice", "cd .. && ls"), /вне вашей папки/)
+  for (const cmd of ["  ", undefined, "ls\0x", "a".repeat(65537), '"'.repeat(60000)])
+    await assert.rejects(linuxBash("ses_alice", cmd), /пустая или недопустимая команда/, String(cmd).slice(0, 20))
+  await assert.rejects(linuxBash("ses_alice", `cat ${P("vault", "agents", "_index.md")}`), /Доступ запрещён/, "POSIX-путь к хранилищу в команде")
+})
+
+test("Linux: teleharness-render идёт через песочницу; история модели — своя команда", async () => {
+  const r = linuxPayload((await linuxBash("ses_alice", 'teleharness-render "Новый дизайн.pptx" --pages 1-3', { workdir: "proj" })).command)
+  assert.deepEqual([r.cwd, r.command], [path.join(ALICE, "proj"), 'teleharness-render "Новый дизайн.pptx" --pages 1-3'])
+  await assert.rejects(linuxBash("ses_alice", "teleharness-render x.pptx", { workdir: BOB }), /вне вашей/)
+  const cmd = 'python -c "print(1 & 2)" | grep 0'
+  const line = (await linuxBash("ses_alice", cmd)).command
+  const stored = { type: "tool", tool: "bash", state: { status: "completed", input: { command: line, description: "x" } } }
+  const bogus = { type: "tool", tool: "bash", state: { status: "completed", input: { command: RUNNER + "!!!" } } }
+  const output = { messages: [{ info: { role: "assistant" }, parts: [stored, bogus] }] }
+  await linuxHooks["experimental.chat.messages.transform"]({}, output)
+  assert.equal(output.messages[0].parts[0].state.input.command, cmd)
+  assert.equal(stored.state.input.command, line, "the stored part object is not mutated")
+  assert.equal(output.messages[0].parts[1], bogus, "не разобранная строка — как есть")
 })

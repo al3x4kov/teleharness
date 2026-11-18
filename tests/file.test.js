@@ -3,10 +3,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
-import { mimeFor, resolveInside, serveWorkspaceFile, workspaceFileExists } from "../lib/file.js";
+import { mimeFor, realInside, resolveInside, serveWorkspaceFile, translateLegacyFilePath, workspaceFileExists } from "../lib/file.js";
+import { config, platformDefaults } from "../lib/config.js";
 
 const ROOT = mkdtempSync(path.join(tmpdir(), "teleharness-file-"));
 mkdirSync(path.join(ROOT, "sub"), { recursive: true });
@@ -57,10 +58,19 @@ test("resolveInside: traversal outside is rejected", () => {
     "",
     null,
   ];
-  // Windows-only shapes: on POSIX a backslash is an ordinary file-name character.
-  if (process.platform === "win32") outside.push("..\\escape.txt", "D:\\Windows\\system.ini" /* absolute elsewhere */, "\\\\server\\share\\x" /* UNC */);
-  else outside.push("/etc/passwd" /* absolute elsewhere */);
   for (const t of outside) assert.equal(resolveInside(ROOT, t, []), null, `should be rejected: ${t}`);
+  // TASK-17.18: Windows-формы. На win32 — абсолютный путь вне папки и UNC; на POSIX «\\» — обычный
+  // символ имени, поэтому те же строки отвергаются только через TELEHARNESS_LEGACY_PATH_ROOT (перевод C:/D:,
+  // отказ на UNC), а без него остаются буквальными именами ВНУТРИ папки (не выход наружу).
+  const winShapes = ["D:\\Windows\\system.ini" /* absolute elsewhere */, "\\\\server\\share\\x" /* UNC */];
+  if (process.platform === "win32") {
+    for (const t of winShapes) assert.equal(resolveInside(ROOT, t, []), null, `should be rejected: ${t}`);
+  } else {
+    const legacy = path.join(path.dirname(ROOT), "teleharness-legacy-not-a-root");
+    for (const t of winShapes) assert.equal(resolveInside(ROOT, t, [], legacy), null, `should be rejected (legacy root): ${t}`);
+    for (const t of winShapes) assert.equal(resolveInside(ROOT, t, [], ""), path.join(ROOT, t), `literal name inside: ${t}`);
+    for (const t of ["/etc/passwd", path.join(path.dirname(ROOT), "escape.txt")]) assert.equal(resolveInside(ROOT, t, []), null, `should be rejected: ${t}`);
+  }
 });
 
 test("resolveInside: case-insensitive containment on win32", { skip: process.platform !== "win32" }, () => {
@@ -165,4 +175,67 @@ test("BUG-090: workspaceFileExists — existing file true; missing, directory, o
   assert.equal(workspaceFileExists(ROOT, "sub", [EXTRA]), false, "a directory is not a file");
   assert.equal(workspaceFileExists(ROOT, "../server.js", [EXTRA]), false, "outside: same answer as missing");
   assert.equal(workspaceFileExists(ROOT, "", [EXTRA]), false);
+});
+
+// ---- TASK-17.18: TELEHARNESS_LEGACY_PATH_ROOT — старые Windows-ссылки вложений после переноса на Linux ----
+test("translateLegacyFilePath: C:/D: → <корень>/<буква>/…; file:///D:/…; родные пути не трогает", () => {
+  const L = path.join(path.parse(ROOT).root, "srv", "legacy");
+  assert.equal(translateLegacyFilePath("C:\\Users\\dev\\a.md", L), path.join(L, "C", "Users", "dev", "a.md"));
+  assert.equal(translateLegacyFilePath("d:/Apps/teleharness/x.md", L), path.join(L, "D", "Apps", "teleharness", "x.md"));
+  assert.equal(translateLegacyFilePath("file:///D:/Obsidian/%D0%B7%D0%B0%D0%BC%D0%B5%D1%82%D0%BA%D0%B0%20x.md", L), path.join(L, "D", "Obsidian", "заметка x.md"));
+  for (const t of ["sub/x.md", ".teleharness-uploads/a.xlsx", path.join(ROOT, "report.md")]) assert.equal(translateLegacyFilePath(t, L), t, t);
+  // без корня (по умолчанию в тестовом окружении) — выключено
+  assert.equal(translateLegacyFilePath("D:\\Apps\\x.md", ""), "D:\\Apps\\x.md");
+  assert.equal(translateLegacyFilePath(null, L), null);
+});
+
+test("translateLegacyFilePath: отказ — «..», UNC, file://host, не-дисковые file:, \\0, другие диски, относительный корень", () => {
+  const L = path.join(path.parse(ROOT).root, "srv", "legacy");
+  for (const t of [
+    "D:\\a\\..\\..\\etc\\passwd",
+    "C:/a/../b",
+    "D:\\..",
+    "file:///D:/a/../b",
+    "file:///D:/a/%2e%2e/b",
+    "\\\\nas\\share\\x",
+    "//nas/share/x",
+    "\\\\?\\D:\\x",
+    "file://nas/share/x.md",
+    "file:////nas/share/x.md",
+    "file:///etc/passwd",
+    "file:///D:/bad%E0%A4%A",
+    "D:\\a\0b",
+    "file:///D:/a%00b",
+    "E:\\x.md",
+    "D:x.md",
+  ]) assert.equal(translateLegacyFilePath(t, L), null, JSON.stringify(t));
+  assert.equal(translateLegacyFilePath("D:\\x.md", "relative/root"), null, "корень должен быть абсолютным");
+});
+
+test("resolveInside + legacy root: переведённый путь всё равно проходит проверку области (лексически и realpath)", () => {
+  const L = mkdtempSync(path.join(tmpdir(), "teleharness-legacy-"));
+  try {
+    const vault = path.join(L, "D", "Obsidian");
+    mkdirSync(vault, { recursive: true });
+    writeFileSync(path.join(vault, "n.md"), "n");
+    const outside = path.join(L, "D", "Secret");
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(path.join(outside, "s.txt"), "S");
+    // внутри разрешённого корня — путь найден
+    assert.equal(resolveInside(ROOT, "D:\\Obsidian\\n.md", [vault], L), path.join(vault, "n.md"));
+    assert.equal(resolveInside(ROOT, "file:///D:/Obsidian/n.md", [vault], L), path.join(vault, "n.md"));
+    // перевод не расширяет список корней: соседняя папка под тем же legacy-корнем — отказ
+    assert.equal(resolveInside(ROOT, "D:\\Secret\\s.txt", [vault], L), null);
+    assert.equal(resolveInside(ROOT, "C:\\Windows\\win.ini", [vault], L), null);
+    assert.equal(resolveInside(ROOT, "D:\\Obsidian\\..\\Secret\\s.txt", [vault], L), null);
+    // symlink внутри корня наружу: лексически внутри, realpath — отказ
+    if (process.platform !== "win32") {
+      symlinkSync(outside, path.join(vault, "jx"));
+      const full = resolveInside(ROOT, "D:\\Obsidian\\jx\\s.txt", [vault], L);
+      assert.equal(full, path.join(vault, "jx", "s.txt"));
+      assert.equal(realInside(full, [ROOT, vault]), null);
+    }
+  } finally {
+    rmSync(L, { recursive: true, force: true });
+  }
 });

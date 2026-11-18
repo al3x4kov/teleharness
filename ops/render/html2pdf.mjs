@@ -4,19 +4,24 @@
 // everything else — internet, loopback (opencode :4096), LAN, other schemes —
 // is aborted. file:// cannot be loaded from an http page by the browser itself.
 // argv: <site dir> <page file name> <out pdf>
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { chromium } = require(process.env.TELEHARNESS_RENDER_PLAYWRIGHT || "D:/Apps/teleharness-qa/node_modules/playwright");
+const { chromium } = require(process.env.TELEHARNESS_RENDER_PLAYWRIGHT || (process.platform === "win32" ? "D:/Apps/teleharness-qa/node_modules/playwright" : "playwright"));
 
 const [site, page, out] = process.argv.slice(2);
-const root = path.resolve(site);
+const root = realpathSync(path.resolve(site));
 const TYPES = { ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".css": "text/css", ".js": "text/javascript", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf" };
 const HOST = "teleharness-render.invalid";
 
-const browser = await chromium.launch({ channel: "msedge", headless: true, args: ["--disable-background-networking", "--disable-component-update", "--no-first-run"] });
+const platformLaunch = process.platform === "win32" ? { channel: "msedge" } : {
+  ...(process.env.TELEHARNESS_RENDER_CHROMIUM ? { executablePath: process.env.TELEHARNESS_RENDER_CHROMIUM } : {}),
+  // Disable only inside the already-isolated offline tenant container.
+  chromiumSandbox: process.env.TELEHARNESS_RENDER_CHROMIUM_SANDBOX !== "0",
+};
+const browser = await chromium.launch({ ...platformLaunch, headless: true, timeout: 45_000, args: ["--disable-background-networking", "--disable-component-update", "--no-first-run", ...(process.env.TELEHARNESS_RENDER_CHROMIUM_SANDBOX === "0" ? ["--single-process", "--no-zygote", "--disable-gpu"] : [])] });
 let code = 0;
 try {
   const ctx = await browser.newContext({ serviceWorkers: "block", acceptDownloads: false, javaScriptEnabled: true });
@@ -28,9 +33,9 @@ try {
       return route.abort("blockedbyclient");
     }
     if (u.protocol !== "http:" || u.hostname !== HOST || route.request().method() !== "GET") return route.abort("blockedbyclient");
-    const p = path.resolve(root, decodeURIComponent(u.pathname).replace(/^\/+/, ""));
-    if (p !== root && !p.startsWith(root + path.sep)) return route.abort("blockedbyclient");
     try {
+      const p = realpathSync(path.resolve(root, decodeURIComponent(u.pathname).replace(/^\/+/, "")));
+      if (p !== root && !p.startsWith(root + path.sep)) return route.abort("blockedbyclient");
       if (!statSync(p).isFile()) return route.abort("blockedbyclient");
       return route.fulfill({ status: 200, headers: { "content-type": TYPES[path.extname(p).toLowerCase()] ?? "application/octet-stream" }, body: readFileSync(p) });
     } catch {

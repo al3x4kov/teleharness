@@ -1,0 +1,18 @@
+# Supplemental Linux renderer image; context contains only public runtime binaries,
+# playwright-core, and the three reviewed render sources (no portal data/config).
+# BASE_IMAGE: your tenant shell image (the "image" of /etc/teleharness/tenant-runner.json read by
+# teleharness-tenant-run) — Debian/Ubuntu with Python in /opt/venv, LibreOffice and Node in /usr/local/bin.
+ARG BASE_IMAGE=teleharness-tenant-shell:latest
+FROM ${BASE_IMAGE}
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64 libpango-1.0-0 libcairo2 && rm -rf /var/lib/apt/lists/*
+RUN /opt/venv/bin/pip install --no-cache-dir pypdfium2==5.15.2
+COPY engine /opt/render-engine
+COPY playwright-core /opt/playwright-core
+COPY chromium /opt/chromium
+COPY --chmod=755 teleharness-render /usr/local/bin/teleharness-render
+RUN chmod -R a+rX /opt/render-engine /opt/playwright-core /opt/chromium
+ENV TELEHARNESS_RENDER_PLAYWRIGHT=/opt/playwright-core TELEHARNESS_RENDER_CHROMIUM=/opt/chromium/chrome TELEHARNESS_RENDER_CHROMIUM_SANDBOX=0 TELEHARNESS_RENDER_NODE=/usr/local/bin/node
+# Browser sandbox disabled only INSIDE the existing unprivileged, cap-free,
+# readonly, network=none tenant container. Host admin Chromium sandbox stays on.
+USER 1000:1000

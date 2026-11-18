@@ -5,6 +5,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { cleanPath, match } from "../src/lib/router.js";
 
+test("FEAT-19.1: Temporal и редактор разрешаются в отдельный view", () => {
+  assert.equal(match("/temporal").view, "temporal");
+  assert.deepEqual(match("/temporal/pipe/abc").params, { section: "pipe", id: "abc" });
+});
+
 test("cleanPath: '#/' and empty hashes normalize to '/'", () => {
   assert.equal(cleanPath("#/"), "/");
   assert.equal(cleanPath("#"), "/");

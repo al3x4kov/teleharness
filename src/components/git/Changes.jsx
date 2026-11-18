@@ -13,7 +13,7 @@ import { UndoSheet } from "../chat/TurnActions.jsx";
 import DiffView, { FileRow, Nums } from "./DiffView.jsx";
 import { canRewind } from "../../lib/store.js";
 import { navigate } from "../../lib/router.js";
-import { gitHash, gitRepo, gitRoot, probeGitRepo } from "../../lib/git-client.js";
+import { gitHash, gitRepo, gitRoot, probeGitRepo, resolveGitRoot } from "../../lib/git-client.js";
 import { filesLabel, relPath, totals, turnChanges, turnPartsOf } from "../../lib/diff.js";
 import "./git.css";
 
@@ -96,7 +96,7 @@ export default function ChangesRow({ files, sid, base = "", lastTurn = false }) 
   const t = totals(files);
   const names = files.map((f) => f.name).join(", ");
   const repo = gitRepo.value[sid] === true;
-  const root = gitRoot.value[sid] ?? null;
+  const root = resolveGitRoot(gitRoot.value[sid], base); // a tenant: {rel} + the chat folder (D4)
   const goGit = () => {
     setOpen(null);
     navigate(gitHash({ sid }));

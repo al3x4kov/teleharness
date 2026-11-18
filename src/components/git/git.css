@@ -50,6 +50,12 @@
   direction: rtl; text-align: left;
 }
 .fn-sub bdi { direction: ltr; unicode-bidi: isolate; }
+/* TASK-18.13 D11: a short label («корень проекта · изменён») is not a path —
+   no start-cut; at 320 px it ends with «…» instead of losing «корень» */
+.fn-sub.is-label { direction: ltr; }
+.dnum .bin { color: var(--text-2); font-weight: 500; }
+/* TASK-18.13 D9: the branch glyph — an SVG sized with the text */
+.branch-ic { display: inline-block; vertical-align: -0.18em; flex: none; }
 
 .btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .gbtn {
@@ -59,6 +65,9 @@
 }
 .gbtn.pri { background: var(--brand); border-color: transparent; color: #fff; }
 .gbtn:disabled { opacity: 0.45; cursor: default; }
+/* TASK-18.13 D12: a disabled primary — no faded brand (grey on indigo was
+   ~2:1 in dark); a neutral fill with --text-2 keeps ≥ 4.5:1 in both themes */
+.gbtn.pri:disabled { opacity: 1; background: var(--input); border-color: var(--border); color: var(--text-2); }
 .gbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .gcard {
@@ -174,6 +183,12 @@
 /* ---- frames 4–6: the Git screen ---- */
 .git-page .set, .gset { display: flex; flex-direction: column; gap: 12px; padding-bottom: 16px; min-width: 0; }
 .git-page .project-heading { min-width: 0; }
+/* TASK-18.13 D10: the subtitle is a chat / project NAME, not a path — UI font,
+   one line, cut at the end */
+.git-page .project-sub {
+  font-family: var(--font-ui); font-size: 13px; word-break: normal;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
 .git-page .br { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; flex-wrap: wrap; min-width: 0; }
 .git-page .br em {
   font-style: normal; font-size: 12.5px; font-weight: 500; color: var(--text-2);
@@ -202,6 +217,9 @@
 }
 .git-msg:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .git-err { color: var(--error); font-size: 13.5px; margin: 0; }
+.git-err p { margin: 0; }
+.git-detail { margin-top: 4px; color: var(--text-2); font-size: 12.5px; overflow-wrap: anywhere; }
+.git-detail summary { cursor: pointer; padding: 6px 0; }
 .git-tenant { margin: 0; }
 .git-toast {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 46;
