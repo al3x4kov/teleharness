@@ -186,7 +186,7 @@ test("TASK-17.18: withJailHook — win32 кавычки \"…\" со слэша�
   }
 });
 
-test("TASK-17.18: jailLine на linux — отдельная Linux-ветка: fail-closed, команда уходит в teleharness-tenant-run base64", () => {
+test("TASK-17.18: jailLine на linux — отдельная Linux-ветка: fail-closed, команда уходит в teleharness-tenant-run base64", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, () => {
   const T = mkdtempSync(path.join(tmpdir(), "teleharness-ljail-"));
   try {
     mkdirSync(path.join(T, "alice", "sub"), { recursive: true });

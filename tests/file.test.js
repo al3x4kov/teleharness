@@ -178,7 +178,7 @@ test("BUG-090: workspaceFileExists — existing file true; missing, directory, o
 });
 
 // ---- TASK-17.18: TELEHARNESS_LEGACY_PATH_ROOT — старые Windows-ссылки вложений после переноса на Linux ----
-test("translateLegacyFilePath: C:/D: → <корень>/<буква>/…; file:///D:/…; родные пути не трогает", () => {
+test("translateLegacyFilePath: C:/D: → <корень>/<буква>/…; file:///D:/…; родные пути не трогает", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, () => {
   const L = path.join(path.parse(ROOT).root, "srv", "legacy");
   assert.equal(translateLegacyFilePath("C:\\Users\\dev\\a.md", L), path.join(L, "C", "Users", "dev", "a.md"));
   assert.equal(translateLegacyFilePath("d:/Apps/teleharness/x.md", L), path.join(L, "D", "Apps", "teleharness", "x.md"));

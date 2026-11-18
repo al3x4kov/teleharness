@@ -70,7 +70,7 @@ test("bash без workdir — в подпапке чата; относитель
   assert.equal(cwdOf((await call("ses_new1", "bash", { command: "teleharness-render deck.pptx", description: "x" })).command), F(CHAT), "teleharness-render тоже из подпапки")
 })
 
-test("Linux: bash без workdir — в подпапке чата; относительный workdir — от неё; старый чат — корень", async () => {
+test("Linux: bash без workdir — в подпапке чата; относительный workdir — от неё; старый чат — корень", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, async () => {
   fs.mkdirSync(path.join(CHAT, "sub"), { recursive: true }) // the Linux runner cds into an existing folder only
   const RUNNER = "/usr/bin/sudo -n /usr/local/libexec/teleharness-tenant-run --b64 "
   const cwd = async (sessionID, args) => {

@@ -22,6 +22,10 @@ Versions are immutable: a run keeps the version it started with. Runs can be pau
 
 ## What you need
 
+Linux or macOS host (the worker talks to the portal over a Unix socket owned by the portal's user; Windows is not
+supported for pipelines).
+
+
 1. **Temporal server** with a namespace, reachable from the portal (gRPC). Any deployment works — Temporal Cloud,
    `temporal server start-dev` for a trial, or a self-hosted server with PostgreSQL.
 2. **The `temporal` CLI** on the portal host (the portal starts, describes and controls workflows through it).

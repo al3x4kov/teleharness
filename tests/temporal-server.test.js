@@ -36,7 +36,7 @@ test("реальный сервер: auth, owner, CAS, immutable versions, CSRF"
  assert.equal((await api(base+"/runs",{token:alice.token})).status,503);
 });
 
-test("выпуск немодельных пайпов не включает модели из окружения портала",async()=>{
+test("выпуск немодельных пайпов не включает модели из окружения портала", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" },async()=>{
  const isolated=await spawnPortal({upstream:up.url,env:{TELEHARNESS_ENV:"prod",TELEHARNESS_ADMIN_TOKEN:ADMIN,
    TELEHARNESS_TEMPORAL_PIPELINES:"1",CLAUDE_CODE_OAUTH_TOKEN:"sample-for-capability-test"}});
  try {

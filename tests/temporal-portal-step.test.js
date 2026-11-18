@@ -10,7 +10,7 @@ test("FEAT-19.16: условие — равно/содержит/не содер
   assert.equal(evaluateCheck({ op: "no" }, false), true);
   assert.throws(() => evaluateCheck({ op: "regex" }, "x"));
 });
-test("FEAT-19.16: артефакт — только имя файла в папке запуска, без перезаписи", () => {
+test("FEAT-19.16: артефакт — только имя файла в папке запуска, без перезаписи", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, () => {
   const have = new Set(["/r/итог.md", "/r/итог (2).md"]);
   assert.equal(artifactTarget("/r", "итог.md", (p) => have.has(p)), "/r/итог (3).md");
   assert.throws(() => artifactTarget("/r", "../x.md", () => false));

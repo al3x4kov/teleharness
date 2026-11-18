@@ -35,7 +35,7 @@ test('TASK-19.8 → FEAT-19.16 (U013 п.4): Codex тенанта — тольк�
   assert.deepEqual(await bridge('execute',{workflowId,stepId:'s'}),{receipt:'ref-t'});
   assert.equal(text.length,1);assert.equal(files.length,0);
 });
-test('FEAT-19.16: подстановки входов и ответов шагов, папка пайпа и запуска, связь с разговором',async()=>{
+test('FEAT-19.16: подстановки входов и ответов шагов, папка пайпа и запуска, связь с разговором', { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" },async()=>{
   const calls=[];const chats=[];
   const bridge=modelBridge({lookupStart:async()=>({owner:'a',definitionId:'d',version:1,inputs:JSON.stringify({task:'отчёт'})}),getUser:async()=>({id:'a',role:'admin'}),
     store:{get:()=>({id:'00000000-0000-4000-8000-000000000000',slug:'ревью',versions:[{version:1,definition:{name:'Ревью',directory:'/p',steps:[{id:'draft',type:'model'},{id:'s',type:'model',name:'Проверка',engine:'claude',model:'m',instruction:'Сделай {{input.task}} по {{steps.draft}}',dependsOn:['draft']}]}}]})},

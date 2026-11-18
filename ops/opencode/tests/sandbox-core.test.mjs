@@ -547,7 +547,7 @@ async function linuxBash(sessionID, command, extra = {}, tool = "bash") {
   return args
 }
 
-test("linuxJailLine: команда и папки уходят в base64-JSON, строка — фиксированной формы", () => {
+test("linuxJailLine: команда и папки уходят в base64-JSON, строка — фиксированной формы", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, () => {
   for (const cmd of ['python -c "print(1)"', "a; b && c | d `id` $(id) ${HOME} > /etc/x", "привет\nмир\r\n", "'\"\\"]) {
     const r = linuxJailLine(cmd, { name: "teleharness-t-alice", home: ALICE, cwd: path.join(ALICE, "proj") })
     assert.ok(r.command, JSON.stringify(r))
@@ -594,7 +594,7 @@ test("linuxJailLine: плохое имя песочницы или нет home �
   assert.match(linuxJailLine("ls", { name: "teleharness-t-alice", home: "" }).error, /нет папки/)
 })
 
-test("Linux: tenant bash/shell → sudo teleharness-tenant-run, root — home тенанта, cwd — рабочая папка", async () => {
+test("Linux: tenant bash/shell → sudo teleharness-tenant-run, root — home тенанта, cwd — рабочая папка", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, async () => {
   for (const tool of ["bash", "shell"]) {
     const a = await linuxBash("ses_alice", "whoami && cat notes.md", {}, tool)
     assert.deepEqual(linuxPayload(a.command), { name: "teleharness-t-alice", home: ALICE, cwd: ALICE, command: "whoami && cat notes.md" }, tool)
@@ -628,7 +628,7 @@ test("Linux: workdir вне папки, симлинк наружу, пуста�
   assert.equal(admin.command, "ls /etc", "админ не трогается")
 })
 
-test("Linux: renderCommand идёт через песочницу (teleharness-render внутри контейнера)", async () => {
+test("Linux: renderCommand идёт через песочницу (teleharness-render внутри контейнера)", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, async () => {
   const z = await core.zoneOf(ALICE)
   const r = await core.renderCommand('"Новый дизайн.pptx" --pages 1-3', z, path.join(ALICE, "proj"), { platform: "linux" })
   assert.deepEqual(linuxPayload(r.command), { name: "teleharness-t-alice", home: ALICE, cwd: path.join(ALICE, "proj"), command: 'teleharness-render "Новый дизайн.pptx" --pages 1-3' })

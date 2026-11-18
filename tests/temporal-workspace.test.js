@@ -13,7 +13,7 @@ test("slug: кириллица сохраняется, опасные симво
 test("slug уникален в проекте", () => {
   assert.equal(uniqueSlug("Отчёт", new Set(["отчёт", "отчёт-2"])), "отчёт-3");
 });
-test("папка пайпа — внутри проекта; неабсолютный проект или чужой slug отклоняются", () => {
+test("папка пайпа — внутри проекта; неабсолютный проект или чужой slug отклоняются", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, () => {
   assert.equal(workspaceOf("/srv/p", "отчёт"), "/srv/p/pipelines/отчёт");
   assert.throws(() => workspaceOf("p", "x"));
   assert.throws(() => workspaceOf("/srv/p", "../etc"));

@@ -282,7 +282,7 @@ async function linuxBash(sessionID, command, extra = {}) {
   return args
 }
 
-test("Linux: tenant bash → sudo teleharness-tenant-run с командой и папками в base64-JSON", async () => {
+test("Linux: tenant bash → sudo teleharness-tenant-run с командой и папками в base64-JSON", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, async () => {
   const cmd = "echo a & type x | y; $(id) `id` 'q' \"w\""
   assert.deepEqual(linuxPayload((await linuxBash("ses_alice", cmd)).command), { name: "teleharness-t-alice", home: ALICE, cwd: ALICE, command: cmd })
   assert.equal(linuxPayload((await linuxBash("ses_alice", "ls", { workdir: "proj" })).command).cwd, path.join(ALICE, "proj"))
@@ -305,7 +305,7 @@ test("Linux: вне папки, симлинк наружу, пустая/с \\0
   await assert.rejects(linuxBash("ses_alice", `cat ${P("vault", "agents", "_index.md")}`), /Доступ запрещён/, "POSIX-путь к хранилищу в команде")
 })
 
-test("Linux: teleharness-render идёт через песочницу; история модели — своя команда", async () => {
+test("Linux: teleharness-render идёт через песочницу; история модели — своя команда", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, async () => {
   const r = linuxPayload((await linuxBash("ses_alice", 'teleharness-render "Новый дизайн.pptx" --pages 1-3', { workdir: "proj" })).command)
   assert.deepEqual([r.cwd, r.command], [path.join(ALICE, "proj"), 'teleharness-render "Новый дизайн.pptx" --pages 1-3'])
   await assert.rejects(linuxBash("ses_alice", "teleharness-render x.pptx", { workdir: BOB }), /вне вашей/)
