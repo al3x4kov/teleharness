@@ -42,7 +42,8 @@ const BODY_MAX = 512 * 1024; // a commit of thousands of selected paths
 // enough to map a turn's files to repo paths — and name, the display name of
 // that folder; only admin also gets the absolute root.
 export function publicStatus(st, base, admin) {
-  const rel = base ? path.relative(base, st.root).split(path.sep).join("/") : null;
+  // git reports a real path (macOS: /private/var/...), the client asked about the logical one (/var/...)
+  const rel = base ? path.relative(realOrSelf(base), realOrSelf(st.root)).split(path.sep).join("/") : null;
   const rootRel = rel != null && !path.isAbsolute(rel) ? rel : null;
   const name = path.basename(base || st.root) || null;
   return { ...st, root: admin ? st.root : null, rootRel, name };

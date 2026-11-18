@@ -13,3 +13,10 @@ test("FEAT-19.16: файлы папки запуска — вложенные, �
   assert.equal(files.find((f) => f.name === "итог.md").path, "runs/r1/итог.md");
   assert.deepEqual(listRunFiles(ws, "runs/none"), []); assert.deepEqual(listRunFiles(ws, null), []);
 });
+
+test("macOS /var → /private/var: папка пайпа через ссылку — пути файлов остаются относительными", () => {
+  const real = mkdtempSync(path.join(os.tmpdir(), "ws-real-")); mkdirSync(path.join(real, "runs", "r1"), { recursive: true });
+  writeFileSync(path.join(real, "runs", "r1", "a.md"), "x");
+  const alias = path.join(mkdtempSync(path.join(os.tmpdir(), "ws-alias-")), "link"); symlinkSync(real, alias);
+  assert.deepEqual(listRunFiles(alias, "runs/r1").map((f) => f.path), ["runs/r1/a.md"]);
+});
