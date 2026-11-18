@@ -20,6 +20,11 @@ Run inputs are asked in the start form and inserted into instructions as `{{inpu
 Versions are immutable: a run keeps the version it started with. Runs can be paused, resumed, cancelled or terminated
 (with a reason), and scheduled (hourly, daily, weekdays or cron, with a preview of the next runs).
 
+## Try it first
+
+`npm run demo` shows the Temporal section with synthetic pipes, runs and schedules — no Temporal server needed.
+In the demo, *Approve* on the waiting run walks it to a result with files.
+
 ## What you need
 
 Linux or macOS host (the worker talks to the portal over a Unix socket owned by the portal's user; Windows is not

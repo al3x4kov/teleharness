@@ -84,9 +84,11 @@ export default function RunDetail({ workflowId }) {
   const steps = run.steps ?? [];
   const files = run.files ?? [];
   // FEAT-19.16: «Итог» — the answer of the last completed model step (or the source of the last artifact).
-  const finalStep = [...steps].reverse().find((x) => x.type === "model" && (run.resultSteps ?? []).includes(x.id)) ?? null;
   const decide = pending.map((id) => steps.find((x) => x.id === id) ?? { id, name: id, type: "approval" });
   const before = (id) => { const i = steps.findIndex((x) => x.id === id); return steps.slice(0, Math.max(0, i)).reverse().find((x) => results.has(x.id)); };
+  const lastAnswer = [...steps].reverse().find((x) => x.type === "model" && (run.resultSteps ?? []).includes(x.id)) ?? null;
+  // The decision block already shows that answer — no second copy as an interim result.
+  const finalStep = lastAnswer && !decide.some((d) => before(d.id)?.id === lastAnswer.id) ? lastAnswer : null;
   const next = (id) => { const i = steps.findIndex((x) => x.id === id); return steps[i + 1]; };
 
   const actions = running ? (

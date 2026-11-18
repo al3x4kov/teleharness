@@ -375,3 +375,12 @@ test("BUG-259: без изменений после публикации кно�
  h.typeInto($(root,'[aria-label="Название пайпа"]'),"Review 2");await h.flush();
  assert.equal(btn().disabled,false);assert(btn().textContent.includes("Опубликовать версию 2"));
 });
+
+test("ответ шага перед решением не дублируется «Промежуточным итогом»",async()=>{
+ installFetch([{path:"/teleharness/api/temporal/runs/w",reply:()=>detail({steps:[{id:"prep",name:"Подготовка",type:"model",engine:"claude",model:"m"},{id:"review",name:"Одобрение",type:"approval"}],
+   state:{generation:"gen",steps:{prep:"completed",review:"running"},pending:["review"],paused:false},resultSteps:["prep"],summary:{kind:"wait"}})},
+  {path:"/teleharness/api/temporal/runs/w/results/prep",reply:()=>({text:"Черновик"})}]);
+ const {root}=h.mount(ui.RunDetail,{workflowId:"w"});
+ await h.waitFor(()=>root.textContent.includes("Черновик"));
+ assert.equal($(root,".t-final"),null);assert.equal(root.textContent.split("Черновик").length-1,1);
+});

@@ -56,6 +56,27 @@ Codex — in any direction.
 
 Details, limits and FAQ: [docs/cross-cli-handoff.md](docs/cross-cli-handoff.md).
 
+## Pipelines that survive restarts (Temporal)
+
+Turn a routine into a pipe: Claude reviews the diff, you approve it from your phone, Codex writes the release notes and
+the file lands in the run folder. Each step runs on your CLI subscription as a turn of your own chat, so you can open
+its conversation later. Runs keep going while the portal is closed or the server restarts.
+
+<p align="center">
+  <img src="docs/screenshots/temporal.gif" alt="A waiting run: Claude's review next to Approve; after approval Codex writes release notes and notes.md opens" width="300">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/phone-light-temporal-runs.png" alt="Runs: a block of runs waiting for your decision, statuses without extra taps" width="200">
+  <img src="docs/screenshots/phone-light-temporal-editor.png" alt="Pipe editor: a Codex step with {{input.branch}} and {{steps.review}}" width="200">
+  <img src="docs/screenshots/phone-light-temporal-result.png" alt="Run result: the final answer and the run files" width="200">
+  <img src="docs/screenshots/phone-light-temporal-condition.png" alt="A condition that was false: the next step is skipped" width="200">
+</p>
+
+Steps: *Model* (Claude or Codex), *Human decision*, *Timer*, *Join*, *Condition*, *Artifact*; run inputs as
+`{{input.name}}`, earlier answers as `{{steps.id}}`; schedules with a preview of the next runs. Optional, Linux and
+macOS — see [docs/temporal.md](docs/temporal.md). Try it without any setup in `npm run demo`.
+
 ## Why Teleharness
 
 Chat apps give you a model. Agent CLIs give you much more — tools, file access, subagents, skills,
@@ -150,7 +171,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | 🧠 | **Agent steps** | Live turn progress: reasoning, tool calls with output, subagent cards with their own steps, background tasks. Undo a turn and its file edits. |
 | 🧾 | **Turn changes and Git** | An answer that edited files gets a *Changes · N files* row: open it for a per-file diff — what this turn changed, or the file now against the last commit (one column on a phone, two panes on a desktop). The Git screen of the chat folder shows the branch, ahead/behind and changed files: tick the files to commit, let the chat's own model suggest the message in a separate short request (it never lands in the chat history), commit, and push — push is for the admin only. Other users work with git in their own folders, without push or branch switching. Settings → Git holds the commit author, the message language and the default selection. |
 | 🌙 | **Background subagents keep working** | Claude Code answers right away while subagents it started in the background keep running after the answer. A band above the composer shows who is still working; a new message waits in the queue, and Claude picks up their results and answers again when they finish. |
-| 🔁 | **Temporal pipelines** *(optional)* | Multi-step scenarios that survive restarts: Claude or Codex steps that work in the pipe's own folder (files included), your decision between steps, timers, conditions, saved artifacts, run inputs passed as `{{input.name}}` and earlier answers as `{{steps.id}}`. Runs show their status without extra taps, a *Waiting for you* block and a badge in the menu, a result block with the final answer, the run's files and each step's conversation; pause, cancel, terminate with a reason; schedules with a preview of the next runs. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md). |
+| 🔁 | **Temporal pipelines** *(optional)* | Multi-step scenarios that survive restarts: Claude or Codex steps that work in the pipe's own folder (files included), your decision between steps, timers, conditions, saved artifacts, run inputs passed as `{{input.name}}` and earlier answers as `{{steps.id}}`. Runs show their status without extra taps, a *Waiting for you* block and a badge in the menu, a result block with the final answer, the run's files and each step's conversation; pause, cancel, terminate with a reason; schedules with a preview of the next runs. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision" width="180"> |
 | 🔀 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. Optionally automatic, with your own order of backup models. |
 | 📊 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
 | 📡 | **Reliable streaming** | One SSE hub for every engine with replay, stall detection and loop protection — survives flaky mobile networks. |

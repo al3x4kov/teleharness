@@ -6,6 +6,16 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+### Added
+- **Temporal in the demo.** `npm run demo` shows synthetic pipes, runs in every state (waiting for a decision, running,
+  waiting for a subscription quota, completed with files, a skipped branch, failed, cancelled) and schedules; *Approve*
+  on the waiting run walks it to a result with `notes.md`. README: a Temporal section with a phone GIF and screenshots
+  (English and Russian).
+
+### Fixed
+- A run waiting for a decision no longer repeats the previous step's answer as an *Interim result* — it is shown once,
+  next to *Approve* / *Reject*.
+
 ## [1.24.2] — 2026-11-18
 
 ### Added
