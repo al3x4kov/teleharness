@@ -14,7 +14,7 @@ test("FEAT-19.16: файлы папки запуска — вложенные, �
   assert.deepEqual(listRunFiles(ws, "runs/none"), []); assert.deepEqual(listRunFiles(ws, null), []);
 });
 
-test("macOS /var → /private/var: папка пайпа через ссылку — пути файлов остаются относительными", () => {
+test("macOS /var → /private/var: папка пайпа через ссылку — пути файлов остаются относительными", { skip: process.platform === "win32" && "symlinks need privileges on Windows" }, () => {
   const real = mkdtempSync(path.join(os.tmpdir(), "ws-real-")); mkdirSync(path.join(real, "runs", "r1"), { recursive: true });
   writeFileSync(path.join(real, "runs", "r1", "a.md"), "x");
   const alias = path.join(mkdtempSync(path.join(os.tmpdir(), "ws-alias-")), "link"); symlinkSync(real, alias);
