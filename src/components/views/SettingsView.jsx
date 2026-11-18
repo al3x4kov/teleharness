@@ -156,7 +156,7 @@ export function tempView(h) {
 
 // «О приложении»: the opencode version comes from the server (/host →
 // opencodeVersion, read from opencode's /global/health), never a literal.
-// BUG-143: the teleharness version is the running server's (/about.version) — the
+// BUG-143: the Teleharness version is the running server's (/about.version) — the
 // bundled constant only until /about answers; harness versions from /about.
 // BUG-178 (2026-11-06: версия на проде не совпадала с ожидаемой): показываем версию
 // ПРИЛОЖЕНИЯ, которое реально запущено; фронт выкатывается без рестарта сервера,

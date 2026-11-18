@@ -106,16 +106,16 @@ function RelayPill({ mark, from, to }) {
 // Полоска «остаток на исходе» (кадр 6): только там, где остаток известен (z.ai), меньше 15 %.
 export function QuotaStrip({ sessionId, hidden = false, onPickOther }) {
   const binding = bindingOf(sessionOf(sessionId));
-  const teleharness = binding?.engine === "opencode" && /^zai/.test(String(binding?.model?.providerID ?? ""));
+  const onGlmPlan = binding?.engine === "opencode" && /^zai/.test(String(binding?.model?.providerID ?? ""));
   const [dismissed, setDismissed] = useState(null); // ключ окна, для которого полоска скрыта
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    if (!teleharness) return undefined;
+    if (!onGlmPlan) return undefined;
     refreshSubscriptions();
     const timer = setInterval(() => { if (!document.hidden) refreshSubscriptions(); }, 120_000);
     return () => clearInterval(timer);
-  }, [teleharness, sessionId]);
-  if (hidden || !teleharness) return null;
+  }, [onGlmPlan, sessionId]);
+  if (hidden || !onGlmPlan) return null;
   const low = lowQuota(subscriptions.value, binding);
   if (!low) return null;
   const key = `${low.kind}:${low.resetAt ?? ""}`;

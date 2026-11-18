@@ -7,7 +7,7 @@ source: server.js, lib/*.js, shared/engine.js, ops/portal-server.js, ops/watchdo
 supersedes: редакция «UI 1.6.1» того же файла (2026-11-02)
 ---
 
-# Архитектура портала teleharness (1.7.0)
+# Архитектура портала Teleharness (1.7.0)
 
 > **Что изменилось в 1.7.0** (подробно — §11 и docs/reviews/2026-11-02/integration.md):
 > - Сервер: единая конфигурация с валидацией env (`lib/config.js`, ADR-006), политика тенанта (`lib/policy.js`: без shell-агентов, Claude только по `engines`, редактирование tool-частей), журнал запросов и `healthz` (`lib/accesslog.js`, ADR-007), серверные сессии `sid` вместо токена в куке, CSRF-гейт, квоты; единая политика путей (`lib/paths.js`); dry-run сборщик мусора (`lib/gc.js`); атомарные JSON-хранилища с карантином (`lib/json-store.js`, ADR-002); guard стенда `TELEHARNESS_ENV`.
@@ -217,7 +217,7 @@ store-фасад (integration.md §1); `globalThis.__teleharnessActiveId` уда
 | `/admin/sessions` | GET | admin | **1.7.0**: `{now, epoch, sessions: hub.sessionsReport()}` — busy/dialog/pending с возрастом (FEAT-07.16) |
 | `/admin/gc` | GET | admin | **1.7.0**: dry-run план уборки (`lib/gc.js`), ничего не удаляет |
 | `/healthz` | GET | прямой loopback | **1.7.0**: без авторизации, только Host 127.0.0.1/localhost без XFF; версия из package.json, состояние upstream/индекса; 503 при индексе старше 60 с; через edge → 404 |
-| `/about` | GET | все | **1.7.0**: версии teleharness / opencode / Claude Code для «О приложении» (все роли) |
+| `/about` | GET | все | **1.7.0**: версии Teleharness / opencode / Claude Code для «О приложении» (все роли) |
 | `/dircheck` | GET | все | **1.7.0**: проверка каталога проекта до создания (`dirProblem` + `driveProblem`) с русским текстом причины |
 | `/session` | GET | все | список upstream; у тенанта — фильтр `dirAllowed`; сессии из TEMP скрыты (`TELEHARNESS_HIDE_TEMP_SESSIONS`); поле `teleharness` (привязка + source) |
 | `/session` | POST | все | `dirProblem`/`driveProblem` (400 с `code`) → `dirAllowed` → гейт движка/агента тенанта (403 `engine not allowed`/`agent not allowed`) → `mkdirSync` → upstream; агент тенанта по умолчанию — `defaultTenantAgent` |

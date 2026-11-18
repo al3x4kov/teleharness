@@ -1,4 +1,4 @@
-// Pure data helpers for the teleharness chat engine: no fetch, no signals, no DOM.
+// Pure data helpers for the Teleharness chat engine: no fetch, no signals, no DOM.
 // Also the single ru number formatter (fmtNum/fmtBytes/fmtDecimal), turn
 // grouping for the chat feed and file-kind helpers for the FileViewer.
 // Every function returns new values; inputs are never mutated. Tolerant of

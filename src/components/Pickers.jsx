@@ -1,4 +1,4 @@
-// Shared UI primitives for the teleharness views: inline SVG glyphs, the bottom-sheet
+// Shared UI primitives for the Teleharness views: inline SVG glyphs, the bottom-sheet
 // chrome (PickerSheet) and the data-driven Model/Agent pickers. Data comes
 // from the store signals (providerCfg, agents); selection is controlled via
 // value/onPick so callers decide where the choice lands (prefs, draft state).

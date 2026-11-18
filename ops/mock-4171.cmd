@@ -1,5 +1,5 @@
 @echo off
-rem QA/design mock instance of teleharness (fixtures, no auth). Runs detached via schtasks.
+rem QA/design mock instance of Teleharness (fixtures, no auth). Runs detached via schtasks.
 set PORT=4171
 set TELEHARNESS_MOCK=1
 cd /d D:\Apps\teleharness

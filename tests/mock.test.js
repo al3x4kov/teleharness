@@ -1,4 +1,4 @@
-// Contract tests for the teleharness mock server: spawn server.js with TELEHARNESS_MOCK=1 on
+// Contract tests for the Teleharness mock server: spawn server.js with TELEHARNESS_MOCK=1 on
 // an ephemeral port and exercise the /teleharness/api/* routes the real proxy will serve.
 //
 // TASK-14.4: сервер спавнится через tests/helpers/spawn-server.mjs — белый

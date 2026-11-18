@@ -13,6 +13,14 @@ and is shown in Settings → About.
   (English and Russian).
 
 ### Changed
+- **Breaking: one name everywhere.** The codename is gone: the portal is served under `/teleharness/`, every setting is a
+  `TELEHARNESS_*` environment variable, the data directory is `~/.teleharness`, tenant folders are
+  `.teleharness-tenants`, uploads go to `.teleharness-uploads`, the sandbox helpers are `teleharness-jail`,
+  `teleharness-render` and `teleharness-tenant-run`, document skills are `teleharness-docx` … `teleharness-xlsx`, the
+  Temporal workflow is `TeleharnessPipelineV1`. Upgrading an existing install: rename the environment variables and
+  folders accordingly, update reverse-proxy rules to the new path and sign in again (the cookie and browser storage
+  keys were renamed too). Z.ai provider and model ids (`zai-coding-plan`, `zai/glm-*`) are the provider's own names
+  and stay as they are.
 - **Architecture diagram refreshed** (English and Russian): three CLIs (opencode, Claude Code, Codex), Temporal
   pipelines (server, Python worker, PostgreSQL, model bridge), the sandbox per OS, and the ChatGPT subscription as a
   provider.

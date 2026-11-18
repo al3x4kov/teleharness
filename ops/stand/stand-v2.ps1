@@ -1,4 +1,4 @@
-﻿# Стенд v2 портала teleharness (FEAT-16.3, tasks 5.2/6.1; design §8–§9).
+﻿# Стенд v2 портала Teleharness (FEAT-16.3, tasks 5.2/6.1; design §8–§9).
 # Поднимает пару «opencode 2.2.6 serve :4101 + портал :4174» со своими папками
 # под D:\th-stage\oc2 (XDG) и D:\th-stage\stand2-data (users.json). Прод
 # (:4096/:4170) и стенд v1 (:4097/:4172) не трогает — только свои порты.

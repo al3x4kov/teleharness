@@ -1,4 +1,4 @@
-// FEAT-07.20: service worker of the teleharness portal — Web Push only.
+// FEAT-07.20: service worker of the Teleharness portal — Web Push only.
 // Scope /teleharness/ (served as /teleharness/sw.js). No fetch handler on purpose: the app is
 // never served from a cache (a stale bundle after a deploy is worse than no
 // offline mode).

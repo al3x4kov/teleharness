@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  Портал teleharness — мобильный web-клиент opencode (прод в D:\Apps\teleharness, сервер 127.0.0.1:4170,
+  Портал Teleharness — мобильный web-клиент opencode (прод в D:\Apps\teleharness, сервер 127.0.0.1:4170,
   наружу https://192.0.2.10/teleharness/ и https://teleharness.home.example.net/teleharness/).
   Все артефакты (спеки, proposal, tasks) писать по-русски.
   Контракт opencode ЗАПИННЕН на версии 1.19.5 (v2 меняет API на /api/* с другим конвертом) —

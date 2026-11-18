@@ -4,7 +4,7 @@
 try:
     import platform as _p
     def _teleharness_no_wmi(*a, **k):
-        raise OSError("WMI is not available in the teleharness sandbox")
+        raise OSError("WMI is not available in the Teleharness sandbox")
     _p._wmi_query = _teleharness_no_wmi
 except Exception:
     pass
