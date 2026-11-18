@@ -13,7 +13,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,7 +212,7 @@ test("D4: status — tenant gets root:null + rootRel/name (no server path anywhe
   }
   assert.equal((await (await api(`/teleharness/api/git/status${q({ sid: "ses_t1" })}`, T)).json()).rootRel, "");
   const adm = await (await api(`/teleharness/api/git/status${dirQ(adminRepo)}`)).json();
-  assert.equal(path.resolve(adm.root).toLowerCase(), path.resolve(adminRepo).toLowerCase(), "admin keeps the absolute root");
+  assert.equal(realpathSync(adm.root).toLowerCase(), realpathSync(adminRepo).toLowerCase(), "admin keeps the absolute root"); // macOS: /var → /private/var
   assert.equal(adm.rootRel, "");
 });
 
