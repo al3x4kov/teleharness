@@ -280,7 +280,7 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 
 ## Архитектура
 
-<p align="center"><img src="docs/architecture-components.ru.png" alt="Компоненты Teleharness: клиент, портал, harness двух CLI, Obsidian, голос, песочница, облака моделей" width="900"></p>
+<p align="center"><img src="docs/architecture-components.ru.png" alt="Компоненты Teleharness: клиент, портал, harness трёх CLI, Obsidian, голос, песочница, пайпы Temporal, провайдеры моделей" width="900"></p>
 
 - **Портал** (`server.js`) — API, авторизация и пользователи, хаб событий, привязка чата к движку, передача
   чата между движками. Для каждого движка свой адаптер: клиент `opencode serve` (1.x и 2.x) и раннер,
@@ -291,7 +291,11 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 - **Obsidian** — долгая память агентов, своя зона у каждого пользователя; здесь же журнал каждого чата,
   который движок читает после передачи.
 - **Голос** — отдельный локальный Python-процесс (Piper TTS, GigaAM STT).
-- **Песочница** — Windows AppContainer для команд других пользователей.
+- **Песочница** — команды оболочки других пользователей: раннер на пользователя на Linux (по желанию),
+  AppContainer на Windows, на macOS закрыто.
+- **Пайпы Temporal** (по желанию, Linux и macOS) — сервер Temporal, исполнитель на Python и PostgreSQL
+  (история, журнал «ровно один раз», слоты параллельности). Шаг модели — ход чата портала в папке пайпа
+  через закрытый сокет. Подробнее — [`docs/temporal.md`](docs/temporal.md).
 
 Послойная схема и путь запроса:
 

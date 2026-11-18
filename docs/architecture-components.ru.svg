@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1730" viewBox="0 0 1400 1730" font-family="Segoe UI, Inter, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="2140" viewBox="0 0 1400 2140" font-family="Segoe UI, Inter, Arial, sans-serif">
 <defs>
   <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1017"/><stop offset="1" stop-color="#111520"/></linearGradient>
   <linearGradient id="srv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3ecf8e" stop-opacity="0.08"/><stop offset="1" stop-color="#3ecf8e" stop-opacity="0.02"/></linearGradient>
@@ -9,6 +9,8 @@
   <marker id="a_purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a78bfa"/></marker>
   <marker id="a_teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dd4bf"/></marker>
   <marker id="a_yellow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f5b942"/></marker>
+  <marker id="a_pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f472b6"/></marker>
+  <marker id="a_codex" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#10b981"/></marker>
   <marker id="a_white" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c9ced8"/></marker>
   <style>
     .t { fill:#e6e8ee; } .m { fill:#9aa3b2; } .d { fill:#6b7385; }
@@ -16,165 +18,236 @@
     .chip { fill:#1e2432; stroke:#323a4d; stroke-width:1.1; }
   </style>
 </defs>
-<rect width="1400" height="1730" fill="url(#bg)"/>
-<text x="60" y="62" class="t h" font-size="30" font-weight="700" text-anchor="start">Портал teleharness — компоненты и связи</text>
-<text x="60" y="94" class="m" font-size="15" font-weight="400" text-anchor="start">Логическая схема: клиент, портал, harness двух CLI, база знаний Obsidian, голос, песочница, облака моделей</text>
+<rect width="1400" height="2140" fill="url(#bg)"/>
+<text x="60" y="62" class="t h" font-size="30" font-weight="700" text-anchor="start">Teleharness — компоненты и потоки данных</text>
+<text x="60" y="94" class="m" font-size="15" font-weight="400" text-anchor="start">Вы общаетесь с агентными CLI во всей их обвязке, а не с голой моделью. Один портал, три CLI, надёжные пайпы, любой провайдер.</text>
 <g filter="url(#shadow)"><rect x="100" y="130" width="1200" height="112" rx="14" fill="#161a24" stroke="#2b3242" stroke-opacity="1" stroke-width="1.4"/></g>
-<text x="124" y="158" class="m h" font-size="13" font-weight="700" text-anchor="start">0 · КЛИЕНТ — браузер / iPhone Safari</text>
+<text x="124" y="158" class="m h" font-size="13" font-weight="700" text-anchor="start">0 · КЛИЕНТ — любой браузер, в первую очередь телефон</text>
 <rect x="124" y="172" width="276" height="54" rx="9" class="chip"/>
 <text x="262" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">SPA · Preact + signals</text>
-<text x="262" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">public/app.js, hash-роутер</text>
+<text x="262" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">устанавливается, светлая / тёмная, en / ru</text>
 <rect x="416" y="172" width="276" height="54" rx="9" class="chip"/>
-<text x="554" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Чаты · файлы · настройки</text>
-<text x="554" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">шаги агента, карточки файлов</text>
-<rect x="708" y="172" width="276" height="54" rx="9" class="chip"/>
-<text x="846" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Голосовой режим</text>
-<text x="846" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">микрофон → PCM, плеер WAV</text>
+<text x="554" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Чаты · файлы · Git</text>
+<text x="554" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">шаги агента, изменения, коммиты</text>
+<rect x="708" y="172" width="276" height="54" rx="9" class="chip" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="846" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#f472b6">Temporal</text>
+<text x="846" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">запуски · пайпы · расписания</text>
 <rect x="1000" y="172" width="276" height="54" rx="9" class="chip"/>
-<text x="1138" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Service Worker</text>
-<text x="1138" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">Web Push о конце хода</text>
+<text x="1138" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Голос · пуш</text>
+<text x="1138" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">микрофон → PCM, Web Push</text>
 <path d="M700,246 L700,322" fill="none" stroke="#c9ced8" stroke-width="2.2" marker-start="url(#a_white)" marker-end="url(#a_white)"/>
-<text x="716" y="285" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#c9ced8">HTTPS · REST /teleharness/api/* · SSE · аудио</text>
-<rect x="30" y="300" width="1340" height="1140" rx="24" fill="url(#srv)" stroke="#3ecf8e" stroke-width="2" stroke-dasharray="12 7"/>
-<rect x="60" y="286" width="300" height="30" rx="15" fill="#10241c" stroke="#3ecf8e" stroke-width="1.6"/>
-<text x="80" y="306" class="h" font-size="14" font-weight="700" text-anchor="start" fill="#3ecf8e">СЕРВЕР · Windows · Node.js</text>
+<text x="716" y="285" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#c9ced8">HTTPS · REST · SSE · аудио</text>
+<rect x="30" y="300" width="1340" height="1600" rx="24" fill="url(#srv)" stroke="#3ecf8e" stroke-width="2" stroke-dasharray="12 7"/>
+<rect x="60" y="286" width="470" height="30" rx="15" fill="#10241c" stroke="#3ecf8e" stroke-width="1.6"/>
+<text x="80" y="306" class="h" font-size="14" font-weight="700" text-anchor="start" fill="#3ecf8e">ВАШ СЕРВЕР · Linux, macOS или Windows · Node.js</text>
 <g filter="url(#shadow)"><rect x="100" y="330" width="1200" height="62" rx="14" fill="#161a24" stroke="#2b3242" stroke-opacity="1" stroke-width="1.4"/></g>
 <text x="124" y="368" class="t" font-size="17" font-weight="700" text-anchor="start">Edge</text>
 <text x="180" y="368" class="m mono" font-size="13.5" font-weight="400" text-anchor="start">ops/portal-server.js · :80 / :443</text>
-<text x="1276" y="368" class="m" font-size="13" font-weight="400" text-anchor="end">TLS · http → https · allow-list статики · X-Forwarded-*</text>
+<text x="1276" y="368" class="m" font-size="13" font-weight="400" text-anchor="end">TLS · http → https · список статики · X-Forwarded-*</text>
 <path d="M700,392 L700,426" fill="none" stroke="#c9ced8" stroke-width="2.2" marker-end="url(#a_white)"/>
-<g filter="url(#shadow)"><rect x="100" y="430" width="1200" height="262" rx="14" fill="#161a24" stroke="#3a4356" stroke-opacity="1" stroke-width="1.4"/></g>
+<g filter="url(#shadow)"><rect x="100" y="430" width="1200" height="328" rx="14" fill="#161a24" stroke="#3a4356" stroke-opacity="1" stroke-width="1.4"/></g>
 <text x="124" y="462" class="m h" font-size="13" font-weight="700" text-anchor="start">1 · ПОРТАЛ</text>
-<text x="220" y="462" class="t mono" font-size="13.5" font-weight="400" text-anchor="start">server.js · 127.0.0.1:4170 · Node без runtime-зависимостей</text>
-<text x="1276" y="462" class="m" font-size="13" font-weight="400" text-anchor="end">оба движка → один хаб → один поток SSE</text>
+<text x="224" y="462" class="t mono" font-size="13.5" font-weight="400" text-anchor="start">server.js · zero runtime dependencies</text>
+<text x="1276" y="462" class="m" font-size="13" font-weight="400" text-anchor="end">любой движок → один хаб → один поток SSE</text>
 <rect x="124" y="482" width="276" height="54" rx="9" class="chip"/>
-<text x="262" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">API-роутер</text>
-<text x="262" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">routes/* · /teleharness/api/*</text>
+<text x="262" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">API-маршрутизатор</text>
+<text x="262" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">routes/*</text>
 <rect x="416" y="482" width="276" height="54" rx="9" class="chip"/>
-<text x="554" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">Auth · тенанты · policy</text>
-<text x="554" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">sid-кука, права, квоты</text>
+<text x="554" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">Вход · пользователи · права</text>
+<text x="554" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">сессии, права, квоты</text>
 <rect x="708" y="482" width="276" height="54" rx="9" class="chip"/>
 <text x="846" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">EventHub</text>
-<text x="846" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">SSE fan-out, replay, stall</text>
+<text x="846" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">раздача SSE, повтор, зависания</text>
 <rect x="1000" y="482" width="276" height="54" rx="9" class="chip"/>
 <text x="1138" y="504" class="t" font-size="14" font-weight="600" text-anchor="middle">BindingStore</text>
 <text x="1138" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">чат → движок + модель + агент</text>
 <rect x="124" y="548" width="276" height="54" rx="9" class="chip"/>
-<text x="262" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Файлы и вложения</text>
-<text x="262" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">папка на чат, TELEHARNESS_FILE_ROOTS</text>
+<text x="262" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Файлы · Git</text>
+<text x="262" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">папка на чат, диффы, коммиты</text>
 <rect x="416" y="548" width="276" height="54" rx="9" class="chip"/>
 <text x="554" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Отмена хода</text>
-<text x="554" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">turn-undo: бэкапы правок</text>
+<text x="554" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">копии перед правками</text>
 <rect x="708" y="548" width="276" height="54" rx="9" class="chip"/>
-<text x="846" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Web Push</text>
-<text x="846" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">VAPID, RFC 8291</text>
+<text x="846" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Relay · журнал</text>
+<text x="846" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">передача между движками</text>
 <rect x="1000" y="548" width="276" height="54" rx="9" class="chip"/>
 <text x="1138" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Хранилища</text>
 <text x="1138" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">data/*.json, атомарная запись</text>
-<rect x="124" y="614" width="276" height="54" rx="9" class="chip" stroke="#4f8cff" stroke-opacity="0.75"/>
-<text x="262" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#4f8cff">opencode-прокси</text>
-<text x="262" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/proxy.js · REST + /event</text>
-<rect x="416" y="614" width="276" height="54" rx="9" class="chip" stroke="#a78bfa" stroke-opacity="0.75"/>
-<text x="554" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#a78bfa">KB-cache</text>
-<text x="554" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/kb-cache.js · снапшот базы</text>
-<rect x="708" y="614" width="276" height="54" rx="9" class="chip" stroke="#e07a52" stroke-opacity="0.75"/>
-<text x="846" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#e07a52">ClaudeRunner</text>
-<text x="846" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/claude.js · процесс на ход</text>
-<rect x="1000" y="614" width="276" height="54" rx="9" class="chip" stroke="#2dd4bf" stroke-opacity="0.75"/>
-<text x="1138" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#2dd4bf">VoiceService</text>
-<text x="1138" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/voice.js · очередь, квоты</text>
-<text x="1300" y="760" class="m h" font-size="13" font-weight="700" text-anchor="end">2 · HARNESS — обвязка агентов вокруг двух CLI</text>
-<g filter="url(#shadow)"><rect x="100" y="774" width="580" height="320" rx="14" fill="#161a24" stroke="#4f8cff" stroke-opacity="0.75" stroke-width="1.4"/></g>
-<rect x="100" y="774" width="580" height="44" rx="14" fill="#4f8cff" fill-opacity="0.16"/>
-<rect x="100" y="804" width="580" height="14" fill="#4f8cff" fill-opacity="0.16"/>
-<text x="122" y="803" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#4f8cff">opencode serve</text>
-<text x="658" y="803" class="t mono" font-size="13" font-weight="400" text-anchor="end">:4096 · GLM</text>
-<text x="124" y="846" class="m" font-size="13">• <tspan class="t" font-weight="600">oh-my-opencode-slim:</tspan> orchestrator → explorer, oracle, fixer, designer</text>
-<text x="124" y="876" class="m" font-size="13">• <tspan class="t" font-weight="600">агенты:</tspan> Hephaestus (глубокий исполнитель), Sandbox (тенанты)</text>
-<text x="124" y="906" class="m" font-size="13">• <tspan class="t" font-weight="600">плагин vault-cache.ts:</tspan> снапшот базы знаний в контекст,</text>
-<text x="124" y="936" class="m" font-size="13">•    дайджест хода в Obsidian, bash тенанта → jail, бэкапы для отмены</text>
-<text x="124" y="966" class="m" font-size="13">• <tspan class="t" font-weight="600">скиллы:</tspan> teleharness-docx / pdf / pptx / xlsx / html / images, openspec</text>
-<text x="124" y="996" class="m" font-size="13">• <tspan class="t" font-weight="600">MCP:</tspan> playwright, marketplace</text>
-<text x="124" y="1026" class="m" font-size="13">• <tspan class="t" font-weight="600">fallback моделей:</tspan> glm-5.3 ↔ glm-5.3-flash</text>
-<g filter="url(#shadow)"><rect x="720" y="774" width="580" height="320" rx="14" fill="#161a24" stroke="#e07a52" stroke-opacity="0.75" stroke-width="1.4"/></g>
-<rect x="720" y="774" width="580" height="44" rx="14" fill="#e07a52" fill-opacity="0.16"/>
-<rect x="720" y="804" width="580" height="14" fill="#e07a52" fill-opacity="0.16"/>
-<text x="742" y="803" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#e07a52">claude CLI (Claude Code)</text>
-<text x="1278" y="803" class="t mono" font-size="13" font-weight="400" text-anchor="end">stream-json</text>
-<text x="744" y="846" class="m" font-size="13">• <tspan class="t" font-weight="600">процесс на ход:</tspan> claude -p --output-format stream-json --resume</text>
-<text x="744" y="876" class="m" font-size="13">• <tspan class="t" font-weight="600">профили:</tspan> admin — bypassPermissions, тенант — restricted</text>
-<text x="744" y="906" class="m" font-size="13">• <tspan class="t" font-weight="600">хуки PreToolUse:</tspan> claude-jail-hook (Bash → jail),</text>
-<text x="744" y="936" class="m" font-size="13">•    turn-undo-hook (копия файла до правки)</text>
-<text x="744" y="966" class="m" font-size="13">• <tspan class="t" font-weight="600">агенты и плагины:</tspan> shared/claude-agents, agent-skills</text>
-<text x="744" y="996" class="m" font-size="13">• <tspan class="t" font-weight="600">MCP:</tspan> playwright (admin), набор тенанта</text>
-<text x="744" y="1026" class="m" font-size="13">• <tspan class="t" font-weight="600">контекст:</tspan> снапшот базы знаний от KB-cache</text>
-<path d="M262,668 L262,770" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
-<text x="272" y="735" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#4f8cff">HTTP + SSE</text>
-<path d="M846,668 L846,770" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#a_orange)"/>
-<text x="856" y="735" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#e07a52">spawn · stdin / stdout</text>
-<text x="1300" y="1150" class="m h" font-size="13" font-weight="700" text-anchor="end">3 · ЛОКАЛЬНЫЕ СЕРВИСЫ</text>
-<g filter="url(#shadow)"><rect x="100" y="1164" width="340" height="236" rx="14" fill="#161a24" stroke="#f5b942" stroke-opacity="0.7" stroke-width="1.4"/></g>
-<rect x="100" y="1164" width="340" height="44" rx="14" fill="#f5b942" fill-opacity="0.16"/>
-<rect x="100" y="1194" width="340" height="14" fill="#f5b942" fill-opacity="0.16"/>
-<text x="122" y="1193" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#f5b942">Песочница тенанта</text>
-<text x="124" y="1236" class="m" font-size="13">• <tspan class="t" font-weight="600">teleharness-jail.exe</tspan> — Windows AppContainer</text>
-<text x="124" y="1264" class="m" font-size="13">• cmd.exe и изолированный Python</text>
-<text x="124" y="1292" class="m" font-size="13">• доступ только к папке тенанта</text>
-<text x="124" y="1320" class="m" font-size="13">• <tspan class="t" font-weight="600">рендер документов:</tspan> LibreOffice,</text>
-<text x="124" y="1348" class="m" font-size="13">•    html2pdf (Playwright)</text>
-<g filter="url(#shadow)"><rect x="480" y="1164" width="440" height="236" rx="14" fill="#161a24" stroke="#a78bfa" stroke-opacity="0.8" stroke-width="1.4"/></g>
-<rect x="480" y="1164" width="440" height="44" rx="14" fill="#a78bfa" fill-opacity="0.16"/>
-<rect x="480" y="1194" width="440" height="14" fill="#a78bfa" fill-opacity="0.16"/>
-<text x="502" y="1193" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#a78bfa">Obsidian · база знаний</text>
-<text x="898" y="1193" class="t mono" font-size="13" font-weight="400" text-anchor="end">markdown</text>
-<text x="504" y="1236" class="m" font-size="13">• <tspan class="t" font-weight="600">agents/_index.md</tspan> — правила для агентов</text>
-<text x="504" y="1264" class="m" font-size="13">• <tspan class="t" font-weight="600">lessons/, decisions/, tasks/</tspan> — заметки</text>
-<text x="504" y="1292" class="m" font-size="13">• <tspan class="t" font-weight="600">sessions/</tspan> — дайджесты ходов (vault-cache)</text>
-<text x="504" y="1320" class="m" font-size="13">• <tspan class="t" font-weight="600">tenants/&lt;имя&gt;/</tspan> — изолированная зона тенанта</text>
-<text x="504" y="1348" class="m" font-size="13">• агенты читают и пишут заметки сами</text>
-<g filter="url(#shadow)"><rect x="960" y="1164" width="340" height="236" rx="14" fill="#161a24" stroke="#2dd4bf" stroke-opacity="0.8" stroke-width="1.4"/></g>
-<rect x="960" y="1164" width="340" height="44" rx="14" fill="#2dd4bf" fill-opacity="0.16"/>
-<rect x="960" y="1194" width="340" height="14" fill="#2dd4bf" fill-opacity="0.16"/>
-<text x="982" y="1193" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#2dd4bf">Голос · voice-worker.py</text>
-<text x="984" y="1236" class="m" font-size="13">• <tspan class="t" font-weight="600">TTS:</tspan> Piper, 4 русских голоса</text>
-<text x="984" y="1264" class="m" font-size="13">• <tspan class="t" font-weight="600">STT:</tspan> GigaAM v2 (sherpa-onnx)</text>
-<text x="984" y="1292" class="m" font-size="13">• <tspan class="t" font-weight="600">ru_normalize:</tspan> числа, даты, ударения</text>
-<text x="984" y="1320" class="m" font-size="13">• JSON lines по stdin / stdout</text>
-<text x="984" y="1348" class="m" font-size="13">• локально, без облака и GPU</text>
-<path d="M270,1094 L270,1160" fill="none" stroke="#f5b942" stroke-width="2.2" marker-end="url(#a_yellow)"/>
-<text x="280" y="1130" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#f5b942">bash → jail</text>
-<path d="M780,1094 L780,1122 L400,1122 L400,1160" fill="none" stroke="#f5b942" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_yellow)"/>
-<path d="M600,1094 L600,1160" fill="none" stroke="#a78bfa" stroke-width="2.2" marker-end="url(#a_purple)"/>
-<text x="520" y="1146" class="t" font-size="12.5" font-weight="600" text-anchor="end" fill="#a78bfa">чтение/запись</text>
-<path d="M820,1094 L820,1160" fill="none" stroke="#a78bfa" stroke-width="2.2" marker-end="url(#a_purple)"/>
-<path d="M554,668 L554,748 L700,748 L700,1160" fill="none" stroke="#a78bfa" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_purple)"/>
-<text x="710" y="1146" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#a78bfa">снапшот</text>
-<path d="M1276,641 L1340,641 L1340,1280 L1304,1280" fill="none" stroke="#2dd4bf" stroke-width="2.2" marker-end="url(#a_teal)"/>
-<text x="1334" y="1000" font-size="12.5" font-weight="600" fill="#2dd4bf" text-anchor="middle" transform="rotate(-90 1334 1000)">JSON lines</text>
-<rect x="40" y="1468" width="1320" height="182" rx="20" fill="none" stroke="#596173" stroke-width="1.3" stroke-dasharray="7 6"/>
-<text x="62" y="1494" class="d h" font-size="12.5" font-weight="700" text-anchor="start">ВНЕ СЕРВЕРА · ОБЛАКА МОДЕЛЕЙ (только инференс)</text>
-<g filter="url(#shadow)"><rect x="100" y="1510" width="540" height="116" rx="14" fill="#161a24" stroke="#4f8cff" stroke-opacity="1" stroke-width="1.4"/></g>
-<text x="124" y="1548" class="t" font-size="18" font-weight="700" text-anchor="start">Z.ai · GLM Coding Plan</text>
-<text x="616" y="1548" class="m mono" font-size="13" font-weight="400" text-anchor="end">api.z.ai</text>
-<text x="124" y="1576" class="m" font-size="13" font-weight="400" text-anchor="start">glm-5.3 — основная, glm-5.3-flash — быстрая и зрение</text>
-<text x="124" y="1600" class="d" font-size="13" font-weight="400" text-anchor="start">ключ хранит opencode (opencode auth login)</text>
-<g filter="url(#shadow)"><rect x="760" y="1510" width="540" height="116" rx="14" fill="#161a24" stroke="#e07a52" stroke-opacity="1" stroke-width="1.4"/></g>
-<text x="784" y="1548" class="t" font-size="18" font-weight="700" text-anchor="start">Anthropic · подписка Claude</text>
-<text x="1276" y="1548" class="m mono" font-size="13" font-weight="400" text-anchor="end">api.anthropic.com</text>
-<text x="784" y="1576" class="m" font-size="13" font-weight="400" text-anchor="start">Opus · Sonnet · Haiku через claude CLI</text>
-<text x="784" y="1600" class="d" font-size="13" font-weight="400" text-anchor="start">токен — CLAUDE_CODE_OAUTH_TOKEN</text>
-<path d="M100,930 L66,930 L66,1568 L96,1568" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
-<path d="M1300,930 L1362,930 L1362,1568 L1304,1568" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#a_orange)"/>
-<text x="60" y="1250" font-size="12.5" font-weight="600" fill="#4f8cff" text-anchor="middle" transform="rotate(-90 60 1250)">HTTPS к GLM API</text>
-<text x="1357" y="1140" font-size="12.5" font-weight="600" fill="#e07a52" text-anchor="middle" transform="rotate(-90 1357 1140)">HTTPS к Anthropic API</text>
-<line x1="100" y1="1690" x2="134" y2="1690" stroke="#4f8cff" stroke-width="3"/>
-<text x="144" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">путь GLM</text>
-<line x1="330" y1="1690" x2="364" y2="1690" stroke="#e07a52" stroke-width="3"/>
-<text x="374" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">путь Claude</text>
-<line x1="560" y1="1690" x2="594" y2="1690" stroke="#a78bfa" stroke-width="3"/>
-<text x="604" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">база знаний</text>
-<line x1="790" y1="1690" x2="824" y2="1690" stroke="#2dd4bf" stroke-width="3"/>
-<text x="834" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">голос</text>
-<line x1="1020" y1="1690" x2="1054" y2="1690" stroke="#f5b942" stroke-width="3"/>
-<text x="1064" y="1695" class="t" font-size="13" font-weight="400" text-anchor="start">песочница</text>
+<rect x="124" y="614" width="276" height="54" rx="9" class="chip" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="262" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#f472b6">API Temporal</text>
+<text x="262" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">запуски, пайпы, версии, расписания</text>
+<rect x="416" y="614" width="276" height="54" rx="9" class="chip"/>
+<text x="554" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle">Web Push</text>
+<text x="554" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">VAPID, RFC 8291</text>
+<rect x="708" y="614" width="276" height="54" rx="9" class="chip"/>
+<text x="846" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle">Подписки</text>
+<text x="846" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">расход и лимиты провайдеров</text>
+<rect x="1000" y="614" width="276" height="54" rx="9" class="chip" stroke="#f472b6" stroke-opacity="0.75"/>
+<text x="1138" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#f472b6">Мост модели</text>
+<text x="1138" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">закрытый сокет · шаг = ход чата</text>
+<rect x="124" y="680" width="276" height="54" rx="9" class="chip" stroke="#4f8cff" stroke-opacity="0.75"/>
+<text x="262" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#4f8cff">Адаптер opencode</text>
+<text x="262" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/proxy.js · REST + события</text>
+<rect x="416" y="680" width="276" height="54" rx="9" class="chip" stroke="#a78bfa" stroke-opacity="0.75"/>
+<text x="554" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#a78bfa">Кэш базы знаний</text>
+<text x="554" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/kb-cache.js · снапшот</text>
+<rect x="708" y="680" width="276" height="54" rx="9" class="chip" stroke="#e07a52" stroke-opacity="0.75"/>
+<text x="846" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#e07a52">Раннер CLI</text>
+<text x="846" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">Claude + посредник Codex · на ход</text>
+<rect x="1000" y="680" width="276" height="54" rx="9" class="chip" stroke="#2dd4bf" stroke-opacity="0.75"/>
+<text x="1138" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#2dd4bf">Голосовой сервис</text>
+<text x="1138" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/voice.js · очередь, квоты</text>
+<text x="1300" y="832" class="m h" font-size="13" font-weight="700" text-anchor="end">2 · ОБВЯЗКА — больше, чем модель</text>
+<g filter="url(#shadow)"><rect x="100" y="846" width="380" height="290" rx="14" fill="#161a24" stroke="#4f8cff" stroke-opacity="0.75" stroke-width="1.4"/></g>
+<rect x="100" y="846" width="380" height="44" rx="14" fill="#4f8cff" fill-opacity="0.16"/>
+<rect x="100" y="876" width="380" height="14" fill="#4f8cff" fill-opacity="0.16"/>
+<text x="122" y="875" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#4f8cff">opencode serve</text>
+<text x="458" y="875" class="t mono" font-size="13" font-weight="400" text-anchor="end">any provider</text>
+<text x="124" y="916" class="m" font-size="13">• <tspan class="t" font-weight="600">oh-my-opencode-slim:</tspan> оркестратор + субагенты</text>
+<text x="124" y="944" class="m" font-size="13">• <tspan class="t" font-weight="600">агенты:</tspan> Hephaestus, Sandbox (пользователи)</text>
+<text x="124" y="972" class="m" font-size="13">• <tspan class="t" font-weight="600">плагин:</tspan> снапшот базы знаний, дайджест,</text>
+<text x="136" y="1000" class="m" font-size="13">bash пользователя → песочница, откат</text>
+<text x="124" y="1028" class="m" font-size="13">• <tspan class="t" font-weight="600">навыки:</tspan> docx / pdf / pptx / xlsx / html</text>
+<text x="124" y="1056" class="m" font-size="13">• <tspan class="t" font-weight="600">MCP:</tspan> playwright, marketplace</text>
+<text x="124" y="1084" class="m" font-size="13">• <tspan class="t" font-weight="600">провайдеры:</tspan> Z.ai, OpenAI, Google, локальные…</text>
+<g filter="url(#shadow)"><rect x="510" y="846" width="380" height="290" rx="14" fill="#161a24" stroke="#e07a52" stroke-opacity="0.75" stroke-width="1.4"/></g>
+<rect x="510" y="846" width="380" height="44" rx="14" fill="#e07a52" fill-opacity="0.16"/>
+<rect x="510" y="876" width="380" height="14" fill="#e07a52" fill-opacity="0.16"/>
+<text x="532" y="875" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#e07a52">claude CLI</text>
+<text x="868" y="875" class="t mono" font-size="13" font-weight="400" text-anchor="end">stream-json</text>
+<text x="534" y="916" class="m" font-size="13">• процесс на ход, stream-json</text>
+<text x="534" y="944" class="m" font-size="13">• <tspan class="t" font-weight="600">профили:</tspan> админ — всё, пользователь — меньше</text>
+<text x="534" y="972" class="m" font-size="13">• <tspan class="t" font-weight="600">хуки:</tspan> песочница (Bash), отмена хода</text>
+<text x="534" y="1000" class="m" font-size="13">• <tspan class="t" font-weight="600">мост разрешений:</tspan> режим «Спрашивать»</text>
+<text x="534" y="1028" class="m" font-size="13">• субагенты, фоновые агенты, навыки</text>
+<text x="534" y="1056" class="m" font-size="13">• <tspan class="t" font-weight="600">MCP:</tspan> playwright, свой набор у пользователя</text>
+<text x="534" y="1084" class="m" font-size="13">• <tspan class="t" font-weight="600">контекст:</tspan> снапшот базы знаний</text>
+<g filter="url(#shadow)"><rect x="920" y="846" width="380" height="290" rx="14" fill="#161a24" stroke="#10b981" stroke-opacity="0.75" stroke-width="1.4"/></g>
+<rect x="920" y="846" width="380" height="44" rx="14" fill="#10b981" fill-opacity="0.16"/>
+<rect x="920" y="876" width="380" height="14" fill="#10b981" fill-opacity="0.16"/>
+<text x="942" y="875" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#10b981">codex CLI</text>
+<text x="1278" y="875" class="t mono" font-size="13" font-weight="400" text-anchor="end">app-server</text>
+<text x="944" y="916" class="m" font-size="13">• codex app-server через посредник</text>
+<text x="944" y="944" class="m" font-size="13">• «Спрашивать», роли агентов (Workflow…)</text>
+<text x="944" y="972" class="m" font-size="13">• песочница Codex для инструментов</text>
+<text x="944" y="1000" class="m" font-size="13">• <tspan class="t" font-weight="600">чаты:</tspan> только админ</text>
+<text x="944" y="1028" class="m" font-size="13">• <tspan class="t" font-weight="600">пайпы:</tspan> все пользователи,</text>
+<text x="956" y="1056" class="m" font-size="13">у них — только текст</text>
+<text x="944" y="1084" class="m" font-size="13">• вход по подписке ChatGPT</text>
+<path d="M262,734 L262,842" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
+<text x="272" y="790" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#4f8cff">HTTP + SSE</text>
+<path d="M846,734 L846,770 L700,770 L700,842" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#a_orange)"/>
+<text x="710" y="800" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#e07a52">запуск · stream-json</text>
+<path d="M846,734 L846,770 L1000,770 L1000,842" fill="none" stroke="#10b981" stroke-width="2.2" marker-end="url(#a_codex)"/>
+<text x="1010" y="795" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#10b981">app-server</text>
+<text x="1300" y="1202" class="m h" font-size="13" font-weight="700" text-anchor="end">3 · ЛОКАЛЬНЫЕ СЕРВИСЫ</text>
+<g filter="url(#shadow)"><rect x="100" y="1216" width="380" height="236" rx="14" fill="#161a24" stroke="#f5b942" stroke-opacity="0.7" stroke-width="1.4"/></g>
+<rect x="100" y="1216" width="380" height="44" rx="14" fill="#f5b942" fill-opacity="0.16"/>
+<rect x="100" y="1246" width="380" height="14" fill="#f5b942" fill-opacity="0.16"/>
+<text x="122" y="1245" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#f5b942">Песочница пользователей</text>
+<text x="124" y="1286" class="m" font-size="13">• <tspan class="t" font-weight="600">Linux:</tspan> раннер на пользователя (по желанию)</text>
+<text x="124" y="1314" class="m" font-size="13">• <tspan class="t" font-weight="600">Windows:</tspan> AppContainer (teleharness-jail)</text>
+<text x="124" y="1342" class="m" font-size="13">• <tspan class="t" font-weight="600">macOS:</tspan> оболочка пользователям закрыта</text>
+<text x="124" y="1370" class="m" font-size="13">• доступ только к своей папке</text>
+<text x="124" y="1398" class="m" font-size="13">• рендер документов (LibreOffice,</text>
+<text x="136" y="1426" class="m" font-size="13">html2pdf)</text>
+<g filter="url(#shadow)"><rect x="510" y="1216" width="400" height="236" rx="14" fill="#161a24" stroke="#a78bfa" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="510" y="1216" width="400" height="44" rx="14" fill="#a78bfa" fill-opacity="0.16"/>
+<rect x="510" y="1246" width="400" height="14" fill="#a78bfa" fill-opacity="0.16"/>
+<text x="532" y="1245" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#a78bfa">Obsidian · активный кэш</text>
+<text x="888" y="1245" class="t mono" font-size="13" font-weight="400" text-anchor="end">markdown</text>
+<text x="534" y="1286" class="m" font-size="13">• <tspan class="t" font-weight="600">agents/_index.md</tspan> — правила для агентов</text>
+<text x="534" y="1314" class="m" font-size="13">• <tspan class="t" font-weight="600">lessons/, decisions/, tasks/</tspan> — заметки</text>
+<text x="534" y="1342" class="m" font-size="13">• <tspan class="t" font-weight="600">sessions/</tspan> — дайджесты ходов</text>
+<text x="534" y="1370" class="m" font-size="13">• <tspan class="t" font-weight="600">tenants/&lt;имя&gt;/</tspan> — зона пользователя</text>
+<text x="534" y="1398" class="m" font-size="13">• журнал чата для передачи между движками</text>
+<text x="534" y="1426" class="m" font-size="13">• агенты сами читают и пишут заметки</text>
+<g filter="url(#shadow)"><rect x="940" y="1216" width="360" height="236" rx="14" fill="#161a24" stroke="#2dd4bf" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="940" y="1216" width="360" height="44" rx="14" fill="#2dd4bf" fill-opacity="0.16"/>
+<rect x="940" y="1246" width="360" height="14" fill="#2dd4bf" fill-opacity="0.16"/>
+<text x="962" y="1245" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#2dd4bf">Голос · voice-worker.py</text>
+<text x="964" y="1286" class="m" font-size="13">• <tspan class="t" font-weight="600">TTS:</tspan> голоса Piper</text>
+<text x="964" y="1314" class="m" font-size="13">• <tspan class="t" font-weight="600">STT:</tspan> GigaAM v2 (sherpa-onnx)</text>
+<text x="964" y="1342" class="m" font-size="13">• <tspan class="t" font-weight="600">нормализация:</tspan> числа, даты</text>
+<text x="964" y="1370" class="m" font-size="13">• JSON-строки через stdin / stdout</text>
+<text x="964" y="1398" class="m" font-size="13">• локально, только CPU, без облака</text>
+<path d="M290,1136 L290,1212" fill="none" stroke="#f5b942" stroke-width="2.2" marker-end="url(#a_yellow)"/>
+<text x="300" y="1192" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#f5b942">bash → песочница</text>
+<path d="M600,1136 L600,1160 L400,1160 L400,1212" fill="none" stroke="#f5b942" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_yellow)"/>
+<path d="M680,1136 L680,1212" fill="none" stroke="#a78bfa" stroke-width="2.2" marker-end="url(#a_purple)"/>
+<text x="690" y="1192" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#a78bfa">чтение / запись</text>
+<path d="M554,734 L554,756 L497,756 L497,1186 L600,1186 L600,1212" fill="none" stroke="#a78bfa" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_purple)"/>
+<text x="590" y="1178" class="t" font-size="12.5" font-weight="600" text-anchor="end" fill="#a78bfa">снапшот</text>
+<path d="M1276,707 L1320,707 L1320,1334 L1304,1334" fill="none" stroke="#2dd4bf" stroke-width="2.2" marker-end="url(#a_teal)"/>
+<text x="1314" y="1040" font-size="12.5" font-weight="600" fill="#2dd4bf" text-anchor="middle" transform="rotate(-90 1314 1040)">JSON-строки</text>
+<text x="1300" y="1506" class="m h" font-size="13" font-weight="700" text-anchor="end">4 · НАДЁЖНЫЕ ПАЙПЫ — по желанию, Linux и macOS</text>
+<g filter="url(#shadow)"><rect x="100" y="1520" width="380" height="180" rx="14" fill="#161a24" stroke="#f472b6" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="100" y="1520" width="380" height="44" rx="14" fill="#f472b6" fill-opacity="0.16"/>
+<rect x="100" y="1550" width="380" height="14" fill="#f472b6" fill-opacity="0.16"/>
+<text x="122" y="1549" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#f472b6">Сервер Temporal</text>
+<text x="458" y="1549" class="t mono" font-size="13" font-weight="400" text-anchor="end">workflows</text>
+<text x="124" y="1590" class="m" font-size="13">• история, таймеры, повторы</text>
+<text x="124" y="1618" class="m" font-size="13">• расписания с догоняющим запуском</text>
+<text x="124" y="1646" class="m" font-size="13">• переживает перезапуск портала и сервера</text>
+<text x="124" y="1674" class="m" font-size="13">• пауза, отмена, остановка, сигналы</text>
+<g filter="url(#shadow)"><rect x="510" y="1520" width="400" height="180" rx="14" fill="#161a24" stroke="#f472b6" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="510" y="1520" width="400" height="44" rx="14" fill="#f472b6" fill-opacity="0.16"/>
+<rect x="510" y="1550" width="400" height="14" fill="#f472b6" fill-opacity="0.16"/>
+<text x="532" y="1549" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#f472b6">Исполнитель пайпов · Python</text>
+<text x="534" y="1590" class="m" font-size="13">• <tspan class="t" font-weight="600">TeleharnessPipelineV1:</tspan> шаги как граф</text>
+<text x="534" y="1618" class="m" font-size="13">• модель · решение · таймер · объединение</text>
+<text x="534" y="1646" class="m" font-size="13">• условие (пропуск ветки) · артефакт</text>
+<text x="534" y="1674" class="m" font-size="13">• версия закреплена за запуском</text>
+<g filter="url(#shadow)"><rect x="940" y="1520" width="360" height="180" rx="14" fill="#161a24" stroke="#f472b6" stroke-opacity="0.8" stroke-width="1.4"/></g>
+<rect x="940" y="1520" width="360" height="44" rx="14" fill="#f472b6" fill-opacity="0.16"/>
+<rect x="940" y="1550" width="360" height="14" fill="#f472b6" fill-opacity="0.16"/>
+<text x="962" y="1549" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#f472b6">PostgreSQL</text>
+<text x="964" y="1590" class="m" font-size="13">• история и видимость Temporal</text>
+<text x="964" y="1618" class="m" font-size="13">• <tspan class="t" font-weight="600">журнал вызовов:</tspan> ровно один раз</text>
+<text x="964" y="1646" class="m" font-size="13">• слоты параллельности движков</text>
+<text x="964" y="1674" class="m" font-size="13">• копии и проверка восстановления</text>
+<path d="M124,641 L76,641 L76,1610 L96,1610" fill="none" stroke="#f472b6" stroke-width="2.2" marker-end="url(#a_pink)"/>
+<text x="70" y="1380" font-size="12.5" font-weight="600" fill="#f472b6" text-anchor="middle" transform="rotate(-90 70 1380)">gRPC</text>
+<path d="M480,1600 L506,1600" fill="none" stroke="#f472b6" stroke-width="2.2" marker-start="url(#a_pink)" marker-end="url(#a_pink)"/>
+<path d="M910,1600 L936,1600" fill="none" stroke="#f472b6" stroke-width="2.2" marker-start="url(#a_pink)" marker-end="url(#a_pink)"/>
+<path d="M710,1520 L710,1484 L1340,1484 L1340,641 L1280,641" fill="none" stroke="#f472b6" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_pink)"/>
+<text x="1330" y="1474" class="t" font-size="12.5" font-weight="600" text-anchor="end" fill="#f472b6">шаг → ход чата</text>
+<rect x="40" y="1936" width="1320" height="160" rx="20" fill="none" stroke="#596173" stroke-width="1.3" stroke-dasharray="7 6"/>
+<text x="62" y="1962" class="d h" font-size="12.5" font-weight="700" text-anchor="start">ПРОВАЙДЕРЫ МОДЕЛЕЙ — только вывод, файлы и инструменты остаются на вашем сервере</text>
+<g filter="url(#shadow)"><rect x="100" y="1976" width="380" height="104" rx="14" fill="#161a24" stroke="#4f8cff" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="122" y="2010" class="t" font-size="16.5" font-weight="700" text-anchor="start">Любой провайдер opencode</text>
+<text x="122" y="2036" class="m" font-size="12.5" font-weight="400" text-anchor="start">Z.ai GLM · OpenAI · Gemini · Anthropic · локальные</text>
+<text x="122" y="2060" class="d" font-size="12.5" font-weight="400" text-anchor="start">ключи хранит opencode</text>
+<g filter="url(#shadow)"><rect x="510" y="1976" width="380" height="104" rx="14" fill="#161a24" stroke="#e07a52" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="532" y="2010" class="t" font-size="16.5" font-weight="700" text-anchor="start">Anthropic · подписка Claude</text>
+<text x="532" y="2036" class="m" font-size="12.5" font-weight="400" text-anchor="start">Opus · Sonnet · Haiku через Claude Code</text>
+<text x="532" y="2060" class="d" font-size="12.5" font-weight="400" text-anchor="start">вход по подписке, в пайпах без платного API</text>
+<g filter="url(#shadow)"><rect x="920" y="1976" width="380" height="104" rx="14" fill="#161a24" stroke="#10b981" stroke-opacity="1" stroke-width="1.4"/></g>
+<text x="942" y="2010" class="t" font-size="16.5" font-weight="700" text-anchor="start">OpenAI · подписка ChatGPT</text>
+<text x="942" y="2036" class="m" font-size="12.5" font-weight="400" text-anchor="start">модели Codex через codex CLI</text>
+<text x="942" y="2060" class="d" font-size="12.5" font-weight="400" text-anchor="start">вход по подписке</text>
+<path d="M100,996 L56,996 L56,2028 L96,2028" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
+<path d="M530,1136 L530,1148 L487,1148 L487,1922 L700,1922 L700,1972" fill="none" stroke="#e07a52" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_orange)"/>
+<path d="M1300,996 L1356,996 L1356,2028 L1304,2028" fill="none" stroke="#10b981" stroke-width="2.2" marker-end="url(#a_codex)"/>
+<text x="50" y="1760" font-size="12.5" font-weight="600" fill="#4f8cff" text-anchor="middle" transform="rotate(-90 50 1760)">HTTPS к API провайдеров</text>
+<text x="1350" y="1760" font-size="12.5" font-weight="600" fill="#10b981" text-anchor="middle" transform="rotate(-90 1350 1760)">HTTPS к OpenAI</text>
+<text x="710" y="1916" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#e07a52">HTTPS к Anthropic</text>
+<rect x="469" y="1615" width="48" height="18" rx="4" fill="#111520"/>
+<text x="493" y="1628" class="t" font-size="12.5" font-weight="600" text-anchor="middle" fill="#f472b6">задачи</text>
+<rect x="899" y="1615" width="48" height="18" rx="4" fill="#111520"/>
+<text x="923" y="1628" class="t" font-size="12.5" font-weight="600" text-anchor="middle" fill="#f472b6">SQL</text>
+<line x1="70" y1="2117" x2="104" y2="2117" stroke="#4f8cff" stroke-width="3"/>
+<text x="114" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">путь opencode</text>
+<line x1="260" y1="2117" x2="294" y2="2117" stroke="#e07a52" stroke-width="3"/>
+<text x="304" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">путь Claude Code</text>
+<line x1="450" y1="2117" x2="484" y2="2117" stroke="#10b981" stroke-width="3"/>
+<text x="494" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">путь Codex</text>
+<line x1="640" y1="2117" x2="674" y2="2117" stroke="#a78bfa" stroke-width="3"/>
+<text x="684" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">база знаний</text>
+<line x1="830" y1="2117" x2="864" y2="2117" stroke="#2dd4bf" stroke-width="3"/>
+<text x="874" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">голос</text>
+<line x1="1020" y1="2117" x2="1054" y2="2117" stroke="#f5b942" stroke-width="3"/>
+<text x="1064" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">песочница</text>
+<line x1="1210" y1="2117" x2="1244" y2="2117" stroke="#f472b6" stroke-width="3"/>
+<text x="1254" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">пайпы</text>
 </svg>

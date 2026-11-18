@@ -12,6 +12,11 @@ and is shown in Settings → About.
   on the waiting run walks it to a result with `notes.md`. README: a Temporal section with a phone GIF and screenshots
   (English and Russian).
 
+### Changed
+- **Architecture diagram refreshed** (English and Russian): three CLIs (opencode, Claude Code, Codex), Temporal
+  pipelines (server, Python worker, PostgreSQL, model bridge), the sandbox per OS, and the ChatGPT subscription as a
+  provider.
+
 ### Fixed
 - A run waiting for a decision no longer repeats the previous step's answer as an *Interim result* — it is shown once,
   next to *Approve* / *Reject*.

@@ -280,7 +280,7 @@ so the Windows sandbox is intentionally not ported to other systems.
 
 ## Architecture
 
-<p align="center"><img src="docs/architecture-components.png" alt="Teleharness components: client, portal, harness of two CLIs, Obsidian, voice, sandbox, model providers" width="900"></p>
+<p align="center"><img src="docs/architecture-components.png" alt="Teleharness components: client, portal, harness of three CLIs, Obsidian, voice, sandbox, Temporal pipelines, model providers" width="900"></p>
 
 - **Portal** (`server.js`) — API, auth and users, the event hub, chat-to-engine binding, the handoff between
   engines. One adapter per engine: a client for `opencode serve` (1.x and 2.x) and a runner that starts
@@ -292,7 +292,11 @@ so the Windows sandbox is intentionally not ported to other systems.
 - **Obsidian** — long-term memory for agents, one zone per user; also holds the per-chat journal an engine
   reads after a handoff.
 - **Voice** — a separate local Python process (Piper TTS, GigaAM STT).
-- **Sandbox** — Windows AppContainer for other users' commands.
+- **Sandbox** — other users' shell commands: an optional per-user runner on Linux, AppContainer on Windows,
+  refused on macOS.
+- **Temporal pipelines** (optional, Linux and macOS) — a Temporal server, a Python worker and PostgreSQL
+  (history, exactly-once ledger, concurrency slots). A model step is a turn of a portal chat in the pipe's
+  folder, reached through a private socket. See [`docs/temporal.md`](docs/temporal.md).
 
 More: [`docs/architecture.md`](docs/architecture.md) (in Russian), requirements in [`openspec/specs/`](openspec/specs/).
 
