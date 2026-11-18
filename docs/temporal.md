@@ -28,7 +28,8 @@ In the demo, *Approve* on the waiting run walks it to a result with files.
 ## What you need
 
 Linux or macOS host (the worker talks to the portal over a Unix socket owned by the portal's user; Windows is not
-supported for pipelines).
+supported for pipelines). Keep the data directory path short: the socket path `<data dir>/temporal-private/worker.sock` must fit in
+103 bytes on macOS and 107 on Linux, otherwise the portal refuses to start pipelines and says so.
 
 
 1. **Temporal server** with a namespace, reachable from the portal (gRPC). Any deployment works — Temporal Cloud,

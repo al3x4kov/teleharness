@@ -26,6 +26,8 @@ and is shown in Settings → About.
   provider.
 
 ### Fixed
+- Temporal: a data directory whose worker-socket path exceeds the OS limit (104 bytes on macOS) no longer crashes the
+  portal with a bare `ENOENT` — it stops with a clear reason.
 - A run waiting for a decision no longer repeats the previous step's answer as an *Interim result* — it is shown once,
   next to *Approve* / *Reject*.
 

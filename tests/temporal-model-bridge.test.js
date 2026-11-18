@@ -129,3 +129,9 @@ test('FEAT-19.16: шаг портала — условие по входу/от�
   assert.equal((await bridge('step',{workflowId,stepId:'save'})).file,path.join('runs','run1','итог (2).md'));
   await assert.rejects(bridge('step',{workflowId,stepId:'m'}));
 });
+
+test("listenModelBridge: a socket path over the OS limit fails with a clear reason instead of a silent truncation", async () => {
+  const { listenModelBridge: listen, SOCKET_PATH_MAX } = await import("../lib/temporal/model-bridge.js");
+  const long = "/tmp/" + "d".repeat(SOCKET_PATH_MAX) + "/worker.sock";
+  await assert.rejects(listen(long, async () => ({})), (e) => /длиннее \d+ байт/.test(e.message) && e.message.includes("каталог данных"));
+});
