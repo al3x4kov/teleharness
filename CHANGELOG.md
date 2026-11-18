@@ -6,6 +6,44 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [1.24.2] — 2026-11-18
+
+### Added
+- **Temporal pipelines** *(optional, off by default — [docs/temporal.md](docs/temporal.md))*. A *Temporal* section next to
+  Chats and Projects: **Runs** (status of every run without extra taps, a *Waiting for you* block and a menu badge,
+  filters, search, self-refresh), **Pipes** (templates, version state, last run) and **Schedules** (hourly / daily /
+  weekdays / cron, a preview of the next runs before saving, *Run now*, schedules that lost access are shown with the
+  reason). A run screen with a step timeline, the decision next to the answer it is about, confirmation sheets for
+  reject / cancel / terminate (a reason is required for terminate) and a *Result* block.
+- **Steps:** *Model* — Claude Code or Codex runs the instruction as a turn of the owner's own chat inside the run
+  folder (files and tools by the owner's rights; for regular users Codex answers with text only); *Human decision*;
+  *Timer*; *Join*; *Condition* (equals / contains / does not contain / yes / no — the steps after a false condition are
+  *skipped*); *Artifact* (save a step's answer as a file). Run inputs are asked in a start form and inserted as
+  `{{input.name}}`; earlier answers as `{{steps.id}}`.
+- **Folders:** every pipe gets `<project>/pipelines/<name>`, every run `runs/<date>-<id>`; the project of a new pipe is
+  picked from the user's own projects (no typed paths). Step conversations open from the run and stay out of the chat
+  list.
+- **Durable execution:** immutable versions (a run keeps the version it started with, publishing an unchanged pipe is
+  refused), exactly-once model calls with a ledger, per-engine and per-user concurrency slots, a usage limit makes a
+  step wait and retry on the subscription — never a paid API.
+- **Linux:** an optional per-user runner for regular users' shell commands (`ops/sandbox/linux`); without it they stay
+  refused.
+
+### Changed
+- Git screen and changes (1.22.1): rename-only and binary files are shown as such, a detached HEAD is explained,
+  suggest-message and push errors are worded by kind, the chat title is the Git subtitle.
+- An agent-shown file that lies outside the configured roots opens for the admin (other users keep their own roots).
+
+### API
+- `GET /teleharness/api/temporal/capabilities`, `…/projects`, `…/attention`; `GET/POST /teleharness/api/temporal/definitions`,
+  `GET/PUT …/definitions/:id`, `POST …/:id/publish`; `GET/POST /teleharness/api/temporal/runs`, `GET …/runs/:id`,
+  `GET …/runs/:id/results/:step`, `POST …/runs/:id/actions`; `GET/POST /teleharness/api/temporal/schedules`,
+  `POST …/schedules/:id/pause|resume`.
+
+### Notes
+- Server-side Temporal validation and error texts are in Russian for now; the editor translates validation messages.
+- The Temporal worker is Python (`worker/temporal`, `temporalio`, `psycopg`); hosting hardening is up to your setup.
+
 ## [1.22.0] — 2026-11-16
 
 ### Added
