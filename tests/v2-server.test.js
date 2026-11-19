@@ -418,7 +418,7 @@ test("permissions и формы: reply уходит в v2-маршруты с de
 });
 
 test("BUG-260: ответ на вопрос незанятой/неизвестной хабу сессии находится по ?directory= клиента, без веера по папкам", async () => {
-  const HDIR = "/tmp/teleharness-v2-hint"; // абсолютный и на Linux, и на Windows (path.isAbsolute)
+  const HDIR = path.join(os.tmpdir(), "teleharness-v2-hint"); // абсолютный на любой ОС (на Windows «/tmp» без диска — 400 not-absolute)
   up.state.sessions.push({ id: "ses_hint", title: "hint", location: { directory: HDIR }, time: { created: 3_000, updated: 3_000 } });
   up.state.permissions.push({ id: "per_hint", sessionID: "ses_hint", permission: "bash", title: "run pwd", time: { created: Date.now() } });
   const before = up.requests.length;
