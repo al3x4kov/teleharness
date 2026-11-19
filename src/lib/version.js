@@ -1,5 +1,6 @@
 // Single source of truth for the UI version shown in Настройки → «О приложении».
 // Bump together with the project-note status entry in the vault.
+// 2.0.3 (2026-11-19): Chats open again when the engine is short of memory — the dialogs poll no longer wakes every chat folder, the chats list survives a short engine restart, identical concurrent reads share one engine call; a "directory" in the body of a new-chat request no longer overrides the checked folder (security); a message no longer vanishes when a turn fails at once; the Temporal worker frees the subscription slot of a run closed during a model step; pipes can be deleted; static assets are served brotli/gzip-compressed; light-theme contrast at least 4.5:1.
 // 2.0.0 (2026-11-19): one name everywhere — /teleharness/ path, TELEHARNESS_* variables, teleharness file, skill and folder names (breaking); a worker-socket path over the OS limit stops with a clear reason; new README demo GIF and architecture diagram.
 // 1.24.2 (2026-11-18): a pipe step's conversation opens for a regular user too (the step chat lives in the project, the agent works in the pipe folder); the schedule form says up front that required inputs block a schedule; an unchanged pipe cannot be published again — "Version N is current".
 // 1.24.1 (2026-11-18): Temporal scrolls again; the admin's project picker drops tenant, temp and system folders; "Readiness" stays neutral until a publish attempt; pipe step chats are hidden from Chats and Projects.
@@ -216,4 +217,4 @@
 // 1.3.0 (2026-10-31): artifacts preview/download, orchestration-directive cards,
 // typing indicator, multi-agent AgentCard, theme boot fix, overlay fill-mode
 // hardening, home junk filter, subscription credit units.
-export const VERSION = "2.0.0";
+export const VERSION = "2.0.3";

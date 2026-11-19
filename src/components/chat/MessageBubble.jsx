@@ -29,7 +29,7 @@ import { probeState, requestProbe } from "../../lib/file-probe.js";
 import { partKbContext } from "../../../shared/title.js";
 import { copyText } from "../../lib/clipboard.js";
 import { t } from "../../lib/i18n.js";
-import { bindingOf, modelName, queuedLabel } from "../../lib/engine.js";
+import { bindingOf, engineOf, modelName, queuedLabel } from "../../lib/engine.js";
 import { describeTurnError } from "../../lib/turn.js";
 import { revealPlan, revealSlices } from "../../lib/exec-detail.js";
 import { costLabel } from "../../lib/context-cost.js";
@@ -515,12 +515,15 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
 
   // Author: once per turn; Claude chats show the model (R-08).
   const binding = bindingOf(sessions.value.find((s) => s.id === (act?.id ?? globalThis.__teleharnessActiveId)));
+  // BUG-264 п.2: the engine of THIS message (info.providerID) wins over the chat's current
+  // binding — after a Relay the old GLM answers keep their z.ai face and their error words.
+  const engine = info.providerID ? engineOf(info.providerID) : binding?.engine ?? null;
   const modelLabel = info.modelID ? modelName(providerCfg.value, { providerID: info.providerID, modelID: info.modelID }) : null;
-  const author = turnAuthor(info, { engine: binding?.engine ?? null, modelLabel, claudeAgents: claudeAgents.value });
+  const author = turnAuthor(info, { engine, modelLabel, claudeAgents: claudeAgents.value });
   const isTurnHead = compact || (turn ? turn.first === info.id : showRole);
   const isTurnEnd = (turn ? turn.last === info.id && turn.closed && !streaming : showMeta) && !revealing;
   const meta = turn ? turnMetaLine(turn, { cost: costLabel(turn).text }) : ""; // FEAT-18.5
-  const stepError = info.error ? describeTurnError(info.error, { engine: binding?.engine ?? "opencode" }) : null;
+  const stepError = info.error ? describeTurnError(info.error, { engine: engine ?? "opencode" }) : null;
   // FEAT-18.8: files this turn changed (its own tool parts) — the «Изменения» row.
   const turnChangedFiles = isTurnEnd && turn ? changesForTurn(feed, turn, sessionDir) : [];
 
@@ -567,7 +570,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
           <span aria-hidden="true">⚠</span> {stepError.title}
         </div>
       )}
-      {turnChangedFiles.length > 0 && <ChangesRow files={turnChangedFiles} sid={act.id} base={sessionDir} lastTurn={isLastTurn} />}
+      {turnChangedFiles.length > 0 && <ChangesRow files={turnChangedFiles} sid={act.id} base={sessionDir} lastTurn={isLastTurn && engine !== "codex"} /* R-2: без «Отменить ход» у Codex */ />}
       {isTurnEnd && (copyPayload() || meta || isLastTurn) && (
         <div class="turn-foot">
           {copyPayload() && (
@@ -579,7 +582,8 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
           {isLastTurn && (
             <span class="turn-acts">
               <RegenerateButton sid={act.id} />
-              <TurnMenu sid={act.id} />
+              {/* R-2: у хода Codex отмены нет (сервер — 409), меню не предлагаем */}
+              {engine !== "codex" && <TurnMenu sid={act.id} />}
             </span>
           )}
           {meta && <span class="msg-meta">{meta}</span>}

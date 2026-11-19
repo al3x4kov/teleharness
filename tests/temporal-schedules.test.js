@@ -69,3 +69,16 @@ test('маршруты перепроверяют права текущего в
   deps.store.get=()=>{throw new DefinitionError(404,'нет');};
   assert.deepEqual((await call('GET')).body,[]);
 });
+test('BUG-264 п.6: расписание удалённого пайпа (было на паузе) видно с причиной, возобновить нельзя',async()=>{
+  const entry={...params,id:'4ae8da84-a0f5-47c9-9151-c008247510e1'};
+  const tomb={deletedAt:'2026-11-19T10:00:00Z',versions:[{version:1,definition:{name:'Отчёт',directory:'/work',inputs:[],steps:[]}}]};
+  const deps={schedules:{get:()=>entry,list:()=>[entry],describe:async x=>({...x,paused:true}),setPaused:async()=>entry},
+    store:{get:(_o,_id,opt)=>{if(opt?.deleted)return tomb;throw new DefinitionError(404,'Пайп не найден');}},
+    dirAllowed:()=>true,engineAllowed:()=>true,readJsonBody:r=>r.body,sendJson:(res,status,body)=>Object.assign(res,{status,body})};
+  async function call(method,suffix=''){
+    const res={};await dispatchRoute(scheduleRoutes(deps),{req:{method,body:{}},res,url:new URL('http://localhost/teleharness/api/temporal/schedules'+suffix),user:{id:'alice',role:'tenant'}},deps);return res;
+  }
+  const list=(await call('GET')).body;
+  assert.equal(list.length,1);assert.equal(list[0].name,'Отчёт');assert.match(list[0].blocked,/Пайп удалён/);
+  assert.equal((await call('POST','/'+entry.id+'/resume')).status,404);
+});

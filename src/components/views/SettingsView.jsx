@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import "../views.css";
 import "../voice.css";
 import {
-  about, admin, agents, busyMap, claudeAgents, connection, effectivePrefs, host, staleModelText, hostError, init, mcp, mcpError, me, prefs, providerCfg,
+  about, admin, agents, busyMap, claudeAgents, dialogs, connection, effectivePrefs, host, staleModelText, hostError, init, mcp, mcpError, me, prefs, providerCfg,
   refreshAbout, refreshHost, refreshMcp, refreshUsage, refreshSubscriptions, logout, sessions, setPrefs, usage, usageError, subscriptions, subscriptionsError, execDetailOn,
   refreshVoice, voiceApi, voiceInfo, voicePrefs, VOICE_PAUSES, VOICE_RATES,
 } from "../../lib/store.js";
@@ -197,7 +197,7 @@ const fmtInt = (n) => (n == null ? "—" : n.toLocaleString(locale()));
 // for opencode turns the age is counted from the first time this page saw
 // them busy (store busyMap) — labelled «не меньше». A dedicated hub API with
 // real ages is Г2's part.
-export function busyRows(status, { sessionsList = [], seen = {}, now = Date.now() } = {}) {
+export function busyRows(status, { sessionsList = [], seen = {}, asking = new Set(), now = Date.now() } = {}) {
   const rows = [];
   for (const [id, st] of Object.entries(status ?? {})) {
     if (!st || (st.type === "idle" && !st.pending)) continue;
@@ -207,7 +207,7 @@ export function busyRows(status, { sessionsList = [], seen = {}, now = Date.now(
       id,
       title: displayTitle(s?.title),
       directory: s?.directory ?? null,
-      kind: st.pending ? "stalled" : st.type === "retry" ? "retry" : "busy",
+      kind: asking.has(id) ? "dialog" : st.pending ? "stalled" : st.type === "retry" ? "retry" : "busy", // BUG-264 п.3
       age: since ? now - since : null,
       exact: Number(st.since) > 0,
     });
@@ -215,7 +215,7 @@ export function busyRows(status, { sessionsList = [], seen = {}, now = Date.now(
   return rows.sort((a, b) => (b.age ?? 0) - (a.age ?? 0));
 }
 
-const BUSY_KIND_RU = { busy: "settings.busy.busy", retry: "settings.busy.retry", stalled: "settings.busy.stalled" };
+export const BUSY_KIND_RU = { busy: "settings.busy.busy", retry: "settings.busy.retry", stalled: "settings.busy.stalled", dialog: "settings.busy.dialog" };
 
 function BusySessions() {
   const [status, setStatus] = useState(null);
@@ -234,7 +234,7 @@ function BusySessions() {
     const timer = setInterval(() => { if (!document.hidden) load(); }, 10_000);
     return () => clearInterval(timer);
   }, []);
-  const rows = status ? busyRows(status, { sessionsList: sessions.value, seen: busyMap.value }) : [];
+  const rows = status ? busyRows(status, { sessionsList: sessions.value, seen: busyMap.value, asking: new Set(dialogs.value.map((d) => d.sessionID)) }) : [];
   const stop = async (r) => {
     setStopping(r.id);
     try {

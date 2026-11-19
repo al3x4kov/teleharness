@@ -43,7 +43,14 @@ export function scheduleRoutes(deps) {
         try{definition=access(user,row);}catch(error){
           if(!(error instanceof DefinitionError && [403,404].includes(error.status)))throw error;
           // FEAT-19.14: a schedule that lost project access is shown (its firings are skipped), not hidden.
-          if(error.status===404)continue;
+          if(error.status===404){
+            // BUG-264 п.6: a schedule of a deleted pipe (it was paused) stays visible with the reason.
+            let tomb=null;try{tomb=deps.store.get(user.id,row.definitionId,{deleted:true});}catch{}
+            const old=tomb?.deletedAt&&tomb.versions.find(v=>v.version===row.version)?.definition;
+            const name=old&&deps.dirAllowed(user,old.directory)&&old.name;
+            if(name)visible.push({...row,name,blocked:'Пайп удалён — расписание больше не срабатывает',pipeDeleted:true});
+            continue;
+          }
           let name='Пайп';
           try{name=deps.store.get(user.id,row.definitionId).versions.find(v=>v.version===row.version)?.definition.name??name;}catch{}
           visible.push({...row,name,blocked:'Нет доступа к проекту или движку пайпа — срабатывания пропускаются'});

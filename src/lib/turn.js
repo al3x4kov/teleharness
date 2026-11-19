@@ -51,10 +51,13 @@ export function awaitingAnswer(messages) {
   return false;
 }
 
-// Turn end: the server is idle, so every delivered tmp has a real twin (or
-// will after a refresh) — drop those, keep the local-only ones.
+// Turn end: local-only bubbles stay; a DELIVERED tmp stays too until the
+// history refresh that follows every turn end shows its real twin
+// (mergeHistory). BUG-263: an opencode turn that died at once on a provider
+// error never sent the user's message.updated — dropping the bubble here
+// emptied the feed (and the title) until a page reload.
 export function finalizeMessages(messages) {
-  return (messages ?? []).filter((m) => !isTmp(m) || isLocalOnly(m));
+  return (messages ?? []).filter((m) => !isTmp(m) || isLocalOnly(m) || m.info.delivery === "delivered");
 }
 
 function plainUserText(m) {

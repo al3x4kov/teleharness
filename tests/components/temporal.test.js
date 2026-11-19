@@ -384,3 +384,50 @@ test("ответ шага перед решением не дублируетс�
  await h.waitFor(()=>root.textContent.includes("Черновик"));
  assert.equal($(root,".t-final"),null);assert.equal(root.textContent.split("Черновик").length-1,1);
 });
+
+// ——— BUG-264 п.6: удаление пайпа ———
+test("BUG-264 п.6: «Удалить пайп…» — лист с именем и последствиями, «Не удалять» закрывает, подтверждение — DELETE и возврат к списку",async()=>{
+ installFetch([{method:"DELETE",path:"/teleharness/api/temporal/definitions/a",reply:()=>({id:"a",deleted:true})}]);
+ const n=h.mount(ui.DefinitionEditor,{engines:["opencode"],subscriptionModels:{}});
+ assert.equal($(n.root,'[data-action="delete-pipe"]'),null,"у несохранённого пайпа удалять нечего");h.cleanup();
+ const {root}=h.mount(ui.DefinitionEditor,{record:record(),engines:["opencode"],subscriptionModels:{}});
+ const btn=$(root,'[data-action="delete-pipe"]');assert(btn);assert.match(btn.className,/t-btn/);assert.match(btn.textContent,/Удалить пайп/);
+ h.click(btn);await h.flush();
+ const sheet=document.querySelector('[role="dialog"]');assert(sheet);assert.equal(sheet.getAttribute("aria-label"),"Удалить пайп «Review»?");
+ assert(sheet.textContent.includes("Завершённые запуски и их файлы останутся"));
+ h.click(byText(sheet,"Не удалять"));await h.flush();assert.equal(document.querySelector('[role="dialog"]'),null);
+ assert.equal(fetchCalls.some(c=>c.method==="DELETE"),false);
+ h.click($(root,'[data-action="delete-pipe"]'));await h.flush();
+ h.click(document.querySelector('[data-action="confirm-delete"]'));
+ await h.waitFor(()=>location.hash==="#/temporal/pipes");
+ assert.equal(fetchCalls.filter(c=>c.method==="DELETE"&&c.path==="/teleharness/api/temporal/definitions/a").length,1);
+});
+test("BUG-264 п.6: 409 — лист остаётся и показывает причину сервера; 403 и 404 объяснены словами",async()=>{
+ const why="Пайп «Review» нельзя удалить: идёт запусков: 1. Дождитесь их завершения или отмените на вкладке «Запуски». Затем удалите пайп.";
+ let reply={status:409,body:{error:why}};
+ installFetch([{method:"DELETE",path:"/teleharness/api/temporal/definitions/a",reply:()=>reply}]);
+ const {root}=h.mount(ui.DefinitionEditor,{record:record(),engines:["opencode"],subscriptionModels:{}});
+ const confirm=async()=>{h.click(document.querySelector('[data-action="confirm-delete"]'));await h.waitFor(()=>document.querySelector('[role="dialog"] [role="alert"]'));return document.querySelector('[role="dialog"] [role="alert"]').textContent;};
+ h.click($(root,'[data-action="delete-pipe"]'));await h.flush();
+ assert.equal(await confirm(),why);assert.notEqual(location.hash,"#/temporal/pipes");
+ reply={status:403,body:{error:"outside your scope"}};assert.match(await confirm(),/Нет доступа к проекту/);
+ reply={status:404,body:{error:"Пайп не найден"}};assert.match(await confirm(),/Пайпа уже нет/);
+ h.click(byText(document.querySelector('[role="dialog"]'),"К пайпам"));await h.flush();assert.equal(location.hash,"#/temporal/pipes");
+});
+test("BUG-264 п.6: запуск удалённого пайпа читается — имя с пометкой, без «Запустить заново» и ссылки на пайп",async()=>{
+ installFetch([{path:"/teleharness/api/temporal/runs/w",reply:()=>detail({status:"COMPLETED",pipeDeleted:true,state:{steps:{prep:"completed",review:"completed",pub:"completed"}},summary:{kind:"ok"},closeTime:new Date().toISOString()})}]);
+ const {root}=h.mount(ui.RunDetail,{workflowId:"w"});await h.waitFor(()=>root.textContent.includes("Завершён"));
+ assert(root.textContent.includes("Контроль"));assert(root.textContent.includes("пайп удалён"));
+ assert.equal($(root,'a[href^="#/temporal/start/"]'),null);assert.equal($(root,'a[href^="#/temporal/pipe/"]'),null);
+ h.cleanup();
+ installFetch([{path:"/teleharness/api/temporal/capabilities",reply:()=>caps},{path:"/teleharness/api/temporal/runs",reply:()=>[run("w1","ok",{pipeDeleted:true})]}]);
+ const l=h.mount(ui.TemporalView);await h.waitFor(()=>l.root.textContent.includes("Пайп w1"));
+ assert(l.root.textContent.includes("Пайп удалён · Версия 1"));
+});
+test("BUG-264 п.6: расписание удалённого пайпа — «Пайп удалён», без переключателя, «Запустить сейчас» и ссылки на пайп",async()=>{
+ installFetch([{path:"/teleharness/api/temporal/capabilities",reply:()=>caps},{path:"/teleharness/api/temporal/runs",reply:()=>[]},
+  {path:"/teleharness/api/temporal/schedules",reply:()=>[{id:"s",definitionId:"a",name:"Документация",version:2,cron:"0 21 * * 1-5",timezone:"UTC",overlap:"skip",pipeDeleted:true,blocked:"Пайп удалён — расписание больше не срабатывает"}]}]);
+ const {root}=h.mount(ui.TemporalView,{section:"schedules"});await h.waitFor(()=>root.textContent.includes("Пайп удалён"));
+ assert(!root.textContent.includes("Срабатывания пропускаются"));assert(!$(root,'[role="switch"]'));
+ assert.equal($(root,'a[href^="#/temporal/start/"]'),null);assert.equal($(root,'a[href^="#/temporal/pipe/"]'),null);
+});

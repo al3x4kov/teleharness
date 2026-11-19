@@ -1854,7 +1854,7 @@
   flex-basis: 100%;
   font-size: 12px;
   line-height: 1.35;
-  color: var(--text-3);
+  color: var(--text-2); /* BUG-264: --text-3 давал 3.03:1 (12 px) — ниже WCAG AA */
   padding: 2px 4px 0;
 }
 .badge-engine {

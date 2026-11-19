@@ -154,19 +154,20 @@ function ScheduleCard({ item, runs }) {
   return (
     <article class="t-card">
       <div class="t-row t-between">
-        <h3><a href={"#/temporal/pipe/" + encodeURIComponent(s.definitionId)}>{s.name}</a></h3>
+        <h3>{s.pipeDeleted ? s.name : <a href={"#/temporal/pipe/" + encodeURIComponent(s.definitionId)}>{s.name}</a>}</h3>
         {!s.blocked && <button type="button" role="switch" aria-checked={!s.paused} class={"t-switch" + (s.paused ? "" : " is-on")}
           data-action={s.paused ? "resume-schedule" : "pause-schedule"} disabled={busy} onClick={toggle}>
           <span aria-hidden="true" />{s.paused ? t("temporal.sch.paused") : t("temporal.sch.on")}</button>}
       </div>
       <p><b>{describeCron(s.cron)}</b> <span class="t-meta">· {s.timezone} · {t("temporal.sch.versionMeta", { n: s.version })}</span></p>
-      {s.blocked && <Banner tone="err" icon="🔒" title={t("temporal.sch.skipped")}>{s.blocked}. {t("temporal.sch.skippedText")}</Banner>}
+      {s.blocked && (s.pipeDeleted ? <Banner tone="info" icon="🗑" title={t("temporal.sch.pipeDeleted")}>{t("temporal.sch.pipeDeletedText")}</Banner>
+        : <Banner tone="err" icon="🔒" title={t("temporal.sch.skipped")}>{s.blocked}. {t("temporal.sch.skippedText")}</Banner>)}
       {!s.blocked && <p class="t-meta">{s.paused ? t("temporal.sch.notWhilePaused") : s.nextTimes?.length ? t("temporal.sch.nextOne", { list: s.nextTimes.slice(0, 3).map((x) => fmt.format(new Date(x))).join(" · ") }) : ""}
         {last?.summary && <> · {t("temporal.sch.prev")} <StatusPill kind={last.summary.kind} /></>}</p>}
       <p class="t-meta">{OVERLAP[s.overlap] ? t(OVERLAP[s.overlap]) : s.overlap}</p>
-      <div class="t-row">
+      {!s.pipeDeleted && <div class="t-row">
         <a class="t-btn" href={"#/temporal/start/" + encodeURIComponent(s.definitionId) + "?v=" + s.version}>{t("temporal.sch.runNow")}</a>
-      </div>
+      </div>}
       {error && <p class="t-err-text" role="alert">{error}</p>}
     </article>
   );

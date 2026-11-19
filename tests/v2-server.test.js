@@ -112,7 +112,7 @@ before(async () => {
   });
   srv = await spawnPortal({
     upstream: up.url,
-    env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_OC_API: "v2", TELEHARNESS_OC_PASSWORD: PW, TELEHARNESS_ACCESS_LOG: "1", TELEHARNESS_HIDE_TEMP_SESSIONS: "0", TELEHARNESS_PLUGIN_GATE_TTL_MS: "500", TELEHARNESS_PLUGIN_GATE_TTL_NEG_MS: "500" },
+    env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_OC_API: "v2", TELEHARNESS_OC_PASSWORD: PW, TELEHARNESS_ACCESS_LOG: "1", TELEHARNESS_HIDE_TEMP_SESSIONS: "0", TELEHARNESS_PLUGIN_GATE_TTL_MS: "500", TELEHARNESS_PLUGIN_GATE_TTL_NEG_MS: "500", TELEHARNESS_LIST_STALE_MS: "50" },
   });
 });
 after(async () => {
@@ -400,6 +400,9 @@ test("abort → interrupt; удаление чата v2", async () => {
 });
 
 test("permissions и формы: reply уходит в v2-маршруты с decision/answer", async () => {
+  // BUG-260: вопрос/разрешение v2 живут только внутри идущего хода — сессия занята
+  // (как в BUG-195); незанятые папки хаб больше не опрашивает.
+  up.state.active = { ...up.state.active, ses_seed: { type: "running" } };
   const perm = await api("/teleharness/api/permission/per_1/reply", { method: "POST", body: { reply: "allow" } });
   assert.equal(perm.status, 200);
   const permCall = up.requests.find((r) => r.path === "/api/session/ses_seed/permission/per_1/reply");
@@ -411,6 +414,21 @@ test("permissions и формы: reply уходит в v2-маршруты с de
   const formCall = up.requests.find((r) => r.path === "/api/session/ses_seed/form/frm_1/reply");
   assert.ok(formCall, "ответ на форму попал в v2-маршрут");
   assert.deepEqual(formCall.body, { answer: { choice: "a" } }); // Э5: {answer:{...}}, не плоская строка
+  delete up.state.active.ses_seed;
+});
+
+test("BUG-260: ответ на вопрос незанятой/неизвестной хабу сессии находится по ?directory= клиента, без веера по папкам", async () => {
+  const HDIR = "/tmp/teleharness-v2-hint"; // абсолютный и на Linux, и на Windows (path.isAbsolute)
+  up.state.sessions.push({ id: "ses_hint", title: "hint", location: { directory: HDIR }, time: { created: 3_000, updated: 3_000 } });
+  up.state.permissions.push({ id: "per_hint", sessionID: "ses_hint", permission: "bash", title: "run pwd", time: { created: Date.now() } });
+  const before = up.requests.length;
+  const miss = await api("/teleharness/api/permission/per_hint/reply", { method: "POST", body: { reply: "allow" } });
+  assert.equal(miss.status, 404, "без подсказки и без занятой сессии — не найден, папки не опрашиваются");
+  const fanout = up.requests.slice(before).filter((r) => r.path === "/api/permission/request");
+  assert.equal(fanout.length, 0, `веер: ${fanout.length}`);
+  const hinted = await api(`/teleharness/api/permission/per_hint/reply?directory=${encodeURIComponent(HDIR)}`, { method: "POST", body: { reply: "allow" } });
+  assert.equal(hinted.status, 200, await hinted.text());
+  assert.ok(up.requests.some((r) => r.path === "/api/session/ses_hint/permission/per_hint/reply"));
 });
 
 test("mcp, агенты — из v2; каталог моделей в форме 1.x с claude-моделями (v2fix2)", async () => {
@@ -605,4 +623,46 @@ test("FEAT-18.4: режим прав → permissions сессии перед х�
   const t = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "t-perm" } })).json();
   const ts = await (await api("/teleharness/api/session", { method: "POST", token: t.token, body: { model: FLASH } })).json();
   assert.equal((await api(`/teleharness/api/session/${ts.id}/binding`, { method: "PATCH", token: t.token, body: { permMode: "ask" } })).status, 400);
+});
+
+// BUG-262 (BUG-12.36): directory из ТЕЛА POST /teleharness/api/session перекрывал проверенную
+// папку (createSession({ directory: dir, ...upBody })) — тенант создавал чат в чужой
+// папке, у admin или в «/», минуя dirAllowed и проверку абсолютного пути (dogfood 2026-11-19).
+test("BUG-262: directory/location в теле создания чата не перекрывают проверенную папку", async () => {
+  const created = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "t261v2" } })).json();
+  assert.ok(created.token, JSON.stringify(created));
+  const tdir = created.user.directories[0];
+  for (const evil of [{ directory: "/" }, { directory: DIR }, { location: { directory: "/" } }]) {
+    const r = await api("/teleharness/api/session", { method: "POST", token: created.token, body: { model: FLASH, ...evil } });
+    const s = await r.json();
+    if (r.status === 200) {
+      const up1 = up.state.sessions.find((x) => x.id === s.id);
+      assert.equal(up1?.location?.directory, tdir, `тело ${JSON.stringify(evil)} увело чат в ${up1?.location?.directory}`);
+    } else {
+      assert.ok([400, 403].includes(r.status), `${r.status} ${JSON.stringify(s)}`);
+    }
+  }
+  const a = await api("/teleharness/api/session", { method: "POST", body: { model: FLASH, directory: "/" } });
+  const as = await a.json();
+  if (a.status === 200) assert.notEqual(up.state.sessions.find((x) => x.id === as.id)?.location?.directory, "/", "admin: тело не обходит проверку папки");
+});
+
+// BUG-264 п.10 (выкат 2.0.1, 2026-11-19 14:07–14:08): пока opencode перезапускался,
+// «Чаты» получали 502 — последний ответ клиенту был старше 2 мин. Сервер держит
+// свежий индекс чатов (тот же общий список) — при сбое движка список без фильтра
+// папки отдаётся из индекса, если он не старше 10 мин.
+test("BUG-264 п.10: движок недоступен — список чатов из свежего индекса, не 502", async () => {
+  const before = await api("/teleharness/api/session");
+  assert.equal(before.status, 200);
+  const known = (await before.json()).map((s) => s.id);
+  await new Promise((r) => setTimeout(r, 200)); // ответ клиенту старше TELEHARNESS_LIST_STALE_MS=50 (на проде — 2 мин); индекс прогрет хабом
+  const saved = up.route("GET", "/api/session", () => ({ status: 503, json: { _tag: "Unavailable", message: "restarting" } }));
+  try {
+    const r = await api("/teleharness/api/session?fresh=1");
+    assert.equal(r.status, 200, await r.clone().text());
+    const ids = (await r.json()).map((s) => s.id);
+    for (const id of known) assert.ok(ids.includes(id), `нет ${id}`);
+  } finally {
+    up.route("GET", "/api/session", saved);
+  }
 });

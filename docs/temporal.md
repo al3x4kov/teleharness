@@ -41,6 +41,9 @@ supported for pipelines). Keep the data directory path short: the socket path `<
 4. **The Python worker** — `worker/temporal/pipeline_worker.py` with the packages from
    [`worker/temporal/requirements.txt`](../worker/temporal/requirements.txt), run as the portal's user with
    `PG*` variables for the ledger and `TELEHARNESS_TEMPORAL_MODEL_SOCKET` pointing to `<data dir>/temporal-private/worker.sock`.
+   The worker also frees the slots of runs closed during a model step (cancelled or timed out): every
+   `TELEHARNESS_TEMPORAL_PERMIT_SWEEP_S` seconds (300) it releases slots of runs closed longer than
+   `TELEHARNESS_TEMPORAL_PERMIT_GRACE_S` seconds ago (3600).
 
 ## Portal settings
 

@@ -20,11 +20,11 @@ export function temporalRoutes(deps) {
     const visible=[];
     for (const entry of entries) {
       try {
-        const record=deps.store.get(user.id,entry.definitionId);
+        const record=deps.store.get(user.id,entry.definitionId,{deleted:true}); // BUG-264 п.6: history of a deleted pipe stays
         const version=record.versions.find(v=>v.version===entry.version);
         if (!version) continue;
         access(user,version.definition,{engines:true});
-        visible.push({...entry,accepted:Boolean(entry.accepted),name:version.definition.name,source:source(entry.workflowId),steps:stepShape(version.definition)});
+        visible.push({...entry,accepted:Boolean(entry.accepted),name:version.definition.name,source:source(entry.workflowId),steps:stepShape(version.definition),...(record.deletedAt?{pipeDeleted:true}:{})});
       } catch (error) {
         if (!(error instanceof DefinitionError && [403,404].includes(error.status))) throw error;
       }
@@ -66,26 +66,25 @@ export function temporalRoutes(deps) {
       if (!deps.lookupRun) throw new DefinitionError(503,"Исполнение Temporal ещё не подключено");
       const row=await deps.lookupRun(user.id,match[1]);
       if (!row) throw new DefinitionError(404,"Запуск не найден");
-      const {versions}=deps.store.get(user.id,row.definitionId);
-      const version=versions.find(v=>v.version===row.version);
+      const record=deps.store.get(user.id,row.definitionId,{deleted:true});
+      const version=record.versions.find(v=>v.version===row.version);
       if (!version) throw new DefinitionError(404,"Опубликованная версия не найдена");
       access(user,version.definition,{engines:true});
       const detail=await deps.describeRun(match[1]);
       const steps=stepShape(version.definition);
       // FEAT-19.16: the run folder, its files, the step chats and the inputs it ran with.
-      const record=deps.store.get(user.id,row.definitionId);
       const workspace=workspaceOf(version.definition.directory,slugOf(record));
       const folder=deps.results?.runFolder?.(match[1]);
       let inputs={};try{inputs=JSON.parse(row.inputs||"{}")??{};}catch{}
       deps.sendJson(res,200,{...detail,resultSteps:deps.results?.steps(match[1])??[],name:version.definition.name,version:row.version,
         definitionId:row.definitionId,directory:version.definition.directory,source:source(match[1]),steps,summary:summarizeRun(detail,steps),
         workspace,runFolder:folder?"runs/"+folder:null,files:folder?listRunFiles(workspace,"runs/"+folder):[],
-        chats:deps.results?.chats?.(match[1])??{},inputs});
+        chats:deps.results?.chats?.(match[1])??{},inputs,...(record.deletedAt?{pipeDeleted:true}:{})});
     }),
     route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/results\/([a-zA-Z][a-zA-Z0-9_-]{0,63})$/,async({res,user,match})=>{
       const row=await deps.lookupRun?.(user.id,match[1]);
       if(!row || !deps.results) throw new DefinitionError(404,"Результат не найден");
-      const v=deps.store.get(user.id,row.definitionId).versions.find(v=>v.version===row.version);
+      const v=deps.store.get(user.id,row.definitionId,{deleted:true}).versions.find(v=>v.version===row.version);
       if(!v) throw new DefinitionError(404,"Версия не найдена");
       access(user,v.definition,{engines:true});
       const text=await deps.results.read(match[1],match[2]);
@@ -96,7 +95,7 @@ export function temporalRoutes(deps) {
       if(!deps.applyAction) throw new DefinitionError(503,"Управление не подключено");
       const row=await deps.lookupRun(user.id,match[1]);
       if(!row) throw new DefinitionError(404,"Запуск не найден");
-      const v=deps.store.get(user.id,row.definitionId).versions.find(x=>x.version===row.version);
+      const v=deps.store.get(user.id,row.definitionId,{deleted:true}).versions.find(x=>x.version===row.version);
       if(!v) throw new DefinitionError(404,"Версия не найдена");
       access(user,v.definition,{engines:true});
       deps.sendJson(res,200,await deps.applyAction(user.id,match[1],command));
@@ -154,6 +153,37 @@ export function temporalRoutes(deps) {
       own(user,match[1]);const b=await body(req,["draft","revision"]);
       own(user,match[1]);access(user,b.draft,{engines:true});
       deps.sendJson(res,200,deps.store.save(user.id,match[1],b.revision,b.draft));
+    }),
+    // BUG-264 п.6: delete = tombstone, no cascade. Finished runs, their files and the
+    // published versions stay (run history reads them); a running/waiting run or an
+    // active schedule blocks the delete with a reason — the owner settles them first.
+    route("DELETE",/^\/teleharness\/api\/temporal\/definitions\/([a-zA-Z0-9_-]+)$/,async({res,user,match})=>{
+      const id=match[1],{draft:{name}}=own(user,id),reasons=[];
+      if (deps.listRuns) {
+        const ids=(await deps.listRuns(user.id)).filter(e=>e.definitionId===id).map(e=>e.workflowId);
+        const cached=reader()?await reader().many(ids):ids.map(()=>null);
+        // A cached «running» may be up to ttl old — re-read those; an unreadable run (history
+        // older than 14 days, Temporal down) does not block: the tombstone keeps its version.
+        const live=await Promise.all(cached.map(async(d,i)=>d?.status==="RUNNING"?await deps.describeRun(ids[i]).catch(()=>null):d));
+        const running=live.filter(d=>d?.status==="RUNNING");
+        if (running.length) {
+          const waiting=running.filter(d=>summarizeRun(d).waiting).length;
+          reasons.push(`идёт запусков: ${running.length}${waiting?`, из них ждут вашего решения: ${waiting}`:""}. Дождитесь их завершения или отмените на вкладке «Запуски».`);
+        }
+      }
+      if (deps.schedules) {
+        let active=0;
+        for (const row of deps.schedules.list(user.id).filter(r=>r.definitionId===id)) {
+          let state;
+          try { state=await deps.schedules.describe(row); }
+          catch { throw new DefinitionError(503,"Не удалось проверить расписания пайпа в Temporal — пайп не удалён. Повторите через минуту"); }
+          if (!state.paused) active++;
+        }
+        if (active) reasons.push(`у него активные расписания: ${active}. Поставьте их на паузу на вкладке «Расписания».`);
+      }
+      if (reasons.length) throw new DefinitionError(409,`Пайп «${name}» нельзя удалить: ${reasons.join(" Кроме того, ")} Затем удалите пайп. Завершённые запуски и их файлы сохранятся.`);
+      own(user,id); // re-check after the awaits, as publish does
+      deps.sendJson(res,200,deps.store.remove(user.id,id));
     }),
     route("POST",/^\/teleharness\/api\/temporal\/definitions\/([a-zA-Z0-9_-]+)\/validate$/,({res,user,match})=>{
       const record=own(user,match[1]);access(user,record.draft,{engines:true});deps.sendJson(res,200,validateDefinition(record.draft));

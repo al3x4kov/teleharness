@@ -31,7 +31,7 @@
   --ink-pill-text: #1f1e1d;
   --drawer-bg: #1f1e1d;
   --success: #6cbf8f;
-  --error: #f07167;
+  --error: #f58a80;
   --warning: #e0b057;
   --shadow-1: 0 12px 32px rgba(0, 0, 0, 0.45);
   --shadow-float: 0 2px 6px rgba(0, 0, 0, 0.25), 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -53,7 +53,7 @@
   --input: #efeeea;
   --border: #e6e4df;
   --text: #1f1e1d;
-  --text-2: #74716b;
+  --text-2: #6c6963; /* BUG-264: AA 4.5:1 и на --input (было #74716b, 4.19) */
   --text-3: rgba(31, 30, 29, 0.48);
   --accent: #2b6cd0;
   --accent-press: #1f58b0;
@@ -66,8 +66,8 @@
   --ink-pill-text: #ffffff;
   --drawer-bg: #f2f1ee;
   --success: #2e7d5c;
-  --error: #d6403a;
-  --warning: #9a7420;
+  --error: #b8332e;
+  --warning: #87651b; /* BUG-264: AA 4.5:1 текстом на грунте и в баннере (было #9a7420, 4.04) */
   --shadow-1: 0 12px 32px rgba(40, 32, 20, 0.14);
   --shadow-float: 0 1px 3px rgba(40, 32, 20, 0.06), 0 6px 20px rgba(40, 32, 20, 0.08);
   --bubble-user: var(--input);
@@ -81,7 +81,7 @@
     --input: #efeeea;
     --border: #e6e4df;
     --text: #1f1e1d;
-    --text-2: #74716b;
+    --text-2: #6c6963; /* BUG-264: AA 4.5:1 и на --input (было #74716b, 4.19) */
     --text-3: rgba(31, 30, 29, 0.48);
     --accent: #2b6cd0;
     --accent-press: #1f58b0;
@@ -94,8 +94,8 @@
     --ink-pill-text: #ffffff;
     --drawer-bg: #f2f1ee;
     --success: #2e7d5c;
-    --error: #d6403a;
-    --warning: #9a7420;
+    --error: #b8332e;
+    --warning: #87651b; /* BUG-264: AA 4.5:1 текстом на грунте и в баннере (было #9a7420, 4.04) */
     --shadow-1: 0 12px 32px rgba(40, 32, 20, 0.14);
     --shadow-float: 0 1px 3px rgba(40, 32, 20, 0.06), 0 6px 20px rgba(40, 32, 20, 0.08);
     --bubble-user: var(--input);

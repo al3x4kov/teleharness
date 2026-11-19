@@ -159,6 +159,35 @@
   text-align: center;
 }
 
+/* BUG-264 п.5 / BUG-239: плашка квоты z.ai. Действия (flex: none) шире остатка строки на телефоне —
+   текст сжимался в колонку по слову, на 320 px кнопка наезжала на него. Текст не уже 220 px,
+   иначе действия уходят строкой ниже (вправо); подпись кнопки переносится, высота ≥ 44 px. */
+.quota-strip {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.quota-strip .stall-text {
+  flex: 1 1 220px;
+}
+
+.quota-strip .turn-error-actions {
+  flex: 0 1 auto;
+  flex-wrap: nowrap; /* на 320 px длинная кнопка переносит подпись, «Скрыть» остаётся рядом */
+  max-width: 100%;
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.quota-strip .stall-btn {
+  flex: 0 1 auto;
+  max-width: 100%;
+  height: auto;
+  min-height: 44px;
+  white-space: normal;
+  text-align: center;
+}
+
 .relay-sub {
   margin: 0 4px 8px;
   font-size: 13.5px;

@@ -133,6 +133,12 @@
   max-width: 340px;
 }
 
+/* BUG-264 п.5: на 320×640 с плашкой квоты колонка сжимала детей — «Повторить»
+   (.empty-cta, 44 px) становилась 23 px. Дети держат свой размер. */
+.chat-empty > * {
+  flex-shrink: 0;
+}
+
 /* History loading: bubble-shaped shimmer placeholders instead of a bare
    «Загрузка истории…» line (audit 2026-11-01 — preloader upgrade). */
 .chat-skeleton {

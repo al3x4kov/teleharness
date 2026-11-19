@@ -47,7 +47,10 @@ export async function startFakeOpencodeV2({
   const state = { sessions, active, permissions, forms, mcp, agents, providers, models, modelDefault, projects, configDocs, messages, diffs, commands, credentials, plugins };
 
   function route(method, p, handler) {
-    routes.set(`${method.toUpperCase()} ${p}`, handler);
+    const k = `${method.toUpperCase()} ${p}`;
+    const prev = routes.get(k); // возврат прежнего — тест может восстановить маршрут
+    routes.set(k, handler);
+    return prev;
   }
 
   // Конверт instance-ответа: эхо location из deepObject-параметра, иначе — дефолт

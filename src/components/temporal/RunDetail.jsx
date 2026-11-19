@@ -99,6 +99,9 @@ export default function RunDetail({ workflowId }) {
       {allowed("cancel") && <button class="t-btn t-danger" type="button" data-action="cancel" disabled={busy} onClick={() => setSheet("cancel")}>{t("temporal.rd.cancel")}</button>}
       {allowed("terminate") && <button class="t-btn t-ghost t-danger-text" type="button" data-action="terminate" disabled={busy} onClick={() => setSheet("terminate")}>{t("temporal.rd.terminate")}</button>}
     </>
+  ) : run.pipeDeleted ? (
+    // BUG-264 п.6: the pipe is deleted — history stays readable, nothing to restart or open.
+    <a class="t-btn" href="#/temporal">{t("temporal.rd.toRuns")}</a>
   ) : (
     <>
       <a class="t-btn t-primary" href={"#/temporal/start/" + encodeURIComponent(run.definitionId) + "?v=" + run.version}>{t("temporal.rd.rerun")}</a>
@@ -113,7 +116,7 @@ export default function RunDetail({ workflowId }) {
           <p class="t-facts"><span>{t("temporal.runs.version", { n: run.version })}</span><span>{t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}</span>
             {run.startTime && <span>{t("temporal.rd.started", { when: when(run.startTime, now) })}</span>}
             {run.startTime && <span>{running ? t("temporal.rd.running") : t("temporal.rd.took")}{duration(run.startTime, run.closeTime, now)}</span>}
-            {ACTIVE.has(kind) && <span>{t("temporal.rd.autoRefresh")}</span>}</p></div>
+            {ACTIVE.has(kind) && <span>{t("temporal.rd.autoRefresh")}</span>}{run.pipeDeleted && <span>{t("temporal.rd.pipeDeleted")}</span>}</p></div>
         <StatusPill kind={kind} />
       </div>
       {state.paused && running && <Banner icon="❚❚" title={t("temporal.rd.paused")}>{t("temporal.rd.pausedText")}</Banner>}
@@ -181,7 +184,7 @@ export default function RunDetail({ workflowId }) {
           <section class="t-card">
             <h2>{t("temporal.rd.about")}</h2>
             <dl class="t-kv">
-              <dt>{t("temporal.rd.kv.pipe")}</dt><dd><a href={"#/temporal/pipe/" + encodeURIComponent(run.definitionId)}>{run.name}</a></dd>
+              <dt>{t("temporal.rd.kv.pipe")}</dt><dd>{run.pipeDeleted ? <>{run.name} <span class="t-muted">{t("temporal.rd.kv.deleted")}</span></> : <a href={"#/temporal/pipe/" + encodeURIComponent(run.definitionId)}>{run.name}</a>}</dd>
               <dt>{t("temporal.rd.kv.version")}</dt><dd>{t("temporal.rd.kv.versionFixed", { n: run.version })}</dd>
               <dt>{t("temporal.rd.kv.run")}</dt><dd>{t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}</dd>
               {run.startTime && <><dt>{t("temporal.rd.kv.started")}</dt><dd>{when(run.startTime, now)}</dd></>}

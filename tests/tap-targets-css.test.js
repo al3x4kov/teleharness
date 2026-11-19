@@ -40,3 +40,11 @@ test("UI-ISSUE-03 (BUG-162): чип файла в сообщении (button.att
   assert.match(block(c, "button.attach.is-link::after"), /inset:\s*-4px/);
   assert.match(block(c, "button.attach.is-link"), /position:\s*relative/);
 });
+
+// BUG-264 п.5: на 320×640 с плашкой квоты пустое состояние чата («История не загрузилась»)
+// сжимало кнопку «Повторить» (.btn-primary.empty-cta, height 44px) до 23 px — дети колонки
+// .chat-empty сжимались flex-shrink'ом. Дети колонки не сжимаются, кнопка держит 44 px.
+test("BUG-264 п.5: дети .chat-empty не сжимаются — «Повторить» пустого состояния остаётся 44 px", () => {
+  assert.match(block(css("src/components/chat.css"), ".chat-empty > *"), /flex-shrink:\s*0/);
+  assert.match(block(css("src/components/views.css"), ".btn-primary"), /height:\s*44px/);
+});

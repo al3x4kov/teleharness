@@ -153,6 +153,34 @@ export async function refreshMessages(id) {
   }
 }
 
+// BUG-264 (N1): a user message that arrived as a bare info (the Claude/Codex
+// runner sends message.updated without parts; a prompt from ANOTHER client
+// has no local bubble to borrow them from) stayed an empty pill until the
+// turn-end history refresh. Only the empty user messages get their parts from
+// the stored history — the live feed (the answer being written) is untouched.
+export async function fillUserParts(id) {
+  const empty = (a) => new Set((a?.messages ?? []).filter((m) => m.info?.role === "user" && !isTmp(m) && !(m.parts?.length > 0)).map((m) => m.info.id));
+  if (active.value?.id !== id || empty(active.value).size === 0) return false;
+  try {
+    const page = await api.getMessagesPage(id, { limit: HISTORY_PAGE, directory: sessionDir(id) });
+    const stored = new Map(page.list.map((m) => makeMessage(m.info ?? m, m.parts ?? [])).map((m) => [m.info.id, m]));
+    let filled = false;
+    patchActive(id, (a) => {
+      const want = empty(a);
+      const messages = a.messages.map((m) => {
+        const twin = want.has(m.info.id) ? stored.get(m.info.id) : null;
+        if (!twin?.parts?.length) return m;
+        filled = true;
+        return { info: { ...twin.info, ...m.info }, parts: twin.parts };
+      });
+      return filled ? { ...a, messages } : a;
+    });
+    return filled;
+  } catch {
+    return false;
+  }
+}
+
 // BUG-08.8: the next older page above the oldest loaded message (scroll to
 // the top of the feed / «Загрузить ещё»). → true when a page was added.
 export async function loadOlder(id) {

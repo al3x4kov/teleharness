@@ -345,6 +345,16 @@ test("Busy sessions (FEAT-07.16 UI): age from claude `since` or first sighting, 
   assert.equal(M.settings.fmtAge(65 * 60_000), "1\u00a0ч 5\u00a0мин");
 });
 
+// BUG-264 п.3 (N3): ход, ждущий ответа человека на вопрос/разрешение (opencode или мост
+// Claude/Codex), в «Активных ходах» — «ждёт вашего ответа», а не «работает».
+test("BUG-264 п.3: busyRows — ход с открытым вопросом/разрешением помечен «ждёт вашего ответа»", () => {
+  const now = 10_000_000;
+  const rows = M.settings.busyRows({ a: { type: "busy", since: now - 60_000 }, b: { type: "busy", since: now - 30_000 } }, { asking: new Set(["a"]), now });
+  assert.equal(rows.find((r) => r.id === "a").kind, "dialog");
+  assert.equal(rows.find((r) => r.id === "b").kind, "busy");
+  assert.equal(M.settings.BUSY_KIND_RU.dialog, "settings.busy.dialog");
+});
+
 // ---------------------------------------------------------------- FEAT-03.11
 test("Access: labelled «Перевыпустить токен», consequences + «Отмена», one-time token with selection on clipboard failure", async () => {
   M.store.me.value = { id: "admin", name: "admin", role: "admin" };

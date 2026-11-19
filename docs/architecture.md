@@ -524,7 +524,7 @@ keepalive подделывался событием `busy`, запись ист�
 эффективная конфигурация с источником каждого значения и `***` у секретов.
 До 1.7.0 env читался в 10 файлах без проверки, и `NaN` тихо выключал защиту (R19).
 
-### 5.1. server.js и lib/* (схема `lib/config.js`, 64 переменных)
+### 5.1. server.js и lib/* (схема `lib/config.js`, 66 переменных)
 
 Таблица сверяется тестом `tests/docs-env-schema.test.js` со схемой `lib/config.js` (TASK-15.9):
 каждое имя схемы должно быть в таблице, дефолт — равен `def` из схемы (секреты и вычисляемые
@@ -565,6 +565,8 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_GC_EMPTY_MIN` | `30` | пустые чаты старше N минут удаляет gc; 0 — выкл. (BUG-01.48) |
 | `TELEHARNESS_INSTANCE_IDLE_MIN` | `30` | opencode-экземпляр папки чата освобождается после N минут простоя; 0 — никогда; HOME/каталог владельца не освобождаются (BUG-195) |
 | `TELEHARNESS_INSTANCE_SWEEP_MS` | `300000` | период обхода простаивающих экземпляров |
+| `TELEHARNESS_LIST_STALE_MS` | `120000` | список чатов при сбое движка: последний ответ не старше (BUG-260) |
+| `TELEHARNESS_LIST_INDEX_STALE_MS` | `600000` | затем — индекс чатов сервера не старше (список без фильтра папки; BUG-264 п.10) |
 | `TELEHARNESS_GC_INTERVAL_MS` | `600000` | период gc (пустые чаты + остатки папок тенантов, BUG-04.6) |
 | `TELEHARNESS_TURN_UNDO_ROOT` | = `TELEHARNESS_DATA_DIR\turn-undo` | бэкапы файлов последнего хода (Claude — PreToolUse hook; opencode — vault-cache; вычисляемое) |
 | `TELEHARNESS_TITLE_LLM` | `true` | автотайтлы коротким вызовом claude CLI; `false`/`0` — только эвристика (BUG-13.14) |

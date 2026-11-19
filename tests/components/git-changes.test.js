@@ -335,6 +335,8 @@ test("кадр 5: обычный пользователь — без отпра�
   await t$.waitFor(() => /Коммит · 1 файл/.test(byText(root, "button", "Коммит ·")?.textContent ?? ""));
   assert.equal(byText(root, "button", "Отправить"), null);
   assert.match(root.textContent, /Отправка в удалённый репозиторий и смена веток доступны только администратору\./);
+  // предвыбор файлов приходит с настройками отдельным запросом — под нагрузкой позже чекбоксов (флейк полного прогона 2026-11-19)
+  await t$.waitFor(() => /Коммит · 1 файл/.test(byText(root, "button", "Коммит ·")?.textContent ?? ""));
   assert.match(byText(root, "button", "Коммит ·").textContent, /Коммит · 1 файл/);
 });
 

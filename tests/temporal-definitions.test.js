@@ -63,3 +63,22 @@ test("ограничения размера и входов; зарезерви�
  const d=draft();mutate(d);assert.equal(validateDefinition(d).valid,false);
  }
 });
+test("BUG-264 п.6: удаление — надгробие: пропадает из списка и правки, версии читаются для истории, слаг занят, переживает перезапуск",async t=>{
+ const {store,file}=fixture(t);const a=store.create("owner",draft());store.publish("owner",a.id,a.revision);
+ const r=store.remove("owner",a.id);assert.equal(r.deleted,true);assert.equal(r.name,"Проверка изменений");
+ assert.deepEqual(store.list("owner"),[]);
+ assert.throws(()=>store.get("owner",a.id),{status:404});assert.throws(()=>store.remove("owner",a.id),{status:404});
+ assert.throws(()=>store.save("owner",a.id,3,draft()),{status:404});assert.throws(()=>store.publish("owner",a.id,3),{status:404});
+ assert.throws(()=>store.get("other",a.id,{deleted:true}),{status:404});
+ const restarted=new DefinitionStore({file});const tomb=restarted.get("owner",a.id,{deleted:true});
+ assert.ok(tomb.deletedAt);assert.equal(tomb.versions[0].definition.name,"Проверка изменений");
+ assert.notEqual(restarted.create("owner",draft()).slug,tomb.slug,"папка запусков старого пайпа не переходит новому");
+ // запуск, принятый до удаления, готовится по своей версии; расписание удалённого пайпа не срабатывает
+ const {prepareRun}=await import("../lib/temporal/prepare-bridge.js");const {DatabaseSync}=await import("node:sqlite");
+ const db=new DatabaseSync(":memory:");const wf="0b35f10a-c900-4c74-b290-88eb93bf3cfa",sid="1b35f10a-c900-4c74-b290-88eb93bf3cfa";
+ db.exec("CREATE TABLE starts(owner,request_id,definition_id,version,workflow_id UNIQUE,accepted,PRIMARY KEY(owner,request_id)); CREATE TABLE temporal_schedule_refs(id,owner,definition_id,version,accepted)");
+ db.prepare("INSERT INTO starts VALUES(?,?,?,?,?,1)").run("owner","k",a.id,1,wf);db.prepare("INSERT INTO temporal_schedule_refs VALUES(?,?,?,?,1)").run(sid,"owner",a.id,1);
+ const deps={db,store:restarted,getUser:id=>({id}),dirAllowed:()=>true,engineAllowed:()=>true};
+ assert.equal((await prepareRun(deps,{launchRef:wf,workflowId:wf,runId:wf})).steps.length,2);
+ await assert.rejects(prepareRun(deps,{launchRef:"schedule/"+sid,workflowId:"teleharness-scheduled-"+sid+"-2026-11-19T09:00:00Z",runId:wf}),{status:404});
+});

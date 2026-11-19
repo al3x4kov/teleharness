@@ -16,7 +16,7 @@ import {
 import { dropDialog, pushDialog } from "./dialogs.js";
 import { isChildOfActive, patchChildFeed } from "./childfeeds.js";
 import { chatGone } from "./pins.js";
-import { finalizeTurn, refreshMessages, refreshStall, releaseHeld, touchActive } from "./session.js";
+import { fillUserParts, finalizeTurn, refreshMessages, refreshStall, releaseHeld, touchActive } from "./session.js";
 import { t } from "../i18n.js";
 
 function textOf(parts) {
@@ -104,6 +104,22 @@ export function scheduleHeal(sid, { delay = HEAL_MS, refresh = refreshMessages }
   }, delay);
   t?.unref?.();
   healTimers.set(sid, t);
+}
+
+// BUG-264 (N1): a user message.updated with no parts and no local bubble (a
+// prompt sent from another client to a Claude/Codex chat) — its text is read
+// from the stored history after a short pause (opencode sends the parts as
+// message.part.updated right after the info; then nothing is fetched).
+export const USER_FILL_MS = 400;
+const fillTimers = new Map();
+function scheduleUserFill(sid, { delay = USER_FILL_MS, fill = fillUserParts } = {}) {
+  if (typeof sid !== "string" || !sid || fillTimers.has(sid)) return;
+  const t = setTimeout(() => {
+    fillTimers.delete(sid);
+    if (active.value?.id === sid) fill(sid);
+  }, delay);
+  t?.unref?.();
+  fillTimers.set(sid, t);
 }
 
 function withPartMessage(messages, props, fn) {
@@ -263,7 +279,7 @@ function reduce(evt) {
         return { ...done, turnError: err };
       });
       // A delivered tmp that never got its real twin (queued prompt, lost
-      // message.updated) was just dropped: pull the real history.
+      // message.updated) waits for the real history (mergeHistory swaps it).
       if (before && before.messages.some((m) => isTmp(m) && m.info.delivery === "delivered")) refreshMessages(p.sessionID);
       // BUG-164: the turn of the OPEN chat ended — re-read its history once,
       // a moment later (after the final parts landed). Any live frame the
@@ -285,7 +301,12 @@ function reduce(evt) {
       }
       noteIdle(p.sessionID);
       setBusyTracked(p.sessionID, false);
+      const failed = active.value?.id === p.sessionID ? active.value : null;
       patchActive(p.sessionID, (act) => ({ ...finalizeTurn(act), turnError: err ?? act.turnError ?? null }));
+      // BUG-263: a turn that failed at once (provider quota) may never have
+      // sent the user's message.updated — the delivered bubble stays and the
+      // stored history replaces it with the real message.
+      if (failed && failed.messages.some((m) => isTmp(m) && m.info.delivery === "delivered")) refreshMessages(p.sessionID);
       releaseHeld(p.sessionID, { idle: true });
       return;
     }
@@ -339,6 +360,10 @@ function reduce(evt) {
         if (info.role === "assistant" && intr && intr !== "user" && intr !== "deleted") next.incomplete = { reason: intr };
         return next;
       });
+      if (info.role === "user" && info.id && !isTmp({ info }) && active.value?.id === sid) {
+        const m = active.value.messages.find((x) => x.info.id === info.id);
+        if (m && !(m.parts?.length > 0)) scheduleUserFill(sid);
+      }
       // The answer arrived: the «ход завис» banner must go now, not on the
       // next 10 s poll (CC-21).
       if (info.role === "assistant" && info.time?.completed != null) clearPending(sid);

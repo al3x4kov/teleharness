@@ -146,6 +146,7 @@ export const api = {
   temporalSave: (id, revision, draft) => json("PUT", "/temporal/definitions/" + idPath(id), { revision, draft }),
   temporalValidate: (id) => json("POST", "/temporal/definitions/" + idPath(id) + "/validate", {}),
   temporalPublish: (id, revision) => json("POST", "/temporal/definitions/" + idPath(id) + "/publish", { revision }),
+  temporalDelete: (id) => json("DELETE", "/temporal/definitions/" + idPath(id)), // BUG-264 п.6
   // ---- auth: the long token IS the credential; a match mints the year-long
   // HttpOnly cookie (the device-stays-logged-in part). All later calls ride
   // the cookie automatically (same-origin fetch + EventSource).

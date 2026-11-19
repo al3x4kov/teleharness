@@ -14,6 +14,33 @@
 //         createPairCode, publicUrl (FEAT-18.2),
 //         getAutoRelay, setAutoRelay, cleanAutoRelay, readAutoRelay,
 //         AUTO_RELAY_ORDER_MAX, autoRelayModelOk(user, model) }
+// BUG-264 п.3: «Активные ходы» — отчёт хаба + открытые запросы моста разрешений
+// Claude/Codex (claude.dialogs()): такой ход ждёт человека, а не «работает».
+export function withBridgeDialogs(report, bridgeDialogs, now = Date.now()) {
+  const by = new Map();
+  for (const d of bridgeDialogs ?? []) {
+    if (typeof d?.sessionID !== "string") continue;
+    const cur = by.get(d.sessionID) ?? { n: 0, oldest: Infinity, dir: d.directory ?? d.dir ?? null };
+    cur.n++;
+    if (Number.isFinite(d.askedAt)) cur.oldest = Math.min(cur.oldest, d.askedAt);
+    by.set(d.sessionID, cur);
+  }
+  if (!by.size) return report;
+  const out = report.map((r) => {
+    const b = by.get(r.sessionID);
+    if (!b) return r;
+    by.delete(r.sessionID);
+    const oldest = Number.isFinite(b.oldest) ? Math.min(b.oldest, r.oldestDialogAt ?? Infinity) : r.oldestDialogAt;
+    return { ...r, state: "dialog", dialogs: (r.dialogs ?? 0) + b.n, oldestDialogAt: oldest ?? null, stalled: false };
+  });
+  for (const [sid, b] of by) {
+    const since = Number.isFinite(b.oldest) ? b.oldest : now;
+    out.push({ sessionID: sid, dir: b.dir, state: "dialog", managed: true, since, ageMs: now - since, lastEventAt: null, silentMs: null, dialogs: b.n, oldestDialogAt: Number.isFinite(b.oldest) ? b.oldest : null, pending: null, stalled: false, incompleteAt: null });
+  }
+  out.sort((a, b) => a.since - b.since);
+  return out;
+}
+
 export function adminRoutes(deps) {
   const { sendJson, apiError } = deps;
   return [
@@ -95,7 +122,7 @@ export function adminRoutes(deps) {
       method: "GET",
       path: "/teleharness/api/admin/sessions",
       scope: "admin",
-      handler: ({ res }) => sendJson(res, 200, { now: Date.now(), epoch: deps.hub.epoch, sessions: deps.hub.sessionsReport() }),
+      handler: ({ res }) => sendJson(res, 200, { now: Date.now(), epoch: deps.hub.epoch, sessions: withBridgeDialogs(deps.hub.sessionsReport(), deps.bridgeDialogs?.() ?? []) }),
     },
     // TASK-12.22: garbage report (dry-run only — nothing is deleted).
     {

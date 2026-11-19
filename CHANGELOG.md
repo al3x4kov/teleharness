@@ -6,6 +6,42 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.0.3] — 2026-11-19
+
+### Added
+- **Delete a pipe.** *Delete pipe…* in the pipe editor, with a confirmation sheet that lists the consequences. The
+  delete is refused with a reason while the pipe has a running run, a run waiting for your decision or an active
+  schedule. Finished runs and their files stay readable on the *Runs* tab, marked *pipe deleted*; a schedule of a
+  deleted pipe stays visible, paused.
+
+### Changed
+- **Compressed static assets.** Text assets are served brotli- or gzip-compressed according to `Accept-Encoding`
+  (the app bundle shrinks from about 826 KB to about 200 KB); the compressed copy is built once per file version.
+- **Contrast.** Secondary text and warnings in the light theme reach WCAG AA (at least 4.5:1).
+
+### Fixed
+- **Chats failing to open when the engine runs out of memory.** With opencode 2.x the dialogs poll woke every chat
+  folder in the engine, and the extra processes ran it out of memory. The poll now only asks folders with busy chats
+  or open questions. The chats list also survives a short engine restart: it falls back to the last good list (up to
+  2 minutes, `TELEHARNESS_LIST_STALE_MS`) and then to the server's chat index (`TELEHARNESS_LIST_INDEX_STALE_MS`).
+  Identical concurrent list and dialog reads share one engine call.
+- **Security:** a `directory` (or `location`) in the body of a new-chat request no longer overrides the checked
+  `?directory=` folder.
+- A message no longer vanishes when a turn fails at once, for example on a provider quota error.
+- **Temporal:** a run cancelled or timed out during a model step no longer holds its subscription slot forever.
+  The worker frees slots of closed runs after a grace period (one hour by default,
+  `TELEHARNESS_TEMPORAL_PERMIT_GRACE_S`; the sweep runs every `TELEHARNESS_TEMPORAL_PERMIT_SWEEP_S`, 300 s). A step
+  that is still running keeps its slot.
+- A message sent from another device shows its text at once instead of an empty bubble until the turn ends.
+- After a chat is handed to another engine, older answers and errors keep the name and colour of the engine that
+  wrote them.
+- Error details no longer drop the letter “s”.
+- The last Codex turn no longer offers *Undo turn* (Codex turns cannot be undone).
+- Settings → Active turns shows a turn waiting for your answer to a question or permission as *waiting for your
+  answer*, not *running*.
+- The usage-limit strip fits a 320 px screen; its buttons wrap their label and stay at least 44 px tall.
+- A chat binding is no longer saved under a key that is not a chat id (for example `undefined`).
+
 ## [2.0.0] — 2026-11-19
 
 ### Added
@@ -219,6 +255,7 @@ First public release under the name **Teleharness**.
 - Slash commands in admin opencode chats expand through opencode `/command`.
 - A chat deleted mid-turn no longer stays busy.
 
+[2.0.3]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.3
 [2.0.0]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.0
 [1.24.2]: https://github.com/al3x4kov/teleharness/releases/tag/v1.24.2
 [1.22.0]: https://github.com/al3x4kov/teleharness/releases/tag/v1.22.0

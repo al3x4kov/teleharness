@@ -117,6 +117,92 @@ def perform(connection, dispatch, workflow_id, step_id):
     return publish(receipt)
 
 
+def release_abandoned(connection, closed_at, now=None, grace_s=3600):
+    """BUG-266: free the slots of runs that can no longer hold an effect.
+
+    An uncertain effect holds its slot (TASK-19.8), but a run cancelled or timed
+    out during a model step never comes back to settle it — its tenant lost the
+    slot forever. A permit is released once its workflow is closed and the grace
+    period (longer than any model turn) has passed. closed_at(workflow_id) →
+    close time in epoch seconds, 0 when the history is gone, None while running
+    or unknown (kept). The claim without a receipt stays: a closed run cannot
+    repeat the operation. Returns the released (tenant, provider, operation).
+    """
+    now = time.time() if now is None else now
+    freed = []
+    rows = connection.execute(
+        "select tenant_id, provider, operation_id from temporal_permits where not released").fetchall()
+    for tenant, engine, operation in rows:
+        try:
+            workflow_id, _step = json.loads(operation)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(workflow_id, str):
+            continue
+        closed = closed_at(workflow_id)
+        if closed is None or now - closed < grace_s:
+            continue
+        released, = connection.execute("select temporal_release(%s,%s,%s)",
+                                       (tenant, engine, operation)).fetchone()
+        if released:
+            freed.append((tenant, engine, operation))
+    return freed
+
+
+async def closed_times(client, workflow_ids):
+    """BUG-266: {workflow_id: close time (epoch s)} for closed runs; 0 when the
+    history is gone (retention); running or unreachable runs are absent (kept)."""
+    from temporalio.client import WorkflowExecutionStatus as S
+    from temporalio.service import RPCError, RPCStatusCode
+    closed_states = {S.COMPLETED, S.FAILED, S.CANCELED, S.TERMINATED, S.TIMED_OUT, S.CONTINUED_AS_NEW}
+    out = {}
+    for workflow_id in workflow_ids:
+        try:
+            info = await client.get_workflow_handle(workflow_id).describe()
+        except RPCError as err:
+            if err.status == RPCStatusCode.NOT_FOUND:
+                out[workflow_id] = 0.0
+            continue
+        except Exception:  # one unreadable run keeps its slot, the pass goes on
+            continue
+        if info.status in closed_states and info.close_time is not None:
+            out[workflow_id] = info.close_time.timestamp()
+    return out
+
+
+async def sweep_abandoned_permits(client, every_s=300, grace_s=3600, connect=None, log=print):
+    """BUG-266: the worker's background pass over unreleased permits."""
+    connect = connect or psycopg.connect
+    while True:
+        try:
+            def pending():
+                with connect() as connection:
+                    ids = set()
+                    for operation, in connection.execute(
+                            "select operation_id from temporal_permits where not released"):
+                        try:
+                            workflow_id = json.loads(operation)[0]
+                        except (ValueError, TypeError, IndexError, KeyError):
+                            continue
+                        if isinstance(workflow_id, str):
+                            ids.add(workflow_id)
+                    return ids
+            ids = await asyncio.to_thread(pending)
+            if ids:
+                closed = await closed_times(client, ids)
+                def apply():
+                    with connect() as connection:
+                        with connection.transaction():
+                            return release_abandoned(connection, closed.get, grace_s=grace_s)
+                freed = await asyncio.to_thread(apply)
+                if freed:
+                    log(f"[teleharness-temporal] released {len(freed)} abandoned permit(s): "
+                        + ", ".join(f"{t}/{e}" for t, e, _ in freed))
+        except Exception as err:  # the sweep never takes the worker down
+            log(f"[teleharness-temporal] permit sweep failed: {type(err).__name__}")
+        await asyncio.sleep(every_s)
+
+
 @activity.defn(name="TeleharnessSubscriptionModelV1")
 async def subscription_model(step_id: str) -> dict:
     info = activity.info()

@@ -15,7 +15,8 @@ import {
   turnErrorFromMessages,
 } from "../src/lib/turn.js";
 import { chatBackTarget } from "../src/lib/router.js";
-import { makeMessage } from "../src/lib/normalize.js";
+import { USER_FILL_MS } from "../src/lib/store/events.js";
+import { firstUserText, makeMessage } from "../src/lib/normalize.js";
 
 const { active, busyMap, dialogs, handleEvent, notice, pendingMap, sessions, setNotice, stalled } = store;
 const SES = "ses_g4a";
@@ -738,5 +739,111 @@ test("П31.Н10: loginWithToken снимает плашку, оставшуюс�
     assert.equal(store.noticeAction.value, null);
   } finally {
     globalThis.fetch = real;
+  }
+});
+
+// ---- BUG-263 (BUG-01.87): ход opencode сразу падает ошибкой провайдера ---------
+// Живой сценарий DF-A-1: POST /prompt → 204 (пузырь «доставлен»), message.updated
+// для сообщения пользователя не пришёл, через ~3 с — session.error (лимит z.ai).
+// Конец хода выкидывал доставленный временный пузырь без перечитывания истории:
+// лента пустела, заголовок (первый текст пользователя) откатывался на «Без названия».
+test("BUG-263: session.error right after a delivered send keeps the bubble, shows the error card and re-reads history", async () => {
+  reset();
+  const bubble = makeMessage({ id: "tmp-263", role: "user", delivery: "delivered", time: { created: 1 } }, [{ type: "text", text: "df-A-glm2: привет" }]);
+  setActive({ status: "busy", messages: [bubble] });
+  const f = stubFetch((c) =>
+    c.path.endsWith("/message")
+      ? ok([{ info: { id: "msg_u263", role: "user", sessionID: SES }, parts: [{ id: "p1", type: "text", text: "df-A-glm2: привет" }] }])
+      : ok({}),
+  );
+  try {
+    handleEvent({
+      type: "session.error",
+      properties: { sessionID: SES, error: { name: "APIError", data: { message: "429 Too Many Requests: usage limit exceeded" } } },
+    });
+    assert.equal(active.value.status, "idle");
+    assert.equal(active.value.turnError?.kind, "limit", "the error card of the turn is shown");
+    assert.deepEqual(
+      active.value.messages.map((m) => m.parts[0]?.text),
+      ["df-A-glm2: привет"],
+      "the user's bubble stays in the feed at the turn end",
+    );
+    assert.equal(firstUserText(active.value.messages), "df-A-glm2: привет", "the title source is not lost");
+    await tick(20);
+    assert.ok(f.calls.some((c) => c.path.endsWith("/message")), "the history is re-read after the failed turn");
+    assert.deepEqual(active.value.messages.map((m) => m.info.id), ["msg_u263"], "the real twin replaces the bubble, no duplicate");
+    assert.equal(active.value.turnError?.kind, "limit", "the error card survives the history refresh");
+  } finally {
+    f.restore();
+    reset();
+  }
+});
+
+test("BUG-263: session.idle keeps a delivered bubble until the refreshed history shows its twin", async () => {
+  reset();
+  const bubble = makeMessage({ id: "tmp-263b", role: "user", delivery: "delivered" }, [{ type: "text", text: "второе" }]);
+  setActive({ status: "busy", messages: [bubble] });
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const f = stubFetch(async (c) => {
+    if (!c.path.endsWith("/message")) return ok({});
+    await gate;
+    return ok([{ info: { id: "msg_u2", role: "user" }, parts: [{ type: "text", text: "второе" }] }]);
+  });
+  try {
+    handleEvent({ type: "session.idle", properties: { sessionID: SES } });
+    assert.deepEqual(active.value.messages.map((m) => m.info.id), ["tmp-263b"], "no empty feed while the history is on its way");
+    release();
+    await tick(20);
+    assert.deepEqual(active.value.messages.map((m) => m.info.id), ["msg_u2"]);
+  } finally {
+    f.restore();
+    reset();
+  }
+});
+
+// ---- BUG-264 п.1 (N1): Claude-ход, отправленный с другого клиента ---------------
+// Раннер Claude шлёт message.updated (user) только с info — без частей. В окне,
+// где этого сообщения не отправляли, пузырь оставался пустой «таблеткой» до
+// перечитывания истории в конце хода. Свой id чата — отложенное перечитывание
+// (scheduleHeal) из прошлых тестов не должно попасть в этот.
+const N1 = "ses_n1_other_client";
+test("BUG-264 N1: a user message from another client gets its text from history while the turn runs", async () => {
+  reset();
+  const live = makeMessage({ id: "msg_a_live", role: "assistant", parentID: "msg_u_other" }, [{ id: "pa", type: "text", text: "пишу…" }]);
+  setActive({ id: N1, status: "busy", messages: [] });
+  const f = stubFetch((c) =>
+    c.path.endsWith("/message")
+      ? ok([
+          { info: { id: "msg_u_other", role: "user", sessionID: N1 }, parts: [{ id: "pu", type: "text", text: "с телефона" }] },
+        ])
+      : ok({}),
+  );
+  try {
+    handleEvent({ type: "message.updated", properties: { sessionID: N1, info: { id: "msg_u_other", sessionID: N1, role: "user", time: { created: 1 } } } });
+    active.value = { ...active.value, messages: [...active.value.messages, live] };
+    await tick(USER_FILL_MS + 150);
+    const user = active.value.messages.find((m) => m.info.id === "msg_u_other");
+    assert.equal(user?.parts?.[0]?.text, "с телефона", "the bubble shows the text before the turn ends");
+    assert.ok(active.value.messages.some((m) => m.info.id === "msg_a_live"), "the live answer is not thrown away");
+    assert.equal(active.value.status, "busy");
+  } finally {
+    f.restore();
+    reset();
+  }
+});
+
+test("BUG-264 N1: no history fetch when the parts arrive live (opencode)", async () => {
+  reset();
+  setActive({ id: N1, status: "busy", messages: [] });
+  const f = stubFetch(() => ok([]));
+  try {
+    handleEvent({ type: "message.updated", properties: { sessionID: N1, info: { id: "msg_u_oc", sessionID: N1, role: "user" } } });
+    handleEvent({ type: "message.part.updated", properties: { sessionID: N1, part: { id: "p", messageID: "msg_u_oc", type: "text", text: "живой" } } });
+    await tick(USER_FILL_MS + 150);
+    assert.equal(f.calls.filter((c) => c.path.endsWith("/message")).length, 0);
+  } finally {
+    f.restore();
+    reset();
   }
 });

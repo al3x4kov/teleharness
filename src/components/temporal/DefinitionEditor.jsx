@@ -10,7 +10,7 @@ import { navigate, setLeaveGuard } from "../../lib/router.js";
 import { me } from "../../lib/store.js";
 import { projectDisplayName } from "../../lib/normalize.js";
 import { validateDefinition, sameDefinition } from "../../../shared/temporal-definition.js";
-import { Banner, STEP_TYPES_UI, errorText, hashQuery } from "./ui.jsx";
+import { Banner, Sheet, STEP_TYPES_UI, errorText, hashQuery } from "./ui.jsx";
 import { unsupportedReasons } from "./readiness.js";
 import { inputToken, stepToken } from "../../../shared/temporal-template.js";
 import { TEMPLATES } from "./PipesList.jsx";
@@ -191,6 +191,7 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
   const [error, setError] = useState(""), [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(() => (record ? null : draft.steps[0]?.id ?? null)), [adding, setAdding] = useState(false);
   const [showIssues, setShowIssues] = useState(false), [removed, setRemoved] = useState(null);
+  const [deleting, setDeleting] = useState(null); // BUG-264 п.6: null | { busy, error, gone }
   const savedAt = useRef(record ? new Date() : null);
   const latest = useRef({ draft, saved, dirty });
   latest.current = { draft, saved, dirty };
@@ -275,6 +276,21 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
       if (e.status === 409 && e.body?.unchanged) setError(t("temporal.ed.unchanged", { n: e.body.unchanged })); // the server's «nothing changed» (not a revision conflict)
       else if (e.status === 409) setStatus("conflict"); else setError(errorText(e));
     } finally { setBusy(false); }
+  }
+
+  // BUG-264 п.6: delete without cascade — the server refuses (409) while runs go or a schedule is on.
+  async function deletePipe() {
+    setDeleting({ busy: true });
+    try {
+      await api.temporalDelete(saved.id);
+      latest.current.dirty = false; setDirty(false); setDeleting(null);
+      navigate("/temporal/pipes");
+    } catch (e) {
+      const error = e.status === 409 ? e.body?.error || t("temporal.ed.deleteBusy")
+        : e.status === 403 ? t("temporal.ed.deleteNoAccess")
+          : e.status === 404 ? t("temporal.ed.deleteGone") : errorText(e);
+      setDeleting({ error, gone: e.status === 404 });
+    }
   }
 
   const validation = validateDefinition(draft, { tr: t });
@@ -394,8 +410,26 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
               </ul>
             </section>
           )}
+          {saved && (
+            <section class="t-card">
+              <button class="t-btn t-danger t-block" type="button" data-action="delete-pipe" onClick={() => setDeleting({})}>{t("temporal.ed.delete")}</button>
+            </section>
+          )}
         </aside>
       </div>
+      {deleting && (
+        <Sheet title={t("temporal.ed.deleteTitle", { name: saved.draft?.name || draft.name || t("temporal.untitled") })} onClose={() => setDeleting(null)}>
+          <ul class="t-consequences"><li>{t("temporal.ed.deleteC1")}</li>
+            <li>{t("temporal.ed.deleteC2")}</li>
+            <li>{t("temporal.ed.deleteC3")}</li></ul>
+          {deleting.error && <p class="t-err-text" role="alert">{deleting.error}</p>}
+          <div class="t-row t-stretch">
+            {deleting.gone ? <button class="t-btn t-primary" type="button" onClick={() => { latest.current.dirty = false; setDirty(false); navigate("/temporal/pipes"); }}>{t("temporal.view.toPipes")}</button> : <>
+              <button class="t-btn" type="button" onClick={() => setDeleting(null)}>{t("temporal.ed.keep")}</button>
+              <button class="t-btn t-danger-fill" type="button" data-action="confirm-delete" disabled={deleting.busy} onClick={deletePipe}>{deleting.busy ? t("temporal.ed.deleting") : t("temporal.ed.deleteConfirm")}</button></>}
+          </div>
+        </Sheet>
+      )}
       <div class="t-savebar">
         <span class="t-muted t-small t-hide-phone t-grow">{statusText}</span>
         <button class="t-btn t-primary" type="button" data-action="publish" aria-disabled={!validation.valid ? "true" : undefined} disabled={busy || unchanged} title={unchanged ? t("temporal.ed.changeToPublish") : undefined} onClick={publish}>

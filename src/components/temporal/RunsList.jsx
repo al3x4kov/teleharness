@@ -31,7 +31,7 @@ export function RunRow({ run, now }) {
       <span class={"t-runicon " + (KINDS[kind] ?? KINDS.unavailable).cls} aria-hidden="true">{(KINDS[kind] ?? KINDS.unavailable).icon}</span>
       <span class="t-runmain">
         <b>{run.name}</b>
-        <span class="t-meta">{t("temporal.runs.version", { n: run.version })} · {t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}{s.startTime ? " · " + when(s.startTime, now) : ""}</span>
+        <span class="t-meta">{run.pipeDeleted ? t("temporal.runs.pipeDeleted") : ""}{t("temporal.runs.version", { n: run.version })} · {t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}{s.startTime ? " · " + when(s.startTime, now) : ""}</span>
       </span>
       <span class="t-runside">
         <StatusPill kind={kind} />

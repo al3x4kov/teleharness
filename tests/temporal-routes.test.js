@@ -137,3 +137,59 @@ test("BUG-259: повторная публикация без изменений
  const sv2=await call("PUT",`/definitions/${a.body.id}`,{revision:p3.body.revision,draft:{steps:d.steps,inputs:d.inputs,directory:d.directory,name:d.name}});
  assert.equal((await call("POST",`/definitions/${a.body.id}/publish`,{revision:sv2.body.revision})).status,409);
 });
+
+// BUG-264 п.6: удаление пайпа. Без каскада: запуски и расписания не трогаются;
+// идущие запуски и активные расписания — отказ 409 с причиной; история читается.
+const T=(id,status,state=null)=>({workflowId:id,runId:"r",status,state});
+async function published(call){const a=await call("POST","/definitions",{draft:draft()});await call("POST",`/definitions/${a.body.id}/publish`,{revision:1});return a.body.id;}
+test("BUG-264 п.6: владелец удаляет пайп, повтор — 404; чужой тенант и admin — 404; отозванная папка — 403",async t=>{
+ const {call,deps}=fixture(t);const id=await published(call);
+ assert.equal((await call("DELETE",`/definitions/${id}`,undefined,{id:"bob",role:"tenant"})).status,404);
+ assert.equal((await call("DELETE",`/definitions/${id}`,undefined,{id:"admin",role:"admin"})).status,404);
+ deps.dirAllowed=()=>false;
+ assert.equal((await call("DELETE",`/definitions/${id}`)).status,403);
+ deps.dirAllowed=(_u,d)=>d===path.resolve("project");
+ const del=await call("DELETE",`/definitions/${id}`);assert.equal(del.status,200);assert.equal(del.body.id,id);assert.equal(del.body.deleted,true);
+ assert.deepEqual((await call("GET","/definitions")).body,[]);
+ for(const [method,suffix] of [["DELETE",""],["GET",""],["PUT",""],["POST","/publish"],["POST","/validate"]])
+  assert.equal((await call(method,`/definitions/${id}${suffix}`,{draft:draft(),revision:2})).status,404,method+suffix);
+ assert.equal((await call("DELETE","/definitions/not-a-uuid")).status,404);
+ // admin удаляет свой пайп по тем же правилам
+ const own=await published((m,u,b)=>call(m,u,b,{id:"admin",role:"admin"}));
+ assert.equal((await call("DELETE",`/definitions/${own}`,undefined,{id:"admin",role:"admin"})).status,200);
+});
+test("BUG-264 п.6: идущий запуск и ждущее решение — 409 с причиной; после завершения удаляется, история запусков читается",async t=>{
+ const {call,deps}=fixture(t);const id=await published(call);
+ let states={w1:T("w1","RUNNING",{paused:false,pending:["wait"],steps:{wait:"running"}}),w2:T("w2","COMPLETED",{steps:{wait:"completed"}})};
+ deps.listRuns=async owner=>owner==="alice"?[{owner,workflowId:"w1",definitionId:id,version:1,accepted:1,inputs:"{}"},{owner,workflowId:"w2",definitionId:id,version:1,accepted:1,inputs:"{}"}]:[];
+ deps.lookupRun=async(owner,w)=>(await deps.listRuns(owner)).find(r=>r.workflowId===w);
+ deps.describeRun=async w=>states[w];
+ deps.results={steps:()=>["wait"],read:async()=>"ответ",runFolder:()=>null,chats:()=>({})};
+ const busy=await call("DELETE",`/definitions/${id}`);assert.equal(busy.status,409);
+ assert.match(busy.body.error,/идёт запусков: 1/);assert.match(busy.body.error,/ждут вашего решения: 1/);assert.match(busy.body.error,/«Запуски»/);
+ assert.equal((await call("GET","/definitions")).body.length,1);
+ states.w1=T("w1","RUNNING",{paused:true,pending:[],steps:{wait:"running"}});
+ assert.equal((await call("DELETE",`/definitions/${id}`)).status,409,"на паузе — тоже идущий");
+ // отменили только что: кеш сводок ещё держит RUNNING — удаление перечитывает такие запуски
+ states.w1=T("w1","CANCELED",null);
+ assert.equal((await call("DELETE",`/definitions/${id}`)).status,200);
+ const runs=await call("GET","/runs");
+ assert.equal(runs.status,200);assert.equal(runs.body.length,2);assert.equal(runs.body[0].name,"Review");assert.equal(runs.body[0].pipeDeleted,true);
+ const detail=await call("GET","/runs/w2");assert.equal(detail.status,200);assert.equal(detail.body.name,"Review");assert.equal(detail.body.pipeDeleted,true);
+ assert.equal((await call("GET","/runs/w2/results/wait")).body.text,"ответ");
+ assert.equal((await call("GET","/runs/w2",undefined,{id:"bob",role:"tenant"})).status,404);
+ // новый запуск удалённого пайпа невозможен
+ deps.startPipeline=async()=>({});deps.validatePipeline=()=>{};
+ assert.equal((await call("POST","/runs",{definitionId:id,version:1,requestId:"11e48cdf-3352-49d3-a8d0-4156afd3655e"})).status,404);
+});
+test("BUG-264 п.6: активное расписание — 409; на паузе — не мешает; Temporal не ответил — 503, пайп цел",async t=>{
+ const {call,deps}=fixture(t);const id=await published(call);
+ let paused=false,down=false;
+ deps.schedules={list:owner=>owner==="alice"?[{id:"s1",definitionId:id,version:1},{id:"s2",definitionId:"other",version:1}]:[],
+  describe:async row=>{if(down)throw new Error("down");return {...row,paused:row.id==="s1"?paused:false,nextTimes:[]};}};
+ const r=await call("DELETE",`/definitions/${id}`);assert.equal(r.status,409);
+ assert.match(r.body.error,/активные расписания: 1/);assert.match(r.body.error,/паузу/);assert.match(r.body.error,/«Расписания»/);
+ down=true;assert.equal((await call("DELETE",`/definitions/${id}`)).status,503);
+ assert.equal((await call("GET","/definitions")).body.length,1);
+ down=false;paused=true;assert.equal((await call("DELETE",`/definitions/${id}`)).status,200);
+});

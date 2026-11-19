@@ -13,6 +13,7 @@ import { config, configErrors, configSources, describeConfig, PROD_UPSTREAM_PORT
 import { mockHandler } from "./lib/mock.js";
 import { pageParams, paginateMessages, proxyRequest } from "./lib/proxy.js";
 import { applySecurityHeaders, serveStatic } from "./lib/static.js";
+import { createListCache } from "./lib/list-cache.js"; // BUG-260
 import { setCapped } from "./lib/capped-map.js";
 import { EventHub } from "./lib/hub.js";
 import { createOcClient } from "./lib/oc-client.js"; // FEAT-16.3 (3.3): клиент для хаба
@@ -1371,6 +1372,7 @@ const API_ROUTES = validateTable([
   }),
   ...adminRoutes({
     sendJson, apiError, readJsonBody, bodyLimit: DEFAULT_OPTS.bodyLimit, listUsers, createUser, regenerateToken, updateUser,
+    bridgeDialogs: () => claude.dialogs(), // BUG-264 п.3
     deleteAccount, closeUserStreams, hub, fetchSessionIndex, sessionIndex: () => sessionIndex, planGc, dataDir: DATA_DIR, path,
     runEmptyChatGc, emptyChatGcInput, gcEmptyMin: config.TELEHARNESS_GC_EMPTY_MIN, pendingRemovals, ownerlessTenantDirs,
     lastGc: () => lastGc, gcRunning: () => gcRunning, gcSweep, rotateOwnToken, setAuthCookie, createSession, isHttps,
@@ -2475,26 +2477,46 @@ const withClaudeActivity = (list) =>
     return Number.isFinite(up) && up >= at ? s : { ...s, time: { ...s.time, updated: at } };
   });
 
+const sessionListCache = createListCache({ staleMs: config.TELEHARNESS_LIST_STALE_MS }); // BUG-260
+
 // GET: admins stream the full upstream list; tenants get the
 // SERVER-filtered list. Every record carries the chat binding under `teleharness`.
 async function sessionListRoute({ req, res, url, user, admin, match }) {
   const p = url.pathname;
   const q = url.search;
+  // BUG-260: одинаковые одновременные чтения — один поход в движок; при его
+  // сбое — последний удачный список (≤ 2 мин) вместо 502. Ключ — upstream-запрос
+  // (фильтр тенанта применяется ниже к каждому ответу, кэш общий и сырой).
+  const dirHint = OC.api === "v2" && admin ? url.searchParams.get("directory") : null;
+  const key = OC.api === "v2" ? `v2:${dirHint ?? ""}` : `v1:${admin ? q : ""}`;
   try {
-    let list = null;
-    if (OC.api === "v2") {
-      // №1: /api/session фильтруется обычным ?directory=; админ-хвосты прочих
-      // query-параметров v1 не переносятся (их у списка нет) (tasks 3.2)
-      const dirHint = admin ? url.searchParams.get("directory") : null;
-      list = await OC.listSessions(dirHint ? { directory: dirHint } : {}, { timeoutMs: DEFAULT_OPTS.timeoutMs });
-      if (!Array.isArray(list)) return sendJson(res, 502, { error: "upstream: bad list" });
-    } else {
-      const r = await fetch(`${UPSTREAM}${admin ? withQuery("/session", q) : "/session"}`, {
-        headers: { accept: "application/json" },
-        signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
-      });
-      if (!r.ok) return sendJson(res, 502, { error: `upstream: ${r.status}` });
-      list = await r.json();
+    let list;
+    try {
+      ({ value: list } = await sessionListCache.get(key, async () => {
+        if (OC.api === "v2") {
+          // №1: /api/session фильтруется обычным ?directory=; админ-хвосты прочих
+          // query-параметров v1 не переносятся (их у списка нет) (tasks 3.2)
+          const l = await OC.listSessions(dirHint ? { directory: dirHint } : {}, { timeoutMs: DEFAULT_OPTS.timeoutMs });
+          if (!Array.isArray(l)) throw Object.assign(new Error("upstream: bad list"), { listError: "upstream: bad list" });
+          return l;
+        }
+        const r = await fetch(`${UPSTREAM}${admin ? withQuery("/session", q) : "/session"}`, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
+        });
+        if (!r.ok) throw Object.assign(new Error(`upstream: ${r.status}`), { listError: `upstream: ${r.status}` });
+        return r.json();
+      }));
+    } catch (err) {
+      // BUG-264 п.10: движок перезапускается (выкат) — общий список без фильтра папки
+      // берётся из индекса чатов сервера (тот же /api/session, обновляется постоянно).
+      const idxAge = Date.now() - sessionIndex.at;
+      if (key === "v2:" && sessionIndex.at > 0 && idxAge <= config.TELEHARNESS_LIST_INDEX_STALE_MS && sessionIndex.recById?.size) {
+        list = [...sessionIndex.recById.values()];
+      } else {
+        if (err?.listError) return sendJson(res, 502, { error: err.listError });
+        throw err;
+      }
     }
     if (!Array.isArray(list)) return sendJson(res, 200, list);
     const out = (admin ? list : list.filter((s) => dirAllowed(user, s?.directory))).filter((s) => !isTempSessionDir(s?.directory));
@@ -2525,7 +2547,9 @@ async function sessionCreateRoute({ req, res, url, user, admin, match }) {
   const body = await readJsonBody(req, DEFAULT_OPTS.bodyLimit);
   const enrollmentProblem=chatRouting.checkCreate();
   if (enrollmentProblem) return sendJson(res,503,enrollmentProblem);
-  const { model: wantModel, agent: wantAgent, ...upBody } = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  // BUG-262: папку задаёт только проверенный ?directory= (dirAllowed, абсолютный путь);
+  // directory/location из тела отбрасываются — иначе они перекрывали проверенную папку.
+  const { model: wantModel, agent: wantAgent, directory: _bodyDir, location: _bodyLoc, ...upBody } = body && typeof body === "object" && !Array.isArray(body) ? body : {};
   // ADR-004: the requested binding is policy-checked before the create.
   let want = makeBinding({ model: wantModel, agent: wantAgent }, { claudeAgentOk: (a) => admin && claudeAgents.has(a) });
   if (want && !engineAllowed(user, want.engine)) return sendJson(res, 403, { error: "engine not allowed" });
@@ -2635,7 +2659,8 @@ async function dialogReplyRoute({ req, res, url, user, admin, match }) {
     // v2: ответpermission — {decision} на /api/session/:sid/permission/:rid/reply,
     // ответ формы — {answer:{...}} (Э5). Адрес диалога — из открытых диалогов хаба
     // (для админа тоже: ?directory клиента не доверенный якорь).
-    const open = (await hub.collectDialogs()).find((e) => e?.id === m[2] && (admin || dirAllowed(user, e.directory ?? e.dir)));
+    // BUG-260: ?directory= клиента — только подсказка, где искать (без веера по всем папкам)
+    const open = (await hub.collectDialogs({ alsoDirs: [url.searchParams.get("directory")] })).find((e) => e?.id === m[2] && (admin || dirAllowed(user, e.directory ?? e.dir)));
     if (!open) {
       req.resume();
       return sendJson(res, 404, { error: "dialog not found" });
@@ -2983,6 +3008,11 @@ function route(req, res, url) {
     if (rateLimited(a.user, req.method)) {
       req.resume();
       return sendJson(res, 429, { error: "слишком много запросов, повторите через минуту" });
+    }
+    // BUG-260: изменение через API — следующие чтения списка чатов не склеиваются с начатыми до него
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      sessionListCache.bump();
+      res.once("finish", () => sessionListCache.bump());
     }
     Promise.resolve()
       .then(() => handleApi(req, res, url, a.user))

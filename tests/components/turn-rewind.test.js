@@ -168,3 +168,24 @@ test("BUG-145: opencode-чат в git-папке — шит объясняет, 
   await t$.flush();
   assert.equal(calls("POST", "revert").length, 0);
 });
+
+// R-2 (повторный dogfood 2.0.2): у хода Codex отмены нет (сервер — 409 «undo is not
+// available for Codex turns»), а меню «⋯ → Отменить ход» показывалось и давало
+// неверную причину в тосте. Для последнего ответа Codex меню хода не показывается.
+test("R-2: последний ответ Codex — нет «⋯ → Отменить ход»; «Сгенерировать заново» остаётся", async () => {
+  const codexSession = { ...SESSION, teleharness: { ...SESSION.teleharness, engine: "codex", model: { providerID: "openai-codex", modelID: "gpt-6.2-astra" } } };
+  const codexMsg = (id, role, text, at) => {
+    const m = msg(id, role, text, at);
+    if (role === "assistant") m.info = { ...m.info, providerID: "openai-codex", modelID: "gpt-6.2-astra" };
+    return m;
+  };
+  installFetch([
+    { method: "GET", path: "/teleharness/api/session", reply: () => [codexSession] },
+    { method: "GET", path: `/teleharness/api/session/${SID}/message`, reply: () => [codexMsg("u1", "user", "Вопрос", 0), codexMsg("a1", "assistant", "Ответ Codex", 10)] },
+  ]);
+  ui.store.sessions.value = [codexSession];
+  const v = t$.mount(ui.ChatView, { id: SID });
+  await t$.waitFor(() => $$(v.root, ".msg").length >= 2);
+  assert.equal($$(v.root, 'button[aria-label="Действия с ходом"]').length, 0, "у хода Codex нет меню отмены");
+  assert.equal($$(v.root, 'button[aria-label="Сгенерировать заново"]').length, 1, "«Сгенерировать заново» остаётся");
+});

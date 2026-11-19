@@ -168,3 +168,33 @@ test("плашка лимита переносит действия под те�
   assert.match(body(".turn-error .stall-btn"), /white-space: normal/);
   assert.match(body(".turn-error .stall-btn"), /min-height: 44px/);
 });
+
+// BUG-264 п.5 (усиление BUG-239): на 320 px кнопка «Продолжить в …» плашки квоты наезжала на текст —
+// .turn-error-actions с flex: none шире остатка строки, а текст (min-width: 0) сжимался в колонку по слову.
+// Плашка квоты переносится: текст не уже 220 px, иначе действия уходят строкой ниже.
+test("BUG-264 п.5: плашка квоты на узком экране — действия под текстом, кнопки ≥ 44 px и переносят подпись", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync(new URL("../../src/components/relay.css", import.meta.url), "utf8").replace(/\r/g, "");
+  // все блоки, где селектор стоит в строке перед «{» (в т.ч. последним в группе)
+  const body = (sel) => {
+    const parts = css.split("\n" + sel + " {").slice(1);
+    assert.ok(parts.length, "нет правила " + sel);
+    return parts.map((p) => p.slice(0, p.indexOf("}"))).join("\n");
+  };
+  assert.match(body(".quota-strip"), /flex-wrap: wrap/);
+  assert.match(body(".quota-strip .stall-text"), /flex: 1 1 220px/);
+  assert.match(body(".quota-strip .turn-error-actions"), /flex: 0 1 auto/);
+  assert.match(body(".quota-strip .turn-error-actions"), /max-width: 100%/);
+  assert.match(body(".quota-strip .turn-error-actions"), /margin-left: auto/);
+  assert.match(body(".quota-strip .stall-btn"), /white-space: normal/);
+  assert.match(body(".quota-strip .stall-btn"), /min-height: 44px/);
+  assert.match(body(".quota-strip .stall-btn"), /max-width: 100%/);
+  // структура, на которую опираются правила
+  const low = [{ id: "zai", title: "z.ai", state: "ok", windows: [{ kind: "week", number: 1, percent: 100, resetAt: T0 + 3600_000 }] }];
+  const h = await openChat({ teleharness: glmBinding, cards: low });
+  const strip = await t$.waitFor(() => $(h.root, ".quota-strip"));
+  assert.ok($(strip, ":scope > .stall-text"), "текст — прямой потомок плашки");
+  const actions = $(strip, ":scope > .turn-error-actions");
+  assert.ok(actions, "действия — прямой потомок плашки");
+  assert.ok($$(actions, "button.stall-btn").length >= 2, "кнопки плашки — .stall-btn: " + actions.outerHTML);
+});
