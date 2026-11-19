@@ -494,3 +494,42 @@
 .sa-main { display: block; }
 .sa-task { display: block; }
 .sa-steps small { font-size: 13.5px; color: var(--text-2); font-weight: 400; }
+
+/* BUG-267: строка-группа однотипных шагов — кнопка во всю ширину (тап-цель 40 px по высоте
+   (отрицательные поля сохраняют ритм списка)), «· ещё N» вне многоточия, шеврон справа;
+   раскрытые шаги группы — списком с отступом под значком. */
+.sa-steps li.sa-grp-row { display: block; }
+.sa-grp {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  margin: -11px 0;
+  padding: 11px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sa-grp > i { width: 14px; flex: none; text-align: center; font-style: normal; color: var(--success); }
+.sa-grp-t { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-steps .sa-grp-n { flex: none; white-space: nowrap; }
+.sa-grp-chev { flex: none; width: 18px; height: 18px; margin-left: auto; align-self: center; color: var(--text-3); display: grid; place-items: center; transition: transform 0.15s; }
+.sa-grp-chev svg { display: block; width: 18px; height: 18px; }
+.sa-grp-chev.is-open { transform: rotate(180deg); }
+.sa-grp:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.sa-grp-list {
+  list-style: none;
+  margin: 10px 0 2px;
+  padding: 0 0 0 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-left: 1px solid var(--border);
+  margin-left: 6px;
+}
+.sa-dropped { font-size: 12.5px; color: var(--text-2); }
+@media (prefers-reduced-motion: reduce) { .sa-grp-chev { transition: none; } }

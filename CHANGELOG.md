@@ -6,6 +6,26 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.0.4] — 2026-11-20
+
+### Added
+- **Paste files into a chat.** Ctrl/⌘+V in the message field attaches images and files from the clipboard — in a
+  chat with any model and engine, through the same path, limits and chips as the paperclip. A screenshot without a
+  name becomes *Screenshot YYYY-MM-DD HH-MM-SS.png* (unique within the message). Plain text pastes as text, also
+  when an office app puts a rendered picture next to it; text longer than 5000 characters is attached as
+  *Pasted text YYYY-MM-DD HH-MM-SS.txt* instead of flooding the field.
+- **Drag and drop files into a chat.** Dragging files over the chat area (feed and composer) shows *Drop to attach*
+  with the number of files; dropping attaches them. Folders are refused with a reason while the other files attach;
+  while the chat is stopping the zone reads *Can't attach right now*; a file dropped anywhere in the window never
+  opens in place of the app. Dragging text or links does not show the zone. Light and dark themes.
+
+### Fixed
+- **Subagent card hid most of its steps.** The header said, for example, *40 steps* while the expanded card showed
+  two to five lines: runs of same-kind steps (mostly commands with Claude) were merged into one line, its *N more*
+  was cut off by the ellipsis, and *Show all steps* only appeared above eight lines. A merged line now opens on tap,
+  its counter is always visible, *Show all steps (N)* lists every step on its own line, and the header counts all
+  steps. Claude subagents keep up to 200 steps (was 40); beyond that the card says *Showing 200 of N steps*.
+
 ## [2.0.3] — 2026-11-19
 
 ### Added

@@ -142,15 +142,15 @@ test("FEAT-01.77: запуск без task_started — teleharnessRun строи
   assert.equal(tr.feed({ type: "assistant", parent_tool_use_id: "toolu_none", message: { content: [{ type: "text", text: "x" }] } }).length, 0);
 });
 
-test("FEAT-01.77: потолок 40 шагов — дальше stepsDropped растёт; stopRuns() гасит работающий запуск", () => {
+test("FEAT-01.77, BUG-267: потолок 200 шагов — дальше stepsDropped растёт; stopRuns() гасит работающий запуск", () => {
   const tr = make();
   tr.feed({ type: "stream_event", event: { type: "message_start", message: { id: "m1" } } });
   tr.feed({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "toolu_cap", name: "Agent", input: {} } } });
-  const blocks = Array.from({ length: 45 }, (_, i) => ({ type: "tool_use", id: `s${i}`, name: "Read", input: { file_path: `f${i}.txt` } }));
+  const blocks = Array.from({ length: 213 }, (_, i) => ({ type: "tool_use", id: `s${i}`, name: "Read", input: { file_path: `f${i}.txt` } }));
   tr.feed({ type: "assistant", parent_tool_use_id: "toolu_cap", message: { id: "s", content: blocks } });
   let z = tr.parts().find((p) => p.tool === "task").state.metadata.teleharnessRun;
-  assert.equal(z.steps.length, 40);
-  assert.equal(z.stepsDropped, 5);
+  assert.equal(z.steps.length, 200);
+  assert.equal(z.stepsDropped, 13);
 
   const ops = tr.stopRuns();
   assert.equal(ops.length, 1, "одна операция на часть с работающим запуском");

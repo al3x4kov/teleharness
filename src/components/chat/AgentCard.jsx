@@ -162,7 +162,9 @@ export default function AgentCard({
     else if (run.endedAt != null && Number(run.endedAt) > 0) dur = fmtDuration(Math.max(0, Number(run.endedAt) - Number(run.startedAt)));
   }
   const steps = Array.isArray(run.steps) ? run.steps : [];
-  const nSteps = steps.length;
+  // BUG-267: полное число шагов = сохранённые + сброшенные сервером сверх потолка
+  const dropped = Number(run.stepsDropped) > 0 ? Math.floor(Number(run.stepsDropped)) : 0;
+  const nSteps = steps.length + dropped;
   const tokensStr = state === "done" && Number.isFinite(Number(run.tokens)) && Number(run.tokens) > 0 ? fmtNum(Number(run.tokens)) : "";
 
   // Раскрытие: управляемое (expanded/onToggle) или собственное состояние
@@ -174,10 +176,21 @@ export default function AgentCard({
   // «Показать все шаги» / «Показать полностью» — локальные, живут до размонтирования
   const [allSteps, setAllSteps] = useState(false);
   const [fullOutput, setFullOutput] = useState(false);
+  // BUG-267: раскрытые строки-группы (ключ — id первого шага группы)
+  const [openGroups, setOpenGroups] = useState(() => new Set());
+  const toggleGroup = (key) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   // TASK-01.79: подряд однотипные завершённые шаги — одна строка (кадр 3);
-  // лимит «8 строк + Показать все шаги» — по строкам после группировки
+  // лимит «8 строк». BUG-267: «Показать все шаги (N)» — и когда строк меньше,
+  // чем шагов (группы прячут шаги), и показывает каждый шаг отдельной строкой.
   const groups = groupSteps(steps);
-  const shownSteps = allSteps ? groups : groups.slice(0, 8);
+  const canShowAll = groups.length > 8 || groups.length < steps.length;
+  const shownSteps = allSteps ? steps : groups.slice(0, 8);
   // TASK-01.79 (BUG-227): ответ без служебных обёрток, рендерится как в ленте
   const output = typeof run.output === "string" && run.output ? cleanAgentOutput(run.output) : "";
   const outLines = output ? output.split("\n").length : 0;
@@ -236,9 +249,60 @@ export default function AgentCard({
         <div class="sa-body">
           {nSteps > 0 && (
             <ul class="sa-steps">
-              {shownSteps.map((s) => {
+              {shownSteps.map((s, gi) => {
                 // TASK-01.79: группа завершённых шагов — одна строка: глагол +
-                // первые два объекта + «· ещё N» и note мелким (кадр 3)
+                // первые два объекта + «· ещё N» и note мелким (кадр 3).
+                // BUG-267: группа из нескольких шагов — кнопка, раскрывает свои шаги
+                if (Array.isArray(s?.objects) && s.count > 1) {
+                  const { verb } = label({ kind: s.kind, tool: s.tool, status: "done", object: s.objects[0] ?? "" }) ?? {};
+                  const objs = s.objects.slice(0, 2).filter(Boolean);
+                  const key = s.id ?? `g${gi}`;
+                  const open = openGroups.has(key);
+                  const start = steps.findIndex((x) => x?.id === s.id);
+                  const members = start >= 0 ? steps.slice(start, start + s.count) : [];
+                  return (
+                    <li key={key} class="sa-grp-row">
+                      <button type="button" class="sa-grp" aria-expanded={open ? "true" : "false"} onClick={() => toggleGroup(key)}>
+                        <i aria-hidden="true">{StepMark.done}</i>
+                        <span class="sa-grp-t">
+                          {verb}
+                          {objs.map((o, i) => (
+                            <span key={o + i}>
+                              {i === 0 && verb ? " " : i > 0 ? ", " : ""}
+                              <code>{o}</code>
+                            </span>
+                          ))}
+                        </span>
+                        {s.count > 2 && <small class="sa-grp-n"> · {t("agent.more", { n: s.count - 2 })}</small>}
+                        {s.note ? <small class="sa-grp-n"> · {s.note}</small> : null}
+                        <span class={"sa-grp-chev" + (open ? " is-open" : "")} aria-hidden="true">
+                          <ChevIcon />
+                        </span>
+                      </button>
+                      {open && members.length > 0 && (
+                        <ul class="sa-grp-list">
+                          {members.map((m) => {
+                            const { verb: v, object: o } = label(m) ?? {};
+                            return (
+                              <li key={m.id}>
+                                <i aria-hidden="true">{StepMark.done}</i>
+                                <span>
+                                  {v}
+                                  {o ? (
+                                    <>
+                                      {" "}
+                                      <code>{o}</code>
+                                    </>
+                                  ) : null}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </li>
+                  );
+                }
                 if (Array.isArray(s?.objects)) {
                   const { verb } = label({ kind: s.kind, tool: s.tool, status: "done", object: s.objects[0] ?? "" }) ?? {};
                   const objs = s.objects.slice(0, 2).filter(Boolean);
@@ -279,10 +343,15 @@ export default function AgentCard({
               })}
             </ul>
           )}
-          {groups.length > 8 && !allSteps && (
+          {canShowAll && !allSteps && (
             <button type="button" class="sa-more" onClick={() => setAllSteps(true)}>
-              {t("agent.showAllSteps")}
+              {t("agent.showAllStepsN", { count: steps.length })}
             </button>
+          )}
+          {dropped > 0 && (
+            <div class="sa-dropped">
+              {t("agent.stepsShown", { shown: steps.length, count: nSteps })}
+            </div>
           )}
           {output && (
             <>

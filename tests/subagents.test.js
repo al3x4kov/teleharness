@@ -657,3 +657,16 @@ test("TASK-01.79: задача без служебной заглушки — ti
   assert.equal(agentRun(part("Структура каталогов", "d"), OC_CTX5).description, "Структура каталогов", "неслужебный title используется");
   assert.equal(agentRun(part(null, "Из описания"), OC_CTX5).description, "Из описания");
 });
+
+// ---- BUG-267: полное число шагов Claude-запуска -----------------------------
+test("BUG-267: Claude-запуск несёт stepsDropped — полное число шагов = сохранённые + сброшенные", () => {
+  const steps = Array.from({ length: 200 }, (_, i) => ({ id: `s${i}`, kind: "tool", tool: "bash", object: `cmd ${i}`, status: "done" }));
+  const run = agentRun(
+    { type: "tool", tool: "task", callID: "toolu_cap", state: { status: "completed", input: { subagent_type: "general-purpose", description: "x" }, metadata: { teleharnessRun: { status: "completed", startedAt: 1, endedAt: 2, steps, stepsDropped: 13 } } } },
+    CLAUDE_CTX,
+  );
+  assert.equal(run.steps.length, 200);
+  assert.equal(run.stepsDropped, 13);
+  const plain = agentRun({ type: "tool", tool: "task", callID: "t2", state: { status: "completed", input: {}, metadata: { teleharnessRun: { status: "completed", steps: [] } } } }, CLAUDE_CTX);
+  assert.equal(plain.stepsDropped, 0, "без сброса — 0");
+});

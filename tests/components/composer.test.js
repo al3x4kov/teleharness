@@ -347,3 +347,106 @@ test("BUG-01.75: после отказа новый набранный текс�
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(ta(root).value, "второй");
 });
+
+// ---- FEAT-01.88: вставка из буфера (Ctrl/⌘+V) ------------------------------
+// clipboardData — подделка с files/getData; файлы — настоящие File (их стримит
+// загрузка). Картинку happy-dom не декодирует → она уходит обычной загрузкой,
+// имя видно в query.name запроса /teleharness/api/upload.
+const clip = ({ files = [], text = "" } = {}) => ({ files, items: null, getData: (t) => (t === "text/plain" ? text : "") });
+const paste = (root, data) => t$.fire(ta(root), "paste", {}, Event, { clipboardData: data });
+const uploads = () => fetchCalls.filter((c) => c.method === "POST" && c.path === "/teleharness/api/upload");
+const echoUpload = () => installFetch([{ method: "POST", path: "/teleharness/api/upload", reply: (c) => ({ name: c.query.name, size: 1 }) }]);
+// happy-dom не декодирует картинки (onload/onerror не приходят) — «битая»
+// картинка уходит обычной загрузкой, как у скрепки (см. vision guard).
+function brokenImages(t) {
+  const Orig = globalThis.Image;
+  globalThis.Image = class {
+    set src(_) {
+      queueMicrotask(() => this.onerror?.(new Error("decode")));
+    }
+  };
+  t.after(() => (globalThis.Image = Orig));
+}
+
+test("FEAT-01.88: Ctrl+V снимка → чип «Снимок <дата время>.png», текст поля не меняется", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  brokenImages(t);
+  echoUpload();
+  const { root } = mountComposer();
+  t$.typeInto(ta(root), "Вот что вижу");
+  const ok = paste(root, clip({ files: [new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png" })] }));
+  assert.equal(ok, false, "браузерная вставка отменена");
+  await t$.waitFor(() => uploads().length === 1);
+  assert.match(uploads()[0].query.name, /^Снимок \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.png$/);
+  await t$.waitFor(() => /Снимок \d{4}/.test(root.textContent));
+  assert.equal(ta(root).value, "Вот что вижу");
+});
+
+test("FEAT-01.88: два снимка подряд — разные имена; файл из проводника сохраняет имя", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  brokenImages(t);
+  echoUpload();
+  const { root } = mountComposer();
+  const shot = () => new File([new Uint8Array([1])], "image.png", { type: "image/png" });
+  paste(root, clip({ files: [shot(), shot()] }));
+  paste(root, clip({ files: [new File(["%PDF"], "ТЗ-портал.pdf", { type: "application/pdf" })], text: "ТЗ-портал.pdf" }));
+  await t$.waitFor(() => uploads().length === 3);
+  const names = uploads().map((c) => c.query.name);
+  assert.equal(new Set(names).size, 3, "имена различаются: " + names.join(" | "));
+  assert.ok(names.includes("ТЗ-портал.pdf"));
+  assert.ok(names.some((n) => / \(2\)\.png$/.test(n)), "второй снимок той же секунды — « (2)»");
+});
+
+test("FEAT-01.88: обычный текст и текст с картинкой-рендером (Excel) — вставка браузера, чипов нет", () => {
+  const { root } = mountComposer();
+  assert.equal(paste(root, clip({ text: "привет" })), true, "не отменено — текст вставит браузер");
+  assert.equal(paste(root, clip({ text: "A1\tB1", files: [new File([new Uint8Array([1])], "image.png", { type: "image/png" })] })), true);
+  assert.equal(uploads().length, 0);
+  assert.equal($(root, ".attach"), null);
+});
+
+test("FEAT-01.88: текст длиннее 5000 символов → файл «Вставка <дата время>.txt», поле не меняется", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  const { root } = mountComposer();
+  const ok = paste(root, clip({ text: "строка лога\n".repeat(1000) }));
+  assert.equal(ok, false);
+  await t$.waitFor(() => uploads().length === 1);
+  assert.match(uploads()[0].query.name, /^Вставка \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.txt$/);
+  assert.equal(ta(root).value, "");
+});
+
+test("FEAT-01.88: вставка подчиняется лимитам скрепки (файл > 100 МБ — причина строкой)", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { root } = mountComposer();
+  const big = new File([new Uint8Array(1)], "запись.mov", { type: "video/quicktime" });
+  Object.defineProperty(big, "size", { value: 101 * MB });
+  paste(root, clip({ files: [big] }));
+  const err = await t$.waitFor(() => $(root, ".composer-error"));
+  assert.match(err.textContent, /запись\.mov: больше 100\sМБ/);
+  assert.equal(uploads().length, 0);
+});
+
+test("FEAT-01.88: во время остановки вставка файла ничего не прикрепляет", () => {
+  const { root } = mountComposer({ status: "stopping" });
+  paste(root, clip({ files: [new File(["x"], "a.pdf", { type: "application/pdf" })] }));
+  assert.equal(uploads().length, 0);
+  assert.equal($(root, ".attach"), null);
+});
+
+test("FEAT-01.88: filesApi — зона перетаскивания добавляет файлы общим путём; папки — причиной", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  const api = { current: null };
+  const { root } = mountComposer({ filesApi: api });
+  assert.equal(api.current.blocked, false);
+  t$.act(() => api.current.add([new File(["x"], "июль.xlsx", { type: "application/vnd.ms-excel" })], ["Выгрузки"]));
+  await t$.waitFor(() => uploads().length === 1);
+  assert.equal(uploads()[0].query.name, "июль.xlsx");
+  const err = await t$.waitFor(() => $(root, ".composer-error"));
+  assert.match(err.textContent, /Выгрузки: папки не прикрепляются — перетащите файлы из неё/);
+  t$.cleanup();
+  assert.equal(api.current, null, "после размонтирования доступа нет");
+  mountComposer({ filesApi: api, status: "stopping" });
+  assert.equal(api.current.blocked, true, "остановка — запрет");
+});

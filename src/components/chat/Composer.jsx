@@ -21,6 +21,8 @@ import { bindingOf, queuedSendLabel } from "../../lib/engine.js";
 import { PencilIcon } from "./TurnActions.jsx";
 import { createRecognizer, speechSupported } from "../../lib/voice.js";
 import { t } from "../../lib/i18n.js";
+// FEAT-01.88: вставка из буфера и перетаскивание — тот же путь, что у скрепки
+import { folderError, pasteAction, pastedFileName, pastedTextName } from "../../lib/paste-drop.js";
 
 const MAX_H = 154; // 6 lines + vertical padding, keep in sync with .composer-ta
 const MAX_FILES = 20;
@@ -126,7 +128,9 @@ async function processImage(file) {
 // Settings default for a chat nobody has bound yet.
 // sessionId: the chat this composer belongs to — the unsent text is kept as
 // a per-user, per-chat draft (ISSUE-015: it survives a reload).
-export default function Composer({ status = "idle", onSend, onStop, onStopHidden = null, model = null, sessionId = null, onVoiceMode = null }) {
+// filesApi (FEAT-01.88): ref, в который композер кладёт { add(files, folders),
+// blocked } — им пользуется зона перетаскивания ChatView.
+export default function Composer({ status = "idle", onSend, onStop, onStopHidden = null, model = null, sessionId = null, onVoiceMode = null, filesApi = null }) {
   const [text, setText] = useState(() => loadDraft(sessionId));
   const [files, setFiles] = useState([]); // {mime, filename, url, preview?}
   const [error, setError] = useState("");
@@ -457,8 +461,18 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
   async function onFiles(e) {
     const picked = [...e.currentTarget.files];
     e.currentTarget.value = "";
-    if (picked.length === 0) return;
-    const errs = [];
+    await addFiles(picked);
+  }
+
+  // FEAT-01.88: общий путь добавления — скрепка, вставка, перетаскивание.
+  // Лимиты, картинки inline, бинарная загрузка — как было у скрепки;
+  // preErrs — причины, найденные до лимитов (папки при перетаскивании).
+  async function addFiles(picked, preErrs = []) {
+    if (picked.length === 0) {
+      if (preErrs.length > 0) showError(preErrs.join(" · "));
+      return;
+    }
+    const errs = [...preErrs];
     const room = MAX_FILES - files.length;
     const batch = picked.slice(0, Math.max(0, room));
     if (picked.length > room) errs.push(t("composer.files.max", { count: MAX_FILES }));
@@ -497,6 +511,46 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
     }
     if (errs.length > 0) showError(errs.join(" · "));
   }
+
+  // FEAT-01.88: Ctrl/⌘+V. Безымянный снимок — «Снимок <время>.png»; длинный
+  // текст — файлом «Вставка <время>.txt»; обычный текст — поведение браузера.
+  function onPaste(e) {
+    const act = pasteAction(e.clipboardData);
+    if (act.kind === "default") return;
+    e.preventDefault();
+    if (status === "stopping") return; // скрепка в этот момент тоже недоступна
+    const now = new Date();
+    const taken = new Set(files.map((f) => f.filename));
+    if (act.kind === "longText") {
+      addFiles([new File([act.text], pastedTextName(now, taken), { type: "text/plain" })]);
+      return;
+    }
+    const list = act.files.map((f) => {
+      const name = pastedFileName(f, now, taken);
+      taken.add(name);
+      return name === f.name ? f : new File([f], name, { type: f.type, lastModified: f.lastModified });
+    });
+    addFiles(list);
+  }
+
+  // FEAT-01.88: доступ зоны перетаскивания (ChatView) — свежие замыкания на каждом рендере
+  useEffect(() => {
+    if (!filesApi) return;
+    filesApi.current = {
+      blocked: status === "stopping",
+      add: (list, folders = []) => {
+        addFiles(list, folders.map(folderError));
+        try {
+          taRef.current?.focus({ preventScroll: true });
+        } catch {
+          /* focus без опций — старые браузеры */
+        }
+      },
+    };
+  });
+  useEffect(() => () => {
+    if (filesApi) filesApi.current = null;
+  }, []);
 
   function removeFile(key) {
     aborters.current[key]?.(); // cancel an in-flight upload
@@ -564,6 +618,7 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
             value={partial ? (text ? `${text} ${partial}` : partial) : text}
             onInput={(e) => setText(e.currentTarget.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
           />
         </div>
         {busy && !canSend ? (

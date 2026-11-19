@@ -2117,3 +2117,58 @@ button.attach.is-link::after {
   .turn-preloader .tp-anim { display: none; }
   .turn-preloader .tp-still { display: block; }
 }
+
+/* == FEAT-01.88: зона перетаскивания файлов (BRIEF-16, макет paste-drop.html) ==
+   Портал в body, position: fixed по прямоугольнику области чата (ставит
+   DropZone.jsx), события не перехватывает. Цвета — токены темы: светлая и
+   тёмная без отдельных правил. */
+.dz {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: 10px;
+  animation: dz-in 0.12s ease-out;
+}
+.dz-in {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--accent);
+  border-radius: 22px;
+  /* --accent-wash почти прозрачен: под ним — полупрозрачный фон темы, лента приглушена */
+  background: linear-gradient(var(--accent-wash), var(--accent-wash)), color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+.dz-ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.dz-title { font-size: 19px; font-weight: 650; color: var(--text); }
+.dz-count {
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dz-hint { font-size: 14px; color: var(--text-2); max-width: 320px; }
+.dz.is-no .dz-in { border-color: var(--text-3); background: color-mix(in srgb, var(--bg) 90%, transparent); }
+.dz.is-no .dz-ring { color: var(--text-2); }
+@keyframes dz-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dz { animation: none; } }

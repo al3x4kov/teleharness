@@ -167,18 +167,18 @@ test("12 шагов: видно 8 и «Показать все шаги», по 
   t$.click($(root, ".sa-head"));
   assert.equal($$(root, ".sa-steps li").length, 8, "не больше 8 строк");
   const more = $(root, ".sa-more");
-  assert.equal(more.textContent, "Показать все шаги");
+  assert.equal(more.textContent, "Показать все шаги (12)");
   t$.click(more);
   assert.equal($$(root, ".sa-steps li").length, 12);
   assert.equal($(root, ".sa-more"), null);
 });
 
-test("TASK-01.79: однотипные подряд сворачиваются — 12 чтений одной строкой, без «Показать все шаги»", () => {
+test("TASK-01.79, BUG-267: 12 чтений одной строкой; «Показать все шаги (12)» есть, раз строк меньше шагов", () => {
   const steps = Array.from({ length: 12 }, (_, i) => step(`s${i}`, "read", `f${i}.js`));
   const { root } = mount({ run: run({ state: "done", startedAt: NOW - 60_000, endedAt: NOW, now: null, steps }), stepLabel: realStepLabel, fmtDuration: fmtDur });
   t$.click($(root, ".sa-head"));
-  assert.equal($$(root, ".sa-steps li").length, 1, "все 12 чтений — одна строка");
-  assert.equal($(root, ".sa-more"), null, "лимит считается по строкам после группировки");
+  assert.equal($$(root, ".sa-steps > li").length, 1, "все 12 чтений — одна строка");
+  assert.equal($(root, ".sa-more").textContent, "Показать все шаги (12)", "BUG-267: строк меньше, чем шагов — кнопка есть");
   assert.match($(root, ".sa-meta").textContent, /12 шагов/, "число шагов в шапке — по исходным шагам");
 });
 
@@ -371,4 +371,49 @@ test("repeat > 1 — значок ×N сохранён", () => {
   const part = { type: "tool", tool: "task", state: { status: "completed", input: { subagent_type: "fixer", description: "x" }, time: { start: NOW - 1000, end: NOW } } };
   const { root } = mount({ part, repeat: 3 });
   assert.match($(root, ".sa-name").textContent, /×3/);
+});
+
+// ---- BUG-267: «40 шагов», а раскрыто 2–5 строк -------------------------------
+// Скриншоты владельца 2026-11-19: Claude-субагент, почти все шаги — «Команда»;
+// группы склеивают их в 5 строк, «ещё N» обрезано многоточием, кнопки нет.
+const cmds = (n, errAt = []) =>
+  Array.from({ length: n }, (_, i) => ({ id: `c${i}`, kind: "tool", tool: "bash", object: `cd /tmp/th-port && node scripts/check-${i}.mjs --all`, status: errAt.includes(i) ? "error" : "done" }));
+
+test("BUG-267: 40 команд с тремя ошибками → «Показать все шаги (40)» → 40 строк, по одной на команду", () => {
+  const steps = cmds(40, [5, 17, 30]);
+  const { root } = mount({ run: run({ state: "done", startedAt: NOW - 391_000, endedAt: NOW, now: null, steps }), stepLabel: realStepLabel, fmtDuration: fmtDur });
+  assert.match($(root, ".sa-meta").textContent, /40 шагов/);
+  t$.click($(root, ".sa-head"));
+  assert.ok($$(root, ".sa-steps > li").length < 40, "сначала — сгруппировано");
+  const more = $(root, ".sa-more");
+  assert.ok(more, "кнопка «Показать все шаги» есть, хотя строк ≤ 8");
+  assert.equal(more.textContent, "Показать все шаги (40)");
+  t$.click(more);
+  assert.equal($$(root, ".sa-steps > li").length, 40, "каждый шаг — отдельной строкой");
+  assert.equal($(root, ".sa-more"), null);
+});
+
+test("BUG-267: строка-группа — кнопка; «ещё N» — отдельный несжимаемый элемент; тап раскрывает все шаги группы", () => {
+  const steps = cmds(13);
+  const { root } = mount({ run: run({ state: "done", startedAt: NOW - 73_000, endedAt: NOW, now: null, steps }), stepLabel: realStepLabel, fmtDuration: fmtDur });
+  t$.click($(root, ".sa-head"));
+  const rows = $$(root, ".sa-steps > li");
+  assert.equal(rows.length, 1);
+  const btn = $(rows[0], "button.sa-grp");
+  assert.ok(btn, "группа раскрывается кнопкой");
+  assert.equal(btn.getAttribute("aria-expanded"), "false");
+  const cnt = $(rows[0], ".sa-grp-n");
+  assert.ok(cnt, "счётчик — отдельный элемент вне строки с многоточием");
+  assert.equal(cnt.textContent.trim(), "· ещё 11", "две первые команды названы, ещё 11");
+  t$.click(btn);
+  assert.equal($($$(root, ".sa-steps > li")[0], "button.sa-grp").getAttribute("aria-expanded"), "true");
+  assert.equal($$(root, ".sa-steps .sa-grp-list > li").length, 13, "все 13 команд группы по отдельности");
+});
+
+test("BUG-267: шагов больше потолка — в шапке полное число, в теле «Показаны 200 из 213 шагов»", () => {
+  const steps = cmds(200);
+  const { root } = mount({ run: run({ state: "done", startedAt: NOW - 600_000, endedAt: NOW, now: null, steps, stepsDropped: 13 }), stepLabel: realStepLabel, fmtDuration: fmtDur });
+  assert.match($(root, ".sa-meta").textContent, /213 шагов/);
+  t$.click($(root, ".sa-head"));
+  assert.match($(root, ".sa-dropped").textContent, /Показаны 200 из 213 шагов/);
 });

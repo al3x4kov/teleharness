@@ -32,6 +32,7 @@ import { lang, t } from "../../lib/i18n.js";
 import { bindingLine, bindingOf } from "../../lib/engine.js";
 import MessageList from "../chat/MessageList.jsx";
 import Composer from "../chat/Composer.jsx";
+import DropZone from "../chat/DropZone.jsx"; // FEAT-01.88
 import ModelBar from "../chat/ModelBar.jsx";
 import DialogBar from "../chat/DialogBar.jsx";
 import VoiceModeView from "../chat/VoiceModeView.jsx";
@@ -99,6 +100,9 @@ export default function ChatView({ id }) {
   // measurement, never the mock's fixed constants.
   const headRef = useRef(null);
   const bottomRef = useRef(null);
+  // FEAT-01.88: область чата для зоны перетаскивания и доступ к добавлению файлов композера
+  const chatRef = useRef(null);
+  const filesApi = useRef(null);
   // FEAT-06.2: the open voice mode ({ctx} — the AudioContext unlocked by the tap).
   const [voiceMode, setVoiceMode] = useState(null);
   // FEAT-11.18: лист «Продолжить в другом движке» — {reason, resume} | null
@@ -222,7 +226,8 @@ export default function ChatView({ id }) {
     : null;
 
   return (
-    <div class="chat">
+    <div class="chat" ref={chatRef}>
+      <DropZone targetRef={chatRef} filesApi={filesApi} />
       <header class="chat-header" ref={headRef}>
         {fromProject ? (
           <button class="icon-btn float-btn" onClick={goBack} aria-label={t("common.back")}>
@@ -369,6 +374,7 @@ export default function ChatView({ id }) {
               model={binding?.model ?? null}
               onSend={(text, attachments) => send({ text, attachments, sessionId: id })}
               onVoiceMode={voiceInfo.value?.enabled && micSupported() ? () => setVoiceMode({ ctx: unlockAudio() }) : null}
+              filesApi={filesApi}
             />
           </footer>
         )}

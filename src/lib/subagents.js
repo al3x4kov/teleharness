@@ -185,6 +185,7 @@ function assemble(part, ctx, id, patch = {}) {
     endedAt: null,
     childId: null,
     steps: [],
+    stepsDropped: 0, // BUG-267: шаги сверх потолка сервера (Claude, TELEHARNESS_STEP_MAX)
     now: null,
     output: null,
     error: null,
@@ -289,6 +290,7 @@ function claudeRun(part, ctx, id) {
             : null
       : null,
     steps,
+    stepsDropped: Number(z?.stepsDropped) > 0 ? Math.floor(Number(z.stepsDropped)) : 0,
     output: typeof z?.output === "string" && z.output ? z.output.slice(0, OUTPUT_MAX) : null,
     error: state === "error" ? errLine(z?.error) ?? errLine(part?.state?.error) ?? t("agent.badge.error") : null,
   });
