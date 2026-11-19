@@ -6,6 +6,8 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-11-19
+
 ### Added
 - **Temporal in the demo.** `npm run demo` shows synthetic pipes, runs in every state (waiting for a decision, running,
   waiting for a subscription quota, completed with files, a skipped branch, failed, cancelled) and schedules; *Approve*
@@ -217,6 +219,9 @@ First public release under the name **Teleharness**.
 - Slash commands in admin opencode chats expand through opencode `/command`.
 - A chat deleted mid-turn no longer stays busy.
 
+[2.0.0]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.0
+[1.24.2]: https://github.com/al3x4kov/teleharness/releases/tag/v1.24.2
+[1.22.0]: https://github.com/al3x4kov/teleharness/releases/tag/v1.22.0
 [1.21.0]: https://github.com/al3x4kov/teleharness/releases/tag/v1.21.0
 [1.20.0]: https://github.com/al3x4kov/teleharness/compare/v1.19.4...v1.21.0
 [1.19.4]: https://github.com/al3x4kov/teleharness/releases/tag/v1.19.4

@@ -1,5 +1,6 @@
 // Single source of truth for the UI version shown in Настройки → «О приложении».
 // Bump together with the project-note status entry in the vault.
+// 2.0.0 (2026-11-19): one name everywhere — /teleharness/ path, TELEHARNESS_* variables, teleharness file, skill and folder names (breaking); a worker-socket path over the OS limit stops with a clear reason; new README demo GIF and architecture diagram.
 // 1.24.2 (2026-11-18): a pipe step's conversation opens for a regular user too (the step chat lives in the project, the agent works in the pipe folder); the schedule form says up front that required inputs block a schedule; an unchanged pipe cannot be published again — "Version N is current".
 // 1.24.1 (2026-11-18): Temporal scrolls again; the admin's project picker drops tenant, temp and system folders; "Readiness" stays neutral until a publish attempt; pipe step chats are hidden from Chats and Projects.
 // 1.24.0 (2026-11-18): Temporal model steps on the owner's Claude / Codex subscriptions run as portal chat turns in the pipe folder (files and tools by the owner's rights; a regular user's Codex step answers with text only); run inputs and {{input.*}} / {{steps.*}} templates, "Condition" and "Artifact" steps, a run summary with the step answers, run files and step conversations; a new pipe's project is picked from the user's own list, every pipe gets pipelines/<name>, every run runs/<date>-<id>; scheduled runs are labelled as such.
@@ -215,4 +216,4 @@
 // 1.3.0 (2026-10-31): artifacts preview/download, orchestration-directive cards,
 // typing indicator, multi-agent AgentCard, theme boot fix, overlay fill-mode
 // hardening, home junk filter, subscription credit units.
-export const VERSION = "1.24.2";
+export const VERSION = "2.0.0";
