@@ -5,6 +5,7 @@
 // pulse), a failed one stays visibly marked instead of vanishing (R-26).
 // Message context passes onOpen — the chip (or image) becomes a button that
 // opens the FileViewer overlay.
+import { chipName } from "../../lib/paste-drop.js"; // BUG-269
 import { useState } from "preact/hooks";
 import { fileBadge } from "../../lib/normalize.js";
 import { t } from "../../lib/i18n.js";
@@ -54,7 +55,7 @@ export default function Attachment({
     <>
       {isImage ? <img class="attach-thumb" src={src} alt="" /> : <span class="attach-icon">{DOC_ICON}</span>}
       <span class="attach-text">
-        <span class="attach-name" title={filename}>{filename}</span>
+        <span class="attach-name" title={filename}>{chipName(filename)}</span>
         {stateText && <span class="attach-state" role={status === "failed" ? "alert" : undefined}>{stateText}</span>}
       </span>
       {badge && !stateText && <span class="file-kind">{badge}</span>}

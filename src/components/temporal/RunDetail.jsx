@@ -198,6 +198,7 @@ export default function RunDetail({ workflowId }) {
           <section class="t-card t-hide-phone"><h2>{t("temporal.rd.actions")}</h2><div class="t-actcol">{actions}</div></section>
         </aside>
       </div>
+      <div class="t-actbar-space t-hide-desk" aria-hidden="true" />
       <div class="t-actbar t-hide-desk">{running ? <>
         {allowed(state.paused ? "resume" : "pause") && (state.paused
           ? <button class="t-btn t-primary" type="button" data-action="resume" disabled={busy} onClick={() => act("resume")}>{t("temporal.rd.resume")}</button>

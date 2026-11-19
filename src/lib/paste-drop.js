@@ -143,3 +143,12 @@ export function droppedEntries(dt) {
 }
 
 export const folderError = (name) => t("drop.folder", { name });
+
+// BUG-269: имя в чипе — начало и конец с расширением, середина в «…»
+// («Снимок 20…21-30-12.png»); полное имя — в title чипа.
+export function chipName(name, max = 16) {
+  const s = String(name ?? "");
+  if (s.length <= max) return s;
+  const tail = Math.ceil((max - 1) * 0.55);
+  return `${s.slice(0, max - 1 - tail)}…${s.slice(-tail)}`;
+}

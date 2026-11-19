@@ -124,3 +124,22 @@ test("new paste/drop and agent-steps keys exist in both dictionaries", () => {
     assert.ok(DICTIONARIES.ru[k], `ru: ${k}`);
   }
 });
+// BUG-269 п.2: длинное имя чипа сокращается посередине — видны начало, конец и расширение
+import { chipName } from "../src/lib/paste-drop.js";
+import { readFileSync as readCss } from "node:fs";
+test("BUG-269 п.2: chipName — середина в «…», конец имени и расширение на месте; короткие — как есть", () => {
+  assert.equal(chipName("Снимок 2026-11-19 21-30-12.png"), "Снимок…30-12.png", "время и расширение видны");
+  assert.equal(chipName("июль.xlsx"), "июль.xlsx");
+  assert.equal(chipName("a".repeat(16)), "a".repeat(16), "до 16 символов не трогаем");
+  const long = chipName("очень-длинное-название-отчёта-за-квартал.pdf");
+  assert.ok(long.length <= 16 && long.endsWith("ртал.pdf") && long.includes("…"), long);
+  assert.equal(chipName(""), "");
+});
+test("BUG-269 п.2: чипы вложений — одна строка с прокруткой вбок (следующий чип выглядывает)", () => {
+  const css = readCss(new URL("../src/components/chat.css", import.meta.url), "utf8");
+  const rule = /\.composer-chips \{([^}]*)\}/.exec(css)?.[1] ?? "";
+  assert.match(rule, /flex-wrap:\s*nowrap/);
+  assert.match(rule, /overflow-x:\s*auto/);
+  assert.match(css, /\.composer-chips > \.attach \{\s*max-width: 212px;/, "чип в поле ввода — не шире 212 px: следующий выглядывает");
+  assert.match(css, /\.composer-chips \.attach-thumb \{\s*width: 28px;/, "миниатюра в поле ввода 28 px — имя помещается");
+});

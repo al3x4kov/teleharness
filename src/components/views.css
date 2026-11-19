@@ -2660,3 +2660,7 @@
   align-self: stretch;
   justify-content: center;
 }
+
+/* BUG-269: строка с раскрывающимся содержимым — выключатель у заголовка, не прыгает при включении */
+.set-row.is-top { align-items: flex-start; }
+.set-row.is-top > .switch { margin-top: 2px; }

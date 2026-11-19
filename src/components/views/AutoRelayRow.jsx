@@ -90,7 +90,7 @@ export default function AutoRelayRow({ client = api }) {
   const loading = state.status === "loading";
   return (
     <li class="card" data-feat="FEAT-18.6">
-      <div class="set-row">
+      <div class="set-row is-top">
         <div class="set-main">
           <div class="row-title" id="autorelay-title">{autoRelayTitle()}</div>
           <div class="set-hint">{autoRelayHint()}</div>

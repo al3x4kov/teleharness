@@ -129,6 +129,45 @@
   }
  },
  {
+  "id": "ses_demo_release_smoke",
+  "slug": "calm-heron",
+  "projectID": "global",
+  "directory": "/home/dev/shop",
+  "summary": {
+   "additions": 0,
+   "deletions": 0,
+   "files": 0
+  },
+  "cost": 0,
+  "tokens": {
+   "input": 26800,
+   "output": 2900,
+   "reasoning": 1500,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  },
+  "title": "Smoke-test the release build",
+  "model": {
+   "id": "claude-opus-5-5",
+   "providerID": "anthropic"
+  },
+  "teleharness": {
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-opus-5-5"
+   },
+   "agent": null,
+   "prompted": true
+  },
+  "version": "1.19.5",
+  "time": {
+   "created": 1794300900000,
+   "updated": 1794300998000
+  }
+ },
+ {
   "id": "ses_demo_nginx_logs",
   "slug": "quiet-harbor",
   "projectID": "global",

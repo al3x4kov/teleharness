@@ -95,6 +95,14 @@ launchctl kickstart -k gui/$(id -u)/dev.teleharness.web      # restart after an 
 A launch agent runs while you are logged in. For a headless Mac, enable automatic login or turn the
 agents into daemons in `/Library/LaunchDaemons` with a `UserName` key.
 
+### On Linux (systemd)
+
+Use [`ops/linux/teleharness.service`](../ops/linux/teleharness.service) as a starting point: copy it to
+`/etc/systemd/system/`, set the user and the checkout path, then `systemctl enable --now teleharness`.
+Keep `OOMPolicy=continue` in it. Agent turns run as children of the portal, and with systemd's default
+(`OOMPolicy=stop`) one turn that runs out of memory — say, a browser or a test run started by an agent — stops
+the whole portal and every running chat.
+
 ## 6. Reach it from your phone
 
 The portal listens on loopback only. Put it behind TLS with whatever you already use:

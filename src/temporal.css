@@ -195,3 +195,6 @@ textarea.t-input { min-height: 96px; resize: vertical; }
 .t-check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
 .t-check input { width: 20px; height: 20px; }
 .t-todo-text { color: var(--text-2); font-size: 14px; } /* BUG-254: not an error until a publish attempt */
+
+/* BUG-269: запас под фиксированную нижнюю панель — конец страницы прокручивается из-под неё */
+.t-actbar-space { height: calc(76px + env(safe-area-inset-bottom)); }

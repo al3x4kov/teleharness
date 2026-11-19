@@ -6,6 +6,28 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.0.5] — 2026-11-20
+
+### Fixed
+- **One agent turn could stop the whole portal on Linux.** Every agent turn runs as a child of the portal (the CLI,
+  browsers or test runs an agent starts). Under systemd, with the default `OOMPolicy=stop`, the kernel killing any of
+  them for memory stopped the entire service — every running chat broke and the portal restarted. The new sample unit
+  [`ops/linux/teleharness.service`](ops/linux/teleharness.service) sets `OOMPolicy=continue` (only the process that ran
+  out of memory dies) and a memory limit with room for concurrent turns; [`docs/macos.md`](docs/macos.md) explains it.
+  If you already run Teleharness under systemd, add `OOMPolicy=continue` to your unit.
+- The empty-composer mic button is dark in the English UI too (its style was tied to the Russian label).
+- Attachment chips sit in one row that scrolls sideways, so the next chip peeks at the edge instead of hiding below
+  the fold; long names are shortened in the middle and keep their end and extension (the full name is in the tooltip).
+- *Continue automatically on a usage limit*: the switch stays next to the title and no longer jumps when turned on.
+- Temporal run screen on a phone: the end of the page (the run files) scrolls clear of the bottom action bar.
+- `npm run demo`: *New chat* opens a new chat instead of an empty `#/chat/undefined` screen.
+
+### Changed
+- README in English and Russian: the features table lost its decorative icon column, the platform table says yes
+  instead of check marks, install commands point to `v2.0.5`, paste and drag-and-drop and the full subagent steps are
+  described; every screenshot and GIF is re-captured from the current demo.
+- The demo has a Claude chat whose subagent runs 14 commands, to show folded steps and *Show all steps (N)*.
+
 ## [2.0.4] — 2026-11-20
 
 ### Added

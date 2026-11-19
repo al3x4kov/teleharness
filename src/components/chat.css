@@ -1411,14 +1411,33 @@ button.attach.is-link::after {
 
 /* ISSUE-009: 20 chips used to grow the composer to 1000px over the header —
    the row is capped and scrolls inside itself. */
+/* BUG-269: одна строка с прокруткой вбок — следующий чип выглядывает у края,
+   видно, что вложений больше (раньше 4-й чип прятался под обрезом списка) */
 .composer-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
-  padding: 8px 4px 0;
-  max-height: min(28dvh, 156px);
+  padding: 8px 4px 2px;
+  max-height: min(28dvh, 156px); /* BUG-05.12: ряд не растёт вверх и не закрывает шапку */
+  overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.composer-chips > * {
+  flex: none;
+}
+/* BUG-269: в поле ввода чип не шире 212 px — на телефоне виден целиком первый
+   и заметная часть следующего; тип файла показывает миниатюра/иконка */
+.composer-chips > .attach {
+  max-width: 212px; /* кириллическое «Снимок…00-00.png» занимает до 120 px */
+}
+.composer-chips .file-kind {
+  display: none;
+}
+.composer-chips .attach-thumb {
+  width: 28px;
+  height: 28px;
 }
 
 .composer-ta {

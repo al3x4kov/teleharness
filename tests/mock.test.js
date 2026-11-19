@@ -115,3 +115,22 @@ test("GET /teleharness/api/dialogs returns the dialogs fixture", async () => {
   const fixture = JSON.parse(readFileSync(path.join(FIXTURES, "dialogs.json"), "utf8"));
   assert.deepEqual(body, fixture);
 });
+
+test("POST /teleharness/api/session creates a chat in memory: listed first, empty history (demo «New chat»)", async () => {
+  const res = await fetch(`${base}/teleharness/api/session?directory=%2Fhome%2Fdev`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: { providerID: "anthropic", modelID: "claude-opus-5-5" } }),
+  });
+  assert.equal(res.status, 200);
+  const s = await res.json();
+  assert.match(s.id, /^ses_demo_new_/);
+  assert.equal(s.directory, "/home/dev");
+  assert.deepEqual(s.teleharness.model, { providerID: "anthropic", modelID: "claude-opus-5-5" });
+  const list = await (await fetch(`${base}/teleharness/api/session`)).json();
+  assert.equal(list[0].id, s.id, "the new chat comes first");
+  const fixture = JSON.parse(readFileSync(path.join(FIXTURES, "sessions.json"), "utf8"));
+  assert.equal(list.length, fixture.length + 1);
+  const msgs = await (await fetch(`${base}/teleharness/api/session/${s.id}/message`)).json();
+  assert.deepEqual(msgs, []);
+});

@@ -89,6 +89,12 @@ test("решение рядом с результатом: одобрение п
  h.click($(root,'[data-action="approve"]'));await h.waitFor(()=>sent.length===2);
  assert.notEqual(sent[1].actionId,undefined);
 });
+test("BUG-269 п.4: на телефоне под нижней панелью действий — распорка, конец страницы прокручивается из-под панели",async()=>{
+ installFetch([{path:"/teleharness/api/temporal/runs/w",reply:()=>detail({status:"COMPLETED",summary:{kind:"ok"}})}]);
+ const {root}=h.mount(ui.RunDetail,{workflowId:"w"});await h.waitFor(()=>$(root,".t-actbar"));
+ const sp=$(root,".t-actbar-space");assert(sp,"распорка есть");assert(sp.classList.contains("t-hide-desk"),"только на телефоне, как панель");
+ assert.equal(sp.nextElementSibling,$(root,".t-actbar"),"распорка — перед панелью, в конце страницы");
+});
 test("409 при решении — тост «запуск изменился» и перечитывание, а не пропажа экрана",async()=>{
  let reads=0;
  installFetch([{path:"/teleharness/api/temporal/runs/w",reply:()=>{reads++;return detail({resultSteps:[]});}},

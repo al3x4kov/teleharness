@@ -1,0 +1,228 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_relsmoke_001",
+   "sessionID": "ses_demo_release_smoke",
+   "role": "user",
+   "time": {
+    "created": 1794300900000
+   },
+   "summary": {
+    "diffs": []
+   },
+   "model": {
+    "providerID": "anthropic",
+    "modelID": "claude-opus-5-5"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_relsmoke_002",
+    "sessionID": "ses_demo_release_smoke",
+    "messageID": "msg_demo_relsmoke_001",
+    "type": "text",
+    "text": "Before I tag 3.4.0, run the release smoke checks in a subagent and tell me if anything blocks the release."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_relsmoke_003",
+   "sessionID": "ses_demo_release_smoke",
+   "role": "assistant",
+   "time": {
+    "created": 1794300901500,
+    "completed": 1794300998000
+   },
+   "parentID": "msg_demo_relsmoke_001",
+   "modelID": "claude-opus-5-5",
+   "providerID": "anthropic",
+   "path": {
+    "cwd": "/home/dev/shop",
+    "root": "/home/dev/shop"
+   },
+   "cost": 0,
+   "tokens": {
+    "total": 31200,
+    "input": 26800,
+    "output": 2900,
+    "reasoning": 1500,
+    "cache": {
+     "read": 0,
+     "write": 0
+    }
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_demo_relsmoke_004",
+    "sessionID": "ses_demo_release_smoke",
+    "messageID": "msg_demo_relsmoke_003",
+    "type": "step-start"
+   },
+   {
+    "id": "prt_demo_relsmoke_005",
+    "sessionID": "ses_demo_release_smoke",
+    "messageID": "msg_demo_relsmoke_003",
+    "type": "text",
+    "text": "I'll hand the checks to a subagent so they run in one go."
+   },
+   {
+    "id": "prt_demo_relsmoke_006",
+    "sessionID": "ses_demo_release_smoke",
+    "messageID": "msg_demo_relsmoke_003",
+    "type": "tool",
+    "tool": "task",
+    "callID": "toolu_demo_relsmoke_agent",
+    "state": {
+     "status": "completed",
+     "input": {
+      "subagent_type": "general-purpose",
+      "description": "Run the release smoke checks",
+      "prompt": "Run every release smoke check one by one and report failures."
+     },
+     "output": "All 14 checks passed.",
+     "title": "Run the release smoke checks",
+     "metadata": {
+      "teleharnessRun": {
+       "status": "completed",
+       "startedAt": 1794300904000,
+       "endedAt": 1794300991000,
+       "tokens": 18400,
+       "steps": [
+        {
+         "id": "toolu_demo_relsmoke_s1",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "npm ci",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s2",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "npm run build",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s3",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "node scripts/check-bundle-size.mjs",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s4",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "npm test -- --reporter=dot",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s5",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "npm run lint",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s6",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "node scripts/check-links.mjs docs",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s7",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "npx tsc --noEmit",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s8",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "node scripts/smoke-start.mjs --port 4399",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s9",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "curl -fsS http://127.0.0.1:4399/healthz",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s10",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "node scripts/check-migrations.mjs",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s11",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "npm audit --omit=dev",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s12",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "node scripts/check-licenses.mjs",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s13",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "git diff --exit-code -- package-lock.json",
+         "status": "done"
+        },
+        {
+         "id": "toolu_demo_relsmoke_s14",
+         "kind": "tool",
+         "tool": "bash",
+         "object": "node scripts/smoke-start.mjs --stop",
+         "status": "done"
+        }
+       ],
+       "output": "All **14 checks passed**: build, tests, lint, types, links, migrations, audit and licenses are clean; the lockfile is unchanged and the app answers on `/healthz`."
+      }
+     },
+     "time": {
+      "start": 1794300904000,
+      "end": 1794300991000
+     }
+    }
+   },
+   {
+    "id": "prt_demo_relsmoke_007",
+    "sessionID": "ses_demo_release_smoke",
+    "messageID": "msg_demo_relsmoke_003",
+    "type": "text",
+    "text": "Nothing blocks the release: all 14 smoke checks passed — build, tests, lint, types, links, migrations, audit and licenses. You can tag 3.4.0."
+   },
+   {
+    "id": "prt_demo_relsmoke_008",
+    "sessionID": "ses_demo_release_smoke",
+    "messageID": "msg_demo_relsmoke_003",
+    "type": "step-finish",
+    "reason": "stop",
+    "cost": 0,
+    "tokens": {
+     "total": 31200,
+     "input": 26800,
+     "output": 2900,
+     "reasoning": 1500,
+     "cache": {
+      "read": 0,
+      "write": 0
+     }
+    }
+   }
+  ]
+ }
+]

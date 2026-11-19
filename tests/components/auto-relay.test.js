@@ -88,6 +88,8 @@ test("FEAT-18.6: по умолчанию выключено — выключат
   assert.match(root.textContent, /Выключено — на плашке лимита кнопка «Продолжить в …»/);
   assert.equal($(root, ".autorelay-list"), null);
   assert.equal(byText(root, "button", "Добавить модель"), null);
+  // BUG-269 п.3: выключатель у заголовка, а не по центру карточки — не прыгает при включении
+  assert.ok(sw(root).closest(".set-row").classList.contains("is-top"));
 });
 
 test("FEAT-18.6: включение и выбор порядка из доступных моделей — сохраняется на сервере", async () => {

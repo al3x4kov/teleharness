@@ -1,0 +1,31 @@
+# Teleharness portal as a systemd service (Linux). Copy to /etc/systemd/system/teleharness.service,
+# replace /opt/teleharness and the user, then: systemctl daemon-reload && systemctl enable --now teleharness
+#
+# Every agent turn runs as a child of the portal (the claude/codex CLI, browsers an agent starts,
+# test runs), so the portal's memory limit covers them too.
+[Unit]
+Description=Teleharness portal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=teleharness
+Group=teleharness
+WorkingDirectory=/opt/teleharness
+EnvironmentFile=-/opt/teleharness/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=90
+# When the kernel kills a process of this unit for memory, systemd's default (OOMPolicy=stop) stops the
+# whole service — one heavy agent turn would take the portal and every running chat down with it.
+# With "continue" only the process that ran out of memory dies; if that is the portal itself,
+# Restart=on-failure brings it back.
+OOMPolicy=continue
+# Leave room for the portal plus a few concurrent turns with their tools; tune to your machine.
+MemoryMax=6G
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

@@ -636,7 +636,7 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
           </button>
         ) : (
           <button
-            class={"send-btn" + (voice ? " is-recording" : waveMode ? " is-wave" : "")}
+            class={"send-btn" + (voice ? " is-recording" : waveMode ? " is-wave" : micMode ? " is-mic" : "")}
             disabled={stopping}
             title={waveMode && !voice ? t("composer.voiceMode") : undefined}
             aria-label={

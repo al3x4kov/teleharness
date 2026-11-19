@@ -3,6 +3,7 @@
 // диктовки, отсутствие микрофона без SpeechRecognition (не secure context).
 import { test, before, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { $, createHarness, loadUI } from "./helpers/load.mjs";
 import { fetchCalls, installFetch } from "./helpers/dom.mjs";
 
@@ -76,6 +77,16 @@ test("пусто + голос доступен → микрофон «удерж
   assert.ok($(root, MIC), "микрофон");
   assert.equal($(root, ARROW), null);
   assert.equal(sendBtn(root).getAttribute("aria-label"), "Отправить — удерживайте для голоса");
+  // BUG-269 п.1: тёмный вид микрофона — по классу, а не по подписи (в Teleharness подпись на языке интерфейса)
+  assert.ok(sendBtn(root).classList.contains("is-mic"), "класс is-mic в режиме микрофона");
+  t$.typeInto(ta(root), "текст");
+  assert.equal(sendBtn(root).classList.contains("is-mic"), false, "со стрелкой — без is-mic");
+});
+
+test("BUG-269 п.1: в CSS тёмный микрофон задан классом is-mic, без привязки к тексту подписи", () => {
+  const css = readFileSync(new URL("../../src/claude-look.css", import.meta.url), "utf8");
+  assert.match(css, /\.send-btn\.is-mic\s*\{/);
+  assert.doesNotMatch(css, /aria-label\^="Отправить — удерживайте"/);
 });
 
 test("ввод текста → стрелка «Отправить»; клик отправляет и чистит поле", () => {
@@ -378,7 +389,8 @@ test("FEAT-01.88: Ctrl+V снимка → чип «Снимок <дата вре
   assert.equal(ok, false, "браузерная вставка отменена");
   await t$.waitFor(() => uploads().length === 1);
   assert.match(uploads()[0].query.name, /^Снимок \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.png$/);
-  await t$.waitFor(() => /Снимок \d{4}/.test(root.textContent));
+  // BUG-269: в чипе имя сокращено посередине, полное — в title
+  await t$.waitFor(() => [...root.querySelectorAll(".attach-name")].some((n) => /^Снимок \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.png$/.test(n.getAttribute("title") ?? "")));
   assert.equal(ta(root).value, "Вот что вижу");
 });
 
