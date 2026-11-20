@@ -17,7 +17,11 @@ const textOf = (m) => (m?.parts ?? []).filter((p) => p.type === "text").map((p) 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-claude-test-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let storeSeq = 0;

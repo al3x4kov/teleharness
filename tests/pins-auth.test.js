@@ -17,7 +17,11 @@ before(async () => {
   auth = await import("../lib/auth.js");
   auth.initAuth();
 });
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 test("cleanPins: strings of the id alphabet only, duplicates collapsed, order kept, limit 200; non-array → 400", () => {
   assert.deepEqual(auth.cleanPins(["ses_b", "ses_a", "ses_b", 7, null, "", "a/b", "x y", "ok-1_Z"]), ["ses_b", "ses_a", "ok-1_Z"]);

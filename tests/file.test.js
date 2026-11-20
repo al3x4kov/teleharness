@@ -83,7 +83,11 @@ test("resolveInside: case-insensitive containment on win32", { skip: process.pla
 // preview, everything else outside must stay 403.
 const EXTRA = mkdtempSync(path.join(tmpdir(), "teleharness-file-extra-"));
 writeFileSync(path.join(EXTRA, "note.md"), "# внешняя заметка\n");
-after(() => rmSync(EXTRA, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(EXTRA, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 test("resolveInside: absolute path inside an extra root is allowed", () => {
   const abs = path.join(EXTRA, "note.md");

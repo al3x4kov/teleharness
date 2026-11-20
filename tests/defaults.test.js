@@ -45,7 +45,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BUNDLE_DIR = mkdtempSync(path.join(os.tmpdir(), "teleharness-defaults-"));
-after(() => rmSync(BUNDLE_DIR, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(BUNDLE_DIR, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const STORE_BUNDLE = (
   await build({
     entryPoints: [path.join(ROOT, "src", "lib", "store.js")],

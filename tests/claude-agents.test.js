@@ -21,7 +21,11 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
 const SHIPPED = path.join(ROOT, "shared", "claude-agents");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-claude-agents-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 let seq = 0;
 const freshDir = (name = "d") => {

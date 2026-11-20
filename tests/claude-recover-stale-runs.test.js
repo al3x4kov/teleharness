@@ -13,7 +13,11 @@ import { ClaudeRunner } from "../lib/claude.js";
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-claude-recover-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 test("BUG-229: при старте teleharnessRun running в сохранённой части становится stopped, времена сохраняются", async () => {
   const dir = path.join(TMP, "data");

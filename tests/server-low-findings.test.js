@@ -15,7 +15,11 @@ import { dispatchRoute } from "../routes/router.js";
 import { PushStore } from "../lib/push.js";
 
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-low-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const fakeRes = () => ({ status: 0, body: null, headers: {}, setHeader(k, v) { this.headers[k] = v; } });
 const sendJson = (res, status, obj) => { res.status = status; res.body = obj; };
 

@@ -14,7 +14,11 @@ import { ClaudeRunner, claudeTurnUsage, translateEvent } from "../lib/claude.js"
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FAKE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-claude-usage-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 test("claudeTurnUsage: на реальной ленте CLI 2.1.322 — сумма хода, контекст последнего вызова, окно и цена", () => {
   const lines = readFileSync(path.join(ROOT, "tests", "fixtures", "claude-stream-subagent-2.1.322.jsonl"), "utf8").split("\n");

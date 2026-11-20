@@ -10,7 +10,11 @@ import path from "node:path";
 import { createCodexCatalog, parseCatalogLine } from "../lib/codex-catalog.js";
 
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-codex-cat-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const RAW = [{ id: "gpt-6.1-sol", displayName: "GPT-6.1-Sol", isDefault: true }, { id: "gpt-6-astra", displayName: "GPT-6-Astra" }];
 
 // spawn-заглушка: печатает заданную строку и закрывается

@@ -8,7 +8,11 @@ import path from "node:path";
 import { RELAY_CATCHUP_MARK, RelayStore, catchUpPart, marksForJournal, mergeFeeds, missedTurns, planRelay, relayMark, relayRule, withCatchUp } from "../lib/relay.js";
 
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-relay-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const CLAUDE = { engine: "claude", model: { providerID: "anthropic", modelID: "claude-opus-5-5" }, agent: null, prompted: true };
 const GLM = { engine: "opencode", model: { providerID: "zai-coding-plan", modelID: "glm-5.3" }, agent: "orchestrator", prompted: true };
 

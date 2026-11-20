@@ -10,7 +10,11 @@ import { buildSnapshot, withSnapshot, zoneForUser } from "../lib/kb-cache.js";
 import { firstUserContext, partKbContext, snapshotDerivedTitle } from "../shared/title.js";
 
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-kb-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const ADMIN = path.join(TMP, "agents");
 const TV = path.join(TMP, "tenants");
 const note = (f, s) => {

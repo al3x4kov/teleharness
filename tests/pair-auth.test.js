@@ -29,7 +29,11 @@ before(async () => {
   tenant = auth.createUser({ name: "pairtenant" }).user;
 });
 
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 beforeEach(() => auth.resetClaimThrottle());
 

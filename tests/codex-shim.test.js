@@ -18,7 +18,11 @@ const SHIM = path.join(ROOT, "lib", "codex-shim.mjs");
 const FAKE = path.join(ROOT, "tests", "fixtures", "codex-appserver-fake.mjs");
 const WRAPPER = path.join(ROOT, "tests", "fixtures", "codex-shim-runner.mjs");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-codex-shim-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 let seq = 0;
 const workDir = () => {

@@ -18,7 +18,11 @@ import {
 } from "../lib/git.js";
 
 const TMP = mkdtempSync(path.join(os.tmpdir(), "teleharness-git-unit-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 const sh = (cwd, ...args) =>
   execFileSync("git", ["-c", "user.name=Seed", "-c", "user.email=seed@x", "-c", "core.autocrlf=false", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });

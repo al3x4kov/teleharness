@@ -9,7 +9,11 @@ import path from "node:path";
 import { materializeFileParts, sanitizeFilename, UPLOAD_DIR } from "../lib/attach.js";
 
 const root = mkdtempSync(path.join(tmpdir(), "teleharness-attach-"));
-after(() => rmSync(root, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(root, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 const filePart = (name, mime, bytes) => ({
   type: "file",

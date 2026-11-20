@@ -8,7 +8,11 @@ import path from "node:path";
 import { JournalWriter, findJournal, isJournalAccess, journalFile, journalRule, renderJournal, writeJournal } from "../lib/chat-journal.js";
 
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-journal-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const T0 = new Date(2026, 10, 12, 14, 0, 0).getTime();
 const user = (id, at, text, extra = {}) => ({ info: { id, role: "user", time: { created: at } }, parts: [{ id: id + "p", type: "text", text, ...extra }] });
 const asst = (id, at, parts, info = {}) => ({ info: { id, role: "assistant", time: { created: at, completed: at + 1000 }, modelID: "glm-5.3", ...info }, parts });

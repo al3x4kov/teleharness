@@ -11,7 +11,11 @@ import { TENANT_MCP, tenantMcpView } from "../lib/policy.js";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-user-prompt-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 test("cleanSystemPrompt: trims, CRLF → LF, strips control chars, empty/null → ''", () => {
   assert.equal(cleanSystemPrompt("  a\r\nb\rc\u0000\u0007\t d  "), "a\nb\nc\t d");

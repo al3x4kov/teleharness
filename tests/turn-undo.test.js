@@ -12,7 +12,11 @@ import { backup, targetOf } from "../lib/turn-undo-hook.mjs";
 import { sweepTurnUndo } from "../lib/gc.js";
 
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-turn-undo-"));
-after(() => rmSync(TMP, { recursive: true, force: true }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 const work = path.join(TMP, "work");
 mkdirSync(work, { recursive: true });
 

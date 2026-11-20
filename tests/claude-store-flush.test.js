@@ -16,7 +16,11 @@ import { writeJsonAtomicAsync } from "../lib/json-store.js";
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FIXTURE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-claude-flush-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function waitFor(predicate, timeoutMs = 5000, stepMs = 25) {

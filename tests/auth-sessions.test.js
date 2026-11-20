@@ -31,7 +31,11 @@ before(async () => {
   auth.initAuth();
 });
 
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 // sessions.json: хеш → запись. Загрузка в память идёт только через initAuth().
 function seedSessions(records) {

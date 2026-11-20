@@ -14,7 +14,11 @@ import { readJsonStore, writeJsonAtomic, writeJsonAtomicAsync } from "../lib/jso
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-json-store-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); // уборка по возможности: на Windows папку может держать дочерний процесс (EBUSY)
+  } catch {}
+});
 
 const freshDir = (name) => {
   const dir = path.join(TMP, name);
