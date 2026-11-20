@@ -6,6 +6,14 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+### Changed
+- **New positioning: a self-hosted control room for AI coding agents.** README (English and Russian) opens with
+  *Your AI coding agents, from your phone* and three pillars — Chat, Relay and Pipelines on Temporal — with a
+  *What it does* block, a note on why pipelines run on Temporal, and Temporal in *Built with*. The social preview,
+  the `package.json` description and keywords (`codex`, `temporal`, `agent-orchestration`, `agentic-workflow`,
+  `human-in-the-loop`) follow the same wording.
+- A test checks that every local image, link and anchor in both READMEs resolves.
+
 ## [2.0.5] — 2026-11-20
 
 ### Fixed

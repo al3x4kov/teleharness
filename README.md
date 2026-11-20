@@ -1,16 +1,18 @@
 <div align="center">
 
-<img src="docs/screenshots/social-preview.png" alt="Teleharness: one chat for multiple AI coding CLIs" width="100%">
+<img src="docs/screenshots/social-preview.png" alt="Teleharness: your AI coding agents — Claude Code, Codex and opencode — from your phone" width="100%">
 
-## One chat for multiple AI coding CLIs
+## Your AI coding agents, from your phone
 
-**Switch between Claude Code, opencode and Codex in the same conversation — without starting over.**
+**Chat with Claude Code, Codex and opencode in one place, hand a task over when a usage limit hits,
+and chain agents into pipelines that survive restarts.**
 
-Teleharness is an open-source, self-hosted web UI for AI coding agents. It runs the real CLIs on your machine,
-with their native agents, skills, MCP servers, hooks and project context, and lets you hand a chat from one CLI
-to another when a subscription hits its usage limit.
+Teleharness is an open-source, self-hosted control room for AI coding CLIs. It runs the real CLIs on your machine —
+with their agents, skills, MCP servers, hooks and project context — and adds what a terminal can't: a mobile-first
+chat, approvals from anywhere, cross-CLI handoff and durable multi-agent pipelines on [Temporal](https://temporal.io).
+All of it runs on the CLI subscriptions you already pay for, not a metered API.
 
-**Multi-CLI chat** · **cross-CLI context handoff** · **subscription usage** · **mobile-first UI** · **persistent memory** · **self-hosted**
+**Chat** · **Relay** · **Pipelines** · **human in the loop** · **on your subscriptions** · **self-hosted**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -18,7 +20,9 @@ to another when a subscription hits its usage limit.
 [![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
+[What it does](#what-it-does) •
 [Switch CLIs](#switch-cli-mid-conversation) •
+[Pipelines](#pipelines-that-survive-restarts-temporal) •
 [Try the demo](#try-it-in-30-seconds) •
 [Tour](#a-quick-tour) •
 [Features](#features) •
@@ -33,6 +37,21 @@ to another when a subscription hits its usage limit.
 </div>
 
 ---
+
+## What it does
+
+<table>
+<tr>
+<td width="33%"><img src="docs/screenshots/phone-light-codex.png" alt="A Codex chat on a phone: file edits, passing tests, Ask mode"></td>
+<td width="33%"><img src="docs/screenshots/phone-light-relay.png" alt="Handoff mark in one feed: Claude Opus → GLM-5.3"></td>
+<td width="33%"><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a block waiting for your decision"></td>
+</tr>
+<tr>
+<td valign="top"><b>Chat</b><br>Claude Code, Codex and opencode side by side in a phone-first UI: live steps, subagent cards, diffs and git, files, voice, push. Approve edits and commands from anywhere.</td>
+<td valign="top"><b>Relay</b><br>A subscription runs out mid-task? The same chat continues on another CLI or model — same folder, one feed, the missed turns carried over. Manually or automatically.</td>
+<td valign="top"><b>Pipelines</b><br>Chain agents into multi-step runs on Temporal: Claude reviews, you approve from your phone, Codex writes — with timers, conditions, schedules and artifacts. Runs survive restarts.</td>
+</tr>
+</table>
 
 ## Switch CLI mid-conversation
 
@@ -62,6 +81,10 @@ Turn a routine into a pipe: Claude reviews the diff, you approve it from your ph
 the file lands in the run folder. Each step runs on your CLI subscription as a turn of your own chat, so you can open
 its conversation later. Runs keep going while the portal is closed or the server restarts.
 
+Why Temporal: every step is a durable activity, model calls are recorded exactly once in a ledger, a *Human decision*
+step can wait for days without holding a process, and concurrency slots per engine and per user keep your
+subscriptions within their limits.
+
 <p align="center">
   <img src="docs/screenshots/temporal.gif" alt="A waiting run: Claude's review next to Approve; after approval Codex writes release notes and notes.md opens" width="300">
 </p>
@@ -82,13 +105,16 @@ macOS — see [docs/temporal.md](docs/temporal.md). Try it without any setup in 
 Chat apps give you a model. Agent CLIs give you much more — tools, file access, subagents, skills,
 MCP servers, hooks, project memory — but they live in a terminal on your desk.
 
-Teleharness puts a mobile-first web UI in front of those CLIs, so the full harness is one tap away:
+Teleharness puts a mobile-first web UI in front of those CLIs, so the full harness is one tap away — and lets you
+chain them into pipelines:
 
 - **CLIs, not models.** Each chat runs through `opencode serve`, the `claude` CLI or the `codex` CLI. Whatever you
   have configured there — agents, skills, plugins, MCP — works from your phone.
 - **Many providers through one portal.** opencode talks to Z.ai GLM, OpenAI, Google Gemini, Anthropic,
   OpenRouter, local models and more; Claude Code brings your Claude subscription, Codex your ChatGPT
   subscription. Pick the engine and model per chat.
+- **Agents that work while you're away.** Pipelines on Temporal run multi-step jobs across Claude and Codex, stop for
+  your approval and resume after restarts — on your subscriptions, never a paid API.
 - **A task survives a usage limit.** When a subscription runs out mid-task, hand the chat over to another
   engine or model: same folder, one feed, and the new engine receives the turns it missed.
 - **Memory that outlives a chat.** An Obsidian vault works as an active cache: agents get a snapshot
@@ -357,7 +383,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHA
 
 ## Built with
 
-[opencode](https://opencode.ai) · [Claude Code](https://docs.anthropic.com/en/docs/claude-code) · [Codex CLI](https://github.com/openai/codex) ·
+[opencode](https://opencode.ai) · [Claude Code](https://docs.anthropic.com/en/docs/claude-code) · [Codex CLI](https://github.com/openai/codex) · [Temporal](https://temporal.io) ·
 [oh-my-opencode-slim](https://www.npmjs.com/package/oh-my-opencode-slim) · [Preact](https://preactjs.com) ·
 [esbuild](https://esbuild.github.io) · [marked](https://marked.js.org) · [DOMPurify](https://github.com/cure53/DOMPurify) ·
 [highlight.js](https://highlightjs.org) · [Piper](https://github.com/rhasspy/piper) · [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)

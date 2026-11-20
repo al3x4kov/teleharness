@@ -31,7 +31,7 @@
   "devDependencies": {
     "happy-dom": "^21.0.4"
   },
-  "description": "Mobile-first web portal for coding-agent CLIs (Claude Code, opencode, Codex) with their full harness: agents, skills, MCP, Obsidian memory.",
+  "description": "Self-hosted control room for AI coding agents (Claude Code, Codex, opencode): mobile-first chat, cross-CLI handoff on usage limits, and durable multi-agent pipelines on Temporal with human approval.",
   "repository": {
     "type": "git",
     "url": "https://github.com/al3x4kov/teleharness.git"
@@ -39,15 +39,20 @@
   "homepage": "https://github.com/al3x4kov/teleharness",
   "keywords": [
     "claude-code",
-    "opencode",
     "codex",
+    "opencode",
     "ai-agents",
     "coding-agent",
+    "agent-orchestration",
+    "agentic-workflow",
+    "temporal",
+    "human-in-the-loop",
+    "multi-agent",
+    "self-hosted",
     "mobile",
     "pwa",
-    "llm",
     "mcp",
-    "obsidian",
-    "self-hosted"
+    "llm",
+    "obsidian"
   ]
 }
