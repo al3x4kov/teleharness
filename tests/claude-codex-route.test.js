@@ -15,7 +15,13 @@ import { ClaudeRunner, codexProviderPatch, providerPatch } from "../lib/claude.j
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const FAKE = path.join(ROOT, "tests", "fixtures", "claude-fake.mjs");
 const TMP = mkdtempSync(path.join(tmpdir(), "teleharness-codex-route-"));
-after(() => rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }));
+// Windows: a just-exited fake CLI can still hold the folder (EBUSY) — the cleanup is
+// best-effort and must not fail the suite; the OS temp folder is cleared anyway.
+after(() => {
+  try {
+    rmSync(TMP, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+  } catch {}
+});
 
 const CODEX = { providerID: "openai-codex", modelID: "gpt-6.1-sol" };
 const HAIKU = { providerID: "anthropic", modelID: "claude-haiku-4-5" };

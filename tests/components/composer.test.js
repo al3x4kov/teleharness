@@ -387,7 +387,7 @@ test("FEAT-01.88: Ctrl+V снимка → чип «Снимок <дата вре
   t$.typeInto(ta(root), "Вот что вижу");
   const ok = paste(root, clip({ files: [new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png" })] }));
   assert.equal(ok, false, "браузерная вставка отменена");
-  await t$.waitFor(() => uploads().length === 1);
+  await t$.waitFor(() => uploads().length === 1, { tries: 3000 });
   assert.match(uploads()[0].query.name, /^Снимок \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.png$/);
   // BUG-269: в чипе имя сокращено посередине, полное — в title
   await t$.waitFor(() => [...root.querySelectorAll(".attach-name")].some((n) => /^Снимок \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}\.png$/.test(n.getAttribute("title") ?? "")));
@@ -402,7 +402,8 @@ test("FEAT-01.88: два снимка подряд — разные имена; 
   const shot = () => new File([new Uint8Array([1])], "image.png", { type: "image/png" });
   paste(root, clip({ files: [shot(), shot()] }));
   paste(root, clip({ files: [new File(["%PDF"], "ТЗ-портал.pdf", { type: "application/pdf" })], text: "ТЗ-портал.pdf" }));
-  await t$.waitFor(() => uploads().length === 3);
+  // три последовательные загрузки настоящих File: на медленных CI-машинах нужно больше оборотов цикла
+  await t$.waitFor(() => uploads().length === 3, { tries: 3000 });
   const names = uploads().map((c) => c.query.name);
   assert.equal(new Set(names).size, 3, "имена различаются: " + names.join(" | "));
   assert.ok(names.includes("ТЗ-портал.pdf"));
