@@ -331,11 +331,14 @@ function reduce(evt) {
       }));
       return;
     case "teleharness.keepalive":
-      // Claude liveness: lastAction / lastOutputAt from the runner.
+      // Claude/ACP liveness: lastAction / lastOutputAt / activeTasks from the runner (BUG-291).
       patchActive(p.sessionID, (act) => ({
         ...act,
         lastAction: p.lastAction ? { label: actionOf({ type: "tool", tool: p.lastAction }), at: p.lastOutputAt ?? act.lastAction?.at ?? null } : act.lastAction,
         lastActivityAt: typeof p.lastOutputAt === "number" ? p.lastOutputAt : act.lastActivityAt,
+        ...(Array.isArray(p.activeTasks) ? { activeTasks: p.activeTasks } : {}),
+        ...(typeof p.hasAnswerText === "boolean" ? { hasAnswerText: p.hasAnswerText } : {}),
+        ...(typeof p.queued === "number" ? { queuedCount: p.queued } : {}),
       }));
       return;
     case "message.updated": {

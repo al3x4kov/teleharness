@@ -7,7 +7,7 @@ import { useEffect, useState } from "preact/hooks";
 import { ModelPicker, PickerSheet } from "../Pickers.jsx";
 import { api, explainApiError } from "../../lib/api.js";
 import { providerCfg } from "../../lib/store.js";
-import { ENGINE_SHORT, engineOf, modelName } from "../../lib/engine.js";
+import { engineOf, engineShortOf, modelName } from "../../lib/engine.js";
 import { t } from "../../lib/i18n.js";
 import "../relay.css";
 
@@ -33,7 +33,7 @@ export function moveUp(order, i) {
   return next;
 }
 
-const label = (m) => `${modelName(providerCfg.value, m)} · ${ENGINE_SHORT[engineOf(m.providerID)] ?? ""}`;
+const label = (m) => `${modelName(providerCfg.value, m)} · ${engineShortOf(m.providerID)}`;
 
 export default function AutoRelayRow({ client = api }) {
   const [state, setState] = useState({ status: "loading", on: false, order: [] }); // loading | ready | error
@@ -105,7 +105,7 @@ export default function AutoRelayRow({ client = api }) {
                     <li class="autorelay-item" key={m.providerID + "/" + m.modelID}>
                       <span class="autorelay-n">{i + 1}.</span>
                       <span class="autorelay-name">
-                        <span class={"engine-dot" + (engineOf(m.providerID) === "claude" ? " is-claude" : engineOf(m.providerID) === "codex" ? " is-codex" : "")} aria-hidden="true" /> {label(m)}
+                        <span class={"engine-dot" + (engineOf(m.providerID) === "claude" ? " is-claude" : engineOf(m.providerID) === "codex" ? " is-codex" : engineOf(m.providerID) === "acp" ? " is-acp" : "")} aria-hidden="true" /> {label(m)}
                       </span>
                       <button class="autorelay-btn" type="button" aria-label={t("autoRelay.up", { name: label(m) })} disabled={saving || i === 0} onClick={() => save({ order: moveUp(order, i) })}>↑</button>
                       <button class="autorelay-btn" type="button" aria-label={t("autoRelay.remove", { name: label(m) })} disabled={saving} onClick={() => save({ order: removeAt(order, i) })}>✕</button>

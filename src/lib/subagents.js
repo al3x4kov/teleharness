@@ -300,7 +300,7 @@ function claudeRun(part, ctx, id) {
 export function agentRun(part, ctx = {}) {
   if (!isAgentTool(part)) return null;
   const id = part?.callID ?? part?.id ?? null;
-  return ctx.engine === "claude" || ctx.engine === "codex" ? claudeRun(part, ctx, id) : ocRun(part, ctx, id);
+  return ctx.engine === "claude" || ctx.engine === "codex" || ctx.engine === "acp" ? claudeRun(part, ctx, id) : ocRun(part, ctx, id);
 }
 
 // Все запуски ленты в порядке появления; запуски дочерних лент идут сразу
@@ -436,11 +436,21 @@ export function cleanAgentOutput(text) {
   return body.replace(/^(?:[ \t]*\n)+/, "").replace(/(?:\n[ \t]*)+$/, "");
 }
 
-// TASK-01.81 (кадры 4, 5): полоса фоновых агентов над полем ввода — когда основной
-// ход не идёт, диалога нет и детализация ВКЛЮЧЕНА. При выключенной детализации работу
-// агентов показывает индикатор «Работают агенты» (кадр 4) — полоса его не дублирует.
-export function showBgBar({ mainBusy = false, dialogOpen = false, detailOn = true, activeCount = 0 } = {}) {
-  return !mainBusy && !dialogOpen && detailOn && activeCount > 0;
+// BUG-290 (BUG-01.91): строка текущего действия для полосы фоновых агентов —
+// тот же источник, что и у карточки (nowLine), плюс «В очереди» для queued.
+export function bgActionText(run) {
+  if (!run) return "";
+  if (run.state === "queued") return t("agents.queued");
+  const line = nowLine(run);
+  if (!line) return "";
+  return line.object ? `${line.verb} ${line.object}` : line.verb;
+}
+
+// BUG-290 (BUG-01.91, вариант 4А): полоса фоновых агентов над полем ввода видна
+// во время нового основного хода и в обоих режимах детализации; скрывается только
+// при открытом диалоге разрешения/вопроса или когда активных агентов нет.
+export function showBgBar({ dialogOpen = false, activeCount = 0 } = {}) {
+  return !dialogOpen && activeCount > 0;
 }
 
 // TASK-01.81 (кадр 3): живая лента ребёнка не несёт расхода токенов — он есть в

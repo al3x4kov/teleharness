@@ -666,3 +666,26 @@ test("BUG-264 п.10: движок недоступен — список чато
     up.route("GET", "/api/session", saved);
   }
 });
+
+// BUG-272 (BUG-20.10): живой 2.x после execution.failed не шлёт session.idle —
+// ход с ошибкой провайдера (429) пропадал с доски вместо «Упало».
+test("BUG-272: ход v2 с ошибкой 429 (execution.failed provider.quota) — на доске «Упало» с причиной limit", async () => {
+  const sid = "ses_mark";
+  const at = (n) => ({ type: n, location: { directory: DIR } });
+  await api("/teleharness/api/session"); // индекс чатов
+  await up.waitForSubscription();
+  up.emit({ ...at("session.execution.started"), data: { sessionID: sid } });
+  await sleep(150);
+  up.emit({ ...at("session.execution.failed"), data: { sessionID: sid, error: { type: "provider.quota", message: "429 Weekly/Monthly Limit Exhausted" } } });
+  let b;
+  for (let i = 0; i < 100; i++) {
+    b = await (await api("/teleharness/api/attention")).json();
+    if (b.counts?.failed >= 1) break;
+    await sleep(50);
+  }
+  const it = b.items.find((x) => x.key === `chat:${sid}`);
+  assert.ok(it, "элемент чата на доске: " + JSON.stringify(b).slice(0, 600));
+  assert.equal(it.state, "failed");
+  assert.equal(it.reason, "limit");
+  assert.equal(it.errorKind, "limit");
+});

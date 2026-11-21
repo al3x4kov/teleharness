@@ -49,6 +49,7 @@ export const VALIDATION_MESSAGES = {
   engine: "Выберите движок",
   modelInstruction: "Укажите модель и инструкцию до 16000 символов",
   modelLimits: "Время шага 1–86400 секунд, попытки 1–10",
+  worktree: "Отдельная рабочая копия: включите или выключите",
   timer: "Таймер: 1–2592000 секунд",
   join: "Выберите правило объединения ветвей",
   when: "Условие должно сравнивать объявленный вход со значением",
@@ -99,6 +100,8 @@ export function validateDefinition(value, { tr } = {}) {
       if (!["opencode","claude","codex"].includes(step.engine)) error(step.id,msg("engine"));
       if (!text(step.model,160) || !text(step.instruction,16000)) error(step.id,msg("modelInstruction"));
       if (!integer(step.timeoutSeconds,1,86400) || !integer(step.maxAttempts,1,10)) error(step.id,msg("modelLimits"));
+      // FEAT-20.7: «Отдельная рабочая копия» — одна копия запуска для всех шагов с галочкой
+      if (step.worktree !== undefined && typeof step.worktree !== "boolean") error(step.id,msg("worktree"));
     }
     if (step.type === "timer" && !integer(step.seconds,1,2592000)) error(step.id,msg("timer"));
     if (step.type === "parallel" && !["all-success","collect-results"].includes(step.join)) error(step.id,msg("join"));

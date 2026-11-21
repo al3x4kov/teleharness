@@ -28,6 +28,19 @@ import { Glyph, useModalFocus } from "../Pickers.jsx";
 import { MenuButton, PinIcon } from "../Menu.jsx";
 import { bindingOf } from "../../lib/engine.js";
 import { locale, t } from "../../lib/i18n.js";
+import { board } from "../../lib/attention.js"; // FEAT-20.2
+
+export function BoardStrip({ counts = board.value?.counts }) {
+  const needs = Number(counts?.needs) || 0;
+  const failed = Number(counts?.failed) || 0;
+  if (needs + failed === 0) return null;
+  const parts = [needs > 0 && t("board.strip.needs", { count: needs }), failed > 0 && t("board.strip.failed", { count: failed })].filter(Boolean).join(" · ");
+  return (
+    <a class="bd-strip" href="#/board" data-req="FEAT-20.2" aria-label={t("board.strip.open", { parts })}>
+      <b>{parts}</b><span class="bd-strip-go">{t("nav.board")} ›</span>
+    </a>
+  );
+}
 
 const SWIPE_W = 130; // keep in sync with --swipe-w in views.css
 
@@ -184,6 +197,11 @@ export function SessionBody({ session: s, pinned = false }) {
       {bindingOf(s)?.engine === "codex" && (
         <span class="badge-engine" title={t("home.badge.codexTitle")}>
           <span class="engine-dot is-codex" aria-hidden="true" />Codex
+        </span>
+      )}
+      {bindingOf(s)?.engine === "acp" && (
+        <span class="badge-engine" title={t("home.acpTitle")}>
+          <span class="engine-dot is-acp" aria-hidden="true" />{bindingOf(s)?.model?.providerID === "acp-antigravity" ? "Gemini" : bindingOf(s)?.model?.providerID === "acp-github-copilot-cli" ? "Copilot" : "ACP"}
         </span>
       )}
     </>
@@ -503,6 +521,7 @@ export default function HomeView() {
         </div>
       ) : (
         <>
+          <BoardStrip />
           <input
             class="search home-search" type="search" placeholder={t("home.search")} value={query}
             aria-label={t("home.search")} autocomplete="off" spellcheck={false}

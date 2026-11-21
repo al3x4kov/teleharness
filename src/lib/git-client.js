@@ -116,6 +116,25 @@ export function agoLabel(at, now = Date.now()) {
 
 // Files ticked by default: «Отмечать изменённые» — tracked changes only (new
 // files, not in git, stay unticked); "none" — nothing.
+// FEAT-20.1: «Принять и закоммитить» передаёт экрану Git файлы пункта ревью (один раз).
+const REVIEW_SEL = (sid) => `teleharness.git.review-select.${sid}`;
+export function giveReviewSelection(sid, files) {
+  try {
+    globalThis.sessionStorage?.setItem(REVIEW_SEL(sid), JSON.stringify(files ?? []));
+  } catch {}
+}
+export function takeReviewSelection(sid) {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(REVIEW_SEL(sid));
+    if (raw == null) return null;
+    globalThis.sessionStorage.removeItem(REVIEW_SEL(sid));
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : null;
+  } catch {
+    return null;
+  }
+}
+
 export function preselected(files, preselect = "modified") {
   if (preselect === "none") return [];
   return (Array.isArray(files) ? files : []).filter((f) => f.status !== "?").map((f) => f.path);

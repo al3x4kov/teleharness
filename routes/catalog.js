@@ -169,7 +169,8 @@ export function catalogRoutes(deps) {
         // из server.js (deps.providerCatalog — клиент адаптера + модели);
         // без неё handleProvider читает ${upstream}/provider как в v1.
         const catalogSource = deps.oc ? deps.providerCatalog ?? null : null;
-        if (admin) return claude.handleProvider(req, res, upstream, { catalog: catalogSource });
+        const acpIds = admin ? deps.acpReady?.(user) ?? [] : [];
+        if (admin && !acpIds.length) return claude.handleProvider(req, res, upstream, { catalog: catalogSource });
         const captured = await deps.captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, upstream, { catalog: catalogSource }));
         if (captured.status !== 200) return sendJson(res, captured.status === 304 ? 502 : captured.status, { error: "provider unavailable" });
         let catalog;
@@ -177,6 +178,10 @@ export function catalogRoutes(deps) {
           catalog = JSON.parse(captured.body);
         } catch {
           return sendJson(res, 502, { error: "provider unavailable" });
+        }
+        if (admin) {
+          const models = Object.fromEntries(await Promise.all(acpIds.map(async id => [id, await deps.discoverModels?.(user,id)])));
+          return sendJson(res,200,deps.acpProviderCatalog(catalog,acpIds,models));
         }
         return sendJson(res, 200, deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex") }));
       },

@@ -11,6 +11,10 @@ import { signal } from "@preact/signals";
 const ROUTES = [
   { path: "/", view: "home" },
   { path: "/projects", view: "projects" },
+  { path: "/board", view: "board" }, // FEAT-20.2: доска внимания
+  { path: "/board/:section", view: "board" }, // FEAT-20.2: #/board/review — вкладка «Ждёт ревью»
+  { path: "/review", view: "review" }, // FEAT-20.2: очередь ревью — вкладка доски (редирект)
+  { path: "/review/:id", view: "reviewItem" }, // FEAT-20.1: экран ревью пункта
   { path: "/temporal", view: "temporal" }, // FEAT-19.1
   { path: "/temporal/:section", view: "temporal" },
   { path: "/temporal/:section/:id", view: "temporal" },
@@ -23,6 +27,7 @@ const ROUTES = [
   { path: "/pair/:code", view: "pair" }, // FEAT-18.2: phone sign-in link (QR)
   { path: "/git/:id", view: "git" }, // FEAT-18.8: git of a chat folder
   { path: "/git", view: "git" }, // FEAT-18.8: git of a project (#/git?directory=…)
+  { path: "/worktrees", view: "worktrees" }, // FEAT-20.7: рабочие копии проекта (#/worktrees?directory=…)
 ];
 
 // replace: swap the current entry (no way «Назад» into it — a deleted chat,

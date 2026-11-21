@@ -810,7 +810,7 @@ test("SSE v2: несколько папок в одном глобальном �
     assert.deepEqual(idles.map((e) => e.directory), [DIR, dirB], "один поток — разные папки");
     const err = got.find((e) => e.type === "session.error");
     assert.equal(err.directory, DIR, "без location — папка из прошлого события сессии (BUG-196)");
-    assert.deepEqual(err.properties, { sessionID: "ses_a", error: { type: "provider.no-route", message: "нет модели", name: "provider.no-route", data: { message: "нет модели" } } }, "BUG-202: имя и data.message как в 1.x");
+    assert.deepEqual(err.properties, { sessionID: "ses_a", error: { type: "provider.no-route", message: "нет модели", name: "provider.no-route", data: { message: "нет модели" } }, terminal: true }, "BUG-202: имя и data.message как в 1.x; BUG-272: execution.failed — конец хода");
     stop.close();
   } finally { await up.close(); }
 });

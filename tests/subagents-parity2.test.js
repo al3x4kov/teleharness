@@ -66,11 +66,11 @@ test("TASK-01.81: транскрипт Claude кладёт расход аген
   assert.equal(task.state.metadata.teleharnessRun.tokens, 18144);
 });
 
-test("TASK-01.81 (кадры 4 и 5): полоса фоновых агентов — только при включённой детализации", () => {
+test("BUG-290 (BUG-01.91): полоса фоновых агентов видна при новом ходе и в обоих режимах детализации, скрывается только при диалоге", () => {
   assert.equal(showBgBar({ mainBusy: false, dialogOpen: false, detailOn: true, activeCount: 1 }), true, "кадр 5");
-  assert.equal(showBgBar({ mainBusy: false, dialogOpen: false, detailOn: false, activeCount: 2 }), false, "детализация выключена: работу агентов показывает индикатор (кадр 4), полоса его не дублирует");
-  assert.equal(showBgBar({ mainBusy: true, dialogOpen: false, detailOn: true, activeCount: 1 }), false, "идёт основной ход");
-  assert.equal(showBgBar({ mainBusy: false, dialogOpen: true, detailOn: true, activeCount: 1 }), false, "открыт диалог");
+  assert.equal(showBgBar({ mainBusy: false, dialogOpen: false, detailOn: false, activeCount: 2 }), true, "вариант 4А: при выключенной детализации полоса над полем ввода");
+  assert.equal(showBgBar({ mainBusy: true, dialogOpen: false, detailOn: true, activeCount: 1 }), true, "кадр 5б: идёт новый основной ход");
+  assert.equal(showBgBar({ mainBusy: false, dialogOpen: true, detailOn: true, activeCount: 1 }), false, "открыт диалог — диалог важнее");
   assert.equal(showBgBar({ mainBusy: false, dialogOpen: false, detailOn: true, activeCount: 0 }), false);
 });
 

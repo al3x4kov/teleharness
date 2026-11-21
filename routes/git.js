@@ -29,7 +29,8 @@
 //         suggest: {claudeBin, codexShim, token, oc, timeoutMs?} }
 import path from "node:path";
 import { GitError, diffForPrompt, gitCommit, gitDiff, gitPush, gitStatus, openRepo, sanitize } from "../lib/git.js";
-import { OneshotError, ONESHOT_DIFF_MAX, cleanCommitMessage, commitPrompt, runClaudeOneshot, runCodexOneshot, runOpencodeOneshot, suggestFailure } from "../lib/oneshot.js";
+import { OneshotError, ONESHOT_DIFF_MAX, cleanCommitMessage, commitPrompt, runAcpOneshot, runClaudeOneshot, runCodexOneshot, runOpencodeOneshot, suggestFailure } from "../lib/oneshot.js";
+import { ACP_PROVIDERS } from "../shared/engine.js";
 import { realpathSync } from "node:fs";
 const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
 
@@ -65,7 +66,9 @@ export function gitRoutes(deps) {
     if (dir == null) return { status: 404, error: "session not found" };
     if (!admin && !deps.dirAllowed(user, dir)) return { status: 403, error: "outside your scope" };
     const own = deps.tenantDir(dir) ? deps.existingChatFolder(dir, sid) : null;
-    return { dir: own ?? dir, base: dir };
+    // FEAT-20.7: чат с рабочей копией — Git показывает копию (её ветку и файлы)
+    const wt = deps.worktreeDirOf?.(sid) ?? null;
+    return { dir: wt ?? own ?? dir, base: wt ?? dir };
   }
 
   // The folder of this request (?sid= | ?directory=) → {dir, untrusted} | {status, error}.
@@ -123,10 +126,18 @@ export function gitRoutes(deps) {
     if (!deps.engineAllowed(user, engine)) throw Object.assign(new Error("engine not allowed"), { status: 403 });
     const s = deps.suggest;
     const opts = s.timeoutMs ? { timeoutMs: s.timeoutMs } : {};
-    if (engine === "claude") return runClaudeOneshot({ binPath: s.claudeBin, model: binding.model.modelID, prompt, token: s.token, ...opts });
-    if (engine === "codex") return runCodexOneshot({ shimPath: s.codexShim, model: binding.model.modelID, prompt, token: s.token, ...opts });
+    // FEAT-20.6: расход «Предложить сообщение» — служебный вызов чата sid в журнале расхода
+    const onResult = (rec) => deps.recordService?.({ engine, sid, user, model: binding?.model ?? null, result: rec });
+    if (engine === "claude") return runClaudeOneshot({ binPath: s.claudeBin, model: binding.model.modelID, prompt, token: s.token, onResult, ...opts });
+    if (engine === "codex") return runCodexOneshot({ shimPath: s.codexShim, model: binding.model.modelID, prompt, token: s.token, onResult, ...opts });
+    if (engine === "acp") {
+      const agent = ACP_PROVIDERS[binding?.model?.providerID];
+      if (!agent) throw new OneshotError("неизвестный провайдер ACP");
+      const modelId = binding.model.modelID === binding.model.providerID ? null : binding.model.modelID;
+      return runAcpOneshot({ shimPath: s.acpShim, dataDir: s.dataDir, owner: user.id, agent, modelId, prompt, onResult, ...opts });
+    }
     const agent = binding?.agent ?? (admin ? null : await deps.tenantAgent());
-    return runOpencodeOneshot({ oc: s.oc, model: binding?.model ?? null, agent, prompt, ...opts });
+    return runOpencodeOneshot({ oc: s.oc, model: binding?.model ?? null, agent, prompt, onAnswer: (info) => deps.recordService?.({ engine: "opencode", sid, user, info }), ...opts });
   }
 
   return [

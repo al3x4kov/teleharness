@@ -8,14 +8,21 @@ import { providerCfg } from "../../lib/store.js";
 import { chatContext, chatCost, contextHint, contextText } from "../../lib/context-cost.js";
 import { t } from "../../lib/i18n.js";
 import "../context-meter.css";
+import { useState } from "preact/hooks";
+import { BudgetBanner, ChatCostSheet } from "./ChatCost.jsx";
 
-export default function ContextMeter({ messages }) {
+// FEAT-20.6: с sid полоска — кнопка, открывает лист «Расход чата» (сумма по ценам API — только там).
+export default function ContextMeter({ messages, sid = null }) {
+  const [open, setOpen] = useState(false);
   const ctx = chatContext(messages, providerCfg.value);
-  if (!ctx) return null;
+  if (!ctx) return sid ? <BudgetBanner sid={sid} /> : null;
   const cost = chatCost(messages);
   const costText = cost ? (cost.kind === "money" ? t("ctx.chatCost", { cost: cost.text }) + (cost.partial ? t("ctx.plusUnknown") : "") : cost.text) : "";
+  const Tag = sid ? "button" : "div";
   return (
-    <div class={"ctx-meter" + (ctx.warn ? " is-warn" : "")} data-req="FEAT-18.5" title={contextHint(ctx)}>
+    <>
+    {sid && <BudgetBanner sid={sid} />}
+    <Tag {...(sid ? { type: "button", "aria-haspopup": "dialog", onClick: () => setOpen(true) } : {})} class={"ctx-meter" + (ctx.warn ? " is-warn" : "") + (sid ? " is-button" : "")} data-req="FEAT-18.5" title={contextHint(ctx) + (sid ? t("context.clickForCost") : "")}>
       {ctx.pct != null && (
         <span class="ctx-bar" aria-hidden="true">
           <span class="ctx-fill" style={`width:${Math.max(2, ctx.pct)}%`} />
@@ -24,7 +31,9 @@ export default function ContextMeter({ messages }) {
       {ctx.warn && <span class="ctx-warn-ico" aria-hidden="true">⚠</span>}
       <span class="ctx-text">{contextText(ctx)}</span>
       {costText && <span class={"ctx-cost is-" + cost.kind}>· {costText}</span>}
-      <span class="sr-only">{`, ${contextHint(ctx)}`}</span>
-    </div>
+      <span class="sr-only">{`, ${contextHint(ctx)}${sid ? t("context.srOpenCost") : ""}`}</span>
+    </Tag>
+    {open && <ChatCostSheet sid={sid} onClose={() => setOpen(false)} />}
+    </>
   );
 }

@@ -1,0 +1,147 @@
+/* FEAT-20.1: экран ревью, вкладка «Ждёт ревью», плашка и карточка плана в чате.
+   Макет: design/mockups-v2/epic20-phone-review.html, бриф BRIEF-20.1.
+   Статус — значок + слово (не только цвет); тап-цели ≥ 44 px; без горизонтальной
+   прокрутки на 320 px (код переносится); листы снизу на телефоне, по центру на широком. */
+.review-view { max-width: 1240px; min-width: 0; padding-bottom: 24px; }
+.rv-header { align-items: center; }
+/* заголовок — колонки 2–3 сетки шапки (иначе правило «последний ребёнок → колонка 48 px» сжимает его) */
+.review-view .page-header.rv-header > .rv-title { grid-column: 2; min-width: 0; text-align: center; }
+.review-view .page-header.rv-header { padding-bottom: 4px; }
+.rv-title h1 { margin: 0; font-size: 17px; }
+.rv-back { display: inline-flex; align-items: center; min-height: 44px; margin: 0 0 4px; padding: 0 2px; color: var(--accent); text-decoration: none; font-weight: 600; cursor: pointer; }
+.rv-sub { margin: 2px 0 0; color: var(--text-2); font-size: 13px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.rv-hint { color: var(--text-2); font-size: 13.5px; margin: 6px 2px; }
+.rv-warn { color: var(--bd-warn); font-weight: 600; margin: 8px 0; }
+.rv-error { color: var(--bd-err); font-weight: 600; margin: 8px 0; }
+.rv-note { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 14px; margin: 8px 0; border-radius: 14px; background: var(--input); border: 1px solid var(--border); font-size: 14px; }
+
+.rv-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.review-view.is-wide .rv-body { grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); align-items: start; }
+.review-view.is-wide .rv-files { position: sticky; top: 8px; max-height: calc(100vh - 160px); overflow: auto; }
+
+.rv-summary { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 10px; font-size: 14px; color: var(--text-2); }
+.rv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; border: 1px solid currentColor; font-size: 13px; font-weight: 700; color: var(--bd-warn); }
+.rv-chip.is-returned { color: var(--text-2); }
+.rv-chip.is-changed, .rv-chip.is-interrupted { color: var(--bd-err); }
+.rv-chip.is-chat-deleted { color: var(--text-3); }
+
+.rv-seg { display: flex; gap: 0; margin: 0 0 10px; border: 1px solid var(--border); border-radius: 99px; overflow: hidden; width: max-content; max-width: 100%; }
+.rv-seg button { min-height: 44px; padding: 0 14px; border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+.rv-seg button[aria-pressed="true"] { background: var(--ink-pill, var(--text)); color: var(--ink-pill-text, var(--bg)); font-weight: 700; }
+
+.rv-file-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rv-file { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 28px; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 8px 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.rv-file.is-open { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--accent); }
+.rv-file-main { display: flex; flex-direction: column; min-width: 0; }
+.rv-file-name { font-weight: 700; overflow-wrap: anywhere; }
+.rv-file-dir { display: flex; min-width: 0; gap: 0; color: var(--text-2); font-size: 12.5px; white-space: nowrap; }
+/* путь режется с начала (имя файла — в заголовке строки), статус виден целиком */
+.rv-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.rv-file-what { flex: 0 0 auto; }
+.rv-file-stat { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; }
+.rv-plus { color: var(--bd-ok); }
+.rv-minus { color: var(--bd-err); }
+.rv-cnt { margin-left: 6px; }
+.rv-letter { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid currentColor; font-family: var(--font-mono); font-weight: 800; font-size: 13px; color: var(--warning); }
+.rv-letter.is-A { color: var(--bd-ok); }
+.rv-letter.is-D { color: var(--bd-err); }
+.rv-letter.is-R { color: var(--accent); }
+.rv-check { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--border); color: var(--bd-ok); font-weight: 900; }
+.rv-check.is-on { border-color: var(--bd-ok); background: color-mix(in srgb, var(--bd-ok) 15%, transparent); }
+.rv-general { margin: 14px 0 6px; }
+.rv-dismiss { margin-top: 10px; }
+.rv-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; min-height: 44px; padding: 0 4px; cursor: pointer; }
+.rv-link.is-danger { color: var(--bd-err); }
+
+.rv-file-view { min-width: 0; }
+.rv-file-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; margin: 0 0 8px; }
+.rv-tap-hint { font-size: 12.5px; }
+.rv-diff { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--input); font-family: var(--font-mono); font-size: 12.5px; }
+.rv-line { display: grid; grid-template-columns: 40px 14px minmax(0, 1fr); width: 100%; min-height: 24px; padding: 2px 6px 2px 0; border: 0; border-left: 4px solid transparent; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.rv-line:disabled { cursor: default; }
+.rv-line.is-add { background: color-mix(in srgb, var(--bd-ok) 12%, transparent); }
+.rv-line.is-del { background: color-mix(in srgb, var(--bd-err) 12%, transparent); }
+.rv-line.is-on { background: color-mix(in srgb, var(--accent) 24%, var(--input)); border-left-color: var(--accent); }
+.rv-line.is-edge .rv-no { color: var(--accent); font-weight: 800; }
+.rv-line:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rv-no { color: var(--text-3); text-align: right; padding-right: 6px; user-select: none; }
+.rv-sign { color: var(--text-2); user-select: none; }
+.rv-code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; min-width: 0; }
+.rv-hunk { padding: 4px 10px; color: var(--text-2); background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 12px; }
+.rv-gap { padding: 10px; color: var(--text-2); background: var(--surface); text-align: center; font-family: var(--font-ui); font-size: 13px; min-height: 44px; }
+.rv-gap-note { color: var(--text-3); }
+.rv-more, .rv-next { margin-top: 10px; }
+.rv-next { width: 100%; }
+
+.rv-comment { margin: 6px 8px 8px 46px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--accent); background: var(--surface); font-family: var(--font-ui); font-size: 14px; }
+.rv-comment.is-sent { border-style: dashed; border-color: var(--text-3); }
+.rv-comment-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.rv-comment-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rv-comment-actions { display: flex; gap: 12px; }
+.rv-tag { font-size: 12px; color: var(--text-2); }
+.rv-tag.is-draft { color: var(--accent); font-weight: 700; }
+.rv-file-comments, .rv-orphans { margin-top: 12px; }
+.rv-file-comments .rv-comment, .rv-orphans .rv-comment, .rv-general .rv-comment { margin-left: 0; }
+.rv-orphans h3 { font-size: 14px; margin: 0 0 6px; color: var(--text-2); }
+
+/* панель выбора строк — тёмная пилюля внизу */
+.rv-pill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 4px; width: min(440px, calc(100vw - 16px)); padding: 6px; border-radius: 22px; background: #1f1e1d; color: #fff; box-shadow: var(--shadow-1); box-sizing: border-box; }
+/* подпись — своей строкой сверху: на 320–393 px видна целиком */
+.rv-pill-label { order: -1; flex: 1 0 100%; text-align: center; font-size: 13px; line-height: 1.3; padding: 2px 6px 0; overflow-wrap: anywhere; }
+.rv-pill-btn { width: 44px; height: 44px; flex: 0 0 44px; border: 0; border-radius: 50%; background: none; color: #fff; font-size: 16px; cursor: pointer; }
+.rv-pill-go { min-height: 44px; flex: 1 1 auto; max-width: 220px; padding: 0 14px; border: 0; border-radius: 99px; background: #fff; color: #1f1e1d; font: inherit; font-weight: 700; cursor: pointer; }
+
+/* нижняя панель */
+/* липкая к низу колонки экрана (не перекрывает меню на десктопе) */
+.rv-bar { position: sticky; bottom: 0; z-index: 50; margin: 16px 0 0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--bg) 92%, transparent); border-top: 1px solid var(--border); backdrop-filter: blur(8px); }
+.rv-bar-btns { display: flex; gap: 8px; max-width: 760px; margin: 0 auto; flex-wrap: wrap; }
+.rv-bar-btns .bd-btn { flex: 1 1 140px; }
+.rv-bar-why { text-align: center; color: var(--text-2); font-size: 13px; margin: 6px 0 0; }
+.rv-toast { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 70; padding: 12px 18px; border-radius: 99px; background: #1f1e1d; color: #fff; font-weight: 600; max-width: calc(100vw - 24px); }
+
+/* листы: снизу на телефоне, диалог по центру на широком */
+.rv-scrim { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.45); display: flex; align-items: flex-end; justify-content: center; }
+.rv-sheet { width: 100%; max-height: 88vh; overflow: auto; background: var(--surface); color: var(--text); border-radius: 20px 20px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-1); }
+.rv-sheet h2 { font-size: 18px; margin: 0 0 8px; overflow-wrap: anywhere; }
+@media (min-width: 768px) {
+  .rv-scrim { align-items: center; padding: 16px; }
+  .rv-sheet { width: min(560px, 100%); border-radius: 20px; }
+  .rv-sheet.is-wide { width: min(640px, 100%); }
+}
+.rv-textarea { width: 100%; box-sizing: border-box; min-height: 110px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--input); color: var(--text); font: inherit; font-size: 16px; resize: vertical; }
+.rv-quote, .rv-preview { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--input); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 30vh; overflow: auto; }
+.rv-preview { max-height: 40vh; }
+.rv-col { flex-direction: column; align-items: stretch; }
+.rv-col .bd-btn { width: 100%; }
+.rv-sheet .bd-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
+
+/* вкладка «Ждёт ревью» на доске */
+.rq-filters { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.rq-filters button { min-height: 44px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+.rq-filters button[aria-pressed="true"] { background: var(--ink-pill, var(--text)); color: var(--ink-pill-text, var(--bg)); border-color: transparent; font-weight: 700; }
+.rq-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .rq-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rq-item { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; min-height: 44px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; }
+.rq-item b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.rq-meta { color: var(--text-2); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.rq-meta > span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* BUG-277: статус — компактной пилюлей, а не полосой во всю карточку */
+.rq-item .rv-chip { align-self: flex-start; max-width: 100%; }
+.rq-accepted { margin-top: 18px; }
+.rq-accepted summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+
+/* в чате: плашка «Ждёт ревью · Проверить», пузырь ревью, карточка плана */
+.rv-plaque { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 4px; padding: 8px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bd-warn) 45%, transparent); background: color-mix(in srgb, var(--bd-warn) 10%, var(--surface)); font-size: 14px; }
+.rv-plaque a { min-height: 44px; display: inline-flex; align-items: center; color: var(--accent); font-weight: 700; text-decoration: none; }
+.rv-bubble-sum { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; font-weight: 600; }
+.rv-bubble-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.pl-card { margin: 10px 0; padding: 12px 14px; border-radius: 16px; border: 1.5px solid var(--accent); background: var(--surface); }
+.pl-card.is-done { border-style: dashed; border-color: var(--text-3); }
+.pl-card h3 { margin: 0 0 6px; font-size: 15px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.pl-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; max-height: 50vh; overflow: auto; margin: 6px 0; }
+.pl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pl-actions .bd-btn { flex: 1 1 140px; }
+.pl-warn { color: var(--bd-err); font-weight: 600; }
+.pl-toggle { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 8px 0; cursor: pointer; }
+.pl-toggle input { width: 22px; height: 22px; margin-top: 2px; }
+.pl-toggle.is-off { opacity: 0.55; cursor: not-allowed; }

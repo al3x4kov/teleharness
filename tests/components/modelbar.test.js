@@ -201,8 +201,8 @@ test("FEAT-18.7: выбор режима в Codex-чате — «Спрашив�
   assert.deepEqual(permModeChoices({ admin: true, engine: "claude" }).map((m) => m.id), ["ask", "edits", "full"]);
 });
 
-test("Codex role selection is optimistic, uses shared catalog, and can be cleared after history", async () => {
-  const model = { providerID: "openai-codex", modelID: "gpt-6.1-sol" };
+for (const [engineLabel, model] of [["Codex",{providerID:"openai-codex",modelID:"gpt-6.1-sol"}],["Gemini",{providerID:"acp-antigravity",modelID:"gemini-4-neon-medium"}]]) test(engineLabel+" role selection uses shared catalog and can be cleared after history", async () => {
+
   let finish;
   installFetch([{ method: "PATCH", path: /\/binding$/, reply: (c) => new Promise(resolve => {
     finish = () => resolve({ teleharness: { model, agent: c.body.agent, prompted: true } });
@@ -212,13 +212,13 @@ test("Codex role selection is optimistic, uses shared catalog, and can be cleare
   const { root } = t$.mount(ui.ModelBar, { sessionId: "ses_m", hasMessages: true });
   t$.click($$(root, "button.model-pill")[1]);
   await t$.flush();
-  assert.match(document.querySelector(".sheet").textContent, /Агенты портала · Codex/);
+  assert.match(document.querySelector(".sheet").textContent, new RegExp("Агенты портала · "+engineLabel));
   t$.click(byText(document.querySelector(".sheet"), "button", "Workflow"));
   await t$.waitFor(() => finish);
   assert.equal(ui.store.sessions.value[0].teleharness.agent, "workflow", "optimistic role survives before server response");
   finish();
   await t$.waitFor(() => pills(root)[1] === "Workflow");
-  assert.equal($$(root, "button.model-pill")[1].getAttribute("aria-label"), "Агент Codex-чата: Workflow. Сменить");
+  assert.equal($$(root, "button.model-pill")[1].getAttribute("aria-label"), `Агент ${engineLabel}-чата: Workflow. Сменить`);
   t$.click($$(root, "button.model-pill")[1]);
   await t$.flush();
   t$.click(byText(document.querySelector(".sheet"), "button", "Без агента"));

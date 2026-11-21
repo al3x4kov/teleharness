@@ -60,7 +60,7 @@ test("resolveSettings: известный раздел, неизвестный, 
   assert.equal(ui.resolveSettings("models", "nope", { admin: true }), "unknown");
   assert.equal(ui.resolveSettings("voice", null, { voice: false }), "unknown");
   assert.equal(ui.resolveSettings(null, null), null);
-  assert.deepEqual(ui.ADMIN_SECTIONS.sort(), ["active", "computer", "users"]);
+  assert.deepEqual(ui.ADMIN_SECTIONS.sort(), ["acp", "active", "computer", "users"]);
 });
 
 test("П32.У1 корень admin: группы «Чаты · Приложение · Возможности · Администрирование», строки ведут в разделы, детализация — переключатель в строке", async () => {
@@ -70,7 +70,7 @@ test("П32.У1 корень admin: группы «Чаты · Приложени
   await t$.waitFor(() => $(root, 'a[href="#/settings/voice"]'));
   assert.deepEqual($$(root, ".set-group-title").map((e) => e.textContent), ["Чаты", "Приложение", "Возможности", "Администрирование"]);
   const hrefs = $$(root, "a.set-link").map((a) => a.getAttribute("href"));
-  for (const id of ["models", "prompt", "voice", "appearance", "notifications", "mcp", "subscription", "computer", "users", "active", "about"]) {
+  for (const id of ["models", "prompt", "voice", "appearance", "notifications", "mcp", "subscription", "computer", "users", "active", "acp", "about"]) {
     assert.ok(hrefs.includes("#/settings/" + id), id);
   }
   assert.match($(root, ".set-account").textContent, /admin.*администратор · Teleharness \d+\.\d+\.\d+/);

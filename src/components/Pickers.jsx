@@ -7,7 +7,7 @@ import { createPortal } from "preact/compat";
 import {
   agents, agentsError, claudeAgents, claudeAgentsError, providerCfg, providerError, refreshAgents, refreshClaudeAgents, refreshProvider,
 } from "../lib/store.js";
-import { ENGINE_LABEL, engineOf, WORKING_MODELS, workingModels } from "../lib/engine.js";
+import { ENGINE_LABEL, acpProviderName, engineOf, WORKING_MODELS, workingModels } from "../lib/engine.js";
 import { locale, t } from "../lib/i18n.js";
 import "./views.css";
 
@@ -205,29 +205,56 @@ const providerRank = (pid) => {
 // human subtitle; provider ids never reach the headings. z.ai goes first
 // (≈4 rows), so Claude is visible without scrolling.
 export const ENGINE_GROUPS = [
+  { engine: "acp", get title() { return t("pickers.engine.acpTitle"); }, get sub() { return t("pickers.engine.acp"); } },
   { engine: "opencode", title: ENGINE_LABEL.opencode, get sub() { return t("pickers.engine.opencode"); } },
   { engine: "claude", title: ENGINE_LABEL.claude, get sub() { return t("pickers.engine.claude"); } },
   { engine: "codex", title: ENGINE_LABEL.codex, get sub() { return t("pickers.engine.codex"); } }, // only while Codex is connected
 ];
 
-// Pure: catalog → [{engine, title, sub, models}] (empty groups dropped).
+const acpProviderSub = (pid) => (
+  pid === "acp-antigravity" ? t("pickers.acpSub.antigravity")
+  : pid === "acp-github-copilot-cli" ? t("pickers.acpSub.copilot")
+  : t("pickers.acpSub.default")
+);
+
+// Pure: catalog → [{key?, engine, title, sub, models}] (empty groups dropped).
+// BUG-287 / BRIEF-20.4: каждый ACP-агент получает свою группу «<Имя агента> · ACP».
 export function modelGroups(cfg, { engine = null, query = "", keep = null } = {}) {
   const q = query.trim().toLowerCase();
   const pool = workingModels(cfg, { keep }).filter(
     (m) => (!engine || engineOf(m.providerID) === engine) && (!q || m.label.toLowerCase().includes(q)),
   );
   const isDefault = (m) => cfg?.defaults?.[m.providerID] === m.id;
-  return ENGINE_GROUPS.map((g) => ({
-    engine: g.engine,
-    title: g.title,
-    sub: g.sub,
-    models: pool
+  const out = [];
+  for (const g of ENGINE_GROUPS) {
+    if (g.engine === "acp") {
+      const acpModels = pool.filter((m) => engineOf(m.providerID) === "acp");
+      const providers = [...new Set(acpModels.map((m) => m.providerID))];
+      for (const pid of providers) {
+        const models = acpModels
+          .filter((m) => m.providerID === pid)
+          .sort((a, b) => modelTitle(a).localeCompare(modelTitle(b), locale(), { numeric: true }));
+        if (models.length > 0) {
+          out.push({
+            key: pid,
+            engine: "acp",
+            title: `${acpProviderName(pid)} · ACP`,
+            sub: acpProviderSub(pid),
+            models,
+          });
+        }
+      }
+      continue;
+    }
+    const models = pool
       .filter((m) => engineOf(m.providerID) === g.engine)
       .sort((a, b) =>
         providerRank(a.providerID) - providerRank(b.providerID) ||
         (g.engine === "claude" || g.engine === "codex" ? Number(isDefault(b)) - Number(isDefault(a)) : 0) ||
-        modelTitle(a).localeCompare(modelTitle(b), locale(), { numeric: true })),
-  })).filter((g) => g.models.length > 0);
+        modelTitle(a).localeCompare(modelTitle(b), locale(), { numeric: true }));
+    if (models.length > 0) out.push({ engine: g.engine, title: g.title, sub: g.sub, key: g.engine, models });
+  }
+  return out;
 }
 
 // Catalog state for the sheet (PK-7): a failed /provider used to leave the
@@ -298,9 +325,9 @@ export function ModelPicker({ value, onPick, engine = null, note = null }) {
       ) : (
         <>
           {groups.map((g) => (
-            <section key={g.engine} aria-label={g.title}>
+            <section key={g.key ?? g.engine} aria-label={g.title}>
               <h3 class="engine-group">
-                <span class={"engine-dot" + (g.engine === "claude" ? " is-claude" : g.engine === "codex" ? " is-codex" : "")} aria-hidden="true" />
+                <span class={"engine-dot" + (g.engine === "claude" ? " is-claude" : g.engine === "codex" ? " is-codex" : g.engine === "acp" ? " is-acp" : "")} aria-hidden="true" />
                 <span class="eg-name">{g.title}</span>
                 <span class="eg-sub">{g.sub}</span>
               </h3>
@@ -408,7 +435,7 @@ export const claudeAgentFoot = () => t("pickers.claudeAgentFoot");
 
 export function ClaudeAgentPicker({ value = null, onPick, engine = "claude" }) {
   const codex = engine === "codex";
-  const label = codex ? "Codex" : "Claude";
+  const label = engine === "gemini" ? "Gemini" : codex ? "Codex" : "Claude";
   const list = claudeAgents.value;
   useEffect(() => {
     if (list == null) refreshClaudeAgents();
@@ -432,9 +459,9 @@ export function ClaudeAgentPicker({ value = null, onPick, engine = "claude" }) {
   const items = Array.isArray(list) ? list : [];
   return (
     <div class="picker">
-      {row(null, t("pickers.noAgent"), codex ? t("pickers.noAgentDescCodex") : t("pickers.noAgentDesc"))}
-      <section aria-label={codex ? t("pickers.codexAgents") : t("pickers.claudeAgents")}>
-        <h3 class="agent-group-label">{codex ? t("pickers.codexAgents") : t("pickers.claudeAgents")}</h3>
+      {row(null, t("pickers.noAgent"), engine === "gemini" ? t("pickers.noAgentDescGemini") : codex ? t("pickers.noAgentDescCodex") : t("pickers.noAgentDesc"))}
+      <section aria-label={engine === "gemini" ? t("pickers.geminiAgents") : codex ? t("pickers.codexAgents") : t("pickers.claudeAgents")}>
+        <h3 class="agent-group-label">{engine === "gemini" ? t("pickers.geminiAgents") : codex ? t("pickers.codexAgents") : t("pickers.claudeAgents")}</h3>
         {list == null && claudeAgentsError.value ? (
           <div class="picker-fail" role="alert">
             <strong>{t("pickers.agentsFailed")}</strong>
@@ -449,7 +476,7 @@ export function ClaudeAgentPicker({ value = null, onPick, engine = "claude" }) {
           items.map((a) => row(a.id, a.name, a.description))
         )}
       </section>
-      <p class="picker-foot">{codex ? t("pickers.codexAgentFoot") : claudeAgentFoot()}</p>
+      <p class="picker-foot">{engine === "gemini" ? t("pickers.geminiAgentFoot") : codex ? t("pickers.codexAgentFoot") : claudeAgentFoot()}</p>
     </div>
   );
 }

@@ -1,0 +1,15 @@
+# Ubuntu 24.04 AppArmor userns profile for bubblewrap (BUG-270 / Codex Linux read-only sandbox)
+abi <abi/4.0>,
+include <tunables/global>
+
+profile teleharness-bwrap-sys /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/teleharness-bwrap>
+}
+
+profile teleharness-bwrap-codex /opt/teleharness/codex-resources/bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/teleharness-bwrap>
+}

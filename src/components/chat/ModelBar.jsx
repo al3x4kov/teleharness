@@ -14,6 +14,7 @@ import { PERM_MODES, bindingOf, claudeAgentName, defaultBinding, engineOf, model
 import { AgentPicker, ClaudeAgentPicker, Glyph, ModelPicker, PickerSheet } from "../Pickers.jsx";
 import { t } from "../../lib/i18n.js";
 import ContextMeter from "./ContextMeter.jsx";
+import { PlanFirstToggle } from "./ChatReview.jsx"; // FEAT-20.1
 
 const lockNote = () => t("modelBar.lockNote");
 
@@ -31,18 +32,22 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
   if (!b) return null;
   const locked = Boolean(bound?.prompted) || hasMessages;
   const claude = b.engine === "claude";
+  const acp = b.engine === "acp";
+  const gemini = b.model.providerID === "acp-antigravity";
   const codex = b.engine === "codex";
   // BUG-160: Claude agents are admin-only (GET /claude/agents → 403 for a
   // tenant; Settings tells tenants «У Claude-чатов агентов нет») — no pill.
   const tenant = Boolean(me.value?.role) && me.value.role !== "admin";
-  const claudeAgentPill = (claude || codex) && !tenant;
-  const roleEngine = codex ? "Codex" : "Claude";
+  const claudeAgentPill = (claude || codex || gemini) && !tenant;
+  const roleEngine = gemini ? "Gemini" : codex ? "Codex" : "Claude";
   const name = modelName(providerCfg.value, b.model);
-  const agentLabel = (claude || codex) ? claudeAgentName(b.agent, claudeAgents.value ?? []) ?? t("modelBar.noAgent") : null;
+  const agentLabel = (claude || codex || gemini) ? claudeAgentName(b.agent, claudeAgents.value ?? []) ?? t("modelBar.noAgent") : null;
   const admin = !tenant;
   const showMode = permModeAvailable({ engine: b.engine, admin });
-  const mode = PERM_MODES.find((x) => x.id === permModeOf(session, { admin }));
+  const rawModeId = permModeOf(session, { admin });
+  const mode = PERM_MODES.find((x) => x.id === ((codex || acp) && rawModeId === "edits" ? "ask" : rawModeId));
   const busy = Boolean(busyMap.value[sessionId]);
+  const planFirst = session?.teleharness?.planFirst === true; // FEAT-20.1
 
   async function pickModel(m) {
     setSheet(null);
@@ -51,7 +56,7 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
     // Crossing engines (only possible before the first message): the agent
     // follows the engine — the Settings default of that engine (Claude: none
     // unless the user picked one, FEAT-13.17).
-    if (engineOf(m.providerID) !== b.engine) patch.agent = engineOf(m.providerID) === "claude" ? defs.claudeAgent ?? null : engineOf(m.providerID) === "codex" ? defs.codexAgent ?? null : defs.agent ?? null;
+    if (engineOf(m.providerID) !== b.engine) patch.agent = (m.providerID === "acp-antigravity" || engineOf(m.providerID) === "claude") ? defs.claudeAgent ?? null : engineOf(m.providerID) === "codex" ? defs.codexAgent ?? null : engineOf(m.providerID) === "acp" ? null : defs.agent ?? null;
     else if (!bound) patch.agent = b.agent;
     await setSessionBinding(sessionId, patch);
   }
@@ -73,12 +78,12 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
       {/* BUG-105: обе пилюли — одной строкой (на 402 px имя режется многоточием). */}
       <div class="model-pills">
         <button class="model-pill" type="button" onClick={() => setSheet("model")}
-          aria-label={t("modelBar.modelLabel", { name, engine: claude ? "Claude" : codex ? "Codex" : "opencode" })}>
-          <span class={"engine-dot" + (claude ? " is-claude" : codex ? " is-codex" : "")} aria-hidden="true" />
+          aria-label={t("modelBar.modelLabel", { name, engine: claude ? "Claude" : codex ? "Codex" : gemini ? "Gemini" : acp ? "ACP" : "opencode" })}>
+          <span class={"engine-dot" + (claude ? " is-claude" : codex ? " is-codex" : acp ? " is-acp" : "")} aria-hidden="true" />
           <span class="pill-label">{name}</span>
           <span class="pill-chev"><Glyph name="chevron" size={14} /></span>
         </button>
-        {(claude || codex) ? (claudeAgentPill && (
+        {(claude || codex || acp) ? (claudeAgentPill && (
           <button class="model-pill" type="button" aria-haspopup="dialog" onClick={() => setSheet("claude-agent")}
             aria-label={b.agent ? t("modelBar.claudeAgentLabel", { engine: roleEngine, name: agentLabel }) : t("modelBar.claudeAgentNone", { engine: roleEngine })}>
             <span class="pill-label">{agentLabel}</span>
@@ -91,24 +96,30 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
             <span class="pill-chev"><Glyph name="chevron" size={14} /></span>
           </button>
         )}
-        {showMode && (
+        {showMode ? (
           <button class={"perm-pill" + (mode.id === "ask" ? " is-ask" : "")} type="button" aria-haspopup="dialog" onClick={() => setSheet("mode")}
-            aria-label={t("modelBar.modeLabel", { mode: mode.label })} title={t("modelBar.modeTitle", { mode: mode.label })}>
+            aria-label={t(planFirst ? "modelBar.modeLabelPlan" : "modelBar.modeLabel", { mode: mode.label })} title={t("modelBar.modeTitle", { mode: mode.label })}>
             <Glyph name="shield" size={15} />
-            <span class="pill-label">{mode.short}</span>
+            <span class="pill-label">{planFirst ? t("modelBar.planPrefix") : ""}{mode.short}</span>
+          </button>
+        ) : (
+          /* FEAT-20.1: у тенанта opencode режима прав нет — пилюля ведёт к «Сначала план» (недоступно с причиной, T-23) */
+          <button class="perm-pill" type="button" aria-haspopup="dialog" onClick={() => setSheet("mode")} aria-label={t("modelBar.planUnavailableLabel")}>
+            <Glyph name="shield" size={15} />
+            <span class="pill-label">{t("modelBar.planShort")}</span>
           </button>
         )}
       </div>
       {!locked && (
         <div class="model-bar-note">
-          {(claude || codex) && !claudeAgentPill
+          {(claude || codex || acp) && !claudeAgentPill
             ? t("modelBar.note.model")
-            : (claude || codex)
+            : (claude || codex || gemini)
             ? t("modelBar.note.claude", { engine: roleEngine })
             : t("modelBar.note.opencode")}
         </div>
       )}
-      {locked && messages && <ContextMeter messages={messages} />}
+      {locked && messages && <ContextMeter messages={messages} sid={sessionId} />}
       {sheet === "model" && (
         <PickerSheet title={t("modelBar.modelSheet")} onClose={() => setSheet(null)}>
           <ModelPicker value={b.model} engine={locked ? b.engine : null} note={locked ? lockNote() : null} onPick={pickModel} />
@@ -116,14 +127,15 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
       )}
       {sheet === "claude-agent" && claudeAgentPill && (
         <PickerSheet title={t("modelBar.agentSheet")} onClose={() => setSheet(null)}>
-          <ClaudeAgentPicker engine={b.engine} value={b.agent} onPick={pickAgent} />
+          <ClaudeAgentPicker engine={gemini ? "gemini" : b.engine} value={b.agent} onPick={pickAgent} />
         </PickerSheet>
       )}
-      {sheet === "mode" && showMode && (
-        <PickerSheet title={t("modelBar.modeSheet")} onClose={() => setSheet(null)}>
+      {sheet === "mode" && (
+        <PickerSheet title={showMode ? t("modelBar.modeSheet") : t("review.planFirst")} onClose={() => setSheet(null)}>
           <div class="picker">
             {busy && <p class="picker-empty" role="status">{t("modelBar.modeBusy")}</p>}
-            {permModeChoices({ admin, engine: b.engine }).map((m) => {
+            <PlanFirstToggle session={session} engine={b.engine} admin={admin} busy={busy} binding={b} bound={Boolean(bound)} />
+            {showMode && permModeChoices({ admin, engine: b.engine }).map((m) => {
               const on = m.id === mode.id;
               return (
                 <button key={m.id} type="button" class={"picker-row" + (on ? " active" : "")} aria-pressed={on ? "true" : "false"} disabled={busy}
@@ -140,7 +152,7 @@ export default function ModelBar({ sessionId, hasMessages = false, messages = nu
                 </button>
               );
             })}
-            <p class="picker-foot">{t("modelBar.modeFoot")}{admin ? "" : t("modelBar.modeFootTenant")}</p>
+            {showMode && <p class="picker-foot">{t("modelBar.modeFoot")}{admin ? "" : t("modelBar.modeFootTenant")}</p>}
           </div>
         </PickerSheet>
       )}

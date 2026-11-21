@@ -58,6 +58,29 @@
   }
  },
  {
+  "id": "ses_demo_gemini_audit",
+  "slug": "gemini-rate-limit-audit",
+  "projectID": "api-server",
+  "directory": "/home/dev/projects/api-server",
+  "title": "Audit rate-limiter edge cases",
+  "time": {
+   "created": 1794304147900,
+   "updated": 1794304717900
+  },
+  "teleharness": {
+   "engine": "acp",
+   "model": {
+    "providerID": "acp-antigravity",
+    "modelID": "gemini-4-neon-medium"
+   },
+   "agent": null,
+   "prompted": true,
+   "source": "stored",
+   "permMode": "ask",
+   "planFirst": true
+  }
+ },
+ {
   "id": "ses_demo_landing_dark_theme",
   "slug": "calm-nebula",
   "projectID": "global",

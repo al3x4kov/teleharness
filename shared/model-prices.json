@@ -1,0 +1,553 @@
+{
+ "//": "FEAT-20.6: встроенный прайс API (USD за 1 млн токенов). Цены сняты с официальных страниц 2026-11-20 (source/checkedAt у каждой модели). OpenAI и z.ai не берут доплату за запись кэша — cacheWrite = цена входа (допущение портала). Моделей без проверенной цены здесь нет: они считаются «нет данных», цену вносит admin.",
+ "currency": "USD",
+ "revision": 1,
+ "models": [
+  {
+   "id": "claude-fable-5-2",
+   "title": "Claude Fable 5.2",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 8,
+    "output": 40,
+    "cacheRead": 0.2,
+    "cacheWrite5m": 10,
+    "cacheWrite1h": 16
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20",
+   "fast": {
+    "input": 16,
+    "output": 80
+   }
+  },
+  {
+   "id": "claude-fable-5-1",
+   "title": "Claude Fable 5.1",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 10,
+    "output": 50,
+    "cacheRead": 0.25,
+    "cacheWrite5m": 12.5,
+    "cacheWrite1h": 20
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-fable-5",
+   "title": "Claude Fable 5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 10,
+    "output": 50,
+    "cacheRead": 1,
+    "cacheWrite5m": 12.5,
+    "cacheWrite1h": 20
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-opus-5-5",
+   "title": "Claude Opus 5.5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 4,
+    "output": 20,
+    "cacheRead": 0.2,
+    "cacheWrite5m": 5,
+    "cacheWrite1h": 8
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20",
+   "fast": {
+    "input": 8,
+    "output": 40
+   }
+  },
+  {
+   "id": "claude-opus-5",
+   "title": "Claude Opus 5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 5,
+    "output": 25,
+    "cacheRead": 0.5,
+    "cacheWrite5m": 6.25,
+    "cacheWrite1h": 10
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20",
+   "fast": {
+    "input": 10,
+    "output": 50
+   }
+  },
+  {
+   "id": "claude-opus-4-8",
+   "title": "Claude Opus 4.8",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 5,
+    "output": 25,
+    "cacheRead": 0.5,
+    "cacheWrite5m": 6.25,
+    "cacheWrite1h": 10
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20",
+   "fast": {
+    "input": 10,
+    "output": 50
+   }
+  },
+  {
+   "id": "claude-opus-4-7",
+   "title": "Claude Opus 4.7",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 5,
+    "output": 25,
+    "cacheRead": 0.5,
+    "cacheWrite5m": 6.25,
+    "cacheWrite1h": 10
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-opus-4-6",
+   "title": "Claude Opus 4.6",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 5,
+    "output": 25,
+    "cacheRead": 0.5,
+    "cacheWrite5m": 6.25,
+    "cacheWrite1h": 10
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-opus-4-5",
+   "title": "Claude Opus 4.5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 5,
+    "output": 25,
+    "cacheRead": 0.5,
+    "cacheWrite5m": 6.25,
+    "cacheWrite1h": 10
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-sonnet-5-5",
+   "title": "Claude Sonnet 5.5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 2,
+    "output": 10,
+    "cacheRead": 0.1,
+    "cacheWrite5m": 2.5,
+    "cacheWrite1h": 4
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-sonnet-5",
+   "title": "Claude Sonnet 5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 2,
+    "output": 10,
+    "cacheRead": 0.2,
+    "cacheWrite5m": 2.5,
+    "cacheWrite1h": 4
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-sonnet-4-6",
+   "title": "Claude Sonnet 4.6",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 3,
+    "output": 15,
+    "cacheRead": 0.3,
+    "cacheWrite5m": 3.75,
+    "cacheWrite1h": 6
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-sonnet-4-5",
+   "title": "Claude Sonnet 4.5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 3,
+    "output": 15,
+    "cacheRead": 0.3,
+    "cacheWrite5m": 3.75,
+    "cacheWrite1h": 6
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "claude-haiku-5-5",
+   "title": "Claude Haiku 5.5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 0.1,
+    "output": 0.5,
+    "cacheRead": 0.01,
+    "cacheWrite5m": 0.125,
+    "cacheWrite1h": 0.2
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20",
+   "longContext": {
+    "aboveInputTokens": 100000,
+    "usdPerMTok": {
+     "input": 0.5,
+     "output": 2.5,
+     "cacheRead": 0.05,
+     "cacheWrite5m": 0.625,
+     "cacheWrite1h": 1
+    }
+   }
+  },
+  {
+   "id": "claude-haiku-4-5",
+   "title": "Claude Haiku 4.5",
+   "provider": "anthropic",
+   "usdPerMTok": {
+    "input": 1,
+    "output": 5,
+    "cacheRead": 0.1,
+    "cacheWrite5m": 1.25,
+    "cacheWrite1h": 2
+   },
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6.2-astra",
+   "title": "GPT-6.2 Astra",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 8,
+    "output": 40,
+    "cacheRead": 0.4,
+    "cacheWrite5m": 8,
+    "cacheWrite1h": 8
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 16,
+     "output": 60,
+     "cacheRead": 0.8,
+     "cacheWrite5m": 16,
+     "cacheWrite1h": 16
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6.2-sol",
+   "title": "GPT-6.2 Sol",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 2,
+    "output": 10,
+    "cacheRead": 0.1,
+    "cacheWrite5m": 2,
+    "cacheWrite1h": 2
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 4,
+     "output": 15,
+     "cacheRead": 0.2,
+     "cacheWrite5m": 4,
+     "cacheWrite1h": 4
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6-astra",
+   "title": "GPT-6 Astra",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 10,
+    "output": 50,
+    "cacheRead": 1,
+    "cacheWrite5m": 10,
+    "cacheWrite1h": 10
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 20,
+     "output": 75,
+     "cacheRead": 2,
+     "cacheWrite5m": 20,
+     "cacheWrite1h": 20
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6.1-sol",
+   "title": "GPT-6.1 Sol",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 2,
+    "output": 10,
+    "cacheRead": 0.1,
+    "cacheWrite5m": 2,
+    "cacheWrite1h": 2
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 4,
+     "output": 15,
+     "cacheRead": 0.2,
+     "cacheWrite5m": 4,
+     "cacheWrite1h": 4
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6.1-terra",
+   "title": "GPT-6.1 Terra",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 1,
+    "output": 5,
+    "cacheRead": 0.05,
+    "cacheWrite5m": 1,
+    "cacheWrite1h": 1
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 2,
+     "output": 7.5,
+     "cacheRead": 0.1,
+     "cacheWrite5m": 2,
+     "cacheWrite1h": 2
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6-luna",
+   "title": "GPT-6 Luna",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 0.1,
+    "output": 0.5,
+    "cacheRead": 0.01,
+    "cacheWrite5m": 0.1,
+    "cacheWrite1h": 0.1
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 0.2,
+     "output": 0.75,
+     "cacheRead": 0.02,
+     "cacheWrite5m": 0.2,
+     "cacheWrite1h": 0.2
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "gpt-6-sol",
+   "title": "GPT-6 Sol",
+   "provider": "openai",
+   "usdPerMTok": {
+    "input": 2,
+    "output": 10,
+    "cacheRead": 0.2,
+    "cacheWrite5m": 2,
+    "cacheWrite1h": 2
+   },
+   "longContext": {
+    "aboveInputTokens": 272000,
+    "usdPerMTok": {
+     "input": 4,
+     "output": 15,
+     "cacheRead": 0.4,
+     "cacheWrite5m": 4,
+     "cacheWrite1h": 4
+    }
+   },
+   "source": "https://developers.openai.com/api/docs/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-5.3",
+   "title": "GLM-5.3",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 1.4,
+    "output": 4.4,
+    "cacheRead": 0.26,
+    "cacheWrite5m": 1.4,
+    "cacheWrite1h": 1.4
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-5.3-flash",
+   "title": "GLM-5.3-Flash",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 0.15,
+    "output": 0.5,
+    "cacheRead": 0.03,
+    "cacheWrite5m": 0.15,
+    "cacheWrite1h": 0.15
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-5.3-flashx",
+   "title": "GLM-5.3-FlashX",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 0.37,
+    "output": 1.25,
+    "cacheRead": 0.075,
+    "cacheWrite5m": 0.37,
+    "cacheWrite1h": 0.37
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-5.2",
+   "title": "GLM-5.2",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 1.4,
+    "output": 4.4,
+    "cacheRead": 0.26,
+    "cacheWrite5m": 1.4,
+    "cacheWrite1h": 1.4
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-5",
+   "title": "GLM-5",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 1,
+    "output": 3.2,
+    "cacheRead": 0.2,
+    "cacheWrite5m": 1,
+    "cacheWrite1h": 1
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-4.7",
+   "title": "GLM-4.7",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 0.6,
+    "output": 2.2,
+    "cacheRead": 0.11,
+    "cacheWrite5m": 0.6,
+    "cacheWrite1h": 0.6
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-4.5",
+   "title": "GLM-4.5",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 0.6,
+    "output": 2.2,
+    "cacheRead": 0.11,
+    "cacheWrite5m": 0.6,
+    "cacheWrite1h": 0.6
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-4.7-flashx",
+   "title": "GLM-4.7-FlashX",
+   "provider": "teleharness",
+   "usdPerMTok": {
+    "input": 0.07,
+    "output": 0.4,
+    "cacheRead": 0.01,
+    "cacheWrite5m": 0.07,
+    "cacheWrite1h": 0.07
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-4.7-flash",
+   "title": "GLM-4.7-Flash",
+   "provider": "teleharness",
+   "free": true,
+   "usdPerMTok": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite5m": 0,
+    "cacheWrite1h": 0
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  },
+  {
+   "id": "glm-4.5-flash",
+   "title": "GLM-4.5-Flash",
+   "provider": "teleharness",
+   "free": true,
+   "usdPerMTok": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite5m": 0,
+    "cacheWrite1h": 0
+   },
+   "source": "https://docs.z.ai/guides/overview/pricing",
+   "checkedAt": "2026-11-20"
+  }
+ ]
+}

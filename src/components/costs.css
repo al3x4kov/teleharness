@@ -1,0 +1,96 @@
+/* FEAT-20.6: «Расходы», лист «Расход чата», карточка «Расход запуска» (макет epic20-api-equivalent-cost). */
+.costs { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cost-tabs { align-self: stretch; overflow-x: auto; }
+.cost-tabs .seg-btn { flex: 1 0 auto; min-width: 56px; }
+.cost-overview, .cost-prices { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cost-period { display: flex; flex-direction: column; gap: 8px; }
+.cost-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cost-chip { min-height: 44px; min-width: 64px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--surface); color: var(--text-2); font-size: 14px; }
+.cost-chip.is-on { background: var(--accent-wash); color: var(--accent); border-color: var(--accent); }
+.cost-custom { display: flex; flex-wrap: wrap; gap: 8px; }
+.cost-custom input, .cost-field input, .cost-field select, .cost-tz input { min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--input); color: var(--text); font: inherit; }
+.cost-caption { margin: 0; font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; }
+.cost-muted { color: var(--text-2); margin: 0; }
+.cost-small { font-size: 12.5px; }
+.cost-num { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.cost-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; vertical-align: middle; border: none; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.cost-banner { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); font-size: 14px; overflow-wrap: anywhere; }
+.cost-banner.is-warn { border-color: var(--warning); }
+.cost-banner.is-error { border-color: var(--error); color: var(--text); }
+.cost-banner.is-offline { border-style: dashed; }
+.cost-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; }
+.cost-tile, .cost-card { padding: 14px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); min-width: 0; }
+.cost-tile h3, .cost-card h3 { margin: 0 0 6px; font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+.cost-big { margin: 0; font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.4px; overflow-wrap: anywhere; color: var(--text); }
+.cost-tile.is-saved .cost-big, .cost-tile.is-saved h3 { color: var(--success); }
+.cost-tile.is-loss h3 { color: var(--warning); }
+.cost-tile.is-invite { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.cost-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cost-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 48px; padding: 6px 0; border: none; border-top: 1px solid var(--border); background: none; color: var(--text); font: inherit; text-align: left; }
+.cost-rows > li:first-child > .cost-row, .cost-rows > .cost-row:first-child { border-top: none; }
+.cost-row.is-link { cursor: pointer; }
+.cost-row.is-link:hover { background: var(--accent-wash); }
+.cost-row.is-deleted { color: var(--text-3); }
+.cost-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.cost-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cost-bar { display: block; height: 4px; border-radius: 2px; background: var(--input); overflow: hidden; margin-top: 3px; }
+.cost-bar > span { display: block; height: 100%; background: var(--accent); }
+.cost-bar.is-claude > span { background: #d97757; }
+.cost-bar.is-teleharness > span { background: #2e9b8f; }
+.cost-bar.is-warn > span { background: var(--warning); }
+.cost-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: var(--r-pill); border: 1px solid var(--border); font-size: 11.5px; color: var(--text-2); white-space: nowrap; vertical-align: 1px; }
+.cost-tag.is-warn { border-color: var(--warning); color: var(--warning); }
+.cost-tag.is-nodata { color: var(--text-2); }
+.cost-warn-text { color: var(--warning); }
+.cost-chart { display: block; width: 100%; height: 140px; }
+.cost-chart-bar { fill: var(--accent); }
+.cost-chart-nodata { fill: var(--text-3); opacity: 0.6; }
+.cost-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 6px 0 0; color: var(--text-2); }
+.cost-legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; } /* BUG-277: знак не отрывается от подписи */
+.cost-chart-empty { margin: 8px 0; }
+.cost-key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.cost-key.is-money { background: var(--accent); }
+.cost-key.is-nodata { background: repeating-linear-gradient(45deg, var(--text-3) 0 2px, transparent 2px 4px); }
+.cost-table-wrap { overflow-x: auto; }
+.cost-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.cost-table th, .cost-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; }
+.cost-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cost-actions .btn, .cost-actions a.btn { min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; }
+.cost-tz { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cost-err { display: block; color: var(--error); font-size: 12.5px; }
+.cost-fail { padding: 12px; border: 1px solid var(--error); border-radius: var(--r-md); }
+.cost-skel { display: flex; flex-direction: column; gap: 10px; }
+.cost-skel span { display: block; height: 64px; border-radius: var(--r-lg); background: var(--input); }
+.cost-form { display: flex; flex-direction: column; gap: 10px; max-height: 60dvh; overflow-y: auto; }
+.cost-field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-2); }
+.cost-field input[aria-invalid="true"] { border-color: var(--error); }
+.cost-check { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: 14px; }
+.cost-more summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--accent); }
+.cost-ul { padding-left: 18px; }
+/* лист «Расход чата» */
+.ctx-meter.is-button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; text-align: left; min-height: 44px; width: 100%; }
+.chat-cost { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 16px; overflow-y: auto; }
+.chat-cost .cost-big { font-size: 26px; }
+.chat-cost-shares { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--input); }
+.chat-cost-shares > span { display: block; height: 100%; background: var(--accent); }
+.chat-cost-shares > span.is-claude { background: #d97757; }
+.chat-cost-shares > span.is-teleharness { background: #2e9b8f; }
+.cost-budget-banner { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin: 6px 12px; padding: 8px 12px; border: 1px solid var(--warning); border-radius: var(--r-md); background: var(--surface); font-size: 13.5px; }
+@media (max-width: 420px) {
+  .cost-big { font-size: 24px; }
+  .cost-tabs .seg-btn { padding: 0 8px; font-size: 12.5px; min-width: 48px; }
+}
+/* BUG-277: на 320 пять вкладок «Обзор…Бюджеты» помещаются без прокрутки */
+@media (max-width: 360px) {
+  .cost-tabs .seg-btn { padding: 0 5px; font-size: 12px; min-width: 0; }
+}
+.cost-project { margin: 4px 0 8px; font-size: 13.5px; color: var(--text-2); }
+
+/* BUG-288: раздельная шапка графика и 4 плитки в ряд на десктопе ≥ 1200 px (BRIEF-20.6) */
+.cost-chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
+.cost-chart-head h3 { margin: 0; }
+@media (min-width: 1200px) {
+  .cost-tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .cost-tile { padding: 12px; }
+  .cost-big { font-size: 24px; }
+}

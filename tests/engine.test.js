@@ -26,9 +26,9 @@ test("CLAUDE_PROVIDER = anthropic; engineOf: только anthropic → claude, 
   for (const p of ["zai-coding-plan", "Anthropic", "", undefined, null, 1]) assert.equal(engineOf(p), "opencode", String(p));
 });
 
-test("ENGINE_LABEL / ENGINE_SHORT покрывают оба движка", () => {
-  assert.deepEqual(Object.keys(ENGINE_LABEL).sort(), ["claude", "codex", "opencode"]); // FEAT-18.7
-  assert.deepEqual(Object.keys(ENGINE_SHORT).sort(), ["claude", "codex", "opencode"]);
+test("ENGINE_LABEL / ENGINE_SHORT покрывают все движки", () => {
+  assert.deepEqual(Object.keys(ENGINE_LABEL).sort(), ["acp", "claude", "codex", "opencode"]); // FEAT-18.7
+  assert.deepEqual(Object.keys(ENGINE_SHORT).sort(), ["acp", "claude", "codex", "opencode"]);
   assert.equal(ENGINE_LABEL.opencode, "opencode"); // TASK-01.84
   assert.equal(ENGINE_LABEL.claude, "Claude · подписка");
   assert.equal(ENGINE_SHORT.opencode, "z.ai");

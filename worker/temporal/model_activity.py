@@ -210,7 +210,7 @@ async def subscription_model(step_id: str) -> dict:
     deadline_ms = int((info.started_time + info.start_to_close_timeout).timestamp() * 1000)
     cancelled = threading.Event()
     def dispatch(action, request):
-        if cancelled.is_set():
+        if cancelled.is_set() and action != "publish":
             raise RuntimeError("Activity cancelled")
         return portal(action, request, deadline_ms)
     def execute():

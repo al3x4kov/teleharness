@@ -6,6 +6,10 @@ import { seedDialogs } from "./dialogs.js";
 import { mergeSessionList } from "../normalize.js";
 import { pollBusy, refreshMessages } from "./session.js";
 import { refreshChildFeeds } from "./childfeeds.js";
+import { onBoardEvent } from "../attention.js"; // FEAT-20.2
+import { onReviewEvent } from "../review-client.js"; // FEAT-20.1
+import { onWorktreeEvent } from "../worktree-client.js"; // FEAT-20.7
+import { onCostEvent } from "../costs.js"; // FEAT-20.6
 
 // SSE errors shorter than this are normal reconnects — no offline bar.
 const OFFLINE_GRACE_MS = 3000;
@@ -83,6 +87,10 @@ onReachable(noteAlive);
 function onLiveEvent(evt) {
   markOnline();
   handleEvent(evt);
+  onBoardEvent(evt); // FEAT-20.2: доска перечитывается по событиям (антидребезг)
+  onReviewEvent(evt); // FEAT-20.1: экран ревью, плашка и карточки плана
+  onWorktreeEvent(evt); // FEAT-20.7: лист рабочей копии и полосы пересечений
+  onCostEvent(evt); // FEAT-20.6: лист «Расход чата», «Расходы», баннер бюджета
 }
 
 // window «online»: the network is back — drop the bar and replace a stream
@@ -144,6 +152,7 @@ async function doResync() {
   ]);
   await pollBusy(); // status truth both ways (missed session.idle)
   refreshChildFeeds(); // ленты субагентов открытого чата — тоже живые данные (FEAT-01.77)
+  onBoardEvent({ type: "teleharness.resync" }); // FEAT-20.2: после переподключения / смены epoch — перечитать доску
   // Stale-dialog guard (merge-only seed never drops): a dialog whose session
   // no longer exists can never be answered — it would keep the blocking
   // backdrop over the whole portal until a reload («страница темнее и ничего

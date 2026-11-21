@@ -68,7 +68,8 @@ test("полоса: один агент — «Фоном работает аге
   assert.ok(bar, "полоса есть");
   assert.equal(bar.tagName, "BUTTON", "вся полоса — кнопка");
   assert.equal(bar.getAttribute("role"), "status");
-  assert.match($(bar, ".bt").textContent, /^Фоном работает агент librarian$/);
+  assert.match($(bar, ".bt-title").textContent, /^Фоном работает агент librarian$/);
+  assert.equal($(bar, ".bt-act").textContent, "Думает", "текущее действие во второй строке");
   assert.equal($(bar, ".bt b").textContent, "librarian", "имя выделено");
   assert.equal($(bar, "time").textContent, "2:04", "таймер от startedAt");
   assert.ok($(bar, ".sa-pulse"), "точка работы");
@@ -80,7 +81,8 @@ test("полоса: несколько агентов — «Фоном рабо�
     { id: "r2", agent: "explorer", state: "running", startedAt: NOW - 200_000 },
   ];
   const { root } = t$.mount(ui.BgAgentsBar, { runs, now: NOW, fmtDuration: fmtDur, onOpen: () => {} });
-  assert.match($(root, ".bt").textContent, /^Фоном работают 2 агента$/);
+  assert.match($(root, ".bt-title").textContent, /^Фоном работают 2 агента$/);
+  assert.equal($(root, ".bt-act").textContent, "librarian: Думает");
   assert.equal($(root, "time").textContent, "3:20", "от самого раннего startedAt");
 });
 

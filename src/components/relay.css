@@ -94,6 +94,12 @@
   white-space: nowrap;
 }
 
+.autorelay-name .engine-dot {
+  display: inline-block;
+  vertical-align: 1px;
+  margin-right: 4px;
+}
+
 .autorelay-btn {
   flex: none;
   min-width: 40px;

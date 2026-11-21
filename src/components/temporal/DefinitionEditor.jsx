@@ -98,6 +98,12 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
                     {earlier.filter((x) => x.type === "model").map((x) => <button key={x.id} type="button" class="t-token" onClick={() => onChange({ instruction: (step.instruction || "") + stepToken(x.id) })}>{t("temporal.ed.tokAnswer", { name: x.name || x.id })}</button>)}
                   </div></div>)}
               <p class="t-help">{t("temporal.ed.modelHelp")}{step.engine === "codex" && codexTextOnly ? t("temporal.ed.codexText") : ""}</p>
+              {/* FEAT-20.7 */}
+              <label class="t-field wt-check" data-req="FEAT-20.7">
+                <input type="checkbox" aria-label={t("temporal.ed.worktree")} checked={Boolean(step.worktree)} disabled={step.engine === "codex" && codexTextOnly}
+                  onChange={(e) => onChange({ worktree: e.currentTarget.checked })} />
+                <span>{t("temporal.ed.worktree")} <small class="t-help">{step.engine === "codex" && codexTextOnly ? t("temporal.ed.worktreeCodexRo") : t("temporal.ed.worktreeHelp")}</small></span>
+              </label>
               <div class="t-two">
                 <label class="t-field"><span>{t("temporal.ed.timeout")}</span>
                   <input class="t-input" type="number" min="1" max="60" aria-label={t("temporal.ed.timeoutAria")} value={Math.round((step.timeoutSeconds || 60) / 60)} onInput={(e) => onChange({ timeoutSeconds: Math.round(Number(e.currentTarget.value) * 60) })} /></label>

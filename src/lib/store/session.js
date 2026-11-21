@@ -2,8 +2,9 @@
 // stop, busy reconciliation, history refresh, chat CRUD and binding.
 import { api, explainApiError } from "../api.js";
 import { makeMessage, upsertSession } from "../normalize.js";
-import { bindingOf, defaultBinding } from "../engine.js";
-import { awaitingAnswer, finalizeMessages, isTmp, mergeHistory, resendParts, turnErrorFromMessages } from "../turn.js";
+import { bindingOf, defaultBinding, isRunnerEngine } from "../engine.js";
+import { RELAY_RESUME_TEXT } from "../../../shared/relay.js";
+import { actionOf, awaitingAnswer, finalizeMessages, isTmp, mergeHistory, resendParts, turnErrorFromMessages } from "../turn.js";
 import {
   active,
   busyMap,
@@ -26,6 +27,7 @@ import {
   staleModelText,
 } from "./state.js";
 import { freshSessionList } from "./catalog.js";
+import { clearWorktreeError, noteWorktreeError } from "../worktree-client.js"; // FEAT-20.7
 import { abortBusyChildren, resetChildFeeds } from "./childfeeds.js";
 import { setPinsNavigate } from "./pins.js";
 import { t } from "../i18n.js";
@@ -61,8 +63,31 @@ export function hasSendInFlight(act) {
   return (act?.messages ?? []).some((m) => isTmp(m) && m.info.delivery === "sending");
 }
 
+
+// BUG-294: сразу применяем серверный live из /status (без ожидания 30-секундного keepalive).
+function applyStatusLive(act, entry) {
+  const live = entry?.live;
+  if (!live || typeof live !== "object") return act;
+  const lastActivityAt = typeof live.lastOutputAt === "number" ? live.lastOutputAt : act.lastActivityAt;
+  const lastAction = live.lastAction
+    ? { label: actionOf({ type: "tool", tool: live.lastAction }), at: live.lastOutputAt ?? act.lastAction?.at ?? null }
+    : act.lastAction;
+  const activeTasks = Array.isArray(live.activeTasks) ? live.activeTasks : act.activeTasks;
+  const hasAnswerText = typeof live.hasAnswerText === "boolean" ? live.hasAnswerText : act.hasAnswerText;
+  const queuedCount = typeof live.queued === "number" ? live.queued : act.queuedCount;
+  return { ...act, lastActivityAt, lastAction, activeTasks, hasAnswerText, queuedCount };
+}
+
 export function finalizeTurn(act) {
-  return { ...act, status: "idle", lastAction: null, messages: finalizeMessages(act.messages) };
+  return {
+    ...act,
+    status: "idle",
+    lastAction: null,
+    activeTasks: [],
+    hasAnswerText: false,
+    queuedCount: 0,
+    messages: finalizeMessages(act.messages),
+  };
 }
 
 // Server truth → busy/pending maps + reconciliation of the open chat in BOTH
@@ -84,8 +109,10 @@ export async function pollBusy() {
     busyMap.value = m;
     pendingMap.value = pm;
     const act = active.value;
-    if (act && act.status === "idle" && m[act.id]) {
-      active.value = { ...act, status: "busy", lastEventAt: Date.now() };
+    if (act && m[act.id]) {
+      const base = act.status === "idle" ? { ...act, status: "busy", lastEventAt: Date.now() } : act;
+      const nextAct = applyStatusLive(base, st[act.id]);
+      if (nextAct !== act) active.value = nextAct;
     } else if (
       act &&
       (act.status === "busy" || act.status === "stopping") &&
@@ -139,6 +166,7 @@ export async function refreshMessages(id) {
         messages: mergeHistory([...older, ...shaped], act.messages),
         loading: false,
         loadError: false,
+        loadErrorDetail: null,
         hasOlder,
         olderCursor,
         olderLoaded: older.length > 0,
@@ -146,10 +174,11 @@ export async function refreshMessages(id) {
         turnError: act.turnError ?? turnErrorFromMessages(shaped, { engine: engineOfSession(id) }),
       };
     }
-  } catch {
-    // История не доехала (404 у удалённой сессии, сбой сети): снимаем loading,
-    // ChatView различает «история пуста» и «чат не найден» по loadError.
-    if (active.value?.id === id) active.value = { ...active.value, loading: false, loadError: true };
+  } catch (err) {
+    // История не доехала (404 у удалённой сессии, 400 чужой каталог BUG-240, сбой сети):
+    // снимаем loading, ChatView различает «история пуста», «чат не найден» и «чужой каталог».
+    const detail = err && typeof err === "object" ? { status: err.status ?? null, code: err.body?.code ?? null, error: err.body?.error ?? null } : null;
+    if (active.value?.id === id) active.value = { ...active.value, loading: false, loadError: true, loadErrorDetail: detail };
   }
 }
 
@@ -253,7 +282,7 @@ export async function openSession(id) {
       const busy = !!(st?.[id]?.type && st[id].type !== "idle");
       setBusyTracked(id, busy);
       patchActive(id, (a) => {
-        if (busy) return a.status === "idle" ? { ...a, status: "busy" } : a;
+        if (busy) return applyStatusLive(a.status === "idle" ? { ...a, status: "busy" } : a, st?.[id]);
         return a.status === "busy" && !hasSendInFlight(a) ? { ...a, status: "idle" } : a;
       });
     },
@@ -413,7 +442,9 @@ async function revertLast(sid, kind) {
   } catch (err) {
     setNotice(
       err?.status === 409
-        ? t("store.turn.busyOrNotLast")
+        ? (/undo is not available/i.test(String(err?.body?.error ?? err?.message ?? ""))
+          ? t("store.turn.undoUnavailable")
+          : t("store.turn.busyOrNotLast"))
         : explainApiError(err, kind === "revert" ? t("store.turn.revertFailed") : kind === "regenerate" ? t("store.turn.regenerateFailed") : t("store.turn.editFailed")),
     );
     return null;
@@ -561,9 +592,9 @@ async function sendParts(parts, { agent, model, sessionId, turnId } = {}) {
   const binding = bound ?? defaultBinding({ ...defs, model: model ?? defs.model, agent: agent ?? defs.agent });
   const queued = act.status === "busy" || act.status === "stopping";
   const hold =
-    queued && binding?.engine !== "claude" && binding?.engine !== "codex" && (heldCount(act.id) > 0 || releasing.has(act.id) || awaitingAnswer(act.messages));
+    queued && !isRunnerEngine(binding?.engine) && (heldCount(act.id) > 0 || releasing.has(act.id) || awaitingAnswer(act.messages));
   const tmpId = `tmp-${Date.now()}-${++tmpSeq}`;
-  if (!turnId && session?.stableTurnIds && binding?.engine !== "claude" && binding?.engine !== "codex" &&
+  if (!turnId && session?.stableTurnIds && !isRunnerEngine(binding?.engine) &&
       parts.every(part=>part.type==="text" && typeof part.text==="string" && !part.text.trimStart().startsWith("/"))) {
     turnId ??= Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, "0")).join("");
   }
@@ -578,7 +609,7 @@ async function sendParts(parts, { agent, model, sessionId, turnId } = {}) {
   };
   setBusyTracked(act.id, true);
   const body = {
-    ...(binding?.engine === "claude" || binding?.engine === "codex" ? {} : { agent: binding?.agent ?? agent ?? defs.agent ?? undefined }),
+    ...(isRunnerEngine(binding?.engine) ? {} : { agent: binding?.agent ?? agent ?? defs.agent ?? undefined }),
     ...(binding ? { model: { providerID: binding.model.providerID, modelID: binding.model.modelID } } : {}),
     parts,
   };
@@ -599,6 +630,8 @@ async function deliver({ sid, tmpId, parts, body, turnId, directory, session, bo
     // for «Повторить»). The bubble itself says what happened via failReason
     // (R-12: no duplicate global notice over it).
     const server = Boolean(err?.status);
+    // FEAT-20.7: копия не создалась — причина и выход в полосе над композером
+    noteWorktreeError(sid, err?.body);
     // ISSUE-015: the failed bubble lives only in this tab — keep its text as
     // the chat's draft so a reload puts it back in the composer.
     const typed = draftTextOf(parts);
@@ -617,6 +650,7 @@ async function deliver({ sid, tmpId, parts, body, turnId, directory, session, bo
     return false;
   }
   patchMessage(sid, tmpId, (m) => ({ info: { ...m.info, delivery: "delivered" }, parts: m.parts }));
+  clearWorktreeError(sid); // FEAT-20.7
   // A retried text that was parked as the draft is delivered now.
   const sent = draftTextOf(parts);
   if (sent && loadDraft(sid) === sent) saveDraft(sid, "");
@@ -682,6 +716,21 @@ function releaseIdleHeld(busy) {
     if (busy[sid] || !q.length) continue;
     if (Date.now() - q[0].at > IDLE_GRACE_MS) releaseHeld(sid, { idle: true });
   }
+}
+
+
+// BUG-294: чистое завершение зависшего ACP-хода после готового ответа — без отмены очереди.
+export function finishHungTurn() {
+  const act = active.value;
+  if (!act || act.status === "stopping") return;
+  api.abort(act.id, { directory: sessionDir(act.id), finish: true })
+    .then(() => {
+      refreshMessages(act.id);
+      return pollBusy();
+    })
+    .catch((err) => {
+      setNotice(t(err?.status ? "turn.abortRejected" : "turn.abortOffline"));
+    });
 }
 
 export function stop() {

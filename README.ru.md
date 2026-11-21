@@ -1,18 +1,19 @@
 <div align="center">
 
-<img src="docs/screenshots/ru/social-preview.png" alt="Teleharness: ваши AI-агенты для кода — Claude Code, Codex и opencode — с телефона" width="100%">
+<img src="docs/screenshots/ru/social-preview.png" alt="Teleharness: ваши AI-агенты для кода — Claude Code, Codex, Gemini (ACP) и opencode — с телефона" width="100%">
 
 ## Ваши AI-агенты для кода — с телефона
 
-**Общайтесь с Claude Code, Codex и opencode в одном месте, передавайте задачу другому CLI, когда кончился лимит,
-и собирайте агентов в пайпы, которые переживают перезапуск.**
+**Общайтесь с Claude Code, Codex, Gemini (ACP) и opencode в одном месте, проверяйте диффы и git worktrees с телефона,
+передавайте задачу другому CLI, когда кончился лимит, и собирайте агентов в пайпы, которые переживают перезапуск.**
 
 Teleharness — открытый self-hosted пульт для AI coding CLI. Он запускает настоящие CLI на вашей машине — с их
-агентами, скиллами, MCP-серверами, хуками и контекстом проекта — и добавляет то, чего нет в терминале: мобильный чат,
-подтверждения откуда угодно, передачу чата между CLI и надёжные пайпы из нескольких агентов на
-[Temporal](https://temporal.io). Всё это работает на подписках CLI, которые у вас уже есть, а не на платном API.
+агентами, скиллами, MCP-серверами, хуками и контекстом проекта — и добавляет то, чего нет в терминале: Доску внимания,
+мобильное ревью с «Сначала план», изолированные git worktrees, учёт расходов по ценам API, передачу чата между CLI и
+надёжные пайпы из нескольких агентов на [Temporal](https://temporal.io). Всё это работает на подписках CLI, которые у
+вас уже есть, а не на платном API.
 
-**Чат** · **Передача между CLI** · **Пайпы** · **человек в контуре** · **на ваших подписках** · **на своём сервере**
+**Чат** · **Доска и ревью** · **Worktrees** · **Передача между CLI** · **Пайпы** · **на ваших подписках** · **на своём сервере**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -21,6 +22,7 @@ Teleharness — открытый self-hosted пульт для AI coding CLI. О
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#поддержка-платформ)
 
 [Что умеет](#что-умеет) •
+[Доска, ревью, worktrees и расходы](#доска-мобильное-ревью-worktrees-и-расходы) •
 [Переключение CLI](#переключение-cli-посреди-разговора) •
 [Пайпы](#пайпы-которые-переживают-перезапуск-temporal) •
 [Демо](#попробовать-за-30-секунд) •
@@ -46,15 +48,55 @@ Teleharness — открытый self-hosted пульт для AI coding CLI. О
 <td width="33%"><img src="docs/screenshots/ru/phone-light-temporal-runs.png" alt="Запуски Temporal с блоком «Ждут вашего решения»"></td>
 </tr>
 <tr>
-<td valign="top"><b>Чат</b><br>Claude Code, Codex и opencode рядом в интерфейсе для телефона: живые шаги, карточки субагентов, диффы и git, файлы, голос, push. Разрешайте правки и команды откуда угодно.</td>
+<td valign="top"><b>Чат</b><br>Claude Code, Codex, Gemini и Copilot (ACP) и opencode рядом в мобильном интерфейсе: шаги в реальном времени, карточки субагентов, «Сначала план», диффы и git worktrees, файлы, голос, push. Подтверждайте правки и команды откуда угодно.</td>
 <td valign="top"><b>Передача</b><br>Подписка кончилась посреди задачи? Тот же чат продолжается в другом CLI или модели — та же папка, одна лента, пропущенные ходы переносятся. Вручную или автоматически.</td>
 <td valign="top"><b>Пайпы</b><br>Соберите агентов в многошаговые запуски на Temporal: Claude проверяет, вы одобряете с телефона, Codex пишет — с таймерами, условиями, расписаниями и артефактами. Запуски переживают перезапуск.</td>
 </tr>
 </table>
 
+## Доска, мобильное ревью, worktrees и расходы
+
+Ведите несколько агентных задач параллельно, не сидя в терминале:
+
+- **Доска внимания (`#/board`)** — единый экран для всех чатов и запусков Temporal (*Ждёт вас*, *Работает*, *Готово*,
+  *Упало*) со сводкой «Пока вас не было», быстрыми действиями и push-уведомлениями по категориям с тихими часами.
+- **Мобильное ревью и «Сначала план» (`#/board/review`)** — тапните строку или диапазон в диффе, оставьте черновик
+  комментария, верните структурированный фидбек агенту или примите и закоммитьте. Включите *Сначала план* — Claude,
+  Codex, opencode или Gemini сначала составит план в режиме чтения и подождёт вашего одобрения, прежде чем править файлы.
+- **Изолированные Git Worktrees (`#/worktrees`)** — отдельная рабочая копия и ветка на каждый чат или запуск пайпа,
+  раннее предупреждение о пересечении файлов и конфликтах при пробном слиянии, слияние (squash / merge / fast-forward)
+  после прогона тестов.
+- **Расходы по ценам API (`#/settings/costs`)** — журнал каждого хода в SQLite по редактируемой таблице цен, сравнение
+  с реальными подписками (Claude Max, ChatGPT Plus, Google Antigravity, GitHub Copilot CLI), расчёт экономии и
+  окупаемости, мягкие месячные бюджеты и экспорт в CSV.
+- **Агенты ACP (`#/settings/acp`)** — установка и вход в **Google Antigravity** (`Gemini 4 Neon`, `Gemini 3.8 Flash`)
+  и **GitHub Copilot CLI** прямо из Настроек, с поддержкой ролей, картинок, «Сначала план» и авто-передачи.
+
+<p align="center">
+  <img src="docs/screenshots/ru/phone-light-board.png" alt="Доска внимания со сводкой «Пока вас не было» и блоком «Ждёт вас»" width="180">
+  <img src="docs/screenshots/ru/phone-light-review.png" alt="Мобильное ревью диффа с выбором строк и комментариями" width="180">
+  <img src="docs/screenshots/ru/phone-light-plan.png" alt="Чат Gemini 4 Neon с карточкой Плана 1 в режиме чтения" width="180">
+  <img src="docs/screenshots/ru/phone-light-worktrees.png" alt="Изолированные git worktrees с проверкой пересечений и конфликтов" width="180">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/ru/desktop-light-board.png" alt="Доска внимания на десктопе в четырёх колонках" width="820">
+</p>
+<p align="center"><sub>Доска внимания на десктопе: ревью, ждущие планы, активные пайпы, завершённые и упавшие задачи на одном экране.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/ru/desktop-light-review.png" alt="Экран ревью на десктопе: список файлов и дифф" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/ru/desktop-light-costs.png" alt="Экран «Расходы»: график по дням, подписки и окупаемость" width="820">
+</p>
+<p align="center"><sub>Сравнение эквивалента по ценам API с реальными подписками, график по дням и разбивка по моделям.</sub></p>
+
 ## Переключение CLI посреди разговора
 
-Начните задачу в Claude Code и продолжите в opencode на GLM или любой другой модели opencode либо в Codex — в любую сторону.
+Начните задачу в Claude Code, а продолжите в Gemini (ACP), Codex или opencode на GLM и любой другой модели —
+в любую сторону.
 
 - **Из меню чата, в любой момент:** *Продолжить в…* → движок и модель.
 - **Когда подписка закончилась:** плашка лимита предлагает *Продолжить в &lt;модель&gt;* — одно нажатие.
@@ -190,7 +232,11 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 
 | | |
 |---|---|
-| **Три движка в одном интерфейсе** | opencode (любой провайдер), Claude Code и Codex CLI рядом; чат закреплён за движком, моделью и агентом. Чаты Codex пока только для администратора, на любой ОС — другим пользователям их откроет собственная песочница Codex (в пайпах Temporal Codex доступен всем, у пользователей — только текстом).<br><img src="docs/screenshots/ru/phone-light-picker-codex-detail.png" alt="Выбор модели: группы движков opencode, Claude и Codex" width="180"> <img src="docs/screenshots/ru/phone-light-codex.png" alt="Чат Codex: правки файлов, 212 успешных тестов, режим «Спрашивать» и подписка" width="180"> |
+| **Четыре семейства движков, один интерфейс** | opencode (любой провайдер), Claude Code, Codex CLI и агенты ACP (Google Antigravity / Gemini и GitHub Copilot CLI) рядом; чат закрепляется за своим движком, моделью и агентом. Чаты Codex и ACP пока только для администратора (в пайпах Temporal Codex доступен всем, только текст).<br><img src="docs/screenshots/ru/phone-light-picker-codex-detail.png" alt="Выбор модели: группы opencode, Claude, Codex и ACP" width="180"> <img src="docs/screenshots/ru/phone-light-acp.png" alt="Настройки: агенты ACP с Google Antigravity и GitHub Copilot CLI" width="180"> |
+| **Доска внимания** | Единый экран для всех чатов и запусков Temporal: *Ждёт вас*, *Работает*, *Готово* и *Упало*, сводка «Пока вас не было», быстрые действия и push по категориям с тихими часами.<br><img src="docs/screenshots/ru/phone-light-board.png" alt="Доска внимания на телефоне" width="180"> |
+| **Мобильное ревью и «Сначала план»** | Очередь ревью по чатам и пайпам, удобный на телефоне дифф с выбором строк и черновиками комментариев, возврат агенту и принятие с коммитом. Режим *Сначала план* просит агента составить план в режиме чтения до правок.<br><img src="docs/screenshots/ru/phone-light-review.png" alt="Мобильный дифф ревью" width="180"> <img src="docs/screenshots/ru/phone-light-plan.png" alt="Карточка Плана 1 в чате Gemini" width="180"> |
+| **Изолированные Git Worktrees** | Своя рабочая копия и ветка на чат или пайп, раннее предупреждение о пересечении файлов и конфликтах при пробном слиянии, слияние squash/merge/ff с прогоном тестов и очистка забытых веток.<br><img src="docs/screenshots/ru/phone-light-worktree.png" alt="Чат с активной рабочей копией, плашкой ревью и предупреждением о конфликте" width="180"> <img src="docs/screenshots/ru/phone-light-worktrees.png" alt="Список рабочих копий проекта и настройки слияния" width="180"> |
+| **Расходы по ценам API** | Журнал ходов в SQLite по редактируемой таблице цен, реальные подписки (Claude Max, ChatGPT Plus, Google Antigravity, Copilot CLI) с экономией и окупаемостью, мягкие месячные бюджеты, сводки по чату/проекту/пайпу и экспорт в CSV.<br><img src="docs/screenshots/ru/phone-light-costs.png" alt="Экран «Расходы» на телефоне" width="180"> |
 | **Режим прав для чата** | *Спрашивать* — агент спрашивает перед правками файлов и командами, вы разрешаете или отклоняете прямо в чате (Claude — через мост разрешений, Codex — нативно); *Правки без вопросов*; *Без вопросов* (только администратор).<br><img src="docs/screenshots/ru/phone-light-ask.png" alt="Запрос разрешения на команду миграции: «Разрешить» и «Отклонить» в чате" width="180"> <img src="docs/screenshots/ru/phone-light-permission-modes.png" alt="Режимы прав: «Спрашивать», «Правки без вопросов», «Без вопросов»" width="180"> |
 | **Ждут вас** | Фильтр списка чатов со счётчиком чатов, где агент ждёт вашего решения, и push-уведомление, когда он начинает ждать.<br><img src="docs/screenshots/ru/phone-light-waiting.png" alt="Фильтр «Ждут вас» включён: один чат ожидает разрешения" width="180"> |
 | **Контекст и расход** | Строка над полем ввода: насколько заполнено окно контекста модели (с предупреждением после 80 %) и сколько стоил чат — или что он идёт по подписке.<br><img src="docs/screenshots/ru/phone-light-context.png" alt="Под ответом указана подписка, внизу — «Контекст 41 %»" width="180"> <img src="docs/screenshots/ru/phone-light-context-warning.png" alt="Предупреждение: контекст 86 %, почти заполнен" width="180"> |
@@ -240,7 +286,7 @@ npx github:al3x4kov/teleharness            # → http://127.0.0.1:4180/teleharne
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.0.5 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -259,7 +305,7 @@ claude setup-token                 # движок Claude: токен — в .env
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.0.5 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
@@ -294,7 +340,7 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 | | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
 | Портал, движки opencode и Claude, файлы, push | да | да | да |
-| Движок Codex (чаты) | только админ | только админ | только админ |
+| Движки Codex и ACP (чаты) | только админ | только админ | только админ |
 | Пайпы Temporal (по желанию) | да | да | — |
 | Codex в пайпах Temporal | да (у пользователей — только текст) | да (у пользователей — только текст) | — |
 | Кэш Obsidian, голос | да | да | да |

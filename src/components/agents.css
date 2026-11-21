@@ -403,13 +403,50 @@
   min-width: 0;
 }
 
+.bg-bar.bg-work-bar {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.bg-work-btn {
+  flex: none;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bg-work-btn:hover { border-color: var(--accent); color: var(--accent); }
+.bg-work-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .bg-bar .bt {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+}
+
+.bg-bar .bt-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: left;
+}
+
+.bg-bar .bt-act {
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bg-bar .bt b {

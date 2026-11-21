@@ -6,13 +6,43 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.4.9] — 2026-11-22
+
+### Added
+- **ACP engines: Google Antigravity (Gemini) and GitHub Copilot CLI.** Install and sign in to ACP agents from
+  Settings → ACP agents, pick Gemini models (`Gemini 4 Neon`, `Gemini 3.8 Flash`) or GitHub Copilot CLI per chat,
+  use roles, permissions, vision attachments, background status & message queue, Plan-First (`plan-ro`) and
+  bidirectional Auto-Relay with Gemini.
+- **Attention Board (`#/board`).** A single control room across all chats and Temporal runs grouped into
+  *Needs you*, *Working*, *Ready* and *Failed*, with a *While you were away* summary, quick actions (approve,
+  stop, snooze, mark seen) and per-category Web Push notifications with quiet hours.
+- **Mobile Review & Plan-First (`#/board/review`, `#/review/:id`).** A review queue for agent edits, a mobile-first
+  diff viewer with line selection and persistent inline draft comments, return-to-agent with structured feedback,
+  accept & commit, and a read-only *Plan first* toggle that pauses for approval before any file is touched.
+- **Isolated Git Worktrees (`#/worktrees`).** Run each chat or pipeline in its own git worktree and branch, detect
+  file overlaps and merge conflicts via dry-run, merge back (squash / merge / fast-forward) with a configurable test
+  command, and clean up orphaned branches.
+- **API-Equivalent Costs & Subscriptions (`#/settings/costs`).** SQLite ledger of turn usage priced against an
+  editable model price table, subscription tracking (including Google Antigravity and GitHub Copilot CLI) with
+  savings and payback multiplier, soft monthly budgets, per-chat / per-project / per-run breakdowns, and CSV export.
+- **Linux AppArmor `bwrap` profile for Codex** (`ops/linux/`) so Codex sandboxing works out of the box on Ubuntu
+  24.04+ kernels with unprivileged userns restrictions.
+
 ### Changed
 - **New positioning: a self-hosted control room for AI coding agents.** README (English and Russian) opens with
-  *Your AI coding agents, from your phone* and three pillars — Chat, Relay and Pipelines on Temporal — with a
-  *What it does* block, a note on why pipelines run on Temporal, and Temporal in *Built with*. The social preview,
-  the `package.json` description and keywords (`codex`, `temporal`, `agent-orchestration`, `agentic-workflow`,
-  `human-in-the-loop`) follow the same wording.
+  *Your AI coding agents, from your phone*, updated media (all screenshots, both GIFs and social preview in EN & RU),
+  and full `2.4.9` demo coverage in `npm run demo`.
+- Full English and Russian localization across all new views (Attention Board, Mobile Review & Plan-First, Git
+  Worktrees, Costs & Subscriptions, and ACP Agents).
 - A test checks that every local image, link and anchor in both READMEs resolves.
+
+### Fixed
+- **ACP Auto-Relay, Relay catch-up, Costs, Push and Plan-First:** ACP JSON-RPC errors (including rate limits with
+  code `-32000`) properly trigger bidirectional Auto-Relay; `withRelayCatchUp` and Web Push recognize ACP turns;
+  ACP turns are recorded in the cost ledger with Antigravity & Copilot subscriptions; Plan-First (`plan-ro`) works
+  for admin ACP chats; engine indicator dots render reliably across viewports.
+- **Persistent background-agent bar** stays visible across reconnects and chat switches while background subagents
+  are still running.
 
 ## [2.0.5] — 2026-11-20
 
@@ -305,6 +335,9 @@ First public release under the name **Teleharness**.
 - Slash commands in admin opencode chats expand through opencode `/command`.
 - A chat deleted mid-turn no longer stays busy.
 
+[2.4.9]: https://github.com/al3x4kov/teleharness/releases/tag/v2.4.9
+[2.0.5]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.5
+[2.0.4]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.4
 [2.0.3]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.3
 [2.0.0]: https://github.com/al3x4kov/teleharness/releases/tag/v2.0.0
 [1.24.2]: https://github.com/al3x4kov/teleharness/releases/tag/v1.24.2

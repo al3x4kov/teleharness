@@ -3,6 +3,7 @@
 // а Drawer импортирует chatTitle из HomeView — без цикла импортов.
 import { signal } from "@preact/signals";
 import { t } from "../lib/i18n.js";
+import { boardCount } from "../lib/attention.js"; // FEAT-20.2
 
 export const drawerOpen = signal(false);
 
@@ -38,10 +39,12 @@ export function TeleharnessMark({ size = 40 }) {
 }
 
 export function MenuButton() {
+  const c = boardCount.value;
   return (
-    <button class="icon-btn menu-btn float-btn" type="button" aria-label={t("menu.menu")} aria-haspopup="dialog"
-      aria-expanded={drawerOpen.value ? "true" : "false"} onClick={openDrawer}>
+    <button class="icon-btn menu-btn float-btn" type="button" aria-label={c ? `${t("menu.menu")}, ${c.label}` : t("menu.menu")} aria-haspopup="dialog"
+      aria-expanded={drawerOpen.value ? "true" : "false"} onClick={openDrawer} style={c ? { position: "relative" } : undefined}>
       <Svg><path d="M4 7h16" /><path d="M4 12h12" /><path d="M4 17h8" /></Svg>
+      {c && <span class={"menu-badge" + (c.kind === "failed" ? " is-failed" : "")} aria-hidden="true">{c.kind === "failed" ? "!" : c.text}</span>}
     </button>
   );
 }

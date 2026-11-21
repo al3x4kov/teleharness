@@ -281,7 +281,7 @@ test("TASK-01.79: завершённая карточка без ленты гр
 
 // ---- (г) детализация выключена: ответ + прелоадер с подписью -------------------
 
-test("FEAT-01.77 (г): детализация выключена — фоновый агент занят: виден ответ и прелоадер «Работают агенты», карточек .sa нет", async () => {
+test("BUG-290 / FEAT-01.77 (г): детализация выключена — в ленте ответ без карточек .sa и без дублирующего прелоадера «Работают агенты»", async () => {
   ui.store.setPrefs({ execDetail: false });
   const CHILD = "ses_bg_child";
   const feed = [
@@ -293,18 +293,14 @@ test("FEAT-01.77 (г): детализация выключена — фонов�
   ];
   ui.store.busyMap.value = { [CHILD]: Date.now() };
   const h = mountFeed(feed);
-  await t$.waitFor(() => $(h.root, ".msg-preloader.is-agents"));
-  assert.match(h.root.textContent, /Ответ готов\./, "завершённый ответ показан");
+  await t$.waitFor(() => /Ответ готов\./.test(h.root.textContent));
   assert.equal($$(h.root, ".sa").length, 0, "карточек агентов в компактном режиме нет");
-  assert.equal($(h.root, ".pre-t b").textContent, "Работают агенты");
-  assert.match($(h.root, ".pre-t span").textContent, /explorer/, "в подписи имя агента");
+  assert.equal($(h.root, ".msg-preloader.is-agents"), null, "BUG-290 (4А): полоса над полем ввода не дублируется индикатором в ленте");
 
-  // агент закончил → прелоадер погас, ответ остался
   t$.act(() => {
     ui.store.busyMap.value = {};
     putFeed(CHILD, childFeed("Собрал всё"));
   });
-  await t$.waitFor(() => $(h.root, ".msg-preloader") == null);
   assert.match(h.root.textContent, /Ответ готов\./, "ответ остался на месте");
 });
 
@@ -342,11 +338,11 @@ test("FEAT-01.77 (д): полоса «Фоном работает агент» �
   const bar = await t$.waitFor(() => $(root, ".bg-bar"));
   assert.match($(bar, ".bt").textContent, /Фоном работает агент/);
   assert.match($(bar, ".bt").textContent, /explorer/);
-  // ход основного агента идёт → полоса скрыта
+  // BUG-290: ход основного агента идёт → полоса остаётся видимой над полем ввода
   t$.act(() => {
     ui.store.active.value = { ...ui.store.active.value, status: "busy" };
   });
-  await t$.waitFor(() => $(root, ".bg-bar") == null);
+  await t$.waitFor(() => $(root, ".bg-bar") != null);
   // BUG-237: чат занят только фоновыми агентами (status busy + bg) — полоса видна, строки «Работает» нет
   t$.act(() => {
     ui.store.active.value = { ...ui.store.active.value, status: "busy", bgAgents: true };
@@ -368,15 +364,15 @@ test("FEAT-01.77 (д): полоса «Фоном работает агент» �
     putFeed(CHILD, childFeed("Сделано фоном"));
   });
   await t$.waitFor(() => $(root, ".bg-bar") == null);
-  // TASK-01.81 (кадр 4): детализация выключена, агент снова в работе → полосы нет, есть индикатор с подписью
+  // BUG-290 (вариант 4А): детализация выключена, агент снова в работе → полоса над полем ввода без дублирования в ленте
   t$.act(() => {
     ui.store.setPrefs({ execDetail: false });
     ui.store.childFeeds.value = new Map();
     ui.store.busyMap.value = { [CHILD]: Date.now() };
   });
-  const pre = await t$.waitFor(() => $(root, ".msg-preloader.is-agents"));
-  assert.match(pre.textContent, /Работают агенты/);
-  assert.equal($(root, ".bg-bar"), null, "полоса не дублирует индикатор");
+  const compactBar = await t$.waitFor(() => $(root, ".bg-bar"));
+  assert.match($(compactBar, ".bt").textContent, /explorer/);
+  assert.equal($(root, ".msg-preloader.is-agents"), null, "индикатор в ленте не дублирует полосу");
   t$.act(() => {
     ui.store.busyMap.value = {};
   });

@@ -13,6 +13,7 @@ import { PickerSheet } from "../Pickers.jsx";
 import { canRewind, editing, redoTurn, regenerate, rewindBusy, startEdit, undoPreview, undoTurn } from "../../lib/store.js";
 import "../turn-actions.css";
 import { t } from "../../lib/i18n.js";
+import { loadChatWt, wtByChat } from "../../lib/worktree-client.js"; // FEAT-20.7
 
 const Icon = ({ children, size = 18 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -75,6 +76,12 @@ export function UndoSheet({ sid, onClose }) {
     };
   }, [sid]);
   const busy = rewindBusy.value?.sid === sid;
+  useEffect(() => {
+    void loadChatWt(sid, { overlaps: false });
+  }, [sid]);
+  const wtItem = wtByChat.value[sid]?.item ?? null;
+  const wtCommit = wtItem?.turnCommit ?? null;
+  const wtBranch = wtItem?.branch ?? "";
   const confirm = async () => {
     const r = await undoTurn(sid);
     if (r) onClose();
@@ -108,6 +115,12 @@ export function UndoSheet({ sid, onClose }) {
         {state.shell && (
           <p class="undo-warn" role="note">
             <span aria-hidden="true">⚠</span> {t("turnActions.undo.shellWarn")}
+          </p>
+        )}
+        {/* FEAT-20.7 (кр. 19, N-30): ход в рабочей копии сделал коммит */}
+        {wtCommit && (
+          <p class="undo-warn" role="note" data-req="FEAT-20.7">
+            <span aria-hidden="true">⚠</span> {t("turn.undo.wtCommitWarn", { hash: wtCommit.after.slice(0, 7), branch: wtBranch })}
           </p>
         )}
       </div>

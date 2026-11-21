@@ -16,6 +16,7 @@ import { gitHash } from "../../lib/git-client.js"; // FEAT-18.8
 import BranchIcon from "../git/BranchIcon.jsx"; // TASK-18.13 D9
 import "../git/git.css";
 import { Glyph } from "../Pickers.jsx";
+import { ProjectCost } from "./ProjectCost.jsx"; // FEAT-20.6
 import {
   DeleteModal, LoadError, Modal, RenameModal, SessionRow, useSessionList,
 } from "./HomeView.jsx";
@@ -78,6 +79,13 @@ export default function ProjectView({ id }) {
           <BranchIcon /> Git
         </button>
       )}
+      {/* FEAT-20.7: рабочие копии репозитория проекта */}
+      {dir && (
+        <button class="gbtn git-open" type="button" data-feat="FEAT-20.7" onClick={() => navigate(`/worktrees?${new URLSearchParams({ directory: dir })}`)}>
+          <BranchIcon /> {t("project.worktrees")}
+        </button>
+      )}
+      {dir && <ProjectCost dir={dir} />}
       {loadState === "loading" ? (
         <div class="sk-list" role="status" aria-label={t("project.loading")}>
           {[0, 1, 2].map((i) => (

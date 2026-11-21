@@ -42,9 +42,9 @@ test("Настройки (admin): «Агент для новых чатов · C
   const row = claudeRow(root);
   assert.ok(row, "строка Claude есть");
   assert.equal(row.querySelector(".set-value").textContent, "Без агента");
-  assert.equal(row.querySelector(".set-hint").textContent, "Новые Claude-чаты начинаются без агента. Агента можно выбрать в самом чате.");
+  assert.equal(row.querySelector(".set-hint").textContent, "Выбранная роль применяется к новым чатам Claude и Gemini. В чате её можно сменить.");
   const teleharness = [...root.querySelectorAll(".set-row")].find((r) => /· z\.ai/.test(r.querySelector(".row-title")?.textContent ?? ""));
-  assert.equal(teleharness.querySelector(".set-hint").textContent, "Для Claude-чатов — строка ниже.");
+  assert.equal(teleharness.querySelector(".set-hint").textContent, "Для Claude и Gemini — строка ниже.");
   assert.equal(ui.store.prefs.value.claudeAgent, null);
 });
 

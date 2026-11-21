@@ -22,10 +22,14 @@ import PairView from "./views/PairView.jsx";
 import ChatView from "./views/ChatView.jsx";
 import GitView from "./views/GitView.jsx"; // FEAT-18.8
 import TemporalView from "./views/TemporalView.jsx"; // FEAT-19.1
+import BoardView from "./views/BoardView.jsx"; // FEAT-20.2
+import ReviewView from "./views/ReviewView.jsx"; // FEAT-20.1
+import WorktreesView from "./views/WorktreesView.jsx"; // FEAT-20.7
+import { startBoard, stopBoard, syncTitleBadge } from "../lib/attention.js";
 import Drawer from "./Drawer.jsx";
 import { t } from "../lib/i18n.js";
 
-const VIEWS = { home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView, temporal: TemporalView };
+const VIEWS = { worktrees: WorktreesView, reviewItem: ReviewView, board: BoardView, home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView, temporal: TemporalView };
 
 export default function AppShell() {
   const { view, path, params } = useRoute();
@@ -190,6 +194,22 @@ export default function AppShell() {
   // Up here with the other hooks — after-conditional hooks break Preact.
   // FEAT-03.23 (П32.Н11): /access → «Пользователи» for admin, the settings
   // root for everyone else (no hint that such a section exists).
+  // FEAT-20.2: доска считается для всего приложения (счётчик меню, «(N)» во
+  // вкладке, значок приложения, полоса на «Чатах») — только после входа.
+  useEffect(() => {
+    if (!me.value) return undefined;
+    startBoard();
+    return stopBoard;
+  }, [!!me.value]);
+  // экраны (чат) ставят свой заголовок — «(N)» возвращается после них
+  useEffect(() => {
+    syncTitleBadge();
+  }, [path]);
+  // FEAT-20.2: очередь ревью — вкладка доски; отдельного раздела «Ревью» нет
+  useEffect(() => {
+    if (view === "review") navigate("/board/review", { replace: true });
+  }, [view]);
+
   useEffect(() => {
     if (view !== "access") return;
     const to = accessTarget(me.value);

@@ -175,7 +175,9 @@ test("PushStore: bound to a user, cap per user (oldest goes), only the owner rem
 });
 
 // A notifier with a fake clock and a recording sender.
-function rig({ info = {}, managed = new Set(), recipients = () => ["u1"], debounceMs = 20_000 } = {}) {
+// summaryWindowMs 0: эти тесты — про отдельные события (дебаунс, получатели);
+// окно сводной push FEAT-20.2 проверяется своими тестами ниже.
+function rig({ info = {}, managed = new Set(), recipients = () => ["u1"], debounceMs = 20_000, summaryWindowMs = 0, prefsOf, activeAt, timers } = {}) {
   const dir = tmpDir();
   const store = new PushStore({ file: path.join(dir, "s.json") });
   const ua = makeUaKeys();
@@ -191,6 +193,10 @@ function rig({ info = {}, managed = new Set(), recipients = () => ["u1"], deboun
     chatInfo: async (sid) => info[sid] ?? { dir: "C:\\Home", title: `чат ${sid}` },
     isManaged: (sid) => managed.has(sid),
     debounceMs,
+    summaryWindowMs,
+    ...(prefsOf ? { prefsOf } : {}),
+    ...(activeAt ? { activeAt } : {}),
+    ...(timers ? { setTimer: (fn, ms) => timers.push({ fn, ms }) } : {}),
     now: () => clock.t,
     log: () => {},
     send: async (sub, payload, opts) => {
@@ -256,6 +262,26 @@ test("hub events: busy → idle = «Готово»; idle without busy, Claude-ma
   }
 });
 
+// BUG-272: opencode 2.x — после execution.failed idle не приходит; ошибка с terminal завершает ход
+test("BUG-272: opencode 2.x error turn (terminal session.error, no idle) — «Ошибка» once; next turn counts again", async () => {
+  const r = rig();
+  try {
+    r.n.observe(ev("session.status", "ses_q", { status: "busy" }));
+    r.n.observe(ev("session.error", "ses_q", { error: { name: "provider.quota", data: { message: "429" } }, terminal: true }));
+    await tick();
+    await tick();
+    assert.deepEqual(r.sent.map((s) => s.payload.title), ["Ошибка: чат ses_q"]);
+    r.clock.t += 60_000;
+    r.n.observe(ev("session.status", "ses_q", { status: "busy" }));
+    r.n.observe(ev("session.idle", "ses_q"));
+    await tick();
+    await tick();
+    assert.deepEqual(r.sent.map((s) => s.payload.title), ["Ошибка: чат ses_q", "Готово: чат ses_q"]);
+  } finally {
+    r.cleanup();
+  }
+});
+
 test("Claude onTurnEnd: «Готово»; stop by the person / delete / restart — nothing; timeout — «Ошибка»", async () => {
   const r = rig();
   try {
@@ -291,4 +317,131 @@ test("payload: short title, url of the chat, tag per chat", () => {
   assert.equal(p.url, "/teleharness/#/chat/ses%2F1");
   assert.equal(p.tag, "teleharness-ses/1");
   assert.equal(payloadFor("done", { sid: "s", title: "" }).title, "Готово: Новый чат");
+});
+
+// ---- FEAT-20.2: политика push доски внимания ---------------------------------
+import { quietLeftMs, summaryPayload } from "../lib/push.js";
+
+test("FEAT-20.2 кр. 15: выключенный вид — нет push ни на одно устройство; «Ждёт вас» по-прежнему приходит", async () => {
+  const { n, sent, clock, cleanup } = rig({ prefsOf: () => ({ needs: true, failed: true, done: false }) });
+  try {
+    await n.fire("done", "ses_a");
+    assert.equal(sent.length, 0);
+    clock.t += 30_000;
+    await n.fire("ask", "ses_a");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].payload.kind, "ask");
+  } finally {
+    cleanup();
+  }
+});
+
+test("FEAT-20.2 N-14: «Готово»/«Упало» не приходят, пока пользователь смотрит портал (45 с), «Ждёт вас» — приходит", async () => {
+  const at = { t: 1_000_000 };
+  const { n, sent, clock, cleanup } = rig({ activeAt: () => at.t });
+  try {
+    await n.fire("done", "ses_a");
+    await n.fire("error", "ses_b");
+    assert.equal(sent.length, 0, "смотрит портал");
+    await n.fire("ask", "ses_c");
+    assert.equal(sent.length, 1);
+    clock.t += 46_000;
+    await n.fire("done", "ses_d");
+    assert.equal(sent.length, 2, "ушёл — push снова приходят");
+  } finally {
+    cleanup();
+  }
+});
+
+test("FEAT-20.2 P-12: окно 120 с — первое событие сразу, следующие одной сводной push «Готово 2 · Упало 1» на доску", async () => {
+  const timers = [];
+  const { n, sent, clock, cleanup } = rig({ summaryWindowMs: 120_000, timers });
+  try {
+    await n.fire("done", "ses_1");
+    assert.equal(sent.length, 1, "первое — сразу");
+    clock.t += 10_000;
+    await n.fire("done", "ses_2");
+    clock.t += 10_000;
+    await n.fire("done", "ses_3");
+    clock.t += 10_000;
+    await n.fire("error", "ses_4");
+    assert.equal(sent.length, 1, "накоплено, не отправлено");
+    assert.equal(timers[0].ms, 120_000);
+    await timers[0].fn();
+    const last = sent.at(-1).payload;
+    assert.equal(last.kind, "summary");
+    assert.equal(last.title, "Готово 2 · Упало 1");
+    assert.equal(last.url, "/teleharness/#/board");
+    assert.equal(sent.length, 2, "одна сводка вместо трёх push");
+  } finally {
+    cleanup();
+  }
+});
+
+test("FEAT-20.2: в окне один накопленный — уходит как есть; «Ждёт вас» окна не ждёт", async () => {
+  const timers = [];
+  const { n, sent, clock, cleanup } = rig({ summaryWindowMs: 120_000, timers, recipients: () => ["u1"] });
+  try {
+    await n.fire("done", "ses_1");
+    clock.t += 5_000;
+    await n.fire("ask", "ses_2");
+    assert.equal(sent.length, 2, "запрос — сразу");
+    clock.t += 5_000;
+    await n.fire("done", "ses_3");
+    assert.equal(sent.length, 2);
+    await timers[0].fn();
+    assert.equal(sent.at(-1).payload.kind, "done");
+    assert.equal(sent.at(-1).payload.chat, "ses_3");
+  } finally {
+    cleanup();
+  }
+});
+
+test("FEAT-20.2 N-30: тихие часы — «Готово»/«Упало» копятся до конца одной сводкой, «Ждёт вас» сразу", async () => {
+  const timers = [];
+  const night = Date.UTC(2026, 10, 20, 2, 0, 0);
+  const { n, sent, clock, cleanup } = rig({ recipients: () => ["u1"], timers, prefsOf: () => ({ needs: true, failed: true, done: true, quiet: { on: true, from: "23:00", to: "08:00", tz: "UTC" } }) });
+  try {
+    clock.t = night;
+    await n.fire("error", "ses_r");
+    await n.fire("done", "ses_a");
+    clock.t += 30_000;
+    await n.fire("done", "ses_b");
+    assert.equal(sent.length, 0);
+    await n.fire("ask", "ses_q");
+    assert.equal(sent.length, 1, "запрос разрешения в 02:00 — сразу");
+    assert.equal(timers[0].ms, 6 * 3600_000, "до 08:00");
+    await timers[0].fn();
+    assert.equal(sent.at(-1).payload.title, "Готово 2 · Упало 1");
+  } finally {
+    cleanup();
+  }
+});
+
+test("FEAT-20.2: тот же открытый запрос после переподключения хаба — без второй push", async () => {
+  const { n, sent, clock, cleanup } = rig({ recipients: () => ["u1"] });
+  try {
+    n.observe(ev("permission.asked", "ses_p", { id: "per_same" }));
+    await tick();
+    await tick();
+    clock.t += 60_000;
+    n.observe(ev("permission.asked", "ses_p", { id: "per_same" }));
+    await tick();
+    await tick();
+    assert.equal(sent.length, 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test("FEAT-20.2: тихие часы через полночь и днём; сводка с правильной формой числа", () => {
+  const q = { on: true, from: "23:00", to: "08:00", tz: "UTC" };
+  assert.equal(quietLeftMs(q, Date.UTC(2026, 0, 1, 23, 30)), 8.5 * 3600_000);
+  assert.equal(quietLeftMs(q, Date.UTC(2026, 0, 1, 12, 0)), 0);
+  assert.equal(quietLeftMs({ ...q, on: false }, Date.UTC(2026, 0, 1, 2, 0)), 0);
+  assert.equal(quietLeftMs({ on: true, from: "13:00", to: "15:00", tz: "UTC" }, Date.UTC(2026, 0, 1, 14, 0)), 3600_000);
+  assert.equal(summaryPayload("u", { done: 1 }).body, "1 событие — откройте доску");
+  assert.equal(summaryPayload("u", { done: 2, needs: 2 }).body, "4 события — откройте доску");
+  assert.equal(summaryPayload("u", { failed: 5 }).body, "5 событий — откройте доску");
+  assert.equal(summaryPayload("u", { done: 3, failed: 1, needs: 2 }).title, "Готово 3 · Упало 1 · Ждут вас 2");
 });

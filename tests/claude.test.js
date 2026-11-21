@@ -648,7 +648,7 @@ test("restart: orphaned CLI run is killed, question answered, claude session kep
   );
   const logs = [];
   const runner = new ClaudeRunner({ hub: stubHub(), storePath, binPath: FIXTURE, log: (m) => logs.push(m) });
-  const code = await Promise.race([exited.then(() => "exited"), sleep(5000).then(() => "alive")]);
+  const code = await Promise.race([exited.then(() => "exited"), sleep(15_000).then(() => "alive")]);
   assert.equal(code, "exited", "the orphan must be killed");
   const msgs = runner.messages("r1");
   assert.equal(msgs.length, 2);

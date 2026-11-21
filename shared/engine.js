@@ -11,7 +11,12 @@ export const CLAUDE_PROVIDER = "anthropic";
 // раннер CLI, что у Claude (lib/claude.js), программой-посредником lib/codex-shim.mjs.
 export const CODEX_PROVIDER = "openai-codex";
 
+// FEAT-20.4: antigravity — Google Antigravity ACP-сервер (бинарная поставка);
+// gemini оставлен, чтобы старые чаты продолжали работать.
+export const ACP_PROVIDERS = {"acp-antigravity":"antigravity","acp-gemini":"gemini","acp-github-copilot-cli":"github-copilot-cli"};
+
 export function engineOf(providerID) {
+  if (Object.hasOwn(ACP_PROVIDERS,providerID)) return "acp";
   if (providerID === CLAUDE_PROVIDER) return "claude";
   if (providerID === CODEX_PROVIDER) return "codex";
   return "opencode";
@@ -20,7 +25,7 @@ export function engineOf(providerID) {
 // FEAT-18.7: движки, ходы которых ведёт раннер CLI портала (история в сторе портала,
 // очередь, мост разрешений), — в отличие от opencode serve.
 export function isRunnerEngine(engine) {
-  return engine === "claude" || engine === "codex";
+  return engine === "acp" || engine === "claude" || engine === "codex";
 }
 
 // FEAT-18.7: движок раннера для модели хода или null (opencode).

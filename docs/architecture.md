@@ -524,7 +524,7 @@ keepalive подделывался событием `busy`, запись ист�
 эффективная конфигурация с источником каждого значения и `***` у секретов.
 До 1.7.0 env читался в 10 файлах без проверки, и `NaN` тихо выключал защиту (R19).
 
-### 5.1. server.js и lib/* (схема `lib/config.js`, 66 переменных)
+### 5.1. server.js и lib/* (схема `lib/config.js`, 67 переменных)
 
 Таблица сверяется тестом `tests/docs-env-schema.test.js` со схемой `lib/config.js` (TASK-15.9):
 каждое имя схемы должно быть в таблице, дефолт — равен `def` из схемы (секреты и вычисляемые
@@ -583,6 +583,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_PUSH_SUBJECT` | `https://teleharness.home.example.net/teleharness/` | VAPID `sub` (RFC 8292) |
 | `TELEHARNESS_PUSH_EXTRA_ORIGINS` | пусто | дополнительные origins push-сервисов через `;` (тесты/проверки с локальным фейком) |
 | `TELEHARNESS_PUSH_DEBOUNCE_MS` | `20000` | дебаунс отправки push |
+| `TELEHARNESS_PUSH_SUMMARY_MS` | `120000` | окно сводной push доски внимания (FEAT-20.2): первое событие — сразу, ≥ 2 следующих — одной сводкой |
 | `TELEHARNESS_PUSH_MAX_PER_USER` | `10` | максимум push на пользователя в сутки-окно |
 | `TELEHARNESS_PUBLIC_URL` | пусто | публичный адрес корня портала, например `https://example.com/teleharness/` (путь обязан кончаться на `/teleharness`); ссылка входа и QR «Подключить телефон» — `<адрес>/#/pair/<код>`; пусто — экран просит задать переменную (FEAT-18.2) |
 | `TELEHARNESS_ADMIN_TOKEN` | пусто (секрет) | bootstrap-токен admin; **только** если нет `users.json` |
@@ -620,12 +621,17 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_ANTHROPIC_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора Anthropic API — карточка трат «Anthropic API»; пусто → карточки нет |
 | `TELEHARNESS_JOURNAL_DEBOUNCE_MS` | `server.js` | пауза перед пересборкой журнала чата после конца хода; пусто → 3000 |
 | `TELEHARNESS_AUTO_RELAY_DELAY_MS` | `server.js` | пауза перед автоматической передачей чата при лимите (FEAT-18.6), чтобы ход успел закрыться; пусто → 1500 |
+| `TELEHARNESS_ACP_POST_ANSWER_IDLE_MS` | `lib/claude.js` | BUG-294: сторож зависшего ACP `session/prompt` после готового ответа (0 открытых задач и субагентов) — мягко завершает ход без `[Прервано]`, сохраняет очередь и сбрасывает битую ACP-сессию; пусто → 600000 (10 мин), `0` = выкл. |
 | `TELEHARNESS_CODEX_SHIM` | `lib/claude.js`, `server.js` | посредник Codex, который раннер запускает для моделей Codex (FEAT-18.7), и разовый запрос «Предложить сообщение» (`--teleharness-oneshot`, FEAT-18.8); пусто → `lib/codex-shim.mjs` |
+| `TELEHARNESS_ACP` | `lib/auth.js`, маршруты ACP | При значении `off` отключает каталог, установку, вход и ходы агентов ACP (FEAT-20.4). |
 | `TELEHARNESS_CODEX` | `lib/codex-catalog.js` | `off` — движок Codex выключен, посредник не запускается (FEAT-18.7); пусто → Codex предлагается, когда codex установлен и в нём выполнен вход |
 | `TELEHARNESS_CODEX_BIN` | `lib/codex-shim.mjs` | путь к бинарю codex или его `bin/codex.js` (JS — через node); пусто → нативный codex из глобального пакета npm `@openai/codex` (npm prefix, папка node, `%APPDATA%\npm` на Windows, `/usr/local/lib`, `~/.npm-global` на macOS/Linux), затем `codex` в `PATH` |
 | `TELEHARNESS_JOURNAL_DEBUG` | `server.js`, `lib/chat-journal.js` | непусто → причины пропуска журнала чата пишутся в stderr |
 | `TELEHARNESS_CLAUDE_ADMIN_MODE` | `lib/claude.js` | permission-mode admin-хода Claude; пусто → `bypassPermissions` |
 | `TELEHARNESS_CLAUDE_ADD_DIRS` | `lib/claude.js` | extra `--add-dir` через `;`; пусто → корень портала |
+| `TELEHARNESS_COST_LEDGER` | `server.js` | FEAT-20.6: файл журнала расхода по ценам API (SQLite); пусто → `<data>\usage-ledger.sqlite` |
+| `TELEHARNESS_COST_NO_BACKFILL` | `server.js` | FEAT-20.6: непусто → учёт истории (claude-sessions.json, opencode) при старте не запускается (тесты) |
+| `TELEHARNESS_COST_BACKFILL_DELAY_MS` | `server.js` | FEAT-20.6: пауза перед учётом истории после старта; пусто → 15000 |
 
 Схему читает только `lib/config.js` (`loadConfig`); `TELEHARNESS_UPSTREAM` ещё читают напрямую
 `lib/proxy.js` и `lib/host.js` (перенос на `config` — остаток ADR-006). Плагины opencode

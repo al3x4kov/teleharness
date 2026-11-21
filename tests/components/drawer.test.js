@@ -58,7 +58,8 @@ test("смена экрана закрывает панель", async () => {
 test("разделы: Чаты / Проекты / Настройки, активный отмечен", async () => {
   const { root } = t$.mount(ui.Drawer, { view: "projects", chatId: null });
   const items = $$(root, ".drawer-nav .drawer-item").map((a) => a.textContent.trim());
-  assert.deepEqual(items, ["Чаты", "Проекты", "Temporal", "Настройки"]);
+  // FEAT-20.2: «Доска» — первым пунктом (решение владельца 2026-11-20), пункта «Ревью» нет
+  assert.deepEqual(items, ["Доска", "Чаты", "Проекты", "Temporal", "Настройки"]);
   assert.equal($(root, '.drawer-nav [aria-current="page"]').textContent.trim(), "Проекты");
 });
 

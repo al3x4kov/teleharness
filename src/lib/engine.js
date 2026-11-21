@@ -23,8 +23,15 @@ export const ENGINE_LABEL = {
   get codex() {
     return t("engine.label.codex");
   },
+  acp: "ACP",
 };
-export const ENGINE_SHORT = { opencode: "z.ai", claude: "Claude", codex: "Codex" };
+export const ENGINE_SHORT = { opencode: "z.ai", claude: "Claude", codex: "Codex", acp: "ACP" };
+
+export function engineShortOf(providerID) {
+  if (providerID === "acp-antigravity") return "Gemini";
+  if (providerID === "acp-github-copilot-cli") return "Copilot";
+  return ENGINE_SHORT[engineOf(providerID)] ?? "";
+}
 
 function pickModel(m) {
   const providerID = typeof m?.providerID === "string" ? m.providerID : "";
@@ -51,7 +58,7 @@ export function bindingOf(session) {
   const zm = pickModel(z?.model);
   if (zm) {
     const engine = engineOf(zm.providerID);
-    return { engine, model: zm, agent: engine === "claude" ? claudeAgent(z.agent) : engine === "codex" ? claudeAgent(z.agent) : z.agent ?? null, prompted: Boolean(z.prompted) };
+    return { engine, model: zm, agent: (engine === "claude" || zm.providerID === "acp-antigravity" || engine === "codex") ? claudeAgent(z.agent) : engine === "acp" ? null : z.agent ?? null, prompted: Boolean(z.prompted) };
   }
   const um = pickModel(session?.model);
   if (um) {
@@ -81,7 +88,7 @@ export function permModeOf(session, { admin = false } = {}) {
 // FEAT-18.7: Codex-чат — только «Спрашивать» и «Без вопросов».
 export function permModeChoices({ admin = false, engine = null } = {}) {
   const list = admin ? PERM_MODES : PERM_MODES.filter((x) => x.id !== "full");
-  return engine === "codex" ? list.filter((x) => x.id !== "edits") : list;
+  return engine === "codex" || engine === "acp" ? list.filter((x) => x.id !== "edits") : list;
 }
 // Claude chats: every user; opencode chats: admin only (the server overrides
 // session rules on the 2.x API only — a tenant's Sandbox rules stay).
@@ -96,7 +103,7 @@ export function defaultBinding(prefs) {
   const m = pickModel(prefs?.model);
   if (!m) return null;
   const engine = engineOf(m.providerID);
-  return { engine, model: m, agent: engine === "claude" ? claudeAgent(prefs?.claudeAgent) : engine === "codex" ? claudeAgent(prefs?.codexAgent) : prefs?.agent ?? null, prompted: false };
+  return { engine, model: m, agent: (engine === "claude" || m.providerID === "acp-antigravity") ? claudeAgent(prefs?.claudeAgent) : engine === "codex" ? claudeAgent(prefs?.codexAgent) : engine === "acp" ? null : prefs?.agent ?? null, prompted: false };
 }
 
 // Display name of a Claude agent id from the catalog ([{id, name}]); the id
@@ -147,6 +154,9 @@ export const WORKING_MODELS = {
   "zai-coding-plan": null,
   zai: ["glm-5v-turbo"],
   anthropic: null,
+  "acp-antigravity": null,
+  "acp-gemini": null,
+  "acp-github-copilot-cli": null,
   "openai-codex": null, // FEAT-18.7: каталог Codex приходит только когда codex установлен и вошёл
 };
 
@@ -182,10 +192,22 @@ export function modelAvailable(model, cfg) {
 
 // Human model name from the normalized catalog ({id, providerID, label});
 // falls back to a formatted id (prettyModelId) while the catalog loads.
+export const ACP_PROVIDER_LABELS = Object.freeze({
+  "acp-antigravity": "Google Antigravity",
+  "acp-github-copilot-cli": "GitHub Copilot CLI",
+});
+
+export function acpProviderName(providerID) {
+  return ACP_PROVIDER_LABELS[providerID] ?? prettyModelId(String(providerID ?? "").replace(/^acp-/, ""));
+}
+
 export function modelName(cfg, model) {
   if (!model) return "";
   const hit = (cfg?.models ?? []).find((m) => m.providerID === model.providerID && m.id === model.modelID);
-  if (!hit?.label) return prettyModelId(model.modelID);
+  if (!hit?.label) {
+    if (ACP_PROVIDER_LABELS[model.modelID]) return ACP_PROVIDER_LABELS[model.modelID];
+    return prettyModelId(model.modelID);
+  }
   const suffix = ` (${hit.providerID})`;
   return hit.label.endsWith(suffix) ? hit.label.slice(0, -suffix.length) : hit.label;
 }
@@ -197,6 +219,8 @@ export function bindingLine(binding, cfg, claudeAgents = []) {
   if (!binding) return "";
   const name = modelName(cfg, binding.model);
   if (binding.engine === "claude") return `${name} · ${claudeAgentName(claudeAgent(binding.agent), claudeAgents) ?? "Claude Code"}`;
+  if (binding.model?.providerID === "acp-antigravity") return `${name} · ${claudeAgentName(claudeAgent(binding.agent), claudeAgents) ?? "Gemini"}`;
+  if (binding.engine === "acp") return `${name} · ${binding.model?.providerID === "acp-github-copilot-cli" ? "Copilot" : "ACP"}`;
   if (binding.engine === "codex") return `${name} · ${claudeAgentName(claudeAgent(binding.agent), claudeAgents) ?? "Codex"}`;
   return [binding.agent, name].filter(Boolean).join(" · ");
 }

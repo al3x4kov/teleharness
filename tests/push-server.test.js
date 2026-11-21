@@ -67,7 +67,7 @@ before(async () => {
       { id: "ses_adm2", directory: tmp.home, title: "Второй чат" },
     ],
   });
-  srv = await spawnPortal({ upstream: up.url, tmp, env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_PUSH_EXTRA_ORIGINS: pushSvc.origin } });
+  srv = await spawnPortal({ upstream: up.url, tmp, env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_PUSH_EXTRA_ORIGINS: pushSvc.origin, TELEHARNESS_PUSH_SUMMARY_MS: "0" } }); // окно сводной push FEAT-20.2 — в push.test.js
   await up.waitForSubscription(tmp.home);
   const created = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "tpush" } })).json();
   tenant = created.token;

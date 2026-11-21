@@ -60,6 +60,9 @@ export function temporalRoutes(deps) {
       catch(e) { if(e instanceof DefinitionError) return deps.sendJson(ctx.res,e.status,{error:e.message,...(e.errors?{errors:e.errors}:{}),...(e.unchanged?{unchanged:e.unchanged}:{})}); throw e; }
     }};
   }
+  // FEAT-20.2: запуски пользователя для доски внимания — тот же источник, что список и «Ждут вашего решения».
+  // null — исполнение Temporal не подключено.
+  deps.boardRuns=async user=>deps.listRuns?withSummaries(await visibleRuns(user)):null;
   return [
     route("GET",base+"/capabilities",({res,user})=>deps.sendJson(res,200,{definitions:true,subscriptionModels:Object.fromEntries(Object.entries(deps.subscriptionModels??{}).filter(([e])=>pipeEngineAllowed(deps.engineAllowed,user,e))),pipelineAvailable:!!deps.startPipeline,schedulesAvailable:!!deps.schedules,runListAvailable:typeof deps.listRuns==="function",timerStartAvailable:typeof deps.startTimer==="function",execution:{available:!!deps.startPipeline,reason:deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено"},engines:["claude","codex"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"})),
     route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})$/, async ({user,res,match})=>{

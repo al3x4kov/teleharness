@@ -1107,3 +1107,54 @@ test("TASK-19.9: watchdog skips replay and abort when chat ownership refuses leg
   assert.ok(checked.has("ses_wait")&&checked.has("ses_busy"));
   assert.ok(!up.posts.some(p=>p.path.endsWith("/abort")||p.path.endsWith("/prompt_async")));
 });
+
+// FEAT-20.2: остановка зависшего хода — событие teleharness.turn.stalled (доска пишет
+// исход «Остановлен: ход завис»); личное событие — только подключениям userId.
+test("FEAT-20.2: stall abort emits teleharness.turn.stalled once, after the abort", async () => {
+  const up = startAbortUpstream();
+  const hub = new EventHub({ stallAbortMs: 100, stallTickMs: 40 });
+  const seen = [];
+  hub.onEvent((data) => { if (data.includes("teleharness.turn.stalled")) seen.push(JSON.parse(data)); });
+  hub.start(await up.base);
+  cleanups.push(async () => {
+    hub.stop();
+    await up.close();
+  });
+  await sleep(150);
+  up.emitSse(JSON.stringify({ type: "session.status", properties: { sessionID: "ses_st", status: { type: "busy" } } }));
+  await sleep(600);
+  assert.equal(seen.length, 1, "one stalled event per stall");
+  assert.equal(seen[0].properties.sessionID, "ses_st");
+  assert.ok(seen[0].properties.silentMs >= 100);
+});
+
+test("FEAT-20.2: broadcastToUser reaches only that user's streams, without ring replay", async () => {
+  const hub = new EventHub({});
+  const server = http.createServer((req, res) => hub.handleClient(req, res, { userId: new URL(req.url, "http://x").searchParams.get("u") }));
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const aborts = [];
+  cleanups.push(() => {
+    for (const ab of aborts) ab();
+    server.closeAllConnections?.();
+    return new Promise((r) => server.close(r));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const open = async (u) => {
+    const ctl = new AbortController();
+    const r = await fetch(`${base}/?u=${u}`, { signal: ctl.signal });
+    const reader = r.body.getReader();
+    const chunks = [];
+    (async () => { try { for (;;) { const { value, done } = await reader.read(); if (done) break; chunks.push(new TextDecoder().decode(value)); } } catch {} })();
+    aborts.push(() => ctl.abort());
+    return chunks;
+  };
+  const a = await open("alice");
+  const b = await open("bob");
+  await sleep(100);
+  assert.equal(hub.broadcastToUser("alice", { type: "teleharness.attention", properties: { reason: "seen" } }), 1);
+  assert.equal(hub.broadcastToUser(null, { type: "x" }), 0);
+  await sleep(100);
+  assert.ok(a.join("").includes('"teleharness.attention"'));
+  assert.ok(!b.join("").includes('"teleharness.attention"'), "bob gets nothing");
+  assert.ok(!/id: .*\n.*teleharness\.attention/.test(a.join("")), "no id line: not in the replay ring");
+});

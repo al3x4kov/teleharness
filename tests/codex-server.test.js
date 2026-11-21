@@ -164,3 +164,62 @@ test("Relay Codex → Claude: Claude получает пропущенный х�
   assert.match(prompt, /меня зовут Алекс/, "в запрос Claude вложен пропущенный ход Codex");
   assert.ok(!JSON.parse(textOf(a).replace(/\(resumed\)/g, "")).argv.includes("--resume"), "Claude не продолжает разговор Codex");
 });
+
+test("FEAT-20.4: вход ACP → выбор модели → два сообщения через HTTP портала", async()=>{
+  const {agentEntry}=await import("../lib/acp-registry.js");
+  const {mkdir,copyFile,chmod}=await import("node:fs/promises");
+  // FEAT-20.4: antigravity — бинарная поставка (наружный список движков, gemini
+  // убран): фикстура-«бинарник» запускается напрямую, вход — вставка адреса
+  // страницы после входа (loopback-редирект Google).
+  for(const agent of ["antigravity","github-copilot-cli"]){
+    const file=agentEntry(DATA,agent);
+    await mkdir(path.dirname(file),{recursive:true});
+    if(agent==="antigravity"){
+      // «Бинарник» — sh-шима (node не исполняет .par); каталог берётся
+      // подстановкой ${0%/*}, потому что в env агента нет /usr/bin.
+      const {writeFile}=await import("node:fs/promises");
+      await copyFile(path.join(ROOT,"tests/fixtures/acp-agy-fake.mjs"),path.join(path.dirname(file),"agy-fake.mjs"));
+      await writeFile(file,'#!/bin/sh\nexec node "${0%/*}/agy-fake.mjs" "$@"\n');
+      await chmod(file,0o755);
+    } else await copyFile(path.join(ROOT,"tests/fixtures/acp-chat-agent.mjs"),file);
+    const loginPath="/teleharness/api/acp/"+agent+"/login";
+    let state=await (await api(loginPath,{method:"POST",body:{action:"start",confirmed:true}})).json();
+    if(agent==="antigravity"){
+      for(let i=0;i<100 && state.status!=="awaiting-code";i++){
+        await new Promise(resolve=>setTimeout(resolve,25));
+        state=await (await api(loginPath)).json();
+      }
+      assert.equal(state.status,"awaiting-code",agent);
+      const port=decodeURIComponent(state.url).match(/127\.0\.0\.1:(\d+)\//)?.[1];
+      assert.ok(port,"в ссылке входа есть адрес слушателя: "+state.url);
+      state=await (await api(loginPath,{method:"POST",body:{action:"submit",id:state.id,url:`http://127.0.0.1:${port}/?code=4/test&state=fake-state`}})).json();
+    }
+    for(let i=0;i<100 && state.status!=="ready";i++){
+      await new Promise(resolve=>setTimeout(resolve,25));
+      state=await (await api(loginPath)).json();
+    }
+    assert.equal(state.status,"ready",agent);
+    const key="acp-"+agent;
+    const catalog=await (await api("/teleharness/api/provider")).json();
+    assert.ok(catalog.connected.includes(key));
+    const modelID = agent === "antigravity" ? "neon-test" : key;
+    assert.ok(catalog.all.find(p => p.id === key).models[modelID]);
+    const model={providerID:key,modelID};
+    const chat=await (await api("/teleharness/api/session"+q,{method:"POST",body:{model}})).json();
+    assert.equal(chat.teleharness.engine,"acp");
+    for(const [index,expected] of ["one two","one resumed"].entries()){
+      const r=await api("/teleharness/api/session/"+chat.id+"/prompt"+q,{method:"POST",body:{model,parts:[{type:"text",text:"hello"}]}});
+      assert.equal(r.status,204);
+      const answer=await lastAnswer(chat.id,index+1);
+      assert.equal(answer?.info.providerID,key);
+      assert.equal(answer.info.modelID, modelID);
+      assert.equal(textOf(answer),agent === "antigravity" ? expected.replace("one","neon-test") : expected);
+    }
+    if (agent === "antigravity") {
+      const response = await api("/teleharness/api/session/"+chat.id+"/prompt"+q, {method:"POST",
+        body:{model,parts:[{type:"text",text:"ask"}]}});
+      assert.equal(response.status,204);
+      assert.equal(textOf(await lastAnswer(chat.id,3)),"selected","режим администратора по умолчанию разрешает инструмент без диалога");
+    }
+  }
+});

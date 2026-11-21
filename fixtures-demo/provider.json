@@ -333,16 +333,165 @@
      "headers": {}
     }
    }
+  },
+  {
+   "id": "acp-antigravity",
+   "name": "Google Antigravity",
+   "source": "acp",
+   "env": [],
+   "options": {},
+   "models": {
+    "gemini-4-neon-medium": {
+     "id": "gemini-4-neon-medium",
+     "providerID": "acp-antigravity",
+     "name": "Gemini 4 Neon (Medium)",
+     "family": "gemini",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": true,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "image": true
+      },
+      "output": {
+       "text": true
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 1000000,
+      "output": 65536
+     },
+     "status": "active"
+    },
+    "gemini-4-neon-high": {
+     "id": "gemini-4-neon-high",
+     "providerID": "acp-antigravity",
+     "name": "Gemini 4 Neon (High)",
+     "family": "gemini",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": true,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "image": true
+      },
+      "output": {
+       "text": true
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 1000000,
+      "output": 65536
+     },
+     "status": "active"
+    },
+    "gemini-3.8-flash-high": {
+     "id": "gemini-3.8-flash-high",
+     "providerID": "acp-antigravity",
+     "name": "Gemini 3.8 Flash (High)",
+     "family": "gemini",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": true,
+      "toolcall": true,
+      "input": {
+       "text": true,
+       "image": true
+      },
+      "output": {
+       "text": true
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 1000000,
+      "output": 65536
+     },
+     "status": "active"
+    }
+   }
+  },
+  {
+   "id": "acp-github-copilot-cli",
+   "name": "GitHub Copilot CLI",
+   "source": "acp",
+   "env": [],
+   "options": {},
+   "models": {
+    "acp-github-copilot-cli": {
+     "id": "acp-github-copilot-cli",
+     "providerID": "acp-github-copilot-cli",
+     "name": "GitHub Copilot CLI",
+     "family": "copilot",
+     "capabilities": {
+      "temperature": true,
+      "reasoning": true,
+      "attachment": false,
+      "toolcall": true,
+      "input": {
+       "text": true
+      },
+      "output": {
+       "text": true
+      }
+     },
+     "cost": {
+      "input": 0,
+      "output": 0,
+      "cache": {
+       "read": 0,
+       "write": 0
+      }
+     },
+     "limit": {
+      "context": 200000,
+      "output": 16384
+     },
+     "status": "active"
+    }
+   }
   }
  ],
  "default": {
   "zai-coding-plan": "glm-5.3",
   "anthropic": "claude-opus-5-5",
-  "openai-codex": "gpt-6.1-sol"
+  "openai-codex": "gpt-6.1-sol",
+  "acp-antigravity": "gemini-4-neon-medium",
+  "acp-github-copilot-cli": "acp-github-copilot-cli"
  },
  "connected": [
   "zai-coding-plan",
   "anthropic",
-  "openai-codex"
+  "openai-codex",
+  "acp-antigravity",
+  "acp-github-copilot-cli"
  ]
 }

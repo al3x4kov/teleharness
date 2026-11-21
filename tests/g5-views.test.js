@@ -458,3 +458,14 @@ test("BUG-143: константа версии фронта совпадает �
   const src = readFileSync(path.join(root, "src", "lib", "version.js"), "utf8");
   assert.equal(src.match(/export const VERSION = "([^"]+)"/)?.[1], pkg.version);
 });
+
+test("FEAT-20.4: выбор модели показывает доступных ACP-агентов по имени",async()=>{
+  const {acpProviderCatalog}=await import("../lib/acp-registry.js");
+  const base=JSON.parse(readFileSync(path.join(root,"fixtures","provider.json"),"utf8"));
+  // FEAT-20.4: наружный список движков — antigravity и copilot (gemini убран).
+  const cfg=M.normalizeProviders(acpProviderCatalog(base,["antigravity","github-copilot-cli"]));
+  const groups=M.pickers.modelGroups(cfg,{engine:"acp"});
+  // BUG-287: каждый ACP-агент отображается своей группой «<Имя агента> · ACP»
+  assert.equal(groups.length,2);
+  assert.deepEqual(groups.flatMap(g=>g.models.map(m=>m.providerID)).sort(),["acp-antigravity","acp-github-copilot-cli"]);
+});

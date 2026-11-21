@@ -65,14 +65,20 @@ test("тенант: умолчание «Правки», пункта «Без �
   assert.match(document.querySelector(".sheet .picker-foot").textContent, /только администратору/);
 });
 
-test("тенант: сохранённый «full» не показывается шире роли; opencode-чат тенанта — без пилюли", () => {
+test("тенант: сохранённый «full» не показывается шире роли; opencode-чат тенанта — режима прав нет, «Сначала план» серый с причиной (FEAT-20.1 N-22)", async () => {
   seed({ model: OPUS, agent: null, prompted: true, permMode: "full" }, "user");
   let m = t$.mount(ui.ModelBar, { sessionId: "ses_m", hasMessages: true });
   assert.equal(permPill(m.root).textContent.trim(), "Правки");
   t$.cleanup();
   seed({ model: GLM, agent: "ask", prompted: true }, "user");
   m = t$.mount(ui.ModelBar, { sessionId: "ses_m", hasMessages: true });
-  assert.equal(permPill(m.root), null, "режим opencode тенанту недоступен");
+  assert.equal(permPill(m.root).textContent.trim(), "План", "режима прав нет — пилюля ведёт только к «Сначала план»");
+  t$.click(permPill(m.root));
+  await t$.flush();
+  assert.equal(sheetRows().length, 0, "режимов прав opencode тенанту нет");
+  const box = document.querySelector(".sheet .pl-toggle input");
+  assert.equal(box.disabled, true);
+  assert.match(document.querySelector(".sheet .pl-toggle").textContent, /нет агента «plan».*администратора/);
 });
 
 test("во время хода режим не меняется: пункты выключены, подсказка", async () => {

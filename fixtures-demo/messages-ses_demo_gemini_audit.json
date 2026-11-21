@@ -1,0 +1,88 @@
+[
+ {
+  "info": {
+   "id": "msg_demo_gemini_u1",
+   "sessionID": "ses_demo_gemini_audit",
+   "role": "user",
+   "time": {
+    "created": 1794304567900
+   },
+   "model": {
+    "providerID": "acp-antigravity",
+    "modelID": "gemini-4-neon-medium"
+   }
+  },
+  "parts": [
+   {
+    "id": "prt_gem_u1",
+    "type": "text",
+    "text": "Audit `src/middleware/rate-limit.js` for clock-skew and burst race conditions. Draft a concrete plan before touching any files."
+   }
+  ]
+ },
+ {
+  "info": {
+   "id": "msg_demo_gemini_a1",
+   "sessionID": "ses_demo_gemini_audit",
+   "role": "assistant",
+   "parentID": "msg_demo_gemini_u1",
+   "providerID": "acp-antigravity",
+   "modelID": "gemini-4-neon-medium",
+   "time": {
+    "created": 1794304572900,
+    "completed": 1794304627900
+   },
+   "tokens": {
+    "input": 18400,
+    "output": 1420,
+    "reasoning": 480,
+    "cache": {
+     "read": 12000,
+     "write": 0
+    }
+   },
+   "cost": 0,
+   "finish": "stop"
+  },
+  "parts": [
+   {
+    "id": "prt_gem_t1",
+    "type": "tool",
+    "tool": "read",
+    "state": {
+     "status": "completed",
+     "input": {
+      "filePath": "src/middleware/rate-limit.js"
+     },
+     "title": "src/middleware/rate-limit.js",
+     "time": {
+      "start": 1794304575900,
+      "end": 1794304579900
+     }
+    }
+   },
+   {
+    "id": "prt_gem_t2",
+    "type": "tool",
+    "tool": "grep",
+    "state": {
+     "status": "completed",
+     "input": {
+      "pattern": "Date\\.now",
+      "path": "src/middleware"
+     },
+     "title": "grep Date.now in src/middleware",
+     "time": {
+      "start": 1794304580900,
+      "end": 1794304585900
+     }
+    }
+   },
+   {
+    "id": "prt_gem_txt",
+    "type": "text",
+    "text": "I inspected `src/middleware/rate-limit.js` and found two issues:\n\n- **Wall-clock refill:** `Date.now()` moves backward on NTP adjustments, resetting tokens mid-window.\n- **Multi-worker burst race:** separate `GET` + `SET` calls allow two concurrent requests to pass the same remaining token.\n\nNo files were edited yet. Review **Plan 1** below to approve or edit before execution."
+   }
+  ]
+ }
+]

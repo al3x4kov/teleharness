@@ -6,10 +6,13 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
 import { t } from "../../lib/i18n.js";
 import { me } from "../../lib/store.js";
+import { useSeenOnOpen } from "../../lib/attention.js"; // FEAT-20.2
 import { Banner, Empty, Sheet, Skeleton, StatusPill, STEP_TYPES_UI, errorText, usePoll, useNow, when, duration } from "./ui.jsx";
 import Markdown from "../chat/Markdown.jsx";
 import FileCard from "../chat/FileCard.jsx";
 import FileViewer from "../chat/FileViewer.jsx";
+import { RunWorktree } from "../chat/Worktree.jsx"; // FEAT-20.7
+import { RunCost } from "./RunCost.jsx"; // FEAT-20.6
 
 const ACTIVE = new Set(["wait", "run", "quota", "paused"]);
 const STEP_STATE = {
@@ -37,6 +40,7 @@ export default function RunDetail({ workflowId }) {
   const [reason, setReason] = useState(""), [comment, setComment] = useState(""), [viewer, setViewer] = useState(null);
   const retry = useRef(null);
   const now = useNow(15000);
+  useSeenOnOpen(workflowId ? "run:" + workflowId : null); // FEAT-20.2 (кр. 5): запуск открыт ≥ 2 с — просмотрен
   async function load() {
     try { setRun(await api.temporalRun(workflowId)); setError(null); }
     catch (e) { if ([403, 404].includes(e.status)) setGone(true); else setError(e); }
@@ -195,6 +199,8 @@ export default function RunDetail({ workflowId }) {
               <dt>ID</dt><dd class="t-mono">{workflowId}</dd>
             </dl>
           </section>
+          <RunWorktree workflowId={workflowId} />{/* FEAT-20.7 */}
+          <RunCost workflowId={workflowId} steps={steps} />{/* FEAT-20.6 */}
           <section class="t-card t-hide-phone"><h2>{t("temporal.rd.actions")}</h2><div class="t-actcol">{actions}</div></section>
         </aside>
       </div>

@@ -14,7 +14,7 @@ import { me, refreshSessions, sessions } from "../../lib/store.js";
 import { navigate } from "../../lib/router.js";
 import { t } from "../../lib/i18n.js";
 import { dirBasename, projectDisplayName } from "../../lib/normalize.js";
-import { agoLabel, gitErrorText, hashDirectory, preselected, pushErrorView, remoteOf, rootInfo, setGitRepo, suggestErrorView } from "../../lib/git-client.js";
+import { agoLabel, gitErrorText, hashDirectory, preselected, pushErrorView, remoteOf, rootInfo, setGitRepo, suggestErrorView, takeReviewSelection } from "../../lib/git-client.js";
 import { filesLabel, splitPath } from "../../lib/diff.js";
 import DiffView, { FileRow } from "../git/DiffView.jsx";
 import BranchIcon from "../git/BranchIcon.jsx";
@@ -114,7 +114,9 @@ export default function GitView({ id = null, directory: dirProp = null, client =
     const paths = new Set(files.map((f) => f.path));
     if (!seeded.current) {
       seeded.current = true;
-      setChecked(new Set(preselected(files, preselect)));
+      // FEAT-20.1 «Принять и закоммитить»: отмечены ровно файлы принятого пункта ревью
+      const fromReview = sid ? takeReviewSelection(sid) : null;
+      setChecked(new Set(fromReview ? files.filter((f) => fromReview.includes(f.path) || (f.oldPath && fromReview.includes(f.oldPath))).map((f) => f.path) : preselected(files, preselect)));
     } else {
       setChecked((prev) => new Set([...prev].filter((p) => paths.has(p))));
     }

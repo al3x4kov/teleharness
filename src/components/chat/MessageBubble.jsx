@@ -24,6 +24,7 @@ import FileViewer from "./FileViewer.jsx";
 import FileCard from "./FileCard.jsx";
 import { EditButton, RegenerateButton, TurnMenu } from "./TurnActions.jsx";
 import ChangesRow, { changesForTurn } from "../git/Changes.jsx"; // FEAT-18.8
+import { PlanCards, ReviewBubble, ReviewPlaque, reviewBubbleOf } from "./ChatReview.jsx"; // FEAT-20.1
 import { mentionedFiles, serverFilesFor, turnHaystack } from "../../lib/turn-files.js";
 import { probeState, requestProbe } from "../../lib/file-probe.js";
 import { partKbContext } from "../../../shared/title.js";
@@ -444,7 +445,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
                 {t("message.voiced")}
               </span>
             )}
-            {cleanTexts.length > 0 && <span class="bubble-text">{cleanTexts.join("\n")}</span>}
+            {cleanTexts.length > 0 && (reviewBubbleOf(cleanTexts.join("\n")) ? <ReviewBubble text={cleanTexts.join("\n")} /> /* FEAT-20.1: сообщение ревью свёрнуто */ : <span class="bubble-text">{cleanTexts.join("\n")}</span>)}
             {(files.length > 0 || refChips.length > 0) && (
               <div class="msg-files">
                 {files.map((p, i) => (
@@ -474,7 +475,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
               <button class="retry-btn" type="button" onClick={() => retryFailed(info.id)}>{t("common.retry")}</button>
             </div>
           )}
-          {!isQueued && !info.failed && lastUserId === info.id && !beingEdited && (
+          {!isQueued && !info.failed && lastUserId === info.id && !beingEdited && bindingOf(sessions.value.find((s) => s.id === (act?.id ?? globalThis.__teleharnessActiveId)))?.engine !== "acp" && (
             <div class="msg-under turn-acts">
               <EditButton sid={act.id} />
             </div>
@@ -517,8 +518,12 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
   const binding = bindingOf(sessions.value.find((s) => s.id === (act?.id ?? globalThis.__teleharnessActiveId)));
   // BUG-264 п.2: the engine of THIS message (info.providerID) wins over the chat's current
   // binding — after a Relay the old GLM answers keep their z.ai face and their error words.
-  const engine = info.providerID ? engineOf(info.providerID) : binding?.engine ?? null;
-  const modelLabel = info.modelID ? modelName(providerCfg.value, { providerID: info.providerID, modelID: info.modelID }) : null;
+  // BUG-233: also check nested info.model?.providerID or catalog provider of info.modelID
+  // so GLM answers keep their non-Claude dot after returning the chat to Claude.
+  const msgModelId = info.modelID || info.model?.modelID || null;
+  const msgProvider = info.providerID || info.model?.providerID || (msgModelId ? providerCfg.value?.models?.find((m) => m.id === msgModelId)?.providerID ?? null : null);
+  const engine = msgProvider ? engineOf(msgProvider) : binding?.engine ?? null;
+  const modelLabel = msgModelId ? modelName(providerCfg.value, { providerID: msgProvider, modelID: msgModelId }) : null;
   const author = turnAuthor(info, { engine, modelLabel, claudeAgents: claudeAgents.value });
   const isTurnHead = compact || (turn ? turn.first === info.id : showRole);
   const isTurnEnd = (turn ? turn.last === info.id && turn.closed && !streaming : showMeta) && !revealing;
@@ -570,7 +575,10 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
           <span aria-hidden="true">⚠</span> {stepError.title}
         </div>
       )}
-      {turnChangedFiles.length > 0 && <ChangesRow files={turnChangedFiles} sid={act.id} base={sessionDir} lastTurn={isLastTurn && engine !== "codex"} /* R-2: без «Отменить ход» у Codex */ />}
+      {turnChangedFiles.length > 0 && <ChangesRow files={turnChangedFiles} sid={act.id} base={sessionDir} lastTurn={isLastTurn && engine !== "codex" && engine !== "acp"} /* R-2/BUG-281: без «Отменить ход» у Codex и ACP */ />}
+      {/* FEAT-20.1: карточка плана хода «Сначала план» и плашка «Ждёт ревью · Проверить» под последним ответом */}
+      {isTurnEnd && act?.id && <PlanCards sid={act.id} turnLast={info.id} isLastTurn={isLastTurn} feedIds={new Set((feed ?? []).map((m) => m?.info?.id))} chatModel={binding?.model?.modelID ?? null} />}
+      {isTurnEnd && isLastTurn && act?.id && <ReviewPlaque sid={act.id} />}
       {isTurnEnd && (copyPayload() || meta || isLastTurn) && (
         <div class="turn-foot">
           {copyPayload() && (
@@ -579,10 +587,10 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
               <span aria-live="polite">{copied === "ok" ? t("common.copied") : copied === "fail" ? t("message.copyFailedShort") : t("message.copyAnswer")}</span>
             </button>
           )}
-          {isLastTurn && (
+          {isLastTurn && engine !== "acp" && (
             <span class="turn-acts">
               <RegenerateButton sid={act.id} />
-              {/* R-2: у хода Codex отмены нет (сервер — 409), меню не предлагаем */}
+              {/* R-2: у хода Codex отмены нет (сервер — 409), меню не предлагаем; у ACP нет отката и повтора (BUG-286) */}
               {engine !== "codex" && <TurnMenu sid={act.id} />}
             </span>
           )}

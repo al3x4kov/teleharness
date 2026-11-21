@@ -3,6 +3,7 @@
 // «Проверить», статус словами; iPhone вне экрана «Домой» — пояснение.
 import { useEffect, useState } from "preact/hooks";
 import * as pushLib from "../../lib/push.js";
+import { api } from "../../lib/api.js";
 import { t } from "../../lib/i18n.js";
 
 // Texts resolve in the active language at call time (language switch re-renders).
@@ -118,6 +119,85 @@ export default function NotificationsRow({ lib = pushLib }) {
           </div>
         )}
       </div>
+    </li>
+  );
+}
+
+// FEAT-20.2 (кр. 15): «О чём сообщать» — виды push доски внимания и тихие часы.
+// Настройка у пользователя (все его устройства), не у браузера.
+export const KINDS = [
+  ["needs", "notify.kinds.needs", "notify.kinds.needsHint"],
+  ["failed", "notify.kinds.failed", "notify.kinds.failedHint"],
+  ["done", "notify.kinds.done", "notify.kinds.doneHint"],
+];
+export const SUMMARY_HINT = () => t("notify.kinds.summaryHint");
+
+export function PushKindsRow({ load = api.getPushPrefs, save = api.setPushPrefs }) {
+  const [prefs, setPrefs] = useState(null);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    let live = true;
+    load().then((p) => live && setPrefs(p)).catch(() => live && setError(t("notify.kinds.loadErr")));
+    return () => {
+      live = false;
+    };
+  }, []);
+  async function put(next) {
+    const prev = prefs;
+    setPrefs(next);
+    setSaving(true);
+    setError(null);
+    try {
+      setPrefs(await save({ ...next, quiet: { ...next.quiet, tz: next.quiet?.tz || Intl.DateTimeFormat().resolvedOptions().timeZone || null } }));
+    } catch {
+      setPrefs(prev);
+      setError(t("notify.kinds.saveErr"));
+    } finally {
+      setSaving(false);
+    }
+  }
+  if (!prefs) {
+    return (
+      <li class="card" data-feat="FEAT-20.2">
+        <div class="set-row"><div class="set-main"><div class="row-title">{t("notify.kinds.title")}</div>
+          <div class={"set-value" + (error ? " is-error" : "")}>{error ?? t("notify.kinds.loading")}</div></div></div>
+      </li>
+    );
+  }
+  const q = prefs.quiet ?? { on: false, from: "23:00", to: "08:00" };
+  return (
+    <li class="card" data-feat="FEAT-20.2">
+      <div class="set-row"><div class="set-main">
+        <div class="row-title">{t("notify.kinds.title")}</div>
+        <div class="set-hint">{t("notify.kinds.sub")}</div>
+      </div></div>
+      {KINDS.map(([k, titleKey, hintKey]) => (
+        <div class="set-row" key={k}>
+          <div class="set-main">
+            <div class="row-title" id={"pk-" + k}>{t(titleKey)}</div>
+            <div class="set-hint">{t(hintKey)}</div>
+          </div>
+          <button class="switch" type="button" role="switch" aria-labelledby={"pk-" + k} aria-checked={prefs[k] !== false ? "true" : "false"}
+            aria-busy={saving ? "true" : undefined} onClick={() => put({ ...prefs, [k]: prefs[k] === false })} />
+        </div>
+      ))}
+      <div class="set-row">
+        <div class="set-main">
+          <div class="row-title" id="pk-quiet">{t("notify.quiet.title")}</div>
+          <div class="set-hint">{q.on ? t("notify.quiet.on", { from: q.from, to: q.to }) : t("notify.quiet.off")}</div>
+          {q.on && (
+            <div class="pk-quiet">
+              <label>{t("notify.quiet.from")} <input type="time" value={q.from} onChange={(e) => put({ ...prefs, quiet: { ...q, from: e.currentTarget.value } })} /></label>
+              <label>{t("notify.quiet.to")} <input type="time" value={q.to} onChange={(e) => put({ ...prefs, quiet: { ...q, to: e.currentTarget.value } })} /></label>
+            </div>
+          )}
+        </div>
+        <button class="switch" type="button" role="switch" aria-labelledby="pk-quiet" aria-checked={q.on ? "true" : "false"}
+          onClick={() => put({ ...prefs, quiet: { ...q, on: !q.on } })} />
+      </div>
+      <p class="set-hint pk-summary">{SUMMARY_HINT()}</p>
+      {error && <p class="notif-status is-error" role="alert">{error}</p>}
     </li>
   );
 }

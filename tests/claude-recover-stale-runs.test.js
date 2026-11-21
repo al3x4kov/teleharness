@@ -66,3 +66,24 @@ test("BUG-229: при старте teleharnessRun running в сохранённ�
   const parts = stored.sessions.ses_rec.messages[1].parts;
   assert.equal(parts.filter((p) => p.type === "text").length, 1);
 });
+
+// FEAT-20.2: ход, прерванный перезапуском, сообщается доске внимания
+// (onInterrupted) — в «Упало или остановлено» со словами «Остановлен перезапуском».
+test("FEAT-20.2: onInterrupted gets every chat whose question was cut by the restart, once per chat", async () => {
+  const dir = path.join(TMP, "data-attn");
+  mkdirSync(dir, { recursive: true });
+  const storePath = path.join(dir, "claude-sessions.json");
+  const T0 = Date.now() - 60_000;
+  const q = (id, t) => ({ info: { id, role: "user", time: { created: t } }, parts: [{ id: "t" + id, type: "text", text: "вопрос" }] });
+  writeFileSync(storePath, JSON.stringify({ version: 1, sessions: {
+    ses_cut: { id: "ses_cut", directory: "/p/teleharness", claudeSid: "c1", updatedAt: T0, messages: [q("u1", T0), q("u2", T0 + 1)] },
+    ses_ok: { id: "ses_ok", directory: "/p/teleharness", claudeSid: "c2", updatedAt: T0, messages: [q("u3", T0), { info: { id: "a3", role: "assistant", time: { created: T0 + 5 } }, parts: [{ id: "x", type: "text", text: "ok" }] }] },
+  } }), "utf8");
+  const got = [];
+  const runner = new ClaudeRunner({ hub: { markManaged() {}, emit: () => {} }, storePath, binPath: FIXTURE, keepaliveMs: 1000, log: () => {}, onInterrupted: (list) => got.push(...list) });
+  await runner.flushNow();
+  assert.equal(got.length, 1, "one entry per chat");
+  assert.equal(got[0].sid, "ses_cut");
+  assert.equal(got[0].dir, "/p/teleharness");
+  assert.ok(Number.isFinite(got[0].at));
+});

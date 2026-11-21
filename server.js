@@ -4,7 +4,12 @@
 import http from "node:http";
 import {createHash} from "node:crypto";
 import { tenantJailFor, tenantKit } from "./lib/claude-tenant.js";
-import { ensureChatFolder, existingChatFolder } from "./lib/chat-folder.js";
+import { chatFolderFor, ensureChatFolder, existingChatFolder } from "./lib/chat-folder.js";
+import { Worktrees, WorktreeStore } from "./lib/worktrees.js"; // FEAT-20.7
+import { worktreeRoutes } from "./routes/worktrees.js"; // FEAT-20.7
+import { worktreeRule } from "./shared/worktree.js"; // FEAT-20.7
+import { linuxJailLine } from "./lib/linux-jail.mjs"; // FEAT-20.7: тесты тенанта в песочнице
+import { GitError } from "./lib/git.js"; // FEAT-20.7
 import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -42,6 +47,15 @@ import { storeKbTrace } from "./lib/kb-trace.js";
 import { dispatchRoute, validateTable } from "./routes/router.js";
 import { fileRoutes } from "./routes/files.js";
 import { catalogRoutes } from "./routes/catalog.js";
+import { GeminiLoginSessions } from "./lib/acp-login-session.js";
+import { CopilotLoginSessions } from "./lib/acp-copilot-login.js";
+import { AgyLoginSessions } from "./lib/acp-agy-login.js";
+import { launchCopilotLogin, launchGeminiLogin, launchAgyLogin, markAcpProfile, acpProfileReady } from "./lib/acp-login-launch.js";
+import { discoverAcpModels } from "./lib/acp-models.js";
+import { acpProviderCatalog, AcpRegistry } from "./lib/acp-registry.js";
+import { AcpInstaller } from "./lib/acp-install.js";
+import { acpCatalogRoutes } from "./routes/acp-catalog.js";
+import { acpLoginRoute } from "./routes/acp-login.js";
 import { adminRoutes } from "./routes/admin.js";
 import { gitRoutes } from "./routes/git.js"; // FEAT-18.8
 import { temporalRoutes } from "./routes/temporal.js"; // FEAT-19.4
@@ -60,6 +74,12 @@ import { createInstanceReaper } from "./lib/instance-reaper.js";
 import { sessionRoutes } from "./routes/session.js";
 import { clearReverting, isReverting, markReverting, withSessionLock } from "./lib/session-lock.js"; // BUG-218 (design §1)
 import { pushRoutes } from "./routes/push.js";
+import { attentionRoutes } from "./routes/attention.js"; // FEAT-20.2
+import { reviewRoutes } from "./routes/review.js"; // FEAT-20.1
+import { ReviewService, ReviewStore } from "./lib/review.js"; // FEAT-20.1
+import { planExecText, planReviseText } from "./shared/review-message.js"; // FEAT-20.1
+import { AttentionStore, OutcomeObserver, outcomeOfError, clip as attentionClip } from "./lib/attention.js";
+import { turnErrorKind } from "./shared/turn-error.js";
 import { PushNotifier, PushStore, loadOrCreateVapid, vapidKeyObject } from "./lib/push.js";
 import {
   initAuth,
@@ -115,9 +135,14 @@ import { ClaudeRunner, DEFAULT_BIN as CLAUDE_DEFAULT_BIN, checkMcpConfig } from 
 import { ClaudeAgentCatalog, isClaudeAgentId } from "./lib/claude-agents.js";
 import { VoiceQuota, VoiceService } from "./lib/voice.js";
 import { voiceRoutes } from "./routes/voice.js";
-import { BindingStore, applyBinding, cleanModel, cleanPermMode, effectivePermMode, engineOf, makeBinding, ocPermRules, patchBinding, resolveBinding } from "./lib/binding.js";
+import { BindingStore, OC_PLAN_RULES, applyBinding, cleanModel, cleanPermMode, effectivePermMode, engineOf, makeBinding, ocPermRules, patchBinding, planUnsupported, resolveBinding } from "./lib/binding.js";
 import { isRunnerEngine, CLAUDE_PROVIDER, CODEX_PROVIDER, CLAUDE_MODELS } from "./shared/engine.js";
 import { createCodexCatalog } from "./lib/codex-catalog.js"; // FEAT-18.7 // FEAT-18.7: claude и codex — ходы раннера CLI
+import { CostLedger } from "./lib/cost/ledger.js"; // FEAT-20.6: журнал расхода по ценам API
+import { CostReports } from "./lib/cost/report.js";
+import { CostRecorder } from "./lib/cost/recorder.js";
+import { CostBackfill } from "./lib/cost/backfill.js";
+import { costRoutes } from "./routes/costs.js";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -288,7 +313,9 @@ async function fetchSessionIndex(force = false) {
       }
       sessionIndex = { at: Date.now(), byId, recById };
     }
+    sessionIndex.failAt = 0;
   } catch (err) {
+    sessionIndex.failAt = Date.now(); // FEAT-20.2: доска — «Неизвестно — нет связи с opencode»
     errLog("fetchSessionIndex", err); // upstream down: keep serving the last known index
   }
   return sessionIndex.byId;
@@ -596,20 +623,79 @@ else if (claudeMcp.file) console.log(`[teleharness-claude] MCP for admin chats: 
 // (ops/opencode) into the same root as the Claude ones.
 const ocUndo = new TurnUndo({ root: config.TELEHARNESS_TURN_UNDO_ROOT });
 let temporalChatSteps = null; // FEAT-19.16: model steps of pipes run as chat turns
+// FEAT-20.2: доска внимания — исходы ходов и личные отметки (<data>/attention).
+let attentionInterrupted = 0; // ходов прервано перезапуском (восстановление раннера при старте)
+const attention = new AttentionStore({ dir: path.join(DATA_DIR, "attention"), log: (m) => console.error(m) });
+const ATTENTION_EVENT_TEXT = { done: "Готово", error: "Упало", limit: "Лимит подписки", auth: "Нужен вход в движок", restart: "Остановлен перезапуском сервера", stalled: "Остановлен: ход завис" };
+// Исход хода → хранилище, событие сводки «Пока вас не было» и личное событие
+// владельцам папки чата (правило pushRecipients: тенант — свои, admin — ничьи).
+function attentionOutcome(sid, rec, dir = null) {
+  try {
+    const d = claude.dirOf(sid) ?? sessionIndex.byId.get(sid) ?? dir ?? null; // папка — из индекса, поток событий — запасной вариант
+    const out = attention.setOutcome(sid, { ...rec, dir: d });
+    if (!out) return;
+    const users = pushRecipients(d);
+    const title = claude.titleInfo(sid)?.title || sessionIndex.recById.get(sid)?.title || "чат";
+    const kind = out.kind === "done" ? "done" : out.kind === "limit" ? "limit" : "failed";
+    attention.addEvent(users, { at: out.at, kind, key: `chat:${sid}`, text: `${ATTENTION_EVENT_TEXT[out.kind] ?? out.kind}: «${title}»` });
+    attentionPing(users, "outcome");
+  } catch (err) {
+    errLog("attention.outcome", err);
+  }
+}
+function attentionPing(users, reason) {
+  const evt = JSON.stringify({ type: "teleharness.attention", properties: { reason } });
+  for (const u of new Set(users ?? [])) hub.broadcastToUser(u, evt);
+}
+// Строка-итог готового хода Claude/Codex — первая строка последнего ответа.
+function lastAnswerSnippet(sid) {
+  try {
+    const list = claude.messages(sid) ?? [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const m = list[i];
+      if (m?.info?.role !== "assistant") continue;
+      const text = (m.parts ?? []).filter((p) => p?.type === "text").map((p) => p.text ?? "").join(" ");
+      if (text.trim()) return attentionClip(text);
+    }
+  } catch {}
+  return null;
+}
 const claude = new ClaudeRunner({
   hub,
   storePath: path.join(DATA_DIR, "claude-sessions.json"),
   undoRoot: config.TELEHARNESS_TURN_UNDO_ROOT,
   onTurnEnd: (e) => {
     if (temporalChatSteps?.owns(e?.sid)) { temporalChatSteps.onTurnEnd(e); return titler?.claudeTurnDone(e); } // a pipe step: no push, no auto-relay
+    if (e?.sid && e.reason !== "deleted") reviewTurnEnd(e.sid, e.dir ?? null, { interrupted: Boolean(e.reason || e.error) }); // FEAT-20.1
     webPush?.notifier.claudeTurnEnd(e); // FEAT-07.20: «Готово: <чат>»
-    // FEAT-18.6: ход Claude упал по лимиту подписки → авто-передача (если включена)
-    if (e?.error && isLimitError(e.error, { engine: "claude" })) autoRelayOnLimit(e.sid, e.dir ?? null);
+    // FEAT-20.2: исход хода для доски; остановка человеком/удаление — не исход
+    if (e?.sid && !["user", "cancelled", "deleted"].includes(e.reason)) {
+      const engine = engineOfChat(e.sid);
+      const kind = e.reason === "restart" ? "restart" : e.reason ? "error" : e.error ? outcomeOfError(e.error, { engine }) : "done";
+      if (kind) attentionOutcome(e.sid, { kind, errorKind: e.error ? turnErrorKind(e.error, { engine }) : null, snippet: kind === "done" ? lastAnswerSnippet(e.sid) : e.error ? String(e.error?.message ?? e.error) : null }, e.dir ?? null);
+    }
+    // FEAT-18.6 / BUG-295: ход раннера (Claude/Codex/ACP) упал по лимиту подписки → авто-передача
+    if (e?.error && isLimitError(e.error, { engine: engineOfChat(e.sid) })) autoRelayOnLimit(e.sid, e.dir ?? null);
     return titler?.claudeTurnDone(e);
   },
   // BUG-142: title as soon as the first question is stored (a Workflow turn
   // runs for hours); onTurnEnd above retries if this attempt failed.
-  onTurnStart: (e) => titler?.claudeTurnDone(e),
+  onTurnStart: (e) => {
+    reviewTurnStart(e?.sid, e?.dir ?? null); // FEAT-20.1: база ревью — снимок перед ходом
+    return titler?.claudeTurnDone(e);
+  },
+  // FEAT-20.1: ExitPlanMode план-хода; ход уже закончился (фоновый субагент, BUG-237) — план заменяет ответ
+  onPlan: (e) => {
+    if (!e?.sid) return;
+    if (planTurns.has(e.sid)) return void planCaptured.set(e.sid, e.plan ?? "");
+    const dir = reviewChatDir(e.sid, e.dir ?? null);
+    if (dir) for (const user of pushRecipients(dir)) reviews.planFromTool(user, e.sid, e.plan ?? "");
+  },
+  // FEAT-20.2: ходы, прерванные перезапуском, — в «Упало или остановлено»
+  onInterrupted: (list) => {
+    attentionInterrupted = list.length;
+    for (const x of list) attention.setOutcome(x.sid, { kind: "restart", at: x.at, dir: x.dir, snippet: null });
+  },
   agents: claudeAgents,
   onAgentMissing: (e) => claudeAgentGone(e),
   mcpConfig: claudeMcp.file,
@@ -690,11 +776,15 @@ async function withRelayCatchUp(id, dir, body, binding) {
     try {
       oc = (await ocWholeMessages(id, dir)) ?? [];
     } catch {} // движок недоступен: остаются журнал и строка системного промпта
-    // FEAT-18.7: в сторе раннера ходы Claude и Codex вместе — вопрос относится к движку своего ответа
+    // FEAT-18.7 / BUG-296: в сторе раннера ходы Claude, Codex и ACP вместе — определяем движок через engineOf
     const target = engineOfChat(id, binding);
+    const runnerMsgEngine = (pid) => {
+      const e = engineOf(pid);
+      return isRunnerEngine(e) ? e : "claude";
+    };
     const answerEngine = new Map();
-    for (const m of mine) if (m?.info?.role === "assistant" && m.info.parentID) answerEngine.set(m.info.parentID, m.info.providerID === "openai-codex" ? "codex" : "claude");
-    const engineOfMsg = (m) => (m?.info?.role === "assistant" ? (m.info.providerID === "openai-codex" ? "codex" : "claude") : answerEngine.get(m?.info?.id) ?? target);
+    for (const m of mine) if (m?.info?.role === "assistant" && m.info.parentID) answerEngine.set(m.info.parentID, runnerMsgEngine(m.info.providerID));
+    const engineOfMsg = (m) => (m?.info?.role === "assistant" ? runnerMsgEngine(m.info.providerID) : answerEngine.get(m?.info?.id) ?? target);
     const own = target === "opencode" ? oc : mine.filter((m) => engineOfMsg(m) === target);
     const other = target === "opencode" ? mine : [...oc, ...mine.filter((m) => engineOfMsg(m) !== target)];
     const missed = missedTurns(own, other);
@@ -792,7 +882,7 @@ function portalRulesFor(sid, dir) {
   try {
     file = journal.fileOf(sid, kbZoneOfDir(dir)?.root ?? null);
   } catch {}
-  return [PORTAL_FILE_RULE, file ? journalRule(file) : "", relayRule(relays.get(sid), file)].filter(Boolean).join("\n\n");
+  return [PORTAL_FILE_RULE, file ? journalRule(file) : "", relayRule(relays.get(sid), file), worktreeNote(sid)].filter(Boolean).join("\n\n"); // FEAT-20.7
 }
 
 // FEAT-07.20: Web Push. Keys and subscriptions live in <data>/push/ (secrets,
@@ -825,13 +915,269 @@ if (config.TELEHARNESS_PUSH) {
       subject: config.TELEHARNESS_PUSH_SUBJECT,
       recipients: pushRecipients,
       chatInfo: pushChatInfo,
-      isManaged: (sid) => engineOfChat(sid) === "claude",
+      isManaged: (sid) => isRunnerEngine(engineOfChat(sid)),
+      prefsOf: (userId) => attention.user(userId)?.push ?? null, // FEAT-20.2: виды и тихие часы
+      activeAt: (userId) => attention.user(userId)?.lastActiveAt ?? null, // FEAT-20.2: смотрит портал на любом устройстве
       debounceMs: config.TELEHARNESS_PUSH_DEBOUNCE_MS,
+      summaryWindowMs: config.TELEHARNESS_PUSH_SUMMARY_MS, // FEAT-20.2
       log: (m) => console.log(m),
     });
     webPush = { store, notifier, vapid, extraOrigins: config.TELEHARNESS_PUSH_EXTRA_ORIGINS };
     if (!MOCK) hub.onEvent((data, dir) => notifier.observe(data, dir));
   }
+}
+// FEAT-20.2: исходы opencode-чатов (busy → idle/error) и «ждёт вас» для сводки.
+const attentionObserver = new OutcomeObserver({
+  isManaged: (sid) => isRunnerEngine(engineOfChat(sid)),
+  onTurnStart: (sid, dir) => reviewTurnStart(sid, dir), // FEAT-20.1
+  onTurnEnd: (sid, rec, dir) => reviewTurnEnd(sid, dir, { interrupted: rec?.kind !== "done" }), // FEAT-20.1
+  onOutcome: (sid, rec, dir) => {
+    if (sessionIndex.recById.get(sid)?.parentID) return; // исход субагента — не исход чата
+    attentionOutcome(sid, rec, dir);
+  },
+  onAsk: (sid, dir) => {
+    void (async () => {
+      const d = claude.dirOf(sid) ?? (await resolveSessionDir(sid).catch(() => null)) ?? dir;
+      const users = pushRecipients(d);
+      const rec = sessionIndex.recById.get(sid);
+      const root = rec?.parentID ?? sid;
+      const title = claude.titleInfo(root)?.title || sessionIndex.recById.get(root)?.title || "чат";
+      attention.addEvent(users, { kind: "needs", key: `chat:${root}`, text: `Ждёт вас: «${title}»` });
+      attentionPing(users, "needs");
+    })().catch((err) => errLog("attention.ask", err));
+  },
+});
+hub.onEvent((data, dir) => attentionObserver.observe(data, dir));
+
+// ---- FEAT-20.6: журнал расхода по ценам API (<data>/usage-ledger.sqlite) -----------------
+// Запись — готовый ответ любого движка (`message.updated` с time.completed) через поток хаба;
+// служебные вызовы — routes/git.js recordService; шаги пайпов — registerStep (chat-step.js).
+// Сбой журнала не трогает ход: ошибка видна admin в «Расходах», пропущенное добирает учёт истории.
+const costLedger = new CostLedger({ file: process.env.TELEHARNESS_COST_LEDGER || path.join(DATA_DIR, "usage-ledger.sqlite"), log: (m) => console.error(m) });
+const costUserName = (id) => {
+  try {
+    const u = getUser(id);
+    return u ? u.name ?? id : null;
+  } catch {
+    return null;
+  }
+};
+const costReports = new CostReports({
+  ledger: costLedger,
+  chatExists: (sid) => (claude.has(sid) || sessionIndex.recById.has(sid) ? true : sessionIndex.at ? false : null),
+  userName: costUserName,
+});
+const costRecorder = new CostRecorder({
+  ledger: costLedger,
+  deps: {
+    dirOf: (sid) => claude.dirOf(sid) ?? sessionIndex.byId.get(sid) ?? null,
+    resolveDir: MOCK ? null : (sid) => resolveSessionDir(sid),
+    // opencode v2: модель шага, если session.step.started пропущен (рестарт посреди хода) — привязка чата
+    modelOf: (sid) => {
+      const m = bindings.get(sid)?.model;
+      return m?.modelID ? { providerID: m.providerID ?? null, modelID: m.modelID } : null;
+    },
+    parentOf: (sid) => sessionIndex.recById.get(sid)?.parentID ?? null,
+    titleOf: (sid) => chatTitleOf(sid),
+    ownerOf: (_sid, dir) => {
+      const u = chatOwner(dir);
+      return u ? { id: u.id, name: u.name ?? u.id } : null;
+    },
+    log: (m) => console.error(m),
+    onRecorded: ({ row, alerts }) => costRecorded(row, alerts),
+  },
+});
+function costRecorded(row, alerts) {
+  if (!row?.user_id) return;
+  const evt = JSON.stringify({ type: "teleharness.cost.updated", properties: { sessionID: row.parent_sid ?? row.sid ?? null, runId: row.run_id ?? null } });
+  hub.broadcastToUser(row.user_id, evt);
+  for (const a of alerts ?? []) {
+    // бюджет 80/100 %: пользователю — событие (баннер в «Расходах» и чате), admin — push (кр. 12)
+    hub.broadcastToUser(row.user_id, JSON.stringify({ type: "teleharness.cost.budget", properties: a }));
+    const name = costUserName(row.user_id) ?? row.user_name ?? row.user_id;
+    const payload = { title: `Бюджет ${name}: ${a.pct} %`, body: `Израсходовано ${a.pct} % месячного бюджета по ценам API. Ходы не ограничиваются.`, kind: "budget", url: "/teleharness/#/settings/costs", tag: `teleharness-budget-${row.user_id}-${a.month}-${a.threshold}` };
+    for (const admin of listUsers().filter((u) => u.role === "admin" && !u.disabled)) void webPush?.notifier.sendToUser(admin.id, payload, { urgency: "normal", ttl: 24 * 3600 }).catch(() => {});
+  }
+}
+hub.onEvent((data, dir) => costRecorder.observe(data, dir));
+const costBackfill = new CostBackfill({
+  ledger: costLedger,
+  recorder: costRecorder,
+  deps: {
+    claudeSessions: () => claude.storeSnapshot?.() ?? null,
+    ...(MOCK ? {} : {
+      ocSessions: async () => {
+        await fetchSessionIndex();
+        return [...sessionIndex.recById.values()].filter((r) => r?.id && !claude.has(r.id)).map((r) => ({ id: r.id, directory: r.directory ?? sessionIndex.byId.get(r.id) ?? null, parentID: r.parentID ?? null }));
+      },
+      ocMessages: (sid, dir) => ocWholeMessages(sid, dir),
+    }),
+    log: (m) => console.error(m),
+  },
+});
+// Учёт истории — после старта, не в момент запуска (кр. 15); журнал ожил после сбоя — добор (кр. 16).
+if (!process.env.TELEHARNESS_COST_NO_BACKFILL) setTimeout(() => void costBackfill.start(), Number(process.env.TELEHARNESS_COST_BACKFILL_DELAY_MS) || 15_000).unref?.();
+setInterval(() => {
+  if (costLedger.missed > 0 && costLedger.db && !costLedger.error) {
+    costLedger.missed = 0;
+    void costBackfill.start({ force: true });
+  }
+}, 60_000).unref?.();
+
+// ---- FEAT-20.1: ревью изменений и «Сначала план» -----------------------------------
+// Пункт ревью на чат (lib/review.js): конец хода с правками → ревизия; база —
+// снимок перед ходом. Владельцы — как у доски (pushRecipients). Событие
+// teleharness.review.updated — только владельцу; доска перечитывается по teleharness.attention.
+const reviews = new ReviewService({
+  store: new ReviewStore({ dir: path.join(DATA_DIR, "review"), log: (m) => console.error(m) }),
+  objectsRoot: path.join(DATA_DIR, "review-objects"),
+  tmpDir: path.join(DATA_DIR, "tmp", "review"),
+  busy: (sid) => Boolean(sid && (claude.busySnapshot()[sid] || hub.busySnapshot()[sid])),
+  post: ({ user, sid, dir, text }) => {
+    const u = getUser(user);
+    if (!u || u.disabled) return { ok: false, status: 403, error: "user disabled" };
+    return internalPrompt({ sid, dir, user: u, text, autoRelay: false });
+  },
+  emit: (users, props) => {
+    const evt = JSON.stringify({ type: props?.plan ? "teleharness.plan.updated" : "teleharness.review.updated", properties: props });
+    for (const u of new Set(users ?? [])) hub.broadcastToUser(u, evt);
+    attentionPing(users, "review");
+  },
+  log: (m) => console.error(m),
+  // BUG-273: проект карточки ревью — проект чата (как у чата на доске), а не папка
+  // рабочей копии / подпапка чата тенанта; копия без чата — её основной репозиторий
+  // BUG-277: название — текущее название чата (автозаголовок приходит после первого хода)
+  titleOf: (it) => {
+    const sid = it?.source?.sid;
+    if (!sid) return null;
+    const rec = sessionIndex.recById.get(sid);
+    return claude.titleInfo(sid)?.title || (rec ? titler.overlay([rec])[0]?.title : null) || rec?.title || null;
+  },
+  projectDirOf: (it) => {
+    const sid = it?.source?.sid;
+    if (sid) return reviewChatDir(sid);
+    const wt = it?.source?.kind === "branch" && it.source.wtId ? worktrees.store.byId(it.source.wtId) : null;
+    return wt?.repoRoot ?? null;
+  },
+});
+// ---- FEAT-20.7: рабочие копии (git worktree) ------------------------------------
+// Копия на чат/запуск (lib/worktrees.js): создаётся при первом сообщении, ход
+// идёт в ней; пересечения, слияние с тестами, удаление без потери работы.
+// Событие teleharness.worktree.updated — владельцу копии (и admin); лист перечитывается.
+const worktrees = new Worktrees({
+  store: new WorktreeStore({ dir: path.join(DATA_DIR, "worktrees"), log: (m) => console.error(m) }),
+  dataDir: path.join(DATA_DIR, "worktrees"),
+  log: (m) => console.error(m),
+  busy: (sid) => Boolean(sid && (claude.busySnapshot()[sid] || hub.busySnapshot()[sid])),
+  author: (uid) => {
+    const g = getGitSettings(uid);
+    return { name: g.authorName, email: g.authorEmail };
+  },
+  tenantJail: (dir) => tenantJailFor(dir, config.TELEHARNESS_TENANT_HOME),
+  jailLine: linuxJailLine,
+  emit: (item, what) => {
+    const evt = JSON.stringify({ type: "teleharness.worktree.updated", properties: { id: item.id, sid: item.sid ?? null, runId: item.runId ?? null, what, state: item.state } });
+    const to = new Set([item.owner, ...listUsers().filter((u) => u.role === "admin").map((u) => u.id)]);
+    for (const u of to) hub.broadcastToUser(u, evt);
+    if (["merged", "op"].includes(what)) attentionPing([item.owner], "worktree");
+  },
+});
+// Папка хода чата с копией (null — копии нет).
+const worktreeDirOf = (sid) => worktrees.workDirOf(sid);
+const worktreeNote = (sid) => {
+  const it = worktrees.forChat(sid);
+  return it ? worktreeRule({ branch: it.branch, base: it.base, port: it.port, path: it.tenant ? null : it.path }) : "";
+};
+const chatTitleOf = (sid) => claude.titleInfo(sid)?.title || sessionIndex.recById.get(sid)?.title || null;
+const tenantTestsOk = () => process.platform === "linux" && Boolean(config.TELEHARNESS_TENANT_HOME);
+const planTurns = new Map(); // sid → {user, engine, model, at} — идёт план-ход
+const planCaptured = new Map(); // sid → текст плана из ExitPlanMode (Claude)
+const ocPlanRulesOn = new Set(); // opencode-чаты, где на сессии стоят правила план-хода
+const tenantRoots = () => [config.TELEHARNESS_TENANT_HOME, ...listUsers().filter((u) => u.role !== "admin").flatMap((u) => u.directories ?? [])].filter(Boolean);
+const reviewUntrusted = (admin, dir) => !admin || (dir ? isUnderAny(dir, tenantRoots()) : true);
+// Папка, где агент правит: у чата тенанта — своя подпапка (FEAT-04.12), если есть.
+function reviewWorkDir(sid, dir) {
+  if (!dir) return null;
+  const wtDir = worktreeDirOf(sid); // FEAT-20.7: чат в рабочей копии
+  if (wtDir) return wtDir;
+  return (isUnderAny(dir, tenantRoots()) ? existingChatFolder(dir, sid) : null) ?? dir;
+}
+function reviewChatDir(sid, hint = null) {
+  return claude.dirOf(sid) ?? sessionIndex.byId.get(sid) ?? hint ?? null;
+}
+function reviewTurnStart(sid, hint = null) {
+  if (!sid || temporalChatSteps?.owns(sid) || sessionIndex.recById.get(sid)?.parentID) return;
+  const dir = reviewChatDir(sid, hint);
+  if (!dir || isTempSessionDir(dir)) return;
+  const work = reviewWorkDir(sid, dir);
+  const wtItem = worktrees.forChat(sid); // FEAT-20.7: HEAD до хода — предупреждение «Коммит останется в ветке»
+  if (wtItem) worktrees.headOf(wtItem).then((h) => worktrees.noteTurnStart(sid, h)).catch(() => {});
+  reviews.turnStart({ users: pushRecipients(dir), sid, dir: work, untrusted: isUnderAny(work, tenantRoots()) }).catch((err) => errLog("review.turnStart", err));
+}
+// Части последнего хода (после последнего сообщения пользователя) — режим «по ходам».
+async function reviewTurnParts(sid, dir) {
+  let list = null;
+  try {
+    list = isRunnerEngine(engineOfChat(sid)) ? claude.messages(sid) : await ocWholeMessages(sid, dir);
+  } catch {}
+  if (!Array.isArray(list)) return { parts: [], turnId: null };
+  let i = list.length - 1;
+  while (i >= 0 && list[i]?.info?.role !== "user") i--;
+  const turn = list.slice(i + 1);
+  return { parts: turn.flatMap((m) => m?.parts ?? []), turnId: turn.at(-1)?.info?.id ?? list[i]?.info?.id ?? null, answer: turn.filter((m) => m?.info?.role === "assistant").flatMap((m) => (m.parts ?? []).filter((p) => p?.type === "text" && !p.synthetic).map((p) => p.text ?? "")).join("\n").trim() };
+}
+function reviewTurnEnd(sid, hint, { interrupted = false } = {}) {
+  void (async () => {
+    if (!sid || temporalChatSteps?.owns(sid) || sessionIndex.recById.get(sid)?.parentID) return;
+    const dir = reviewChatDir(sid, hint);
+    const plan = planTurns.get(sid) ?? null;
+    planTurns.delete(sid);
+    if (!dir || isTempSessionDir(dir)) return;
+    const work = reviewWorkDir(sid, dir);
+    // FEAT-20.7: конец хода — пересчёт пересечений копий репозитория (кр. 7)
+    if (worktrees.forChat(sid)) worktrees.touchRepoOf(sid, { titleOf: chatTitleOf }).catch((err) => errLog("worktree.touch", err));
+    else worktrees.touchDir(work).catch(() => {});
+    const users = pushRecipients(dir);
+    const { parts, turnId, answer } = await reviewTurnParts(sid, dir);
+    const b = bindingFor(sid, sessionIndex.recById.get(sid) ?? null);
+    const title = claude.titleInfo(sid)?.title || sessionIndex.recById.get(sid)?.title || null;
+    const out = await reviews.turnEnd({ users, sid, dir: work, untrusted: isUnderAny(work, tenantRoots()), turnId, parts, ended: interrupted ? "interrupted" : "done", planTurn: Boolean(plan), meta: { title, engine: b?.engine ?? engineOfChat(sid), model: b?.model?.modelID ?? null } });
+    if (plan) {
+      const text = planCaptured.get(sid) ?? (interrupted ? "" : answer);
+      const violations = out.flatMap((x) => (x.planViolation ?? []).map((f) => f.path));
+      const source = planCaptured.has(sid) ? "tool" : "answer";
+      for (const user of users) reviews.createPlan(user, { sid, turnId, engine: plan.engine, model: plan.model, text, source, violations: [...new Set(violations)] });
+      planCaptured.delete(sid);
+    }
+  })().catch((err) => errLog("review.turnEnd", err));
+}
+// План-ход: «Сначала план» включён и это не ход выполнения одобренного плана.
+function notePlanTurn(sid, binding, user, req) {
+  if (!binding?.planFirst || req?.teleharnessPlanExec) {
+    planTurns.delete(sid);
+    return false;
+  }
+  if (binding.engine === "opencode" && !isAdmin(user)) return false; // тенант: режим недоступен (409 при включении)
+  planTurns.set(sid, { user: user.id, engine: binding.engine, model: binding.model?.modelID ?? null, at: Date.now() });
+  planCaptured.delete(sid);
+  return true;
+}
+async function planBlockedReason(binding, admin) {
+  if (binding.engine === "opencode" && OC.api !== "v2") return "«Сначала план» доступен на opencode 2.x";
+  let tenantPlanAgent = false;
+  if (!admin && binding.engine === "opencode") tenantPlanAgent = false; // спайк 1.4: агента plan среди агентов тенанта нет
+  return planUnsupported({ engine: binding.engine, admin, tenantPlanAgent });
+}
+// Решение по плану → ход выполнения / новый план-ход тем же путём, что сообщение пользователя.
+async function planRun({ user, action, plan, text, edited, comment }) {
+  const dir = reviewChatDir(plan.sid);
+  if (!dir) return { ok: false, status: 404, error: "чат удалён" };
+  if (action === "approve") {
+    const b = bindingFor(plan.sid, sessionIndex.recById.get(plan.sid) ?? null);
+    const r = await internalPrompt({ sid: plan.sid, dir, user, text: planExecText(text, { edited }), autoRelay: false, flags: { teleharnessPlanExec: true } });
+    return { ...r, engine: b?.engine ?? null, model: b?.model?.modelID ?? null };
+  }
+  return internalPrompt({ sid: plan.sid, dir, user, text: planReviseText(comment), autoRelay: false });
 }
 
 // Deletes a session upstream (directory-pinned) and every local trace of it
@@ -851,7 +1197,10 @@ async function deleteSessionEverywhere(id, dir) {
     titler.forget(id);
     dropJournal(id, dir); // FEAT-11.18
     dropPinEverywhere(id); // FEAT-01.69: no «ghost» pins of a deleted chat
+    attention.forgetKey(`chat:${id}`, { sid: id }); // FEAT-20.2: отметки и исход удалённого чата
+    reviews.chatDeleted(id); // FEAT-20.1: пункт «Чат удалён»
     autoRelay.forget(id); // FEAT-18.6
+    worktrees.cancelPending(id); // FEAT-20.7: пустой чат — заявка на копию уходит с ним
   }
   return ok;
 }
@@ -1316,6 +1665,7 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
   // FEAT-19.16: a model step = a portal chat turn in the pipe folder (same engine
   // runner, tenant jail, permissions and limits as chats).
   temporalChatSteps=chatStepRunner({
+    registerStep:(x)=>costLedger.registerStep(x), // FEAT-20.6: попытка шага → журнал расхода до хода
     // BUG-257: a tenant may open only chats of its own folders (exact match) — its step
     // chat lives in the project and the agent works in the pipe folder (workDir, FEAT-04.12).
     createSession:async({user,directory,project,engine,model})=>{
@@ -1326,14 +1676,23 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
       bindings.set(created.id,binding);hub.syncDirectories();fetchSessionIndex(true).catch(()=>{});
       return created.id;
     },
-    dispatchTurn:async({res,sid,directory,project,user,text})=>{
+    dispatchTurn:async({res,sid,directory,project,user,text,worktree=null})=>{
       const admin=isAdmin(user),binding=bindings.get(sid);
-      const chatDir=admin||!project?directory:project,workDir=admin||!project?null:directory;
+      const chatDir=admin||!project?directory:project,workDir=worktree?.path??(admin||!project?null:directory); // FEAT-20.7: шаг в копии запуска
       const race=await markPrompted(sid,binding);if(race){res.writeHead(409);return res.end(race);}
       return claude.dispatch({res,sid,dir:chatDir,body:Buffer.from(JSON.stringify(applyBinding({parts:[{type:"text",text}]},binding))),
         access:admin?"admin":"tenant",agent:null,
         kbZone:kbZoneForUser(user,{admin,adminRoot:config.TELEHARNESS_KB_ROOT,tenantVault:config.TELEHARNESS_TENANT_VAULT,home:admin?HOME_DIR:null}),
-        jail:admin?null:tenantJailFor(chatDir,config.TELEHARNESS_TENANT_HOME),systemPrompt:getSystemPrompt(user.id),portalNote:"",workDir,permMode:null});
+        jail:admin?null:tenantJailFor(chatDir,config.TELEHARNESS_TENANT_HOME),systemPrompt:getSystemPrompt(user.id),portalNote:"",workDir,permMode:null,
+        writableRoots:worktree?.commonDir?[worktree.commonDir]:null});
+    },
+    // FEAT-20.7: рабочая копия запуска — одна на запуск (ветка teleharness/run-<пайп>-<id4>)
+    prepareWorktree:async({user,project,workspace,workflowId,pipeName})=>{
+      const existing=workflowId?worktrees.store.byRun(workflowId):null;
+      if(existing&&existing.state!=="orphaned") return existing;
+      const admin=isAdmin(user);
+      return worktrees.create({runId:workflowId,kind:"run",owner:user.id,tenant:!admin,dir:project,untrusted:!admin||isUnderAny(project,tenantRoots()),
+        title:pipeName,chatFolder:admin?null:path.join(workspace,".teleharness-run-copies",String(workflowId??"run").replace(/[^A-Za-z0-9_-]/g,"").slice(-24))});
     },
     messagesOf:(sid)=>claude.messages(sid),abort:(sid)=>claude.abort(sid),
     setTitle:(sid,title)=>claude.setTitle(sid,title,"user"),
@@ -1348,7 +1707,78 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
 } else if (process.env.TELEHARNESS_ENV==="stand" && process.env.TELEHARNESS_TEMPORAL_STAGE_TIMERS==="1") {
   Object.assign(temporalDeps,stageTimerStarter(path.join(DATA_DIR,"temporal-stage-starts.sqlite")));
 }
+// FEAT-20.2: чаты доски пользователя — тенант: свои папки; admin: папки, не
+// принадлежащие ни одному тенанту (правило pushRecipients). Временные папки — нет.
+const PIPE_STEP_DIR_RE = /[\\/]pipelines[\\/][^\\/]+$/;
+async function attentionChats(user, admin) {
+  await fetchSessionIndex();
+  const tenants = admin ? listUsers().filter((u) => !u.disabled && u.role !== "admin") : [];
+  const mine = (dir) => (admin ? !tenants.some((t) => dirAllowed(t, dir)) : dirAllowed(user, dir));
+  const recs = new Map(sessionIndex.recById);
+  for (const sid of claude.sessionIds()) if (!recs.has(sid)) recs.set(sid, { id: sid, directory: claude.dirOf(sid), title: claude.titleInfo(sid)?.title ?? null });
+  const out = [];
+  for (const [id, rec] of recs) {
+    const dir = rec?.directory ?? claude.dirOf(id) ?? null;
+    if (!dir || isTempSessionDir(dir) || !mine(dir)) continue;
+    const b = bindingFor(id, rec);
+    const title = claude.titleInfo(id)?.title || titler.overlay([rec])[0]?.title || rec?.title || null;
+    out.push({
+      id, dir, title, parentID: rec?.parentID ?? null, agent: rec?.agent ?? null,
+      engine: b?.engine ?? engineOfChat(id), model: b?.model?.modelID ?? null,
+      step: (typeof title === "string" && title.startsWith("⇄ ")) || PIPE_STEP_DIR_RE.test(dir) || !!temporalChatSteps?.owns(id),
+    });
+  }
+  return out;
+}
+// Живое состояние: занятость (хаб: opencode и раннер), тишина хода, фоновые агенты, открытые запросы.
+function attentionLive() {
+  const busy = {};
+  for (const r of hub.sessionsReport()) if (r.state === "busy" || (r.state === "dialog" && r.lastEventAt)) busy[r.sessionID] = { since: r.since, lastEvent: r.lastEventAt };
+  const live = claude.liveness();
+  for (const [sid, st] of Object.entries(claude.busySnapshot())) {
+    const l = live[sid];
+    busy[sid] = { since: l?.startedAt ?? busy[sid]?.since ?? Date.now(), lastEvent: st.bg ? null : l?.lastOutputAt ?? busy[sid]?.lastEvent ?? null, bg: !!st.bg };
+  }
+  const seen = new Set();
+  const dialogs = [];
+  for (const d of [...claude.dialogs(), ...hub.dialogsSnapshot()]) {
+    if (!d?.id || seen.has(d.id)) continue;
+    seen.add(d.id);
+    dialogs.push(d);
+  }
+  return { busy, dialogs };
+}
+// FEAT-20.4. gemini оставлен для внутренних тестов и фикстур; наружный список
+// провайдеров — только antigravity и copilot (Google отклонил OAuth-клиент gemini-cli).
+const acpLogins = {
+  "antigravity":new AgyLoginSessions((owner,extraEnv)=>launchAgyLogin(DATA_DIR,owner,extraEnv),(owner,status)=>markAcpProfile(DATA_DIR,owner,"antigravity",status),owner=>acpProfileReady(DATA_DIR,owner,"antigravity")),
+  gemini:new GeminiLoginSessions(owner=>launchGeminiLogin(DATA_DIR,owner),(owner,status)=>markAcpProfile(DATA_DIR,owner,"gemini",status)),
+  "github-copilot-cli":new CopilotLoginSessions(owner=>launchCopilotLogin(DATA_DIR,owner),(owner,status)=>markAcpProfile(DATA_DIR,owner,"github-copilot-cli",status),owner=>acpProfileReady(DATA_DIR,owner,"github-copilot-cli"))
+};
+const ACP_PUBLIC_IDS = ["antigravity","github-copilot-cli"];
+// FEAT-20.4. Статус попытки живёт в памяти процесса, креды — на диске: каталог
+// моделей должен переживать рестарт, поэтому ready ищем и в маркере профиля.
+const acpReady = user => engineAllowed(user,"acp") ? ACP_PUBLIC_IDS.filter(id=>acpLogins[id].get(user.id).status==="ready" || acpProfileReady(DATA_DIR,user.id,id)) : [];
 const API_ROUTES = validateTable([
+  ...attentionRoutes({
+    sendJson, readJsonBody, store: attention, chatsFor: attentionChats, live: attentionLive,
+    sources: () => ({ opencode: MOCK ? "ok" : sessionIndex.failAt > sessionIndex.at || !sessionIndex.at ? "down" : "ok", claude: "ok" }),
+    boardRuns: (user) => temporalDeps.boardRuns?.(user) ?? null,
+    reviews: (user) => reviews.summaries(user.id), // FEAT-20.1: элементы ревью по общему контракту
+    pinsOf: (id) => getPins(id), epoch: () => hub.epoch ?? null,
+    ping: (id, reason) => attentionPing([id], reason),
+    projectName: (dir) => String(dir ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "",
+  }),
+  // FEAT-20.6: расход по ценам API (routes/costs.js)
+  ...costRoutes({
+    sendJson, readJsonBody, errLog, ledger: costLedger, reports: costReports, backfill: costBackfill, dirAllowed, userName: costUserName,
+    chatAllowed: async (user, sid) => {
+      const dir = claude.dirOf(sid) ?? (await resolveSessionDir(sid).catch(() => null));
+      return dir ? dirAllowed(user, dir) : true; // удалённый чат: решают строки журнала (только свои)
+    },
+  }),
+  // FEAT-20.1: ревью и план (routes/review.js)
+  ...reviewRoutes({ sendJson, readJsonBody, errLog, reviews, untrusted: reviewUntrusted, planRun }),
   ...temporalRoutes(temporalDeps),
   ...scheduleRoutes(temporalDeps),
   ...fileRoutes({
@@ -1358,7 +1788,7 @@ const API_ROUTES = validateTable([
   }),
   ...catalogRoutes({
     sendJson, errLog, usageStats, subscriptionCards, hub, claude, claudeAgents, upstream: UPSTREAM, statusTtlMs: STATUS_TTL_MS,
-    fetchSessionIndex, dirAllowed, captureResponse, providerForUser, engineAllowed, proxyRequest, withQuery,
+    fetchSessionIndex, dirAllowed, captureResponse, providerForUser, acpReady, acpProviderCatalog, discoverModels: (user,id) => discoverAcpModels(DATA_DIR,user.id,id), engineAllowed, proxyRequest, withQuery,
     defaultOpts: DEFAULT_OPTS, tenantAgents, agentList, publicAgent, upstreamError, hostStats, opencodeVersion, harnessVersions,
     version: VERSION, defaultDir, chatDir: CHAT_DIR, instanceHealth,
     // FEAT-16.3 (tasks 3.2): каталог идёт через клиент только в v2-режиме —
@@ -1370,6 +1800,9 @@ const API_ROUTES = validateTable([
     providerCatalog,
     ocUpstreamError,
   }),
+  ...acpCatalogRoutes({registry:new AcpRegistry(DATA_DIR), installer:new AcpInstaller(DATA_DIR), sendJson, readJsonBody}),
+  acpLoginRoute({ sendJson, readJsonBody, agent:"github-copilot-cli", login:acpLogins["github-copilot-cli"] }),
+  acpLoginRoute({ sendJson, readJsonBody, agent:"antigravity", login:acpLogins.antigravity }),
   ...adminRoutes({
     sendJson, apiError, readJsonBody, bodyLimit: DEFAULT_OPTS.bodyLimit, listUsers, createUser, regenerateToken, updateUser,
     bridgeDialogs: () => claude.dialogs(), // BUG-264 п.3
@@ -1387,11 +1820,13 @@ const API_ROUTES = validateTable([
     sendJson, readJsonBody, apiError, errLog, dirAllowed, existingChatFolder, isUnderAny,
     // the chat's folder: the runner's record for Claude/Codex chats, else the upstream index
     chatDirOf: async (sid) => claude.dirOf(sid) ?? (await resolveSessionDir(sid)),
+    worktreeDirOf, // FEAT-20.7: Git чата с рабочей копией — это копия
     // TASK-18.13 D1 (P1): any folder INSIDE a tenant's folders (chats<id> subfolders) or the tenant home is the
     // tenant's — its repo config is untrusted for the admin too (a named program must never run as the server)
     tenantDir: (dir) => isUnderAny(dir, [config.TELEHARNESS_TENANT_HOME, ...listUsers().filter((u) => u.role !== "admin").flatMap((u) => u.directories ?? [])].filter(Boolean)),
     bindingOf: async (sid) => bindingFor(sid, await sessionRecord(sid, true).catch(() => null)),
     engineAllowed,
+    recordService: (x) => costRecorder.service(x), // FEAT-20.6: расход «Предложить сообщение»
     tenantAgent: async () => defaultTenantAgent(await agentList(), config.TELEHARNESS_TENANT_AGENT),
     getGitSettings, setGitSettings, cleanGitSettings,
     suggest: {
@@ -1401,12 +1836,34 @@ const API_ROUTES = validateTable([
       oc: OC,
     },
   }),
+  // FEAT-20.7: рабочие копии (routes/worktrees.js)
+  ...worktreeRoutes({
+    sendJson, readJsonBody, errLog, wt: worktrees, dirAllowed, isUnderAny,
+    chatDirOf: async (sid) => claude.dirOf(sid) ?? (await resolveSessionDir(sid)),
+    tenantDir: (dir) => isUnderAny(dir, tenantRoots()),
+    titleOf: chatTitleOf,
+    tenantTestsOk,
+    sessionPrompted: (sid) => Boolean(bindings.get(sid)?.prompted) || claude.messages(sid)?.length > 0,
+    gitAuthor: (uid) => {
+      const g = getGitSettings(uid);
+      return { name: g.authorName, email: g.authorEmail };
+    },
+    review: ({ user, admin, item }) => reviews.branchItem(user.id, { sid: item.sid, wtId: item.id, dir: item.path, base: item.base, title: (item.sid ? chatTitleOf(item.sid) : null) ?? item.title ?? item.branch, branch: item.branch, untrusted: !admin || isUnderAny(item.path, tenantRoots()) }),
+  }),
   ...pushRoutes({ sendJson, readJsonBody, push: () => webPush }),
   ...voiceRoutes({ sendJson, readBody, readJsonBody, voice: voiceService, quota: voiceQuota }),
   ...sessionRoutes({
     binding: (c) => sessionBindingRoute(c),
     action: (c) => sessionActionRoute(c),
-    revert: (c) => sessionRevertRoute(c),
+    revert: async (c) => {
+      await sessionRevertRoute(c);
+      // FEAT-20.1: «Отменить ход» вернул файлы — пункт ревью пересчитывается
+      if (c.req.method === "POST" && c.res.statusCode === 200 && /\/revert$/.test(c.url.pathname)) {
+        const sid = c.match?.[1];
+        const dir = sid ? reviewChatDir(sid) : null;
+        if (dir) { const work = reviewWorkDir(sid, dir); reviews.turnUndone({ users: pushRecipients(dir), sid, dir: work, untrusted: isUnderAny(work, tenantRoots()) }).catch((err) => errLog("review.undo", err)); }
+      }
+    },
     patchDelete: (c) => sessionPatchDeleteRoute(c),
     list: (c) => sessionListRoute(c),
     create: (c) => sessionCreateRoute(c),
@@ -1488,20 +1945,29 @@ async function relayUnderLock({ id, dir, user, admin, current, target, reason = 
 // Модель доступна пользователю: движок разрешён и модель есть в его каталоге
 // (тот же каталог, что видит клиент; каталог недоступен — не отказываем здесь,
 // передача сама перепроверит модель тенанта).
-async function providerCatalogJson() {
+async function providerCatalogJson(user = null) {
   const captured = await captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, UPSTREAM, { catalog: providerCatalog }));
   if (captured.status !== 200) return null;
+  let catalog;
   try {
-    return JSON.parse(captured.body);
+    catalog = JSON.parse(captured.body);
   } catch {
     return null;
   }
+  if (user && engineAllowed(user, "acp")) {
+    const acpIds = acpReady(user);
+    if (acpIds.length) {
+      const models = Object.fromEntries(await Promise.all(acpIds.map(async (id) => [id, await discoverAcpModels(DATA_DIR, user.id, id)])));
+      catalog = acpProviderCatalog(catalog, acpIds, models);
+    }
+  }
+  return catalog;
 }
 async function autoRelayModelOk(user, model) {
   const m = cleanModel(model);
   if (!m || !engineAllowed(user, engineOf(m.providerID))) return false;
-  const catalog = await providerCatalogJson();
-  return modelInCatalog(catalog, m, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex") }) !== false;
+  const catalog = await providerCatalogJson(user);
+  return modelInCatalog(catalog, m, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex"), acpAllowed: engineAllowed(user, "acp") }) !== false;
 }
 
 // Чья настройка действует для чата: тенант, которому принадлежит папка чата (как журнал
@@ -1518,11 +1984,11 @@ function chatOwner(dir) {
 // Внутренний ход «продолжи» — тот же маршрут prompt, что у клиента (гейты, привязка,
 // вложение пропущенных ходов, системный промпт), без HTTP: синтетические req/res.
 // req.teleharnessAutoRelay: этот ход не открывает новый цикл авто-передачи.
-function internalPrompt({ sid, dir, user, text }) {
+function internalPrompt({ sid, dir, user, text, autoRelay = true, flags = null }) {
   const admin = isAdmin(user);
   const body = Buffer.from(JSON.stringify({ parts: [{ type: "text", text }] }), "utf8");
   const req = Readable.from([body]);
-  Object.assign(req, { method: "POST", url: `/teleharness/api/session/${sid}/prompt`, headers: { "content-type": "application/json", "content-length": String(body.length) }, teleharnessAutoRelay: true });
+  Object.assign(req, { method: "POST", url: `/teleharness/api/session/${sid}/prompt`, headers: { "content-type": "application/json", "content-length": String(body.length) }, teleharnessAutoRelay: autoRelay, ...(flags ?? {}) });
   const q = dir ? `?directory=${encodeURIComponent(dir)}` : "";
   const url = new URL(`http://internal/teleharness/api/session/${encodeURIComponent(sid)}/prompt${q}`);
   return new Promise((resolve) => {
@@ -1559,6 +2025,11 @@ const autoRelay = createAutoRelay({
     withSessionLock(sid, async () => {
       const current = bindingFor(sid, await sessionRecord(sid, true).catch(() => null));
       const out = await relayUnderLock({ id: sid, dir, user, admin: isAdmin(user), current, target: { model }, reason: RELAY_REASON_AUTO });
+      if (out.status === 200) {
+        // FEAT-20.2: событие сводки «Пока вас не было»
+        const title = claude.titleInfo(sid)?.title || sessionIndex.recById.get(sid)?.title || "чат";
+        attention.addEvent(pushRecipients(dir), { kind: "relay", key: `chat:${sid}`, text: `Relay: «${title}» автоматически продолжен на ${model?.modelID ?? "запасной модели"}` });
+      }
       return { ok: out.status === 200, status: out.status, error: out.body?.error ?? null };
     }),
   resume: ({ sid, dir, user }) => internalPrompt({ sid, dir, user, text: RELAY_RESUME_TEXT }),
@@ -1584,7 +2055,7 @@ if (!MOCK)
     }
     const sid = evt?.properties?.sessionID;
     if (evt?.type !== "session.error" || typeof sid !== "string" || !sid) return;
-    if (engineOfChat(sid) === "claude") return; // Claude — через onTurnEnd
+    if (isRunnerEngine(engineOfChat(sid))) return; // Claude/Codex/ACP — через onTurnEnd
     if (!isLimitError(evt.properties.error)) return;
     // папка — из индекса чатов (по ней определяется владелец настройки), поток событий — запасной вариант
     void (async () => autoRelayOnLimit(sid, claude.dirOf(sid) ?? (await resolveSessionDir(sid).catch(() => null)) ?? dir ?? null))();
@@ -1628,10 +2099,15 @@ async function sessionBindingRoute({ req, res, url, user, admin, match }) {
     if (Object.prototype.hasOwnProperty.call(body, "permMode") && (body.permMode ?? null) !== (current?.permMode ?? null)) {
       if (hub.busySnapshot()[id] || claude.busySnapshot()[id]) return sendJson(res, 409, { error: "turn is running: the permission mode changes between turns", teleharness: current });
       if (!admin && body.permMode === "full") return sendJson(res, 403, { error: "permission mode not allowed", teleharness: current });
-      // FEAT-18.7: без песочницы Codex «Правки без вопросов» не могут писать — в Codex-чате их нет
-      if (body.permMode === "edits" && r.binding.engine === "codex") return sendJson(res, 400, { error: "permission mode not supported for this chat", teleharness: current });
+      // FEAT-18.7: без песочницы Codex/ACP «Правки без вопросов» не могут писать — в этом чате их нет
+      if (body.permMode === "edits" && (r.binding.engine === "codex" || r.binding.engine === "acp")) return sendJson(res, 400, { error: "permission mode not supported for this chat", teleharness: current });
       if (body.permMode !== null && r.binding.engine === "opencode" && (!admin || OC.api !== "v2"))
         return sendJson(res, 400, { error: "permission mode not supported for this chat", teleharness: current });
+    }
+    // FEAT-20.1 «Сначала план»: только где запрет правок обеспечен (иначе 409 plan-unsupported с причиной)
+    if (body.planFirst === true && current?.planFirst !== true) {
+      const why = await planBlockedReason(r.binding, admin);
+      if (why) return sendJson(res, 409, { error: why, code: "plan-unsupported", teleharness: current });
     }
     // ADR-004 / BUG-12.5: the engine and the agent are policy-checked.
     if (!engineAllowed(user, r.binding.engine)) return sendJson(res, 403, { error: "engine not allowed" });
@@ -1800,6 +2276,21 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
       const agent = adminAgentFor(binding.agent, await agentList(), await upstreamDefaultAgent());
       if (agent !== binding.agent) binding = { ...binding, agent };
     }
+    // FEAT-20.7: чат с включённой «Отдельной рабочей копией» — копия создаётся
+    // первым сообщением (ход ждёт создания, кр. 2); сбой — ход не начинается,
+    // сообщение остаётся в композере (клиент получает kind).
+    let wtDir = null;
+    if (worktrees.pendingOf(id) || worktrees.forChat(id)) {
+      try {
+        const firstText = Array.isArray(parsed?.parts) ? parsed.parts.filter((x) => x?.type === "text" && !x.synthetic).map((x) => x.text).join(" ") : "";
+        const it = await worktrees.ensureForTurn({ sid: id, text: firstText, chatFolder: admin ? null : chatFolderFor(dir, id) });
+        wtDir = it?.path ?? null;
+      } catch (err) {
+        if (err instanceof GitError) return sendJson(res, err.status, { error: err.message, ...(err.extra ?? {}), worktree: true });
+        errLog("worktree.create", err);
+        return sendJson(res, 500, { error: "Не удалось создать рабочую копию", kind: "create-failed", worktree: true });
+      }
+    }
     // BUG-188: a slash command of an ADMIN opencode chat expands upstream —
     // POST /session/:id/command instead of prompt_async (the OmO → slim move
     // lost the auto-slash-command hook, so the raw text reached the model).
@@ -1878,10 +2369,11 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     }
     // FEAT-13.9: the CLI permission profile follows the caller's role.
     // FEAT-13.17: the agent comes from the binding only (admin chats).
+    const planTurn = notePlanTurn(id, binding, user, req);
     if (isRunnerEngine(binding?.engine))
       return claude.dispatch({
         res, sid: id, dir, body: Buffer.isBuffer(out) ? out : Buffer.from(String(out)),
-        access: admin ? "admin" : "tenant",
+        access: admin ? "admin" : "tenant", acpOwner:admin ? user.id : null,
         agent: admin ? binding.agent ?? null : null,
         // FEAT-13.11: admin → TELEHARNESS_KB_ROOT; tenant → only its own zone.
         kbZone: kbZoneForUser(user, { admin, adminRoot: config.TELEHARNESS_KB_ROOT, tenantVault: config.TELEHARNESS_TENANT_VAULT, home: admin ? HOME_DIR : null }),
@@ -1890,11 +2382,14 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
         // FEAT-03.22: the user's own system prompt (added to the built-in one).
         systemPrompt: getSystemPrompt(user.id),
         // FEAT-11.18: где лежит журнал этого чата (если он уже есть)
-        portalNote: [journalRule(journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null)), relayRule(relays.get(id), journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null))].filter(Boolean).join("\n\n"),
+        portalNote: [journalRule(journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null)), relayRule(relays.get(id), journal.fileOf(id, kbZoneOfDir(dir)?.root ?? null)), worktreeNote(id)].filter(Boolean).join("\n\n"),
         // FEAT-04.12 stage B: a tenant chat with its own subfolder runs the CLI there.
-        workDir: admin ? null : existingChatFolder(dir, id),
+        // FEAT-20.7: чат с рабочей копией — CLI в копии; Codex пишет в общий .git.
+        workDir: wtDir ?? (admin ? null : existingChatFolder(dir, id)),
+        writableRoots: wtDir ? [worktrees.forChat(id)?.commonDir].filter(Boolean) : null,
         // FEAT-18.4: the chat's permission mode (null = the role default, as before).
-        permMode: cleanPermMode(binding.permMode) ? effectivePermMode(binding, { admin }) : null,
+        // FEAT-20.1: «Сначала план» — ход без одобренного плана идёт в режиме plan (только чтение).
+        permMode: planTurn ? "plan" : cleanPermMode(binding.permMode) ? effectivePermMode(binding, { admin }) : null,
       });
     // BUG-07.10: a busy-but-silent hung run would swallow «Продолжай» —
     // the hub aborts it first so this prompt starts a fresh run.
@@ -1950,8 +2445,12 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
             await OC.setSessionModel(id, { model: { providerID: model.providerID, modelID: model.modelID, ...(variant ? { variant } : {}) }, timeoutMs: DEFAULT_OPTS.timeoutMs });
           }
           if (agent) await OC.setSessionAgent(id, { agent, timeoutMs: DEFAULT_OPTS.timeoutMs });
-          await applyOcPermMode(id, dir, admin ? binding?.permMode : null);
-          await OC.prompt({ directory: dir ?? null, sessionID: id, ...(inboxId ? {id:inboxId} : {}), parts, ...(sysMeta ? { metadata: sysMeta } : {}), timeoutMs: PROMPT_OPTS.timeoutMs });
+          if (planTurn && admin) {
+            await applyOcRules(id, dir, OC_PLAN_RULES); // FEAT-20.1: план-ход — правки запрещены
+            ocPlanRulesOn.add(id);
+          } else if (admin && ocPlanRulesOn.delete(id)) await applyOcRules(id, dir, ocPermRules(binding?.permMode) ?? []); // снять правила плана
+          else await applyOcPermMode(id, dir, admin ? binding?.permMode : null);
+          await OC.prompt({ directory: (admin ? wtDir : null) ?? dir ?? null, sessionID: id, ...(inboxId ? {id:inboxId} : {}), parts, ...(sysMeta ? { metadata: sysMeta } : {}), timeoutMs: PROMPT_OPTS.timeoutMs });
           if (stableTurnIds(record)) recovery.accepted(id,user.id);
         });
         res.writeHead(204); // тот же ход, что v1 показывал после приёма prompt_async
@@ -1966,7 +2465,9 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     return proxyRequest(req, res, withDir(`/session/${id}/prompt_async`, upQ), { ...PROMPT_OPTS, body: Buffer.isBuffer(out) ? out : Buffer.from(String(out)) });
   }
   if (action === "abort" && req.method === "POST") {
-    if (claude.abort(id)) return sendJson(res, 200, { ok: true });
+    attentionObserver.noteUserStop(id); // FEAT-20.2: «Стоп» человека — не «упало»
+    const finish = new URLSearchParams(q).get("finish") === "1";
+    if (finish ? claude.finishHungAcp(id) : claude.abort(id)) return sendJson(res, 200, { ok: true });
     if (OC.api === "v2") {
       try {
         await OC.abort(id, { directory: (admin ? null : tenantDir) ?? null }); // №8: POST /interrupt
@@ -2025,6 +2526,9 @@ function fireCommandTurn({ id, dir, query, name, body }) {
 async function applyOcPermMode(id, dir, permMode) {
   const rules = ocPermRules(permMode);
   if (!rules) return;
+  return applyOcRules(id, dir, rules);
+}
+async function applyOcRules(id, dir, rules) {
   try {
     await OC.patchSession(id, { directory: dir ?? undefined, permissions: rules, timeoutMs: DEFAULT_OPTS.timeoutMs });
   } catch (err) {
@@ -2200,7 +2704,7 @@ async function sessionRevertRoute({ req, res, url, user, admin, match }) {
     if (dir == null) return sendJson(res, 404, { error: "session not found" });
     if (!dirAllowed(user, dir)) return sendJson(res, 403, { error: "outside your scope" });
   }
-  if (!engineAllowed(user, isClaude ? (binding?.engine === "codex" ? "codex" : "claude") : "opencode")) return sendJson(res, 403, { error: "engine not allowed" });
+  if (!engineAllowed(user, isClaude ? (binding?.engine ?? "claude") : "opencode")) return sendJson(res, 403, { error: "engine not allowed" });
   let messageID = null;
   if (op === "revert") {
     if (req.method === "GET") messageID = url.searchParams.get("messageID");
@@ -2393,6 +2897,20 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
   // after the upstream confirmed the delete with a 2xx — a 5xx leaves the
   // session intact everywhere. A claude-only chat unknown upstream (404)
   // is still forgotten locally.
+  // FEAT-20.7: чат с рабочей копией — копия убирается ДО удаления чата и без
+  // потери работы: ?worktree=auto|keep-branch|all (по умолчанию keep-branch:
+  // незакоммиченное коммитится в ветку, ветка остаётся), all — только с confirm=1.
+  const wtItem = worktrees.forChat(id);
+  if (wtItem) {
+    const mode = ["auto", "keep-branch", "all"].includes(url.searchParams.get("worktree")) ? url.searchParams.get("worktree") : "keep-branch";
+    try {
+      await worktrees.remove(wtItem, { mode, confirm: url.searchParams.get("confirm") === "1" });
+    } catch (err) {
+      if (err instanceof GitError) return sendJson(res, err.status, { error: err.message, ...(err.extra ?? {}), worktree: true });
+      return internalError(res, err, "session.delete.worktree");
+    }
+  }
+  worktrees.cancelPending(id);
   // BUG-210: папка чата — ДО удаления (после него upstream сессию уже не знает)
   const preDir = admin ? await resolveSessionDir(id).catch(() => null) : scopeDir;
   try {
@@ -2425,6 +2943,8 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
       bindings.forget(id);
       titler.forget(id);
       dropPinEverywhere(id); // FEAT-01.69: the chat leaves every user's pins
+      attention.forgetKey(`chat:${id}`, { sid: id }); // FEAT-20.2
+      reviews.chatDeleted(id); // FEAT-20.1
       // BUG-186 / BUG-07.23: the hub learns about deletes only from upstream's
       // session.deleted on /event — which never arrives when the chat's folder
       // has no hub subscription (probe/temp dirs): prod 2026-11-07 kept a
@@ -2713,7 +3233,7 @@ async function eventStreamRoute({ req, res, url, user, admin, match }) {
   // SSE hub, never a direct proxy. Tenants get a visibility filter; every
   // stream is tracked per user so it can be closed on disable/regenerate.
   trackStream(user, res);
-  hub.handleClient(req, res, admin ? {} : { visible: (dir) => dirAllowed(user, dir), transform: tenantEvent }); // BUG-197: белый список типов + редакция tool-частей
+  hub.handleClient(req, res, admin ? { userId: user.id } : { visible: (dir) => dirAllowed(user, dir), transform: tenantEvent, userId: user.id }); // BUG-197: белый список типов + редакция tool-частей; FEAT-20.2: личные события
   return;
 }
 
@@ -2758,9 +3278,18 @@ async function deleteAccount(uid) {
     await hub.syncDirectories(); // drops the /event subscriptions of the emptied folders
   } catch {}
   for (const d of own) await disposeInstance(d);
+  // BUG-276: рабочие копии аккаунта — из реестра (до удаления папок: git ещё видит репозитории)
+  try {
+    const wts = await worktrees.dropOwner(uid);
+    if (wts.length) console.log(`[teleharness-auth] account ${uid}: ${wts.length} worktree(s) removed`);
+  } catch (err) {
+    errLog("account.worktrees", err);
+    warnings.push({ kind: "worktrees", reason: "рабочие копии учётной записи не убраны — уберёт уборка" });
+  }
 
   const out = deleteUser(uid);
   webPush?.store.dropUser(uid); // FEAT-07.20: a deleted account's devices get nothing more
+  attention.dropUser(uid); // FEAT-20.2: отметки доски удалённого аккаунта
   const removed = [...out.removedDirs];
   let failed = out.failedDirs;
   if (failed.length > 0) {
@@ -2852,6 +3381,15 @@ async function gcSweep() {
           const dirOf = new Map(sessions.map((s) => [s.id, s.directory ?? null]));
           for (const id of out.empty.deleted) hub.emit({ type: "session.deleted", properties: { sessionID: id, info: { id, directory: dirOf.get(id) } } }, dirOf.get(id));
         }
+      }
+    }
+    // FEAT-20.7: копии удалённых чатов и устаревшие копии запусков — работа в ветку, папка убирается
+    if (sessionIndex.at >= indexAsked) {
+      try {
+        const g = await worktrees.gc({ isLive: (x) => (x.kind === "run" ? true : Boolean(x.sid && (sessionIndex.recById.has(x.sid) || claude.has(x.sid)))) });
+        out.worktrees = { saved: g.saved.length, pruned: g.pruned.length };
+      } catch (err) {
+        errLog("gc.worktrees", err);
       }
     }
     lastGc = out;
@@ -3068,6 +3606,8 @@ const server = http.createServer((req, res) => {
   }
 });
 
+// FEAT-20.7: незавершённые слияния после перезапуска — к определённому итогу (кр. 17)
+worktrees.recover().then((ops) => { if (ops.length) console.log(`[teleharness-wt] recovered ${ops.length} merge op(s)`); }).catch((err) => errLog("worktrees.recover", err));
 server.listen(PORT, config.TELEHARNESS_LISTEN_HOST, () => { // TASK-17.1: по умолчанию 127.0.0.1
   // TASK-12.29: did the previous run end uncleanly? Log it, push the owner
   // (best effort — a push failure never blocks the start), remember for
@@ -3075,6 +3615,14 @@ server.listen(PORT, config.TELEHARNESS_LISTEN_HOST, () => { // TASK-17.1: по �
   // clean:false, so a kill/crash is detected here on the next boot.
   try {
     const prev = readPrevious(DATA_DIR);
+    // FEAT-20.2: перезапуск (аварийный — отдельно) — событие сводки «Пока вас не было»
+    if (prev.startedAt) {
+      const hhmm = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+      attention.addEvent(listUsers().filter((u) => !u.disabled).map((u) => u.id), {
+        kind: prev.crashed ? "crash" : "restart",
+        text: (prev.crashed ? `Сервер аварийно перезапустился в ${hhmm}` : `Сервер перезапущен в ${hhmm}`) + (attentionInterrupted ? ` — прервано ходов: ${attentionInterrupted}` : ""),
+      });
+    }
     if (prev.crashed) {
       console.log(`[teleharness-fatal] previous run ended uncleanly (pid ${prev.pid ?? "?"}, started ${prev.startedAt ?? "?"})`);
       lastCrashAt = prev.startedAt;

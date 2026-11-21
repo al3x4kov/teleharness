@@ -27,7 +27,7 @@ export const CONTEXT_WARN = 0.8; // > 80 % — «почти заполнен»
 // Подписки: токены без денег (критерий 2 FEAT-18.5). Claude — подписка
 // владельца через claude CLI; z.ai Coding Plan — пакет по подписке
 // (lib/subscriptions.js REGISTRY: badge «Coding Plan»).
-export const SUBSCRIPTION_PROVIDERS = Object.freeze(["anthropic", "zai-coding-plan", "openai-codex"]); // FEAT-18.7: Codex — подписка ChatGPT
+export const SUBSCRIPTION_PROVIDERS = Object.freeze(["anthropic", "zai-coding-plan", "openai-codex", "acp-antigravity", "acp-github-copilot-cli", "acp-gemini"]); // FEAT-18.7 / BUG-280
 
 export function isSubscription(providerID) {
   return SUBSCRIPTION_PROVIDERS.includes(providerID);

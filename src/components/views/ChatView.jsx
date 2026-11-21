@@ -23,6 +23,7 @@ import {
   sessions,
   sessionsError,
   setActiveId,
+  finishHungTurn,
   stop,
   userProjects,
   voiceInfo,
@@ -38,10 +39,12 @@ import DialogBar from "../chat/DialogBar.jsx";
 import VoiceModeView from "../chat/VoiceModeView.jsx";
 // FEAT-01.77: полоса фоновых агентов — связка BgAgentsGate (подписки на
 // агентов живут в AgentRuns.jsx, ChatView сам их не читает).
-import { BgAgentsGate } from "../chat/AgentRuns.jsx";
+import { BgAgentsGate, BgWorkGate } from "../chat/AgentRuns.jsx";
+import { useSeenOnOpen } from "../../lib/attention.js"; // FEAT-20.2
 import { QuotaStrip, RelayActions, RelaySheet } from "../chat/Relay.jsx";
 import ChatMenu from "../ChatMenu.jsx";
 import { gitHash } from "../../lib/git-client.js"; // FEAT-18.8
+import { WorktreeBand, WorktreeChip, WorktreeHeaderPill, WorktreeSheet } from "../chat/Worktree.jsx"; // FEAT-20.7
 import { micSupported, unlockAudio } from "../../lib/voice-audio.js";
 import { greetingText, MenuButton, TeleharnessMark } from "../Menu.jsx";
 import "../chat.css";
@@ -107,6 +110,7 @@ export default function ChatView({ id }) {
   const [voiceMode, setVoiceMode] = useState(null);
   // FEAT-11.18: лист «Продолжить в другом движке» — {reason, resume} | null
   const [relaySheet, setRelaySheet] = useState(null);
+  const [wtSheet, setWtSheet] = useState(false); // FEAT-20.7: лист «Рабочая копия»
   useEffect(() => {
     refreshVoice(); // once per page: does the server have the voice mode?
   }, []);
@@ -188,6 +192,9 @@ export default function ChatView({ id }) {
   // пилюлями, ни «Без названия / …» в шапке; единственное действие — «К чатам».
   const notFound = messages.length === 0 && !!mine && !mine.loading && !!mine.loadError && !known;
 
+  // FEAT-20.2 (кр. 5): чат открыт в видимом окне ≥ 2 с — «просмотрено» на всех устройствах
+  useSeenOnOpen(id ? "chat:" + id : null);
+
   // Tab title follows the open chat (desktop convenience; mobile ignores it).
   useEffect(() => {
     const prev = document.title;
@@ -220,9 +227,16 @@ export default function ChatView({ id }) {
   const [composerStopHidden, setComposerStopHidden] = useState(false);
   const headStop = busy && (composerStopHidden || notFound);
 
-  // Liveness line (BUG-13.3 / R-21): how long the turn runs and what it did last.
+  // Liveness line (BUG-13.3 / R-21 / BUG-291): how long the turn runs, what runs now, and last action.
   const live = busy && !bgOnly && mine // BUG-237: background agents only — the band says it
-    ? { since: busyMap.value[id] ?? null, lastAction: mine.lastAction ?? null, lastActivityAt: mine.lastActivityAt ?? null }
+    ? {
+        since: busyMap.value[id] ?? null,
+        lastAction: mine.lastAction ?? null,
+        lastActivityAt: mine.lastActivityAt ?? null,
+        activeTasks: mine.activeTasks ?? null,
+        hasAnswerText: Boolean(mine.hasAnswerText),
+        queuedCount: mine.queuedCount ?? 0,
+      }
     : null;
 
   return (
@@ -239,6 +253,7 @@ export default function ChatView({ id }) {
         <div class="chat-heading">
           <h1 class="chat-title">{titleReady && !notFound ? title : " "}</h1>
           {notFound ? null : <div class="chat-sub">{(titleReady && subline) || "…"}</div>}
+          {notFound ? null : <WorktreeHeaderPill sessionId={id} onOpen={() => setWtSheet(true)} />}
         </div>
         {/* FEAT-01.69: справа только «⋯» (по требованию — только меню).
             «Стоп» хода живёт в композере; когда там вместо него «Отправить»
@@ -286,17 +301,30 @@ export default function ChatView({ id }) {
                   {t("chat.notFound.back")}
                 </button>
               </>
-            ) : mine.loadError ? (
-              // History fetch died but the chat IS in the list (edge 404, network):
-              // the empty hero here once masked a full portal outage (2026-11-02).
-              <>
-                <h2 class="hero">{t("chat.historyError.title")}</h2>
-                <p class="hint">{t("chat.historyError.text")}</p>
-                <button class="btn-primary empty-cta" type="button" onClick={() => openSession(id)}>
-                  {t("common.retry")}
-                </button>
-              </>
-            ) : (
+            ) : mine.loadError ? (() => {
+              const d = mine.loadErrorDetail;
+              const DIR_CODES = new Set(["not-absolute", "alias", "drive-root", "system", "unc", "device-namespace", "outside-home", "outside-zone"]);
+              const dirBad = d?.status === 400 && DIR_CODES.has(d?.code);
+              const dirPath = known?.directory || "";
+              const isForeign = dirBad && (d.code === "not-absolute" || /^[A-Za-z]:[\\/]/.test(dirPath));
+              const title = dirBad ? t("chat.dirError.title") : t("chat.historyError.title");
+              const hint = isForeign
+                ? t("chat.dirError.foreign", { path: dirPath || t("chat.dirError.unknown") })
+                : dirBad
+                  ? (d.error || t("chat.dirError.default"))
+                  : t("chat.historyError.text");
+              return (
+                <>
+                  <h2 class="hero">{title}</h2>
+                  <p class="hint">{hint}</p>
+                  {!dirBad && (
+                    <button class="btn-primary empty-cta" type="button" onClick={() => openSession(id)}>
+                      {t("common.retry")}
+                    </button>
+                  )}
+                </>
+              );
+            })() : (
               <div class="chat-greeting" data-req="FEAT-09.20">
                 <TeleharnessMark size={44} />
                 <h2 class="hero greeting">{greetingText(new Date().getHours(), me.value?.name)}</h2>
@@ -358,12 +386,25 @@ export default function ChatView({ id }) {
             .chat-bottom рядом с DialogBar, высоту резервирует --chat-bottom-h,
             поэтому ленту не перекрывает. У «не найденного» чата её места нет. */}
         {/* открытый диалог (разрешение/вопрос) важнее: полоса уступает место, нижний стек не растёт (qa-matrix: ≤ 50 % высоты) */}
-        {notFound ? null : <BgAgentsGate hidden={(busy && !bgOnly) || Boolean(activeDialog)} />}
+        {notFound ? null : <BgAgentsGate hidden={Boolean(activeDialog)} />}
+        {notFound ? null : (
+          <BgWorkGate
+            hidden={Boolean(activeDialog)}
+            status={status}
+            engine={binding?.engine ?? null}
+            messages={messages}
+            live={live}
+            onRelease={finishHungTurn}
+          />
+        )}
         {activeDialog && (
           <DialogBar key={activeDialog.id} dialog={activeDialog} queue={queuedDialogs.length} />
         )}
+        {/* FEAT-20.7: создание копии, её ошибки и пересечения — над композером */}
+        {notFound || activeDialog ? null : <WorktreeBand sessionId={id} busy={busy} directory={known?.directory ?? null} />}
         {notFound ? null : (
           <footer class="composer">
+            {!hasMessages && !reverted && mine && !mine.loading ? <WorktreeChip sessionId={id} /> : null}
             <ModelBar sessionId={id} hasMessages={hasMessages} messages={messages} />
             <Composer
               key={id}
@@ -380,6 +421,7 @@ export default function ChatView({ id }) {
         )}
       </div>
       {voiceMode && <VoiceModeView sessionId={id} ctx={voiceMode.ctx} onClose={() => setVoiceMode(null)} />}
+      {wtSheet && <WorktreeSheet sessionId={id} onClose={() => setWtSheet(false)} />}
       {relaySheet && <RelaySheet sessionId={id} reason={relaySheet.reason} resume={relaySheet.resume} onClose={() => setRelaySheet(null)} />}
     </div>
   );

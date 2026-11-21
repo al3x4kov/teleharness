@@ -2,7 +2,7 @@
 // turn-error classification (BUG-07.14), optimistic-bubble bookkeeping
 // (BUG-01.36, FEAT-01.29), «last action» labels for the liveness line
 // (BUG-13.3 / BUG-07.8 UI) and the clean «send again» payload.
-import { fmtSpan as fmtSec, splitDirective, splitInjected } from "./normalize.js";
+import { fmtSpan as fmtSec, splitDirective, splitInjected, toolStepDesc } from "./normalize.js";
 import { t } from "./i18n.js";
 import { claudeAnswerError, errText, turnErrorKind } from "../../shared/turn-error.js";
 
@@ -141,6 +141,7 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
   }
   const raw = errText(err);
   const claude = engine === "claude" || engine === "codex"; // FEAT-18.7: Codex — тот же раннер
+  const acp = engine === "acp";
   const detail = clip(raw) || null;
   // ISSUE-006: the chat's folder is gone / on a missing drive — upstream
   // answers a raw PlatformError realPath stack. A retry cannot help.
@@ -156,19 +157,20 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
   if (kind === "auth") {
     return {
       kind: "auth",
-      title: t(claude ? "turn.err.auth.claude.title" : "turn.err.auth.title"),
-      text: t(claude ? "turn.err.auth.claude.text" : "turn.err.auth.text"),
+      title: t(acp ? "turn.err.auth.acp.title" : claude ? "turn.err.auth.claude.title" : "turn.err.auth.title"),
+      text: t(acp ? "turn.err.auth.acp.text" : claude ? "turn.err.auth.claude.text" : "turn.err.auth.text"),
       detail,
       actions: ["retry"],
     };
   }
   if (kind === "limit") {
+    const codex = engine === "codex";
     return {
       kind: "limit",
-      title: t(claude ? "turn.err.limit.claude.title" : "turn.err.limit.title"),
-      text: t(claude ? "turn.err.limit.claude.text" : "turn.err.limit.text"),
+      title: t(acp ? "turn.err.limit.acp.title" : codex ? "turn.err.limit.codex.title" : claude ? "turn.err.limit.claude.title" : "turn.err.limit.title"),
+      text: t(acp ? "turn.err.limit.acp.text" : codex ? "turn.err.limit.codex.text" : claude ? "turn.err.limit.claude.text" : "turn.err.limit.text"),
       detail,
-      actions: claude ? ["retry"] : ["retry", "settings"],
+      actions: claude || acp ? ["retry"] : ["retry", "settings"],
     };
   }
   if (kind === "length") {
@@ -190,6 +192,7 @@ export function describeTurnError(err, { engine = "opencode" } = {}) {
     };
   }
   if (kind === "spawn") {
+    if (acp) return { kind: "spawn", title: t("turn.err.spawn.acp.title"), text: t("turn.err.spawn.acp.text"), detail, actions: ["retry"] };
     const cx = engine === "codex";
     return { kind: "spawn", title: t(cx ? "turn.err.spawn.codex.title" : "turn.err.spawn.title"), text: t(cx ? "turn.err.spawn.codex.text" : "turn.err.spawn.text"), detail, actions: ["retry"] };
   }
@@ -210,7 +213,7 @@ export function turnErrorFromMessages(messages, { engine = "opencode" } = {}) {
   const tail = list[list.length - 1];
   if (!tail || tail.info?.role !== "assistant") return null;
   if (tail.info.error) return describeTurnError(tail.info.error, { engine });
-  if (engine === "claude" || engine === "codex") {
+  if (engine === "claude" || engine === "codex" || engine === "acp") {
     const text = (tail.parts ?? [])
       .filter((p) => p?.type === "text")
       .map((p) => p.text ?? "")
@@ -242,11 +245,19 @@ export function collectAnswers(questions, picks, customs) {
 
 // «Работает 3м 05с · последнее действие: команда · 12с назад» — the line under
 // the feed while a turn runs (BUG-13.3 / R-21). Any piece may be missing.
-export function livenessLine({ since = null, lastAction = null, lastActivityAt = null } = {}, now = Date.now()) {
+export function livenessLine({ since = null, lastAction = null, lastActivityAt = null, activeTasks = null } = {}, now = Date.now()) {
   const bits = [];
   if (typeof since === "number" && since > 0 && now >= since) bits.push(t("turn.live.workingFor", { span: fmtSpan(now - since) }));
   else bits.push(t("turn.live.working"));
-  if (lastAction?.label) bits.push(t("turn.live.lastAction", { label: lastAction.label }));
+  const running = Array.isArray(activeTasks) ? activeTasks.filter(Boolean) : [];
+  if (running.length > 0) {
+    const t0 = running[0];
+    const lbl = actionOf({ type: "tool", tool: t0.tool }) ?? t("turn.live.taskFallback");
+    const desc = t0.detail ? `${lbl} (${clip(t0.detail, 48)})` : lbl;
+    bits.push(t("turn.live.runningTask", { desc: `${desc}${running.length > 1 ? ` +${running.length - 1}` : ""}` }));
+  } else if (lastAction?.label) {
+    bits.push(t("turn.live.lastAction", { label: lastAction.label }));
+  }
   const at = typeof lastActivityAt === "number" ? lastActivityAt : lastAction?.at;
   if (typeof at === "number" && at > 0 && now >= at) {
     const ago = now - at;
@@ -263,6 +274,7 @@ function fmtSpan(ms) {
 const TOOL_LABEL = {
   bash: "command",
   shell: "command",
+  execute: "command",
   read: "read",
   write: "write",
   edit: "edit",
@@ -293,5 +305,122 @@ export function actionOf(part) {
   }
   if (part.type === "text") return t("turn.action.text");
   if (part.type === "reasoning") return t("turn.action.reasoning");
+  return null;
+}
+
+const AGENT_TOOLS = new Set(["task", "subagent", "agent"]);
+const isNonAgentTool = (tool) => !AGENT_TOOLS.has(String(tool ?? "").toLowerCase());
+
+function toolTitleRu(tool) {
+  const raw = actionOf({ type: "tool", tool }) ?? t("turn.live.taskFallback");
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function openAssistantOf(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const m = list[i];
+    if (m?.info?.role === "assistant") {
+      return m.info?.time?.completed == null ? m : null;
+    }
+  }
+  return null;
+}
+
+// Активные (running/pending) не-агентные задачи открытого хода: объединяет
+// серверный keepalive (live.activeTasks) и открытые tool-части из ленты (BUG-291).
+export function runningTasksOf(messages, live = null) {
+  const byId = new Map();
+  for (const t of Array.isArray(live?.activeTasks) ? live.activeTasks : []) {
+    if (!t || !isNonAgentTool(t.tool)) continue;
+    const id = String(t.id ?? `${t.tool}:${t.detail ?? ""}`);
+    byId.set(id, {
+      id,
+      tool: String(t.tool ?? "tool"),
+      detail: typeof t.detail === "string" && t.detail.trim() ? t.detail.trim() : null,
+      startedAt: typeof t.startedAt === "number" && t.startedAt > 0 ? t.startedAt : null,
+    });
+  }
+  const open = openAssistantOf(messages);
+  if (open) {
+    for (const p of open.parts ?? []) {
+      if (p?.type !== "tool" || !isNonAgentTool(p.tool)) continue;
+      const st = p.state?.status;
+      if (st !== "running" && st !== "pending") continue;
+      const id = String(p.callID ?? p.id ?? `${p.tool}:${p.state?.time?.start ?? ""}`);
+      if (byId.has(id)) continue;
+      const desc = toolStepDesc(p);
+      const start = p.state?.time?.start;
+      byId.set(id, {
+        id,
+        tool: String(p.tool ?? "tool"),
+        detail: desc || null,
+        startedAt: typeof start === "number" && start > 0 ? start : null,
+      });
+    }
+  }
+  return [...byId.values()].sort((a, b) => (a.startedAt ?? Infinity) - (b.startedAt ?? Infinity));
+}
+
+// BUG-291: явная полоса над композером, объясняющая, какая фоновая задача держит
+// ход открытым (и почему новая реплика пользователя ждёт в очереди).
+export function bgWorkNotice({ status, engine = null, messages = [], live = null, now = Date.now() } = {}) {
+  if (status !== "busy") return null;
+  const tasks = runningTasksOf(messages, live);
+  const queuedFromMsgs = (Array.isArray(messages) ? messages : []).filter(
+    (m) => m?.info?.role === "user" && m.info.queued === true && !m.info.failed,
+  ).length;
+  const queuedCount = Math.max(Number(live?.queued ?? live?.queuedCount ?? 0) || 0, queuedFromMsgs);
+  const open = openAssistantOf(messages);
+  const hasOpenText = Boolean(open?.parts?.some((p) => p?.type === "text" && typeof p.text === "string" && p.text.trim().length > 0));
+  const hasAnswerText = Boolean(live?.hasAnswerText) || hasOpenText;
+
+  if (tasks.length > 0 && (hasAnswerText || queuedCount > 0 || engine === "acp")) {
+    const first = tasks[0];
+    const label = toolTitleRu(first.tool);
+    const name = first.detail ? `${label} · ${clip(first.detail, 64)}` : label;
+    const title = tasks.length === 1 ? t("turn.bg.waitingOne", { name }) : t("turn.bg.waitingMany", { count: tasks.length, name });
+    let detail;
+    if (queuedCount > 0) {
+      detail =
+        queuedCount === 1
+          ? t("turn.bg.queuedOne")
+          : t("turn.bg.queuedMany", { count: queuedCount });
+    } else if (hasAnswerText) {
+      detail = t("turn.bg.answerVisible");
+    } else {
+      detail = t("turn.bg.taskRunning");
+    }
+    const starts = tasks.map((t) => t.startedAt).filter((v) => typeof v === "number" && v > 0);
+    const startedAt = starts.length ? Math.min(...starts) : (typeof live?.since === "number" ? live.since : null);
+    return { kind: "task", title, detail, startedAt, count: tasks.length, tasks };
+  }
+
+  if (engine === "acp" && hasAnswerText) {
+    const lastAt = typeof live?.lastActivityAt === "number" ? live.lastActivityAt : live?.lastAction?.at ?? null;
+    const silentMs = typeof lastAt === "number" ? Math.max(0, now - lastAt) : 0;
+    if (queuedCount > 0 || (typeof lastAt === "number" && silentMs >= 5000)) {
+      const canRelease = typeof lastAt === "number" && (silentMs >= 30_000 || (queuedCount > 0 && silentMs >= 10_000));
+      const title = canRelease ? t("turn.bg.acpCanRelease") : t("turn.bg.acpClosing");
+      const detail = canRelease
+        ? queuedCount > 0
+          ? t("turn.bg.acpSilentQueue", { span: fmtSpan(silentMs) })
+          : t("turn.bg.acpSilentFree", { span: fmtSpan(silentMs) })
+        : queuedCount > 0
+          ? t("turn.bg.acpQueued")
+          : t("turn.bg.acpWaitingClose");
+      const startedAt = typeof live?.since === "number" ? live.since : lastAt;
+      return {
+        kind: "acp-hold",
+        title,
+        detail,
+        startedAt,
+        count: 1,
+        tasks: [],
+        canRelease,
+      };
+    }
+  }
+
   return null;
 }

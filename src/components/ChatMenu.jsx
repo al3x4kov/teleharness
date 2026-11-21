@@ -17,6 +17,8 @@ import {
   busyMap, chatGone, connection, deleteChat, pinBusy, pins, renameSession, sessions, togglePin,
 } from "../lib/store.js";
 import { DeleteModal, RenameModal } from "./views/HomeView.jsx";
+import { WorktreeDeleteModal } from "./chat/Worktree.jsx"; // FEAT-20.7
+import { wtApi } from "../lib/worktree-client.js"; // FEAT-20.7
 import { Glyph } from "./Pickers.jsx";
 import { PinIcon } from "./Menu.jsx";
 import { t } from "../lib/i18n.js";
@@ -168,7 +170,11 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
     else if (it.id === "rename") setRenaming(true);
     else if (it.id === "relay") onRelay?.(sessionId);
     else if (it.id === "git") onGit?.(sessionId);
-    else if (it.id === "delete") setDeleting("ask");
+    else if (it.id === "delete") {
+      // FEAT-20.7: чат с рабочей копией — диалог о несохранённой работе копии
+      setDeleting("ask");
+      wtApi.ofChat(sessionId, { overlaps: false }).then((r) => r?.item && setDeleting((d) => (d === "ask" ? { wt: r.item } : d))).catch(() => {});
+    }
   };
 
   const confirmDelete = async () => {
@@ -258,7 +264,22 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
           />,
           document.body,
         )}
-      {deleting &&
+      {deleting?.wt &&
+        createPortal(
+          <WorktreeDeleteModal
+            sessionId={sessionId}
+            item={deleting.wt}
+            title={session.title || t("chat.defaultTitle")}
+            onClose={() => setDeleting(null)}
+            onDelete={async () => {
+              const ok = await deleteChat(sessionId, { stopFirst: running });
+              setDeleting(null);
+              if (ok) onDeleted?.(sessionId);
+            }}
+          />,
+          document.body,
+        )}
+      {deleting && !deleting.wt &&
         createPortal(
           <DeleteModal
             session={session}

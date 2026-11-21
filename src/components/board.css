@@ -1,0 +1,185 @@
+/* FEAT-20.2: «Доска внимания». Макет: design/mockups-v2/epic20-attention-board.html,
+   бриф design/briefs/BRIEF-20.2-attention-board.md. Состояние = значок + слово + цвет;
+   тап-цели ≥ 44 px; без горизонтальной прокрутки на 320–1440 px. */
+:root {
+  --bd-warn: #e8bd6a;
+  --bd-err: #f58a80;
+  --bd-ok: #7fcb9e;
+  --bd-cnt-bg: #e0b057;
+  --bd-cnt-text: #1f1e1d;
+}
+:root[data-theme="light"] {
+  --bd-warn: #83621a;
+  --bd-err: #b8322c;
+  --bd-ok: #256b4e;
+  --bd-cnt-bg: #83621a;
+  --bd-cnt-text: #ffffff;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bd-warn: #83621a;
+    --bd-err: #b8322c;
+    --bd-ok: #256b4e;
+    --bd-cnt-bg: #83621a;
+    --bd-cnt-text: #ffffff;
+  }
+}
+
+.board-view { max-width: 1240px; min-width: 0; }
+/* BUG-275: вкладки — сегмент своей строкой под шапкой (не ребёнок .page-header), подпись без переноса */
+.bd-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: -6px 0 12px; }
+.bd-tabs a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px; color: var(--text); text-decoration: none; border: 1px solid var(--border); white-space: nowrap; }
+.bd-tabs a[aria-current="page"] { background: var(--ink-pill, var(--text)); color: var(--ink-pill-text, var(--bg)); border-color: transparent; }
+
+.bd-num { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 99px; font-size: 13px; font-weight: 700; background: var(--input); color: var(--text); font-variant-numeric: tabular-nums; }
+.bd-hint { color: var(--text-2); font-size: 13.5px; margin: 6px 4px 10px; }
+.bd-nowrap { white-space: nowrap; }
+/* BUG-277: подсказка admin — один раз, с «Понятно» */
+.bd-note-admin { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin: 0 0 12px; padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--input); color: var(--text-2); font-size: 13.5px; }
+.bd-note-admin > span { flex: 1 1 220px; min-width: 0; }
+.bd-note-close { min-height: 44px; font-size: 13.5px; padding: 0 14px; margin-left: auto; }
+
+.bd-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--bd-warn) 14%, var(--surface)); color: var(--text); font-size: 14px; border: 1px solid color-mix(in srgb, var(--bd-warn) 35%, transparent); }
+.bd-banner.is-offline { background: color-mix(in srgb, var(--bd-err) 12%, var(--surface)); border-color: color-mix(in srgb, var(--bd-err) 35%, transparent); }
+.is-offline .bd-item { opacity: 0.55; }
+
+.bd-filters { display: flex; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; }
+.bd-filters .bd-search { flex: 1 1 200px; min-width: 0; width: auto; }
+.bd-filters .bd-select { flex: 1 1 160px; min-width: 0; }
+.bd-select { min-height: 44px; max-width: 100%; padding: 0 12px; border-radius: var(--r-md, 12px); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 15px; }
+
+/* сводка «Пока вас не было» */
+.bd-away { margin: 0 0 16px; padding: 14px 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); box-shadow: var(--shadow-float, none); }
+.bd-away h2 { font-size: 17px; margin: 0; }
+.bd-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.bd-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; background: var(--input); font-size: 13.5px; font-weight: 600; }
+.bd-pill.is-done { color: var(--bd-ok); }
+.bd-pill.is-failed { color: var(--bd-err); }
+.bd-pill.is-needs { color: var(--bd-warn); }
+.bd-events { list-style: none; margin: 6px 0; padding: 0; font-size: 14px; }
+.bd-events li { padding: 4px 0; overflow-wrap: anywhere; }
+.bd-ev-time { font-variant-numeric: tabular-nums; color: var(--text-2); margin-right: 6px; }
+.bd-away-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.bd-away-hint { margin: 8px 0 0; font-size: 12.5px; }
+.bd-link { background: none; border: 0; color: var(--accent); font: inherit; font-size: 14px; min-height: 44px; padding: 0; cursor: pointer; }
+
+/* секции */
+.bd-columns { display: flex; flex-direction: column; gap: 6px; }
+.bd-section { margin: 0 0 14px; min-width: 0; }
+.bd-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 4px; min-height: 44px; padding: 0 4px; }
+/* BUG-277: заголовок секции — одной строкой; «Отметить все» уходит вниз, а не ломает заголовок */
+.bd-section-head h2 { font-size: 17px; font-weight: 650; margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+.bd-short { display: none; }
+.bd-section.is-needs .bd-num.is-on { background: var(--bd-cnt-bg); color: var(--bd-cnt-text); }
+.bd-section.is-failed .bd-num.is-on { background: color-mix(in srgb, var(--bd-err) 18%, var(--input)); color: var(--bd-err); }
+.bd-fold { background: none; border: 0; color: var(--text); font: inherit; font-size: 15px; font-weight: 600; min-height: 44px; padding: 0; cursor: pointer; }
+.bd-none { color: var(--text-2); font-size: 14px; margin: 0 4px 6px; }
+.bd-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* элемент */
+.bd-item { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; min-width: 0; }
+.bd-main { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; padding: 12px 52px 12px 12px; color: var(--text); text-decoration: none; min-height: 44px; border-radius: 18px; }
+.bd-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.bd-icon { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--input); }
+.is-needs .bd-icon { color: var(--bd-warn); background: color-mix(in srgb, var(--bd-warn) 15%, var(--input)); }
+.is-working .bd-icon { color: var(--accent); }
+.is-done .bd-icon { color: var(--bd-ok); }
+.is-failed .bd-icon, .bd-item.is-quiet .bd-icon { color: var(--bd-err); background: color-mix(in srgb, var(--bd-err) 13%, var(--input)); }
+.bd-item.is-quiet .bd-icon { color: var(--bd-warn); background: color-mix(in srgb, var(--bd-warn) 15%, var(--input)); }
+.is-unknown .bd-icon, .is-snoozed .bd-icon, .is-older .bd-icon { color: var(--text-2); }
+.bd-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bd-title { font-size: 15.5px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bd-pin { color: var(--text-2); vertical-align: -2px; }
+/* BUG-277: слово состояния и мета — отдельными кусками (макет .stw); мета одной строкой с многоточием, id не рвётся посреди слова */
+.bd-state { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 13px; line-height: 1.35; color: var(--text-2); min-width: 0; }
+.bd-state b { color: var(--text); font-weight: 650; }
+.bd-meta { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.is-needs .bd-state b { color: var(--bd-warn); }
+.is-failed .bd-state b { color: var(--bd-err); }
+.is-done .bd-state b { color: var(--bd-ok); }
+.bd-item.is-quiet .bd-state b { color: var(--bd-warn); }
+.bd-snippet { font-size: 13.5px; color: var(--text); opacity: 0.85; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bd-note { font-size: 12.5px; color: var(--text-2); font-style: italic; }
+.bd-time { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; align-self: start; padding-top: 2px; }
+.bd-more { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: transparent; color: var(--text-2); font-size: 22px; line-height: 1; cursor: pointer; }
+.bd-more:hover, .bd-more:focus-visible { background: var(--input); color: var(--text); }
+.bd-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px 56px; }
+.bd-actions .bd-btn { white-space: nowrap; }
+.bd-cmd { flex: 1 1 100%; font-family: var(--font-mono, monospace); font-size: 12.5px; background: var(--input); padding: 6px 8px; border-radius: 8px; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.bd-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 14.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
+.bd-btn.bd-primary { background: var(--ink-pill, var(--text)); color: var(--ink-pill-text, var(--bg)); border-color: transparent; }
+.bd-btn.is-danger, .bd-menu .is-danger { color: var(--bd-err); }
+.bd-btn.bd-primary.is-danger { background: var(--bd-err); color: #fff; }
+.bd-btn[aria-disabled="true"], .bd-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.bd-markall { min-height: 44px; font-size: 13.5px; padding: 0 10px; white-space: nowrap; flex: none; margin-left: auto; border-color: transparent; background: transparent; color: var(--accent); }
+.bd-markall:hover:not(:disabled) { background: var(--input); }
+.bd-moreitems { margin-top: 8px; width: 100%; }
+
+.bd-menu { position: absolute; z-index: 30; top: 50px; right: 6px; min-width: 240px; max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-1); padding: 6px; display: flex; flex-direction: column; }
+.bd-menu a, .bd-menu button { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; text-decoration: none; border-radius: 10px; cursor: pointer; }
+.bd-menu a:hover, .bd-menu button:hover:not(:disabled), .bd-menu a:focus-visible, .bd-menu button:focus-visible { background: var(--input); }
+.bd-menu button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* пусто, загрузка, «удалён или недоступен» */
+.bd-empty, .bd-gone { text-align: center; padding: 40px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bd-empty h2, .bd-gone h2 { font-size: 22px; margin: 4px 0 0; }
+.bd-empty p, .bd-gone p { color: var(--text-2); margin: 0 0 8px; max-width: 420px; }
+.bd-empty-icon { color: var(--bd-ok); }
+.bd-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.bd-sk-section { margin-bottom: 18px; display: flex; flex-direction: column; gap: 8px; }
+.bd-sk-h { height: 22px; width: 40%; border-radius: 8px; }
+.bd-sk-row { height: 74px; border-radius: 18px; }
+@media (prefers-reduced-motion: reduce) { .bd-skeleton .sk { animation: none; } }
+
+/* подтверждения */
+.bd-scrim { position: fixed; inset: 0; z-index: 200; background: rgba(0, 0, 0, 0.45); display: grid; place-items: center; padding: 16px; }
+.bd-dialog { width: min(420px, 100%); background: var(--surface); color: var(--text); border-radius: 20px; padding: 20px; box-shadow: var(--shadow-1); }
+.bd-dialog h2 { font-size: 18px; margin: 0 0 8px; }
+.bd-dialog-text { color: var(--text-2); font-size: 14.5px; margin-bottom: 16px; }
+.bd-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* полоса на «Чатах» и счётчик меню */
+.bd-strip { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0 0 12px; padding: 8px 14px; border-radius: 14px; background: color-mix(in srgb, var(--bd-warn) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--bd-warn) 30%, transparent); color: var(--text); text-decoration: none; font-size: 14.5px; }
+.bd-strip b { font-weight: 650; }
+.bd-strip .bd-strip-go { margin-left: auto; color: var(--accent); font-weight: 600; white-space: nowrap; }
+.drawer-board { display: inline-grid; place-items: center; margin-left: auto; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--bd-cnt-bg); color: var(--bd-cnt-text); font-variant-numeric: tabular-nums; }
+.drawer-board.is-failed { background: color-mix(in srgb, var(--bd-err) 18%, var(--input)); color: var(--bd-err); }
+
+/* узкий экран: кнопки ответа — в столбик под значком */
+@media (max-width: 360px) {
+  .bd-actions { padding-left: 12px; flex-direction: column; }
+  /* BUG-277: в столбце flex-basis 140px становился ВЫСОТОЙ — кнопка-овал */
+  .bd-actions .bd-btn { width: 100%; flex: none; }
+  .bd-main { padding-right: 48px; grid-template-columns: 34px minmax(0, 1fr); }
+  .bd-time { grid-column: 2; }
+}
+@media (max-width: 767px) {
+  .bd-section-head h2 { font-size: 16px; gap: 6px; }
+  .bd-markall { padding: 0 6px; font-size: 13px; }
+  .bd-actions { padding-left: 12px; }
+  .bd-actions .bd-btn { flex: 1 1 auto; padding: 0 14px; }
+}
+/* после правила телефона: иначе его flex перебивает столбец ≤ 360 (BUG-277) */
+@media (max-width: 360px) {
+  .bd-actions .bd-btn { flex: none; }
+}
+
+/* ≥ 1180: четыре колонки (меню закреплено) */
+@media (min-width: 1180px) {
+  .board-view { max-width: none; padding-left: 24px; padding-right: 24px; }
+  .bd-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .bd-columns .bd-section { background: color-mix(in srgb, var(--input) 45%, transparent); border-radius: 20px; padding: 6px 8px 10px; }
+  .bd-columns .bd-full { display: none; }
+  .bd-columns .bd-short { display: inline; }
+  .bd-columns .bd-main { grid-template-columns: 30px minmax(0, 1fr); padding-right: 46px; }
+  .bd-columns .bd-icon { width: 30px; height: 30px; }
+  .bd-columns .bd-time { grid-column: 2; }
+  .bd-columns .bd-actions { padding-left: 12px; }
+  .bd-columns .bd-actions .bd-btn { flex: 1 1 100%; }
+}
+.menu-badge { position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--bd-cnt-bg); color: var(--bd-cnt-text); font-variant-numeric: tabular-nums; }
+.menu-badge.is-failed { background: var(--bd-err); color: #fff; }
+.pk-quiet { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.pk-quiet input { min-height: 44px; font: inherit; padding: 0 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--input); color: var(--text); }
+.pk-summary { padding: 0 16px 14px; margin: 0; }

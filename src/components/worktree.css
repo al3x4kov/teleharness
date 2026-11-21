@@ -1,0 +1,126 @@
+/* FEAT-20.7: рабочие копии — чип, пилюля ветки, полосы, листы, список копий.
+   Цвет не единственный носитель смысла: у каждого состояния знак (! ✕ ✓ …) и слово. */
+.wt-chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 2px 6px; }
+.wt-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--border); border-radius: var(--r-pill, 999px); background: var(--surface); color: var(--text);
+  font: inherit; font-size: 14px; cursor: pointer;
+}
+.wt-chip.is-on { background: var(--accent-wash); border-color: var(--accent); color: var(--text); }
+.wt-chip.is-off { opacity: .6; cursor: not-allowed; }
+.wt-chip-state { font-size: 12px; color: var(--accent); font-weight: 600; }
+.wt-chip-note { font-size: 12.5px; color: var(--text-2); display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wt-chip-note.is-muted { color: var(--text-3); }
+.wt-link { background: none; border: 0; padding: 8px 2px; min-height: 44px; color: var(--accent); font: inherit; font-size: 13.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.wt-link.is-danger { color: var(--error); }
+.wt-link:disabled { opacity: .5; }
+
+.wt-pill {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-height: 28px; margin-top: 2px; padding: 2px 10px;
+  border: 0; border-radius: var(--r-pill, 999px); background: var(--accent-wash); color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+/* имя уже обрезано с начала (shortBranch): конец с id виден всегда, второго многоточия нет (dogfood 2026-11-20) */
+.wt-pill-name { font-family: var(--font-mono, ui-monospace, monospace); overflow: hidden; text-overflow: clip; white-space: nowrap; direction: ltr; min-width: 0; }
+.wt-pill-base { color: var(--text-2); white-space: nowrap; }
+.wt-pill-mark { color: var(--warning); font-weight: 700; }
+.wt-pill.is-warn { box-shadow: inset 0 0 0 1px var(--warning); }
+/* пилюля стоит под заголовком: тап-цель расширяется прозрачной зоной до 44 px */
+.wt-pill { position: relative; }
+.wt-pill::after { content: ""; position: absolute; inset: -8px -2px; }
+
+.wt-band {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; margin: 0 0 6px; padding: 10px 12px; min-height: 44px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: var(--r-md, 12px); background: var(--surface); color: var(--text); text-align: left; font: inherit; font-size: 13.5px;
+}
+button.wt-band { cursor: pointer; }
+.wt-band.is-warn { border-color: var(--warning); }
+.wt-band.is-bad { border-color: var(--error); }
+.wt-band-ico { flex: none; width: 20px; text-align: center; font-weight: 700; }
+.wt-band.is-warn .wt-band-ico { color: var(--warning); }
+.wt-band.is-bad .wt-band-ico { color: var(--error); }
+.wt-band-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.wt-band-text span { color: var(--text-2); font-size: 12.5px; }
+.wt-band-actions { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.wt-band { flex-wrap: wrap; }
+.wt-band-go { flex: none; color: var(--text-3); font-size: 18px; }
+
+.wt-head { margin-bottom: 8px; }
+.wt-branch { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 14px; min-width: 0; }
+.wt-branch-name { overflow-wrap: anywhere; }
+.wt-muted { color: var(--text-2); font-size: 13px; }
+/* BUG-277: строкой, а не flex — иначе знак «!» оставался один на строке, а текст уходил ниже */
+.wt-warn { color: var(--text); font-size: 13px; display: block; }
+.wt-warn > span[aria-hidden] { color: var(--warning); font-weight: 700; margin-right: 2px; }
+.wt-bad { color: var(--error); font-size: 13px; }
+.wt-h3 { font-size: 14px; margin: 12px 0 6px; font-weight: 600; }
+.wt-add { color: var(--success); }
+.wt-del { color: var(--error); }
+.wt-files { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.wt-files li { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 32px; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.wt-file-path { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; overflow-wrap: anywhere; min-width: 0; }
+.wt-file-num { flex: none; font-size: 12px; white-space: nowrap; }
+.wt-file-num .wt-tag { margin-left: 6px; } /* BUG-277: «●» не липнет к «−0» */
+.wt-tag { flex: none; font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.wt-tag.is-bad { color: var(--error); }
+.wt-tag.is-ok { color: var(--success); }
+
+.wt-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.wt-actions.is-col { flex-direction: column; align-items: stretch; }
+.wt-actions.is-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.wt-actions.is-grid > :first-child { grid-column: 1 / -1; }
+.wt-actions button { min-height: 44px; }
+.btn.is-danger-outline { border: 1px solid var(--error); color: var(--error); background: transparent; }
+@media (max-width: 360px) {
+  .wt-actions.is-grid { grid-template-columns: 1fr; }
+}
+
+.wt-form { display: flex; flex-direction: column; gap: 12px; }
+.wt-field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.wt-field > span, .wt-field > legend { color: var(--text-2); font-size: 12.5px; padding: 0; }
+.wt-field select, .wt-field input[type="text"], .wt-field textarea {
+  min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 8px); background: var(--input, var(--surface)); color: var(--text); font: inherit; box-sizing: border-box; width: 100%;
+}
+.wt-field textarea { min-height: 72px; resize: vertical; }
+.wt-radio, .wt-check { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 44px; font-size: 14px; }
+.wt-radio input, .wt-check input { width: 20px; height: 20px; flex: none; }
+.wt-warnbox { border: 1px solid var(--warning); border-radius: var(--r-md, 12px); padding: 8px 12px; }
+.wt-warnbox legend span { color: var(--warning); font-weight: 700; }
+.wt-danger-box input { border-color: var(--error) !important; }
+
+.wt-steps { list-style: none; margin: 4px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wt-steps li { display: flex; align-items: center; gap: 10px; min-height: 32px; font-size: 14px; }
+.wt-step-ico { width: 24px; height: 24px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1.5px dashed var(--border); font-size: 13px; font-weight: 700; }
+.wt-steps li.is-ok .wt-step-ico { border: 0; background: var(--success); color: var(--on-accent, #fff); }
+.wt-steps li.is-fail .wt-step-ico { border: 0; background: var(--error); color: var(--on-accent, #fff); }
+.wt-steps li.is-run .wt-step-ico { border-style: solid; border-color: var(--accent); }
+.wt-steps li.is-skip { color: var(--text-3); }
+
+.wt-outcome { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--r-md, 12px); border: 1px solid var(--border); margin: 6px 0; font-size: 13.5px; }
+.wt-outcome.is-ok { border-color: var(--success); }
+.wt-outcome.is-ok b span { color: var(--success); }
+.wt-outcome.is-bad { border-color: var(--error); }
+.wt-outcome.is-bad b span { color: var(--error); }
+.wt-outcome.is-warn { border-color: var(--warning); }
+.wt-outcome.is-warn b span { color: var(--warning); }
+.wt-outcome > span { color: var(--text-2); }
+
+.wt-log { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm, 8px); padding: 8px; margin: 6px 0; }
+.wt-log.is-full { max-height: 50vh; }
+
+/* Список «Рабочие копии» проекта */
+.wt-list { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 24px; max-width: var(--content-w, 960px); margin: 0 auto; box-sizing: border-box; width: 100%; }
+.wt-card { border: 1px solid var(--border); border-radius: var(--r-lg, 16px); padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wt-card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+.wt-card-title { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.wt-card .wt-branch-name { direction: rtl; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.wt-state { font-size: 12px; white-space: nowrap; }
+.wt-state.is-warn { color: var(--warning); }
+.wt-state.is-ok { color: var(--success); }
+.wt-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.wt-card-actions button { min-height: 44px; }
+.wt-section-title { font-size: 15px; margin: 14px 0 4px; }
+.wt-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+@media (min-width: 1180px) {
+  .wt-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .wt-list > .wt-full { grid-column: 1 / -1; }
+}

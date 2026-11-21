@@ -332,7 +332,8 @@ export function dirBasename(dir) {
 // 2026-10-31 watchdog incident; Temp\oc_* are recorded test runs). A path
 // segment boundary is required, so "D:\Apps\template" stays visible.
 // extra is an exact-string list (localStorage "teleharness.hiddenDirs").
-const DEFAULT_HIDDEN_DIR_RE = [/\\windows([\\/]|$)/i, /\\temp([\\/]|$)/i];
+// FEAT-20.7: папки рабочих копий (.teleharness-worktrees) — не проекты
+const DEFAULT_HIDDEN_DIR_RE = [/\\windows([\\/]|$)/i, /\\temp([\\/]|$)/i, /[\\/]\.teleharness-worktrees([\\/]|$)/];
 
 export function isHiddenDir(dir, extra = []) {
   const s = String(dir ?? "");
@@ -1074,7 +1075,14 @@ export function toolStepDesc(part) {
   const d = typeof input.description === "string" ? input.description.trim() : "";
   if (d) return d;
   const title = typeof st.title === "string" ? st.title.trim() : "";
-  const cmd = typeof input.command === "string" ? input.command.trim() : "";
+  const cmd =
+    typeof input.command === "string"
+      ? input.command.trim()
+      : typeof input.CommandLine === "string"
+        ? input.CommandLine.trim()
+        : typeof input.command_line === "string"
+          ? input.command_line.trim()
+          : "";
   const fp = String(input.filePath ?? input.file_path ?? input.path ?? "");
   if (!title || title === cmd || title === fp || /^[A-Za-z]:[\\/]|^\//.test(title)) return "";
   return title.length > 80 ? title.slice(0, 79) + "…" : title;

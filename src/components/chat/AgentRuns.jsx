@@ -11,11 +11,13 @@
 // Агентные сигналы читаются только здесь: пузыри и MessageList остаются
 // чистыми (design §6 — событие ленты ребёнка не перерисовывает чужие пузыри).
 import { Fragment } from "preact";
+import { t } from "../../lib/i18n.js";
 import { useEffect, useState } from "preact/hooks";
 import { navigate } from "../../lib/router.js";
 import { agentNow } from "../../lib/agent-tick.js";
 import { active, activeAgentRuns, chatRuns, childFeedOf, ensureChildFeed, execDetailOn, prefs } from "../../lib/store.js";
 import { fmtDuration, needsTokenRefresh, preloaderCaption, showBgBar, stepLabel, summarize } from "../../lib/subagents.js";
+import { bgWorkNotice } from "../../lib/turn.js";
 import AgentCard from "./AgentCard.jsx";
 import AgentSummary from "./AgentSummary.jsx";
 import BgAgentsBar from "./BgAgentsBar.jsx";
@@ -42,7 +44,7 @@ function FeedAutoLoad({ run }) {
     }
     ensureChildFeed(run.childId);
     // по run.id и состоянию: карточка не перезапрашивает ленту на перерисовках
-  }, [run.id, run.state]);
+  }, [run.id, run.state, run.childId]);
   return null;
 }
 
@@ -123,20 +125,52 @@ export default function AgentRuns({ part, repeat = 1, summary = null }) {
 // Прелоадер компактной ленты (детализация выключена): показан, пока идёт ход
 // основного агента ИЛИ работают агенты; у работающих агентов — подпись
 // preloaderCaption, у одиночного основного хода — прежний вид без подписи.
+// BUG-290 (BUG-01.91, вариант 4А): при выключенной детализации работу фоновых
+// агентов показывает BgAgentsBar над полем ввода без прокрутки и без дублирования
+// в ленте — TurnAgentsPreloader держит обычный прелоадер только для основного хода.
 export function TurnAgentsPreloader({ busy = false }) {
-  const act = activeAgentRuns.value;
-  if (!busy && act.length === 0) return null;
-  return <TurnPreloader caption={preloaderCaption(act, agentNow.value)} />;
+  if (!busy) return null;
+  return <TurnPreloader />;
 }
 
-// Полоса фоновых агентов над композером (кадр 5 макета): видна, когда ход
-// основного агента НЕ идёт, а активные запуски есть — в обоих режимах
-// детализации. Тап: прокрутка к карточке (детализация включена) или переход
-// в чат агента (выключена, есть childId).
+// Полоса фоновых агентов над композером (кадры 5 и 5б макета, BUG-290 / BUG-01.91):
+// видна в обоих режимах детализации и во время нового основного хода, скрывается
+// только при открытом диалоге разрешения/вопроса (hidden).
 export function BgAgentsGate({ hidden = false }) {
   const runs = hidden ? [] : activeAgentRuns.value;
   const detail = execDetailOn(prefs.value);
-  // TASK-01.81: при выключенной детализации полосы нет — работу агентов показывает индикатор (кадр 4)
-  if (!showBgBar({ mainBusy: false, dialogOpen: hidden, detailOn: detail, activeCount: runs?.length ?? 0 })) return null;
+  if (!showBgBar({ dialogOpen: hidden, activeCount: runs?.length ?? 0 })) return null;
   return <BgAgentsBar runs={runs} now={agentNow.value} fmtDuration={fmtDuration} onOpen={(r) => (detail ? scrollToRun(r) : openChildChat(r))} />;
+}
+
+// BUG-291: полоса активной фоновой задачи хода (или удержания хода ACP/Gemini)
+// над композером — видна в обоих режимах детализации, уступает место DialogBar
+// и BgAgentsBar, чтобы две полосы не наслаивались.
+export function BgWorkGate({ hidden = false, status = "idle", engine = null, messages = [], live = null, onRelease = null }) {
+  const runs = hidden ? [] : activeAgentRuns.value;
+  const suppressed = hidden || status !== "busy" || (runs?.length ?? 0) > 0;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (suppressed) return undefined;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [suppressed]);
+  if (suppressed) return null;
+  const notice = bgWorkNotice({ status, engine, messages, live, now });
+  if (!notice) return null;
+  const dur = notice.startedAt != null ? fmtDuration(Math.max(0, now - notice.startedAt)) : null;
+  return (
+    <div class="bg-bar bg-work-bar" role="status" aria-live="polite" data-kind={notice.kind}>
+      <i class="sa-pulse" aria-hidden="true" />
+      <span class="bt">
+        <span class="bt-title">{notice.title}</span>
+        {notice.detail ? <span class="bt-act">{notice.detail}</span> : null}
+      </span>
+      {dur && <time>{dur}</time>}
+      {notice.canRelease && onRelease ? (
+        <button class="bg-work-btn" type="button" onClick={onRelease}>{t("chat.bg.releaseBtn")}</button>
+      ) : null}
+    </div>
+  );
 }

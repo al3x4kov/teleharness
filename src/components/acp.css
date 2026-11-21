@@ -1,0 +1,267 @@
+/* FEAT-20.4 / BUG-285: Настройки → Агенты ACP (макет epic20-acp-engine.html) */
+.acp-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.acp-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.acp-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.acp-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.acp-card-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.acp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--input);
+}
+
+.acp-pill.is-ok {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+}
+
+.acp-pill.is-warn {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+}
+
+.acp-pill.is-err {
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, var(--border));
+  background: color-mix(in srgb, var(--error) 12%, var(--surface));
+}
+
+.acp-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--error) 45%, var(--border));
+  background: color-mix(in srgb, var(--error) 10%, var(--surface));
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.acp-warn-ico {
+  color: var(--error);
+  flex: none;
+  font-weight: 700;
+}
+
+.acp-alert {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--error);
+  background: color-mix(in srgb, var(--error) 10%, var(--surface));
+  color: var(--text);
+  font-size: 13.5px;
+  margin: 0;
+}
+
+.acp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.acp-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+}
+
+.acp-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.acp-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.acp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-page .btn,
+.acp-page a.btn,
+.acp-page .btn-primary,
+.acp-page a.btn-primary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.acp-device-code {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.acp-device-code strong {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: var(--r-sm, 6px);
+  background: var(--input);
+}
+
+.acp-catalog-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-catalog-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.acp-catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-catalog-search {
+  flex: 1 1 200px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+}
+
+.acp-catalog-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.acp-catalog-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.acp-catalog-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.acp-agent-info {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.acp-agent-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.acp-agent-ver {
+  font-size: 12.5px;
+  color: var(--text-2);
+  margin-left: 6px;
+}
+
+.acp-agent-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.acp-confirm {
+  padding: 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--accent);
+  background: var(--accent-wash);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acp-confirm p {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+}

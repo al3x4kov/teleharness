@@ -26,8 +26,8 @@ const basename = (p) => String(p ?? "").split(/[\\/]/).pop() || p;
 
 // Человечьи ярлыки инструментов: что ДЕЛАЕТ инструмент, а не его имя.
 // websearch = Claude CLI WebSearch (FEAT-13.19).
-const TOOL_LABEL_KEYS = new Set(["bash", "read", "write", "edit", "glob", "grep", "list", "webfetch", "websearch", "todowrite", "todoread", "question"]);
-const toolLabel = (tool) => (TOOL_LABEL_KEYS.has(tool) ? t("tool.label." + tool) : null);
+const TOOL_LABEL_KEYS = new Set(["bash", "execute", "read", "write", "edit", "glob", "grep", "list", "webfetch", "websearch", "todowrite", "todoread", "question"]);
+const toolLabel = (tool) => (TOOL_LABEL_KEYS.has(tool) ? t("tool.label." + (tool === "execute" ? "bash" : tool)) : null);
 
 // ISSUE-013: the question tool's own title is English («Asked 1 question») —
 // show the first question itself, else a Russian count.

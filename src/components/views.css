@@ -1850,6 +1850,7 @@
 }
 .engine-dot.is-claude { background: #d97757; }
 .engine-dot.is-codex { background: #10a37f; } /* FEAT-18.7: Codex — зелёный OpenAI, подпись рядом всегда есть */
+.engine-dot.is-acp { background: #4285f4; } /* BUG-280: ACP — синий, подпись рядом всегда есть */
 .model-bar-note {
   flex-basis: 100%;
   font-size: 12px;
@@ -2520,6 +2521,11 @@
   .settings-empty {
     max-width: 680px;
     margin-inline: auto; /* 2K/4K: the open section sits centred in its pane (макет D2) */
+  }
+
+  /* BUG-288 / BRIEF-20.6: в «Расходах» 4 плитки сводки в ряд на десктопе ≥ 1200 px */
+  .settings-section[data-section="costs"] {
+    max-width: 1000px;
   }
 
   .set-back {

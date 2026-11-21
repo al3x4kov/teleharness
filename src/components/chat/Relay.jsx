@@ -3,7 +3,7 @@
 // (кадр 2), лист выбора из меню чата (кадр 3), полоска «остаток на исходе» (кадр 6).
 import { useEffect, useState } from "preact/hooks";
 import { effectivePrefs, providerCfg, refreshSubscriptions, relayChat, sessions, subscriptions } from "../../lib/store.js";
-import { bindingOf, modelName } from "../../lib/engine.js";
+import { bindingOf, engineShortOf, modelName } from "../../lib/engine.js";
 import { lowQuota, relayTime, suggestRelay, windowWords } from "../../lib/relay.js";
 import { fmtClock } from "../../lib/normalize.js";
 import { t } from "../../lib/i18n.js";
@@ -13,7 +13,8 @@ import "../relay.css";
 
 const sessionOf = (id) => sessions.value.find((s) => s.id === id) ?? null;
 const nameOf = (m) => modelName(providerCfg.value, { providerID: m?.providerID, modelID: m?.modelID });
-const ENGINE_WORD = { opencode: "opencode", claude: "Claude Code" };
+const ENGINE_WORD = { opencode: "opencode", claude: "Claude Code", codex: "Codex" };
+const engineWordOf = (target) => (target?.engine === "acp" ? engineShortOf(target.providerID) || "ACP" : ENGINE_WORD[target?.engine] ?? target?.engine ?? "");
 
 // Куда предложить передать этот чат (или null — некуда).
 export function relayTarget(id) {
@@ -56,7 +57,7 @@ export function RelayActions({ sessionId, onPickOther }) {
   return (
     <>
       <button class="stall-btn relay-primary" type="button" disabled={busy} onClick={go}>
-        {busy ? t("relay.busy") : t("relay.continueIn", { model: nameOf(target), engine: ENGINE_WORD[target.engine] ?? target.engine })}
+        {busy ? t("relay.busy") : t("relay.continueIn", { model: nameOf(target), engine: engineWordOf(target) })}
       </button>
       <button class="stall-btn" type="button" disabled={busy} onClick={onPickOther}>{t("relay.otherModel")}</button>
     </>
@@ -93,10 +94,10 @@ function RelayPillRow({ mark, from, to }) {
 function RelayPill({ mark, from, to }) {
   return (
     <span class="relay-pill">
-      <i class={"engine-dot" + (mark.from?.engine === "claude" ? " is-claude" : mark.from?.engine === "codex" ? " is-codex" : "")} aria-hidden="true" />
+      <i class={"engine-dot" + (mark.from?.engine === "claude" ? " is-claude" : mark.from?.engine === "codex" ? " is-codex" : mark.from?.engine === "acp" ? " is-acp" : "")} aria-hidden="true" />
       {from}
       <b aria-hidden="true">→</b>
-      <i class={"engine-dot" + (mark.to?.engine === "claude" ? " is-claude" : mark.to?.engine === "codex" ? " is-codex" : "")} aria-hidden="true" />
+      <i class={"engine-dot" + (mark.to?.engine === "claude" ? " is-claude" : mark.to?.engine === "codex" ? " is-codex" : mark.to?.engine === "acp" ? " is-acp" : "")} aria-hidden="true" />
       <b>{to}</b>
       <span class="relay-at">· {relayTime(mark.at)}</span>
     </span>
@@ -104,6 +105,20 @@ function RelayPill({ mark, from, to }) {
 }
 
 // Полоска «остаток на исходе» (кадр 6): только там, где остаток известен (z.ai), меньше 15 %.
+// BUG-238: show DD.MM date for weekly/monthly windows or any reset not on today (MSK).
+export function formatQuotaReset(resetAt, { now = Date.now(), kind = null } = {}) {
+  if (!resetAt) return null;
+  const d = new Date(resetAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const tz = "Europe/Moscow";
+  const time = new Intl.DateTimeFormat("ru-RU", { timeZone: tz, hour: "2-digit", minute: "2-digit" }).format(d);
+  const dayKey = (v) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(v);
+  const needDate = kind === "week" || kind === "month" || dayKey(d) !== dayKey(new Date(now));
+  if (!needDate) return t("relay.quota.resetMsk", { time });
+  const date = new Intl.DateTimeFormat("ru-RU", { timeZone: tz, day: "2-digit", month: "2-digit" }).format(d);
+  return t("relay.quota.resetDateMsk", { date, time });
+}
+
 export function QuotaStrip({ sessionId, hidden = false, onPickOther }) {
   const binding = bindingOf(sessionOf(sessionId));
   const onGlmPlan = binding?.engine === "opencode" && /^zai/.test(String(binding?.model?.providerID ?? ""));
@@ -122,8 +137,7 @@ export function QuotaStrip({ sessionId, hidden = false, onPickOther }) {
   if (dismissed === key) return null;
   const target = relayTarget(sessionId);
   const other = target && target.engine !== binding.engine ? target : null;
-  // время сброса — в местном часовом поясе браузера и локали языка интерфейса
-  const reset = low.resetAt ? fmtClock(low.resetAt) || null : null;
+  const resetLine = formatQuotaReset(low.resetAt, { kind: low.kind });
   const go = async () => {
     if (busy || !other) return;
     setBusy(true);
@@ -134,7 +148,7 @@ export function QuotaStrip({ sessionId, hidden = false, onPickOther }) {
     <div class="stall-bar quota-strip" role="status">
       <span class="stall-text">
         <b class="turn-error-title">{t("relay.quota.left", { left: low.left, window: windowWords(low.kind, low.number) })}</b>{" "}
-        {reset ? `${t("relay.quota.reset", { time: reset })} ` : ""}{t("relay.quota.hint")}
+        {resetLine ? `${resetLine} ` : ""}{t("relay.quota.hint")}
       </span>
       <span class="turn-error-actions">
         {other ? (

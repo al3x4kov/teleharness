@@ -17,11 +17,13 @@ import { ENGINE_SHORT, claudeAgentName, engineOf, modelName } from "../../lib/en
 import { applyTheme, storedTheme } from "../../lib/theme.js";
 import { LANGS, fmtNumber, lang, locale, setLang, t } from "../../lib/i18n.js";
 import { VERSION } from "../../lib/version.js";
+import AcpCatalog from "./AcpCatalog.jsx";
 import AccessSection from "./AccessSection.jsx";
-import NotificationsRow from "./NotificationsRow.jsx";
+import NotificationsRow, { PushKindsRow } from "./NotificationsRow.jsx";
 import PhoneSection from "./PhoneSection.jsx";
-import AutoRelayRow from "./AutoRelayRow.jsx";
-import GitSection from "../git/GitSection.jsx";
+import AutoRelayRow from "./AutoRelayRow.jsx"; // FEAT-18.6
+import GitSection from "../git/GitSection.jsx"; // FEAT-18.8
+import CostsSection from "./CostsSection.jsx"; // FEAT-20.6
 import { promptHint, SystemPromptEditor, loadPrompt, promptState } from "./SystemPromptRow.jsx";
 import { disablePush, pushState } from "../../lib/push.js";
 import { Modal } from "./HomeView.jsx";
@@ -399,7 +401,9 @@ const ICONS = {
   mcp: ["M9 2v6", "M15 2v6", "M6 8h12v4a6 6 0 0 1-12 0Z", "M12 18v4"],
   git: ["M6 3v12", "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M18 9a9 9 0 0 1-9 9"],
   subscription: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 7v5l3 2"],
+  costs: ["M12 2v20", "M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"],
   computer: ["M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z", "M8 20h8", "M12 16v4"],
+  acp: ["M5 9h14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1Z", "M12 5v4", "M12 2.5h.01", "M9 13v2", "M15 13v2"],
   users: ["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z", "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"],
   active: ["M22 12h-4l-3 9L9 3l-3 9H2"],
   about: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 16v-4", "M12 8h.01"],
@@ -431,8 +435,10 @@ export const SECTIONS = [
   { id: "phone", group: "app" }, // every user, own account
   { id: "mcp", group: "features" },
   { id: "subscription", group: "features" },
+  { id: "costs", group: "features" }, // FEAT-20.6
   { id: "git", group: "features" }, // every user, own defaults
   { id: "computer", group: "features", admin: true },
+  { id: "acp", group: "admin", admin: true }, // FEAT-20.4
   { id: "users", group: "admin", admin: true },
   { id: "active", group: "admin", admin: true },
   { id: "about", group: "bottom" },
@@ -578,7 +584,7 @@ function ModelsSection({ sub, done }) {
   return (
     <ul class="card-list">
       <NavRow href="#/settings/models/model" title={t("settings.sub.model")}
-        value={<>{defModel && <span class={"engine-dot" + (defEngine === "claude" ? " is-claude" : defEngine === "codex" ? " is-codex" : "")} aria-hidden="true" />}{modelSub}</>}
+        value={<>{defModel && <span class={"engine-dot" + (defEngine === "claude" ? " is-claude" : defEngine === "codex" ? " is-codex" : defEngine === "acp" ? " is-acp" : "")} aria-hidden="true" />}{modelSub}</>}
         warn={eff.staleModel ? <div class="set-warn" role="status">{staleModelText(eff)} {t("settings.models.pickAgain")}</div> : null}
         hint={t("settings.models.modelHint")} />
       <NavRow href="#/settings/models/agent" title={<>{t("settings.models.agentTitle")} <span class="engine-tag">· z.ai</span></>}
@@ -591,7 +597,7 @@ function ModelsSection({ sub, done }) {
               : t("settings.models.agentHintUser")
         } />
       {isAdminUser && (
-        <NavRow href="#/settings/models/claude-agent" title={<>{t("settings.models.agentTitle")} <span class="engine-tag">· Claude</span></>}
+        <NavRow href="#/settings/models/claude-agent" title={<>{t("settings.models.agentTitle")} <span class="engine-tag">{t("settings.models.claudeGeminiTag")}</span></>}
           value={claudeAgentSub}
           hint={t("settings.models.claudeHint")} />
       )}
@@ -1156,10 +1162,12 @@ export default function SettingsView({ section = null, sub = null } = {}) {
       : id === "prompt" ? <PromptSection onDirty={setDirty} />
       : id === "voice" ? (voiceInfo.value == null ? <Skeleton label={t("settings.voice.loading")} /> : <ul class="card-list"><VoiceSettings /></ul>)
       : id === "appearance" ? <AppearanceSection theme={theme} setTheme={setTheme} />
-      : id === "notifications" ? <ul class="card-list"><NotificationsRow /></ul>
+      : id === "notifications" ? <ul class="card-list"><NotificationsRow /><PushKindsRow /></ul>
       : id === "phone" ? <PhoneSection />
+      : id === "acp" ? <AcpCatalog />
       : id === "mcp" ? <McpSection />
       : id === "subscription" ? <SubscriptionSection />
+      : id === "costs" ? <CostsSection />
       : id === "git" ? <GitSection />
       : id === "computer" ? <ComputerSection />
       : id === "active" ? <ul class="card-list"><BusySessions /></ul>

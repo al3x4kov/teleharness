@@ -5,6 +5,7 @@
 // Содержимое: знак teleharness, разделы, «Недавние» (те же фильтры, что «Чаты»),
 // «Показать все», инициалы → Настройки, тёмная пилюля «Новый чат».
 import { startTemporalAttention, stopTemporalAttention, temporalAttention } from "../lib/temporal-attention.js";
+import { boardCount } from "../lib/attention.js"; // FEAT-20.2
 import { useEffect, useRef, useState } from "preact/hooks";
 import { agents, createAndOpen, explainApiError, me, pins, PINNED_FOLD, sessions, setNotice, splitPinned } from "../lib/store.js";
 import { navigate } from "../lib/router.js";
@@ -47,6 +48,7 @@ export function recentSessions(list, agentList, limit = RECENT_LIMIT) {
 }
 
 const NAV = [
+  { view: "board", href: "#/board", labelKey: "nav.board", icon: <><rect x="3.5" y="4" width="7" height="16" rx="2" /><rect x="13.5" y="4" width="7" height="9" rx="2" /><path d="M13.5 16.5h7M13.5 20h4" /></> },
   { view: "home", href: "#/", labelKey: "common.chats", icon: <><path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.5L4 19.5l1.5-4.3A7.5 7.5 0 1 1 20 11.5Z" /></> },
   { view: "projects", href: "#/projects", labelKey: "common.projects", icon: <><path d="M5 9h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2Z" /><path d="M4 9h16" /><path d="M7 5.5h10" /></> },
   { view: "temporal", href: "#/temporal", labelKey: "nav.temporal", icon: <><path d="M5 7h14l-3-3M19 17H5l3 3M19 7v4M5 17v-4" /></> }, // FEAT-19.1
@@ -165,10 +167,13 @@ export default function Drawer({ view, chatId }) {
           <ul class="drawer-nav">
             {NAV.map((n) => (
               <li key={n.view}>
-                <a class={"drawer-item" + (view === n.view ? " is-active" : "")} href={n.href}
-                  aria-current={view === n.view ? "page" : null}>
+                <a class={"drawer-item" + (view === n.view || (n.view === "board" && view === "reviewItem") ? " is-active" : "")} href={n.href}
+                  aria-current={view === n.view || (n.view === "board" && view === "reviewItem") ? "page" : null}>
                   <Svg>{n.icon}</Svg>
                   <span>{t(n.labelKey)}</span>
+                  {n.view === "board" && boardCount.value && (
+                    <span class={"drawer-board" + (boardCount.value.kind === "failed" ? " is-failed" : "")} aria-label={boardCount.value.label} title={boardCount.value.label}>{boardCount.value.text}</span>
+                  )}
                   {n.view === "temporal" && temporalAttention.value > 0 && (
                     <span class="drawer-count" aria-label={t("temporal.view.waitingAria", { count: temporalAttention.value })}>{temporalAttention.value}</span>
                   )}

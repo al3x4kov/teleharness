@@ -1,18 +1,19 @@
 <div align="center">
 
-<img src="docs/screenshots/social-preview.png" alt="Teleharness: your AI coding agents — Claude Code, Codex and opencode — from your phone" width="100%">
+<img src="docs/screenshots/social-preview.png" alt="Teleharness: your AI coding agents — Claude Code, Codex, Gemini (ACP) and opencode — from your phone" width="100%">
 
 ## Your AI coding agents, from your phone
 
-**Chat with Claude Code, Codex and opencode in one place, hand a task over when a usage limit hits,
-and chain agents into pipelines that survive restarts.**
+**Chat with Claude Code, Codex, Gemini (ACP) and opencode in one place, review diffs and git worktrees from your phone,
+hand a task over when a usage limit hits, and chain agents into pipelines that survive restarts.**
 
 Teleharness is an open-source, self-hosted control room for AI coding CLIs. It runs the real CLIs on your machine —
-with their agents, skills, MCP servers, hooks and project context — and adds what a terminal can't: a mobile-first
-chat, approvals from anywhere, cross-CLI handoff and durable multi-agent pipelines on [Temporal](https://temporal.io).
+with their agents, skills, MCP servers, hooks and project context — and adds what a terminal can't: an Attention Board,
+mobile diff review with Plan-First, isolated git worktrees, API-equivalent cost tracking, cross-CLI handoff and durable
+multi-agent pipelines on [Temporal](https://temporal.io).
 All of it runs on the CLI subscriptions you already pay for, not a metered API.
 
-**Chat** · **Relay** · **Pipelines** · **human in the loop** · **on your subscriptions** · **self-hosted**
+**Chat** · **Board & Review** · **Worktrees** · **Relay** · **Pipelines** · **on your subscriptions** · **self-hosted**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -21,6 +22,7 @@ All of it runs on the CLI subscriptions you already pay for, not a metered API.
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
 [What it does](#what-it-does) •
+[Board, Review & Worktrees](#board-mobile-review-worktrees-and-costs) •
 [Switch CLIs](#switch-cli-mid-conversation) •
 [Pipelines](#pipelines-that-survive-restarts-temporal) •
 [Try the demo](#try-it-in-30-seconds) •
@@ -47,16 +49,54 @@ All of it runs on the CLI subscriptions you already pay for, not a metered API.
 <td width="33%"><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a block waiting for your decision"></td>
 </tr>
 <tr>
-<td valign="top"><b>Chat</b><br>Claude Code, Codex and opencode side by side in a phone-first UI: live steps, subagent cards, diffs and git, files, voice, push. Approve edits and commands from anywhere.</td>
+<td valign="top"><b>Chat</b><br>Claude Code, Codex, Gemini &amp; Copilot (ACP) and opencode side by side in a phone-first UI: live steps, subagent cards, Plan-First, diffs and git worktrees, files, voice, push. Approve edits and commands from anywhere.</td>
 <td valign="top"><b>Relay</b><br>A subscription runs out mid-task? The same chat continues on another CLI or model — same folder, one feed, the missed turns carried over. Manually or automatically.</td>
 <td valign="top"><b>Pipelines</b><br>Chain agents into multi-step runs on Temporal: Claude reviews, you approve from your phone, Codex writes — with timers, conditions, schedules and artifacts. Runs survive restarts.</td>
 </tr>
 </table>
 
+## Board, mobile review, worktrees and costs
+
+Run several coding agents at once without living in a terminal:
+
+- **Attention Board (`#/board`)** — one feed across every chat and Temporal run (*Waiting for you*, *Working*, *Done*,
+  *Failed*) with a *While you were away* summary, quick actions and per-category push notifications with quiet hours.
+- **Mobile Review & Plan-First (`#/board/review`)** — tap any line or range in a diff to leave inline draft comments,
+  send structured feedback back to the agent, or accept and commit. Turn on *Plan first* so Claude, Codex, opencode or
+  Gemini writes a read-only plan and waits for your approval before touching a single file.
+- **Isolated Git Worktrees (`#/worktrees`)** — put each chat or pipeline run on its own branch and worktree, spot file
+  overlaps and dry-run merge conflicts early, and merge back (squash / merge / fast-forward) after running your test command.
+- **API-Equivalent Costs (`#/settings/costs`)** — every turn is logged in SQLite and priced against an editable model table,
+  compared against your real subscriptions (Claude Max, ChatGPT Plus, Google Antigravity, GitHub Copilot CLI) to show
+  actual savings, payback multiplier, soft monthly budgets and CSV export.
+- **ACP Agents (`#/settings/acp`)** — install and sign in to **Google Antigravity** (`Gemini 4 Neon`, `Gemini 3.8 Flash`)
+  and **GitHub Copilot CLI** right from Settings, with roles, vision, Plan-First and Auto-Relay support.
+
+<p align="center">
+  <img src="docs/screenshots/phone-light-board.png" alt="Attention Board with While you were away summary and Waiting for you section" width="180">
+  <img src="docs/screenshots/phone-light-review.png" alt="Mobile diff review with line selection and inline draft comments" width="180">
+  <img src="docs/screenshots/phone-light-plan.png" alt="Gemini 4 Neon chat with read-only Plan 1 card awaiting approval" width="180">
+  <img src="docs/screenshots/phone-light-worktrees.png" alt="Isolated git worktrees with overlap and conflict detection" width="180">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-board.png" alt="Attention Board on desktop with four status columns" width="820">
+</p>
+<p align="center"><sub>Attention Board on desktop: review queues, waiting plans, running pipelines, completed and failed turns in one view.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-review.png" alt="Review screen on desktop with file list and diff pane" width="820">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-costs.png" alt="API-equivalent costs overview with daily chart, subscriptions and payback" width="820">
+</p>
+<p align="center"><sub>API-equivalent cost breakdown against fixed monthly subscriptions, daily chart and per-model spend.</sub></p>
+
 ## Switch CLI mid-conversation
 
-Start a task with Claude Code, then continue it with opencode on GLM or any other model opencode supports, or with
-Codex — in any direction.
+Start a task with Claude Code, then continue it with Gemini (ACP), Codex, or opencode on GLM or any other model —
+in any direction.
 
 - **From the chat menu, at any time:** *Continue in…* → engine and model.
 - **When a subscription runs out:** the usage-limit notice offers *Continue in &lt;model&gt;* — one tap.
@@ -190,7 +230,11 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 
 | | |
 |---|---|
-| **Three engines, one UI** | opencode (any provider), Claude Code and Codex CLI side by side; a chat stays bound to its engine, model and agent. Codex chats are admin-only for now, on every OS — Codex needs its own sandbox before other users get it (in Temporal pipelines every user can use Codex, text-only).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Model picker with opencode, Claude and Codex engine groups" width="180"> <img src="docs/screenshots/phone-light-codex.png" alt="Codex chat: file edits, 212 passing tests, Ask mode and subscription" width="180"> |
+| **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. Codex and ACP chats are admin-only for now (in Temporal pipelines every user can use Codex, text-only).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Model picker with opencode, Claude, Codex and ACP engine groups" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
+| **Attention Board** | One screen for every chat and Temporal run grouped into *Waiting for you*, *Working*, *Done* and *Failed*, with a *While you were away* recap, quick actions and per-category Web Push notifications with quiet hours.<br><img src="docs/screenshots/phone-light-board.png" alt="Attention Board on a phone" width="180"> |
+| **Mobile Review & Plan-First** | Review queue across chats and runs, touch-friendly diff with line selection and persistent inline draft comments, return-to-agent and accept/commit. *Plan first* makes the agent propose a read-only plan and wait for approval before editing files.<br><img src="docs/screenshots/phone-light-review.png" alt="Mobile diff viewer" width="180"> <img src="docs/screenshots/phone-light-plan.png" alt="Gemini Plan 1 approval card" width="180"> |
+| **Isolated Git Worktrees** | Give each chat or pipeline run its own git worktree and branch, detect cross-chat file overlaps and dry-run merge conflicts, merge with squash/merge/ff after running tests, and prune orphaned branches.<br><img src="docs/screenshots/phone-light-worktree.png" alt="Chat with active worktree pill, review plaque and conflict warning" width="180"> <img src="docs/screenshots/phone-light-worktrees.png" alt="Project worktrees list and merge settings" width="180"> |
+| **API-equivalent costs** | SQLite turn cost log priced against an editable table, real subscriptions (Claude Max, ChatGPT Plus, Google Antigravity, Copilot CLI) with savings and payback multiplier, soft monthly budgets, per-chat / per-project / per-run totals and CSV export.<br><img src="docs/screenshots/phone-light-costs.png" alt="Costs overview on a phone" width="180"> |
 | **Permission mode per chat** | *Ask* — the agent asks before file edits and commands, you approve or deny in the chat (Claude through a permission bridge, Codex natively); *Edits without asking*; *No questions* (admin only).<br><img src="docs/screenshots/phone-light-ask.png" alt="In-chat permission request for a migration command with Allow and Deny" width="180"> <img src="docs/screenshots/phone-light-permission-modes.png" alt="Permission modes: Ask, Edits without asking, No questions" width="180"> |
 | **Waiting for you** | A chat list filter with a count of chats where an agent waits for your decision, plus a push notification when it starts waiting.<br><img src="docs/screenshots/phone-light-waiting.png" alt="Waiting for you filter enabled with one chat needing approval" width="180"> |
 | **Context and cost** | A meter above the composer: how full the model's context window is (with a warning past 80 %) and what the chat has cost — or that it runs on a subscription.<br><img src="docs/screenshots/phone-light-context.png" alt="Answer footer: subscription and Context 41 percent" width="180"> <img src="docs/screenshots/phone-light-context-warning.png" alt="Context warning at 86 percent, almost full" width="180"> |
@@ -240,7 +284,7 @@ found (and how to install the missing ones) and prints the admin token. Options:
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.0.5 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -259,7 +303,7 @@ claude setup-token                 # Claude engine: put the token into .env as C
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.0.5 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
@@ -294,7 +338,7 @@ On first start the portal creates an admin and writes the login token to `data/a
 | | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
 | Portal, opencode and Claude engines, files, push | yes | yes | yes |
-| Codex engine (chats) | admin only | admin only | admin only |
+| Codex & ACP engines (chats) | admin only | admin only | admin only |
 | Temporal pipelines (optional) | yes | yes | — |
 | Codex in Temporal pipelines | yes (text-only for regular users) | yes (text-only for regular users) | — |
 | Obsidian cache, voice | yes | yes | yes |

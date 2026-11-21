@@ -138,6 +138,20 @@ export const api = {
   temporalRun: id => json("GET", "/temporal/runs/" + workflowPath(id)),
   temporalRuns: () => json("GET", "/temporal/runs"),
   temporalAttention: () => json("GET", "/temporal/attention"), // FEAT-19.14
+  // FEAT-20.2: доска внимания
+  attention: ({ project, q, active } = {}) => {
+    const u = new URLSearchParams();
+    if (project) u.set("project", project);
+    if (q) u.set("q", q);
+    if (active) u.set("active", "1");
+    const s = u.toString();
+    return json("GET", "/attention" + (s ? "?" + s : ""));
+  },
+  attentionSeen: (body) => json("POST", "/attention/seen", body),
+  attentionSnooze: (key, until) => json("POST", "/attention/snooze", { key, until }),
+  attentionAwayAck: (until) => json("POST", "/attention/away-ack", until ? { until } : {}),
+  getPushPrefs: () => json("GET", "/me/push-prefs"),
+  setPushPrefs: (prefs) => json("PUT", "/me/push-prefs", prefs),
   temporalProjects: () => json("GET", "/temporal/projects"), // BUG-251
   temporalCapabilities: () => json("GET", "/temporal/capabilities"),
   temporalDefinitions: () => json("GET", "/temporal/definitions"),
@@ -257,8 +271,12 @@ export const api = {
   },
   revert: (id, messageID, { directory } = {}) => json("POST", `/session/${idPath(id)}/revert${withDir(directory)}`, { messageID }),
   unrevert: (id, { directory } = {}) => json("POST", `/session/${idPath(id)}/unrevert${withDir(directory)}`),
-  abort: async (id, { directory } = {}) => {
-    await request("POST", `/session/${idPath(id)}/abort${withDir(directory)}`);
+  abort: async (id, { directory, finish = false } = {}) => {
+    const q = new URLSearchParams();
+    if (directory) q.set("directory", directory);
+    if (finish) q.set("finish", "1");
+    const qs = q.toString();
+    await request("POST", `/session/${idPath(id)}/abort${qs ? `?${qs}` : ""}`);
     return true;
   },
   // Dialog replies (live-verified against opencode 1.19.5 on 2026-11-01):
@@ -290,6 +308,9 @@ export const api = {
   getProjects: () => json("GET", "/project"),
   getMcp: () => json("GET", "/mcp"),
   // FEAT-03.22: the caller's own system prompt {text, max}.
+  acpCatalog: (refresh=false) => json(refresh ? "POST" : "GET", "/acp/registry"),
+  installAcpAgent: agent => json("POST", "/acp/agents/install", {id:agent.id, version:agent.version, confirmed:true}),
+  acpLogin: (agent,body) => json(body ? "POST" : "GET", "/acp/"+idPath(agent)+"/login", body),
   getSystemPrompt: () => json("GET", "/me/system-prompt"),
   setSystemPrompt: (text) => json("PUT", "/me/system-prompt", { text }),
   // FEAT-01.69: the caller's pinned chats (ids in pin order).
