@@ -379,10 +379,17 @@ test("кр. 17, P-13: полоса на «Чатах» «Ждут вас 3 · У
 
 test("кр. 5: отметка просмотра — открытие в видимом окне ≥ 2 с, только для «Готово»/«Упало»", async () => {
   ui.attn.value = answer(FULL);
-  installFetch([{ path: "/teleharness/api/attention", reply: () => answer(FULL) }, { method: "POST", path: "/teleharness/api/attention/seen", reply: () => ({ ok: true }) }]);
+  const seen = new Set();
+  installFetch([
+    { path: "/teleharness/api/attention", reply: () => answer(FULL.filter((x) => !seen.has(x.key))) },
+    { method: "POST", path: "/teleharness/api/attention/seen", reply: ({ body }) => { for (const k of body?.keys ?? []) seen.add(k); return { ok: true }; } },
+  ]);
   const cancel = ui.seenAfterVisible("chat:d1", { delayMs: 30 });
-  await new Promise((r) => setTimeout(r, 60));
+  for (let i = 0; i < 40 && ui.attn.value.items.some((x) => x.key === "chat:d1"); i++) {
+    await new Promise((r) => setTimeout(r, 15));
+  }
   assert.deepEqual(fetchCalls.find((c) => c.path === "/teleharness/api/attention/seen")?.body, { keys: ["chat:d1"] });
+  assert.equal(ui.attn.value.items.some((x) => x.key === "chat:d1"), false);
   cancel();
   fetchCalls.length = 0;
   const c2 = ui.seenAfterVisible("chat:d1", { delayMs: 30 }); // уже отмечен локально — ушёл с доски
