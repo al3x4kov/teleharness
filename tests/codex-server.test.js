@@ -179,7 +179,7 @@ test("FEAT-20.4: вход ACP → выбор модели → два сообщ�
       // подстановкой ${0%/*}, потому что в env агента нет /usr/bin.
       const {writeFile}=await import("node:fs/promises");
       await copyFile(path.join(ROOT,"tests/fixtures/acp-agy-fake.mjs"),path.join(path.dirname(file),"agy-fake.mjs"));
-      await writeFile(file,'#!/bin/sh\nexec node "${0%/*}/agy-fake.mjs" "$@"\n');
+      await writeFile(file,'#!/usr/bin/env node\nconst p=require("node:path"),{pathToFileURL}=require("node:url");\nimport(pathToFileURL(p.join(__dirname,"agy-fake.mjs")).href).catch(e=>{console.error(e);process.exit(1);});\n');
       await chmod(file,0o755);
     } else await copyFile(path.join(ROOT,"tests/fixtures/acp-chat-agent.mjs"),file);
     const loginPath="/teleharness/api/acp/"+agent+"/login";

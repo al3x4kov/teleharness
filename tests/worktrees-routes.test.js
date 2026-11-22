@@ -136,7 +136,7 @@ test("admin: merge with tests (idempotent), op journal, main advanced; review of
   const item = (list.body.items ?? list.body).find?.((x) => x.id === rv.body.id);
   assert.equal(item?.source, "branch");
   const before = sh(repo, "rev-parse", "main").trim();
-  const body = { commitDirty: true, testCmd: "test -f merged.txt", message: "Готово: merged.txt", idemKey: "idem-key-0001" };
+  const body = { commitDirty: true, testCmd: "node -e \"process.exit(require('fs').existsSync('merged.txt')?0:1)\"", message: "Готово: merged.txt", idemKey: "idem-key-0001" };
   const m1 = await j(await api(`/teleharness/api/worktrees/${it.id}/merge`, { method: "POST", body }));
   assert.equal(m1.status, 202, JSON.stringify(m1.body));
   const m2 = await j(await api(`/teleharness/api/worktrees/${it.id}/merge`, { method: "POST", body }));

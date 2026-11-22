@@ -111,7 +111,7 @@ test("BUG-296: CostRecorder, prices и CostReports корректно учиты
     assert.equal(row.turns, 1);
     ledger.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }); } catch {}
   }
 });
 

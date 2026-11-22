@@ -135,7 +135,11 @@ before(async () => {
   mkdirSync(path.dirname(entryBin), { recursive: true });
   const fakeScript = path.join(path.dirname(entryBin), "fake-acp.mjs");
   writeFileSync(fakeScript, ACP_FAKE_SCRIPT);
-  writeFileSync(entryBin, `#!/usr/bin/env bash\nexec "${process.execPath}" "${fakeScript}" "$@"\n`, { mode: 0o755 });
+  writeFileSync(
+    entryBin,
+    '#!/usr/bin/env node\nconst p = require("node:path"), { pathToFileURL } = require("node:url");\nimport(pathToFileURL(p.join(__dirname, "fake-acp.mjs")).href).catch((e) => { console.error(e); process.exit(1); });\n',
+    { mode: 0o755 },
+  );
 
   srv = await spawnPortal({
     tmp,
@@ -160,11 +164,10 @@ before(async () => {
   writeFileSync(
     path.join(prof, "models-v1.json"),
     JSON.stringify({
-      version: 1,
-      discoveredAt: Date.now(),
+      updated: Date.now(),
       currentModelId: "gemini-4-neon-medium",
       promptCapabilities: { image: true },
-      models: [{ id: "gemini-4-neon-medium", name: "Gemini 4 Neon (Medium)" }],
+      availableModels: [{ modelId: "gemini-4-neon-medium", name: "Gemini 4 Neon (Medium)" }],
     }),
   );
 

@@ -146,7 +146,7 @@ test("«Спрашивать»: the CLI request → dialog + push «Нужен �
   assert.equal((await setMode(s.id, "full")).status, 409);
   assert.equal((await api(`/teleharness/api/permission/${d.id}/reply`, { method: "POST", body: { reply: "maybe" } })).status, 400);
   assert.equal((await api(`/teleharness/api/permission/${d.id}/reply`, { method: "POST", body: { reply: "once" } })).status, 200);
-  await waitFor(() => existsSync(path.join(tmp.home, "perm-note.txt")), { what: "file written" });
+  await waitFor(() => existsSync(path.join(tmp.home, "perm-note.txt")) && readFileSync(path.join(tmp.home, "perm-note.txt"), "utf8").length > 0, { what: "file written" });
   assert.equal(readFileSync(path.join(tmp.home, "perm-note.txt"), "utf8"), "hello");
   const msgs = await waitFor(async () => {
     const m = await (await api(`/teleharness/api/session/${s.id}/message`)).json();

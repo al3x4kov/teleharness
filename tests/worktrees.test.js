@@ -9,7 +9,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -17,7 +17,7 @@ import {
 } from "../lib/worktrees.js";
 import { branchName, branchSlug, freeBranchName, isPortalBranch, resolveConflictText, translit, worktreeRule } from "../shared/worktree.js";
 
-const TMP = mkdtempSync(path.join(os.tmpdir(), "teleharness-wt-unit-"));
+const TMP = realpathSync(mkdtempSync(path.join(os.tmpdir(), "teleharness-wt-unit-")));
 after(() => {
   try {
     rmSync(TMP, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
@@ -30,6 +30,7 @@ function makeRepo({ test = "node -e \"process.exit(require('fs').existsSync('FAI
   const dir = path.join(base, "proj");
   mkdirSync(dir, { recursive: true });
   sh(dir, "init", "-q", "-b", "main");
+  sh(dir, "config", "core.autocrlf", "false");
   writeFileSync(path.join(dir, "a.txt"), "one\ntwo\nthree\n");
   writeFileSync(path.join(dir, "b.txt"), "bee\n");
   writeFileSync(path.join(dir, ".gitignore"), "node_modules/\n.env\n");
@@ -200,12 +201,11 @@ test("create: limits, space, detached head, failure cleans partial copy and bran
   assert.equal(it.base, "main");
   // сбой git: путь занят файлом → копия не создана, ветки нет, записи нет
   const d3 = makeRepo();
-  const target = path.join(path.dirname(d3), ".teleharness-worktrees", "proj");
-  mkdirSync(target, { recursive: true });
-  chmodSync(target, 0o555); // git не может создать папку копии
+  const wtMeta = path.join(d3, ".git", "worktrees");
+  writeFileSync(wtMeta, "occupied"); // .git/worktrees занят файлом — git worktree add падает на всех ОС (Linux/macOS/Windows)
   const { svc: s4 } = makeSvc();
   await assert.rejects(s4.create({ sid: "ses_f", owner: "admin", dir: d3, untrusted: false, branch: "boom-abcd" }), (e) => e.extra.kind === "create-failed");
-  chmodSync(target, 0o755);
+  try { unlinkSync(wtMeta); } catch {}
   assert.equal(sh(d3, "branch", "--list", "teleharness/*").trim(), "");
   assert.equal(s4.store.live().length, 0);
 });
@@ -470,6 +470,7 @@ test("tenant: copy in the chat folder (inside tenant home), .teleharness-uploads
   const dir = path.join(home, "shop");
   mkdirSync(dir, { recursive: true });
   sh(dir, "init", "-q", "-b", "main");
+  sh(dir, "config", "core.autocrlf", "false");
   writeFileSync(path.join(dir, "a.txt"), "a\n");
   sh(dir, "add", ".");
   sh(dir, "commit", "-q", "-m", "init");
@@ -504,6 +505,7 @@ test("BUG-276: копия с исчезнувшим репозиторием у�
   const dir = path.join(home, "shop");
   mkdirSync(dir, { recursive: true });
   sh(dir, "init", "-q", "-b", "main");
+  sh(dir, "config", "core.autocrlf", "false");
   writeFileSync(path.join(dir, "a.txt"), "a\n");
   sh(dir, "add", ".");
   sh(dir, "commit", "-q", "-m", "init");
@@ -534,6 +536,7 @@ test("tenant tests: unavailable without a jail; tenant runs through jail line", 
   const dir = path.join(home, "shop");
   mkdirSync(dir, { recursive: true });
   sh(dir, "init", "-q", "-b", "main");
+  sh(dir, "config", "core.autocrlf", "false");
   writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { test: "node -e 0" } }));
   sh(dir, "add", ".");
   sh(dir, "commit", "-q", "-m", "init");

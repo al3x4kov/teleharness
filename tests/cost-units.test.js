@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, mkdtempSync, rmSync, chmodSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { claudeTurnUsage, translateEvent } from "../lib/claude.js";
 import { codexTurnModelUsage } from "../lib/codex-shim.mjs";
 import { normalizeAnswer, statusOf } from "../lib/cost/normalize.js";
@@ -17,7 +18,7 @@ import { CostBackfill } from "../lib/cost/backfill.js";
 import { csvCell, csvRow, microToUsd, streamCsv } from "../lib/cost/csv.js";
 import { resultRecord } from "../lib/oneshot.js";
 
-const FIX = path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures", "claude-stream-subagent-2.1.322.jsonl");
+const FIX = fileURLToPath(new URL("./fixtures/claude-stream-subagent-2.1.322.jsonl", import.meta.url));
 const results = () => readFileSync(FIX, "utf8").trim().split("\n").map((l) => JSON.parse(l)).filter((e) => e.type === "result");
 const T0 = Date.UTC(2026, 10, 20, 9, 0, 0); // 20 ноя 2026 12:00 MSK
 

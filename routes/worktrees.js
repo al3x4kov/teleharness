@@ -24,7 +24,8 @@
 // только свои копии (чужая — 404, как несуществующая), без отправки и PR;
 // admin — все копии. Сервер без песочницы → тесты тенанта недоступны.
 import path from "node:path";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
 import { GitError, runGit, sanitize } from "../lib/git.js";
 import { isOpId, isWtId } from "../lib/worktrees.js";
 
@@ -71,7 +72,8 @@ export function worktreeRoutes(deps) {
   async function repoAllowed(dir, user, admin) {
     if (admin) return true;
     const r = await wt.repoKeyFor(dir, true);
-    return Boolean(r && deps.isUnderAny(r.root, user.directories ?? []));
+    const dirs = user.directories ?? [];
+    return Boolean(r && (deps.isUnderAny(r.root, dirs) || deps.isUnderAny(realOrSelf(r.root), dirs.map(realOrSelf))));
   }
 
   const idRoute = (suffix, method, fn) => ({

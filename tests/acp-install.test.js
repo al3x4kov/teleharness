@@ -50,10 +50,39 @@ test("FEAT-20.4: binary-агент — sha256, раскладка без node_mo
   // Локальный архив с двумя файлами бинарной поставки.
   const work=await mkdtemp(path.join(tmpdir(),"acp-bin-zip-"));
   t.after(()=>rm(work,{recursive:true,force:true}));
-  await writeFile(path.join(work,"agy_acp_server.par"),"#!/bin/sh\nexit 0\n");
-  await writeFile(path.join(work,"localharness_external"),"harness\n");
-  await run("zip",["-q",path.join(work,"a.zip"),"agy_acp_server.par","localharness_external"],{cwd:work});
-  const bytes=await readFile(path.join(work,"a.zip"));
+  const crc32 = (buf) => {
+    let c = 0xffffffff;
+    for (const b of buf) {
+      c ^= b;
+      for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+    }
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const makeZip = (entries) => {
+    const locals = [], centrals = [];
+    let offset = 0;
+    for (const [name, content] of entries) {
+      const nb = Buffer.from(name, "utf8");
+      const db = Buffer.from(content, "utf8");
+      const crc = crc32(db);
+      const lh = Buffer.alloc(30);
+      lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt32LE(crc, 14);
+      lh.writeUInt32LE(db.length, 18); lh.writeUInt32LE(db.length, 22); lh.writeUInt16LE(nb.length, 26);
+      locals.push(lh, nb, db);
+      const ch = Buffer.alloc(46);
+      ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6);
+      ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(db.length, 20); ch.writeUInt32LE(db.length, 24);
+      ch.writeUInt16LE(nb.length, 28); ch.writeUInt32LE(offset, 42);
+      centrals.push(ch, nb);
+      offset += lh.length + nb.length + db.length;
+    }
+    const cdSize = centrals.reduce((a, b) => a + b.length, 0);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(entries.length, 8);
+    eocd.writeUInt16LE(entries.length, 10); eocd.writeUInt32LE(cdSize, 12); eocd.writeUInt32LE(offset, 16);
+    return Buffer.concat([...locals, ...centrals, eocd]);
+  };
+  const bytes = makeZip([["agy_acp_server.par", "#!/bin/sh\nexit 0\n"], ["localharness_external", "harness\n"]]);
   const sha=createHash("sha256").update(bytes).digest("hex");
   const server=http.createServer((req,res)=>{res.writeHead(200,{"content-type":"application/zip"});res.end(bytes);});
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
@@ -64,9 +93,11 @@ test("FEAT-20.4: binary-агент — sha256, раскладка без node_mo
   assert.equal(installer.status("antigravity"),"installed");
   const entry=agentEntry(dir,"antigravity");
   assert.equal(entry,path.join(dir,"acp-agents","antigravity","1.5.2","agy_acp_server.par"));
-  const mode=async file => (await stat(file)).mode & 0o777;
-  assert.equal(await mode(entry),0o755);
-  assert.equal(await mode(path.join(path.dirname(entry),"localharness_external")),0o755);
+  if (process.platform !== "win32") {
+    const mode=async file => (await stat(file)).mode & 0o777;
+    assert.equal(await mode(entry),0o755);
+    assert.equal(await mode(path.join(path.dirname(entry),"localharness_external")),0o755);
+  }
   // Архив не переезжает в целевую папку.
   assert.deepEqual((await readdir(path.dirname(entry))).sort(),["agy_acp_server.par","localharness_external"]);
 
