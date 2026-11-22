@@ -9,7 +9,11 @@ import { fetchCalls, installFetch } from "./helpers/dom.mjs";
 
 let ui, t$;
 before(async () => {
-  ui = await loadUI({ ChatView: "src/components/views/ChatView.jsx" });
+  ui = await loadUI({
+    ChatView: "src/components/views/ChatView.jsx",
+    MessageList: "src/components/chat/MessageList.jsx",
+    findMessageIndex: "src/components/chat/MessageList.jsx#findMessageIndex",
+  });
   t$ = createHarness(ui);
 });
 afterEach(() => {
@@ -150,4 +154,53 @@ test("картинка по относительному имени из тек�
   assert.match(cards[0].getAttribute("aria-label"), /abs-shot\.png/);
   assert.equal($$(cards[0], ".fc-tile img").length, 0, "абсолютный путь — карточка остаётся, вместо миниатюры иконка");
   assert.equal(root.textContent.includes("v2-qa-viewer-png.png"), true, "имя осталось только в тексте ответа");
+});
+
+test("FEAT-01.60: findMessageIndex находит сообщение и по id, и внутри mergedIds компактного хода", () => {
+  const list = [
+    { info: { id: "m1", role: "user" }, parts: [] },
+    { info: { id: "m4", role: "assistant" }, parts: [], mergedIds: ["m2", "m3", "m4"] },
+  ];
+  assert.equal(ui.findMessageIndex(list, "m1"), 0);
+  assert.equal(ui.findMessageIndex(list, "m2"), 1);
+  assert.equal(ui.findMessageIndex(list, "m4"), 1);
+  assert.equal(ui.findMessageIndex(list, "missing"), -1);
+});
+
+test("FEAT-01.60: MessageList с targetMid догружает историю, раскрывает окно и подсвечивает вопрос и ответ", async () => {
+  // 1) Сообщения ещё нет → вызывается onLoadOlder
+  let loadCalls = 0;
+  const h1 = t$.mount(ui.MessageList, {
+    sessionId: SID,
+    messages: [msg("m10", "user", "Поздний вопрос"), msg("m11", "assistant", "Поздний ответ")],
+    older: { has: true, loading: false, error: false, paged: true },
+    onLoadOlder: () => { loadCalls += 1; },
+    targetMid: "m1",
+  });
+  await t$.waitFor(() => loadCalls >= 1);
+  assert.equal(loadCalls >= 1, true, "автодогрузка старых сообщений при отсутствующем targetMid");
+  h1.unmount();
+
+  // 2) Сообщение за пределами окна PAGE=50 (в самом начале, user-сообщение) → окно расширяется и ставится .is-search-hit
+  const many = Array.from({ length: 65 }, (_, i) => msg(`m_${i}`, i % 2 === 0 ? "user" : "assistant", `Текст ${i}`));
+  const h2 = t$.mount(ui.MessageList, {
+    sessionId: SID,
+    messages: many,
+    older: { has: false, loading: false, error: false, paged: false },
+    targetMid: "m_0",
+  });
+  const hitUser = await t$.waitFor(() => $(h2.root, '[data-mid="m_0"].is-search-hit'));
+  assert.ok(hitUser, "найденный вопрос (msg-user) получил data-mid и класс is-search-hit");
+  h2.unmount();
+
+  // 3) Найденный ответ assistant
+  const h3 = t$.mount(ui.MessageList, {
+    sessionId: SID,
+    messages: [msg("u1", "user", "Вопрос"), msg("a1", "assistant", "Ответ")],
+    older: { has: false, loading: false, error: false, paged: false },
+    targetMid: "a1",
+  });
+  const hitAsst = await t$.waitFor(() => $(h3.root, '[data-mid="a1"].is-search-hit'));
+  assert.ok(hitAsst, "найденный ответ получил класс is-search-hit");
+  h3.unmount();
 });

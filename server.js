@@ -26,6 +26,7 @@ import { hostStats, opencodeVersion, harnessVersions, setOpencodeInfoSource } fr
 import { usageStats } from "./lib/usage.js";
 import { subscriptionCards } from "./lib/subscriptions.js";
 import { JournalWriter, isJournalAccess, journalRule } from "./lib/chat-journal.js";
+import { ChatSearchIndex } from "./lib/chat-search.js"; // FEAT-01.60
 import { RelayStore, marksForJournal, mergeFeeds, missedTurns, planRelay, relayMark, relayRule, withCatchUp } from "./lib/relay.js";
 import { AUTO_RELAY_ORDER_MAX, cleanAutoRelay, createAutoRelay, readAutoRelay } from "./lib/auto-relay.js"; // FEAT-18.6
 import { isLimitError } from "./shared/turn-error.js"; // FEAT-18.6: общий с клиентом классификатор
@@ -691,12 +692,14 @@ const claude = new ClaudeRunner({
     }
     // FEAT-18.6 / BUG-295: ход раннера (Claude/Codex/ACP) упал по лимиту подписки → авто-передача
     if (e?.error && isLimitError(e.error, { engine: engineOfChat(e.sid) })) autoRelayOnLimit(e.sid, e.dir ?? null);
+    if (e?.sid && e.reason !== "deleted") chatSearch?.syncClaudeSession(e.sid, claude.messages(e.sid)); // FEAT-01.60
     return titler?.claudeTurnDone(e);
   },
   // BUG-142: title as soon as the first question is stored (a Workflow turn
   // runs for hours); onTurnEnd above retries if this attempt failed.
   onTurnStart: (e) => {
     reviewTurnStart(e?.sid, e?.dir ?? null); // FEAT-20.1: база ревью — снимок перед ходом
+    if (e?.sid) chatSearch?.syncClaudeSession(e.sid, claude.messages(e.sid)); // FEAT-01.60
     return titler?.claudeTurnDone(e);
   },
   // FEAT-20.1: ExitPlanMode план-хода; ход уже закончился (фоновый субагент, BUG-237) — план заменяет ответ
@@ -752,6 +755,7 @@ async function markPrompted(id, binding) {
     // FEAT-11.18: журнал чата пересобирается и при приёме хода — событие конца прошлого хода
     // изредка не доходит, и журнал отставал бы на ход
     journal.schedule(id);
+    chatSearch?.markDirty(id); // FEAT-01.60
     return null;
   });
 }
@@ -1141,6 +1145,36 @@ setInterval(() => {
   }
 }, 60_000).unref?.();
 
+// FEAT-01.60: полнотекстовый индекс сообщений чатов (opencode + Claude/Codex/ACP).
+const chatSearch = new ChatSearchIndex({
+  dbPath: MOCK ? ":memory:" : path.join(DATA_DIR, "chat-search.sqlite"),
+  log: (m) => console.error(m),
+  deps: {
+    claudeSessions: () => claude.storeSnapshot?.() ?? null,
+    ...(MOCK ? {} : {
+      ocSessions: async () => {
+        await fetchSessionIndex();
+        return [...sessionIndex.recById.values()].filter((r) => r?.id).map((r) => ({ id: r.id, directory: r.directory ?? sessionIndex.byId.get(r.id) ?? null, time: r.time }));
+      },
+      ocMessages: (sid, dir) => ocWholeMessages(sid, dir),
+    }),
+  },
+});
+if (!MOCK) {
+  hub.onEvent((data) => {
+    if (typeof data !== "string" || (!data.includes('"session.idle"') && !data.includes('"session.updated"'))) return;
+    try {
+      const evt = JSON.parse(data);
+      const p = evt?.payload ?? evt;
+      const sid = p?.properties?.sessionID ?? p?.properties?.info?.id ?? p?.sessionID ?? null;
+      if (typeof sid === "string" && sid) chatSearch.markDirty(sid);
+    } catch {}
+  });
+  if (!process.env.TELEHARNESS_SEARCH_NO_BG) {
+    setTimeout(() => void chatSearch.start(), Number(process.env.TELEHARNESS_SEARCH_INDEX_DELAY_MS) || 10_000).unref?.();
+  }
+}
+
 // ---- FEAT-20.1: ревью изменений и «Сначала план» -----------------------------------
 // Пункт ревью на чат (lib/review.js): конец хода с правками → ревизия; база —
 // снимок перед ходом. Владельцы — как у доски (pushRecipients). Событие
@@ -1316,6 +1350,7 @@ async function deleteSessionEverywhere(id, dir) {
     dropPinEverywhere(id); // FEAT-01.69: no «ghost» pins of a deleted chat
     attention.forgetKey(`chat:${id}`, { sid: id }); // FEAT-20.2: отметки и исход удалённого чата
     reviews.chatDeleted(id); // FEAT-20.1: пункт «Чат удалён»
+    chatSearch?.forget(id); // FEAT-01.60
     autoRelay.forget(id); // FEAT-18.6
     worktrees.cancelPending(id); // FEAT-20.7: пустой чат — заявка на копию уходит с ним
   }
@@ -2142,10 +2177,17 @@ const API_ROUTES = validateTable([
   ...pushRoutes({ sendJson, readJsonBody, push: () => webPush }),
   ...voiceRoutes({ sendJson, readBody, readJsonBody, voice: voiceService, quota: voiceQuota }),
   ...sessionRoutes({
+    search: (c) => sessionSearchRoute(c),
     binding: (c) => sessionBindingRoute(c),
     action: (c) => sessionActionRoute(c),
     revert: async (c) => {
       await sessionRevertRoute(c);
+      // FEAT-01.60: откат/возврат хода меняет историю — обновляем поисковый индекс.
+      if (c.req.method === "POST" && c.res.statusCode === 200 && c.match?.[1]) {
+        const sid = c.match[1];
+        chatSearch?.markDirty(sid);
+        if (claude.has(sid)) chatSearch?.syncClaudeSession(sid, claude.messages(sid));
+      }
       // FEAT-20.1: «Отменить ход» вернул файлы — пункт ревью пересчитывается
       if (c.req.method === "POST" && c.res.statusCode === 200 && /\/revert$/.test(c.url.pathname)) {
         const sid = c.match?.[1];
@@ -3235,6 +3277,7 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
       dropPinEverywhere(id); // FEAT-01.69: the chat leaves every user's pins
       attention.forgetKey(`chat:${id}`, { sid: id }); // FEAT-20.2
       reviews.chatDeleted(id); // FEAT-20.1
+      chatSearch?.forget(id); // FEAT-01.60
       // BUG-186 / BUG-07.23: the hub learns about deletes only from upstream's
       // session.deleted on /event — which never arrives when the chat's folder
       // has no hub subscription (probe/temp dirs): prod 2026-11-07 kept a
@@ -3288,6 +3331,50 @@ const withClaudeActivity = (list) =>
   });
 
 const sessionListCache = createListCache({ staleMs: config.TELEHARNESS_LIST_STALE_MS }); // BUG-260
+
+// FEAT-01.60: серверный полнотекстовый поиск по вопросам и ответам доступных пользователю чатов.
+async function sessionSearchRoute({ req, res, url, user, admin }) {
+  const q = (url.searchParams.get("q") ?? "").trim();
+  const limit = Number(url.searchParams.get("limit")) || 30;
+  if (!q) return sendJson(res, 200, { query: "", hits: [], indexing: chatSearch.status() });
+  try {
+    let list = [];
+    try {
+      const key = OC.api === "v2" ? "v2:" : "v1:";
+      ({ value: list } = await sessionListCache.get(key, async () => {
+        if (OC.api === "v2") {
+          const l = await OC.listSessions({}, { timeoutMs: DEFAULT_OPTS.timeoutMs });
+          return Array.isArray(l) ? l : [];
+        }
+        const r = await fetch(`${UPSTREAM}/session`, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(DEFAULT_OPTS.timeoutMs),
+        });
+        if (!r.ok) return [];
+        const j = await r.json();
+        return Array.isArray(j) ? j : [];
+      }));
+    } catch {
+      if (sessionIndex.recById?.size) list = [...sessionIndex.recById.values()];
+    }
+    const allowedList = (admin ? list : list.filter((s) => dirAllowed(user, s?.directory))).filter((s) => s?.id && !isTempSessionDir(s?.directory));
+    const allowedIds = new Set(allowedList.map((s) => s.id));
+    // Локальные чаты раннера (если upstream временно не ответил) тоже проверяются через dirAllowed.
+    const claudeSnap = claude.storeSnapshot?.() ?? {};
+    for (const [sid, entry] of Object.entries(claudeSnap)) {
+      if (allowedIds.has(sid)) continue;
+      const dir = entry?.directory ?? null;
+      if (isTempSessionDir(dir)) continue;
+      if (admin || (dir && dirAllowed(user, dir))) allowedIds.add(sid);
+    }
+    await chatSearch.ensureFresh(allowedList, { budget: 15, timeoutMs: 2500 });
+    if (!chatSearch.status().ready && !process.env.TELEHARNESS_SEARCH_NO_BG) void chatSearch.start();
+    const out = chatSearch.search(q, { allowedIds, limit });
+    return sendJson(res, 200, out);
+  } catch (err) {
+    return upstreamError(res, err, "session.search");
+  }
+}
 
 // GET: admins stream the full upstream list; tenants get the
 // SERVER-filtered list. Every record carries the chat binding under `teleharness`.
@@ -3981,6 +4068,7 @@ function shutdown() {
   } catch (err) {
     errLog("claude.flushNow", err);
   }
+  try { chatSearch?.stop(); } catch {}
   hub.stop();
   // TASK-12.29: a graceful stop marks run-state clean — the next boot does
   // not report a crash. uncaughtException exits without this mark.

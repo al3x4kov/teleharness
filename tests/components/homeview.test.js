@@ -14,6 +14,7 @@ before(async () => {
     SessionRow: "src/components/views/HomeView.jsx#SessionRow",
     RenameModal: "src/components/views/HomeView.jsx#RenameModal",
     DeleteModal: "src/components/views/HomeView.jsx#DeleteModal",
+    highlightParts: "src/components/views/HomeView.jsx#highlightParts",
   });
   t$ = createHarness(ui);
 });
@@ -207,4 +208,66 @@ test("FEAT-18.7: чат на Codex помечен бейджем «Codex» с з
   assert.match(badge.textContent, /Codex/);
   assert.ok($(badge, ".engine-dot.is-codex"));
   assert.equal($(badge, ".engine-dot.is-claude"), null);
+});
+
+test("FEAT-01.60: highlightParts безопасно разбивает сниппет с кириллицей и спецсимволами", () => {
+  const parts = ui.highlightParts("Ошибка в файле app.js (код 500)", "ошибка app.js (код");
+  const hits = parts.filter((p) => p.hit).map((p) => p.text);
+  assert.deepEqual(hits, ["Ошибка", "app.js", "(код"]);
+  assert.equal(parts.map((p) => p.text).join(""), "Ошибка в файле app.js (код 500)");
+  assert.deepEqual(ui.highlightParts("Текст", ""), [{ text: "Текст", hit: false }]);
+});
+
+test("FEAT-01.60: серверный поиск находит чаты по тексту вопросов и ответов, показывает сниппет и ссылку ?mid=", async () => {
+  installFetch([
+    { method: "GET", path: "/teleharness/api/session", reply: () => [ses("ses_a", "Отчёт"), ses("ses_b", "Переговоры")] },
+    {
+      method: "GET",
+      path: "/teleharness/api/session/search",
+      reply: (call) => {
+        const q = call.query?.q ?? "";
+        if (q === "ракета") {
+          return {
+            query: q,
+            hits: [
+              { sessionId: "ses_a", messageId: "msg_u1", role: "user", snippet: "Запустили новую ракету утром", matchCount: 3, updated: NOW },
+              { sessionId: "ses_b", messageId: "msg_a9", role: "assistant", snippet: "Ответ про ракета-носитель готов", matchCount: 1, updated: NOW - 1000 },
+            ],
+            indexing: { ready: true, done: 2, total: 2 },
+          };
+        }
+        return { query: q, hits: [], indexing: { ready: true, done: 2, total: 2 } };
+      },
+    },
+  ]);
+  ui.store.sessions.value = [ses("ses_a", "Отчёт"), ses("ses_b", "Переговоры")];
+  const { root } = t$.mount(ui.HomeView);
+  await t$.waitFor(() => $$(root, ".swipe").length >= 2);
+  t$.typeInto($(root, ".home-search"), "ракета");
+  await new Promise((r) => setTimeout(r, 220));
+  await t$.waitFor(() => $$(root, ".session-snippet").length === 2);
+  const snippets = $$(root, ".session-snippet");
+  assert.match(snippets[0].textContent, /^Вы:Запустили новую ракету утром/);
+  assert.match(snippets[1].textContent, /^Ответ:Ответ про ракета-носитель готов/);
+  assert.ok($(snippets[1], "mark.search-mark"), "совпадение подсвечено <mark>");
+  assert.equal($(snippets[1], "mark.search-mark").textContent, "ракета");
+  const links = $$(root, "a.session-row").map((a) => a.getAttribute("href"));
+  assert.ok(links.includes("#/chat/ses_a?mid=msg_u1"), "переход к вопросу через ?mid=");
+  assert.ok(links.includes("#/chat/ses_b?mid=msg_a9"), "переход к ответу через ?mid=");
+  assert.match(root.textContent, /совпадений: 3/, "счётчик совпадений > 1 отображается");
+});
+
+test("FEAT-01.60: при сбое /session/search поиск деградирует до заголовков и показывает статус", async () => {
+  installFetch([
+    { method: "GET", path: "/teleharness/api/session", reply: () => [ses("ses_a", "Отчёт по ракете"), ses("ses_b", "Другое")] },
+    { method: "GET", path: "/teleharness/api/session/search", reply: () => ({ status: 500, body: { error: "boom" } }) },
+  ]);
+  ui.store.sessions.value = [ses("ses_a", "Отчёт по ракете"), ses("ses_b", "Другое")];
+  const { root } = t$.mount(ui.HomeView);
+  await t$.waitFor(() => $$(root, ".swipe").length >= 2);
+  t$.typeInto($(root, ".home-search"), "ракет");
+  await new Promise((r) => setTimeout(r, 220));
+  const st = await t$.waitFor(() => $(root, ".search-status"));
+  assert.match(st.textContent, /совпадения по названиям/i);
+  assert.equal($$(root, ".swipe").length, 1, "чат по заголовку остался найден");
 });

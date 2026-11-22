@@ -3,7 +3,7 @@
 // Run: node --test tests/router.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cleanPath, match } from "../src/lib/router.js";
+import { cleanPath, match, parseQuery } from "../src/lib/router.js";
 
 test("FEAT-19.1: Temporal и редактор разрешаются в отдельный view", () => {
   assert.equal(match("/temporal").view, "temporal");
@@ -62,4 +62,11 @@ test("match: unknown or arity-mismatched paths return null (caller redirects hom
 test("match: trailing slash and empty path both fall back to segment matching", () => {
   assert.equal(match("/chat/abc/").params.id, "abc", "empty segments are filtered out");
   assert.equal(match("").view, "home", "'' and '/' both split to zero segments");
+});
+
+test("parseQuery: извлекает параметры query из хэша (FEAT-01.60)", () => {
+  assert.deepEqual(parseQuery("#/chat/ses_1?mid=msg_42"), { mid: "msg_42" });
+  assert.deepEqual(parseQuery("#/chat/ses_1?mid=msg%201&a=b"), { mid: "msg 1", a: "b" });
+  assert.deepEqual(parseQuery("#/chat/ses_1"), {});
+  assert.deepEqual(parseQuery(""), {});
 });

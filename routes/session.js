@@ -5,9 +5,11 @@
 // session/directory resolution (admin vs tenant, claude-only chats) — a
 // common «session» scope would change answers, see ADR-001 «Ход миграции».
 //
-// h: { binding, action, revert, patchDelete, list, create, reply, event }
+// h: { search, binding, action, revert, patchDelete, list, create, reply, event }
 export function sessionRoutes(h) {
   return [
+    // FEAT-01.60: полнотекстовый поиск по содержимому сообщений в доступных чатах.
+    { method: "GET", path: "/teleharness/api/session/search", scope: "user", handler: h.search },
     // PATCH {model?, agent?} — path first, 405 inside (legacy order).
     { method: "*", path: /^\/teleharness\/api\/session\/([^/]+)\/binding$/, scope: "user", handler: h.binding },
     // GET message / POST prompt / POST abort — path first, 405 inside.

@@ -2191,3 +2191,12 @@ button.attach.is-link::after {
 .dz.is-no .dz-ring { color: var(--text-2); }
 @keyframes dz-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dz { animation: none; } }
+
+/* FEAT-01.60: кратковременная подсветка сообщения при переходе из поиска */
+.msg.is-search-hit {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: 6px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  transition: background 350ms ease, outline-color 350ms ease;
+}

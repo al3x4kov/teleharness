@@ -13,7 +13,7 @@ Teleharness — открытый self-hosted пульт для AI coding CLI. О
 надёжные пайпы из нескольких агентов на [Temporal](https://temporal.io). Всё это работает на подписках CLI, которые у
 вас уже есть, а не на платном API.
 
-**Чат** · **Доска и ревью** · **Worktrees** · **Передача между CLI** · **Пайпы** · **на ваших подписках** · **на своём сервере**
+**Чат** · **Поиск** · **Доска и ревью** · **Worktrees** · **Передача между CLI** · **Пайпы** · **на ваших подписках** · **на своём сервере**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -22,6 +22,7 @@ Teleharness — открытый self-hosted пульт для AI coding CLI. О
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#поддержка-платформ)
 
 [Что умеет](#что-умеет) •
+[Поиск](#поиск-по-всем-сообщениям) •
 [Доска, ревью, worktrees и расходы](#доска-мобильное-ревью-worktrees-и-расходы) •
 [Переключение CLI](#переключение-cli-посреди-разговора) •
 [Пайпы](#пайпы-которые-переживают-перезапуск-temporal) •
@@ -54,6 +55,40 @@ Teleharness — открытый self-hosted пульт для AI coding CLI. О
 </tr>
 </table>
 
+## Поиск по всем сообщениям
+
+В списке чатов появилось поле поиска, которое проходит **по каждому вопросу и ответу во всех чатах**, а не только по
+заголовкам. Совпадения приходят живьём, пока вы печатаете: сниппеты с ролями «Вы:»/«Ответ:», подсветкой вхождений и
+счётчиком совпадений; тап по сниппету открывает чат сразу на сообщении: догружается старая история, пока сообщение
+не попадёт в окно, затем прокрутка и подсветка на несколько секунд — даже внутри компактных объединённых ходов.
+Под капотом — локальный SQLite FTS5 (trigram) индекс, полностью производный от чатов и обновляющийся на ходу; пока
+он строится (или недоступен), портал честно пишет об этом и ищет по заголовкам. Администратор ищет по всем чатам,
+пользователь — только по своим папкам.
+
+<p align="center">
+  <img src="docs/screenshots/ru/phone-light-home-search.png" alt="Поиск по чатам на телефоне: запрос token находит два чата со сниппетами «Ответ:», подсветкой и счётчиком совпадений" width="180">
+  <img src="docs/screenshots/ru/desktop-light-home-search.png" alt="Поиск по сообщениям на десктопе: сниппеты с подсветкой, ролями и счётчиком совпадений" width="600">
+</p>
+<p align="center"><sub>Живой поиск со сниппетами по сообщениям и счётчиком совпадений; каждый хит ведёт прямо к сообщению.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/ru/search.gif" alt="Ввод запроса, открытие хита, прокрутка чата к сообщению и подсветка" width="200">
+  <img src="docs/screenshots/ru/phone-light-home-search-off.png" alt="Деградация поиска до заголовков с честной плашкой, пока индекс недоступен" width="180">
+</p>
+<p align="center"><sub>Переход к сообщению из хита (история догружается сама, затем подсветка) — и честная плашка, пока индекс недоступен.</sub></p>
+
+<p align="center"><img src="docs/search-pipeline.ru.png" alt="Конвейер поиска: сообщения чистятся и попадают в производный SQLite FTS5 trigram-индекс, опрашиваются через API с изоляцией тенантов и превращаются в сниппеты со ссылками прямо в чат" width="820"></p>
+<p align="center"><sub>Как это устроено: производный индекс, который всегда может перестроиться, API запросов с изоляцией тенантов, рендеринг сниппетов и deep-link. Подробности — <a href="docs/architecture.md">docs/architecture.md</a>.</sub></p>
+
+На десктопе (≥ 900 px) список **«Недавние»** в боковой панели теперь заполняет доступную высоту вместо фиксированных
+восьми строк — больше чатов под рукой, до 100; на телефонах и узких окнах остаются 8.
+
+<p align="center">
+  <img src="docs/screenshots/ru/desktop-light-drawer-1440.png" alt="Боковая панель на 2560 на 1440: список «Недавние» заполняет панель шестнадцатью строками" width="410">
+  <img src="docs/screenshots/ru/desktop-light-drawer-720.png" alt="Боковая панель на 1280 на 720: восемь недавних чатов в панели поменьше" width="410">
+</p>
+<p align="center"><sub>Адаптивные «Недавние» в боковой панели десктопа: 16 строк на 2560×1440, 8 на 1280×720 (минимум 8, максимум 100).</sub></p>
+
 ## Доска, мобильное ревью, worktrees и расходы
 
 Ведите несколько агентных задач параллельно, не сидя в терминале:
@@ -70,7 +105,7 @@ Teleharness — открытый self-hosted пульт для AI coding CLI. О
   с реальными подписками (Claude Max, ChatGPT Plus, Google Antigravity, GitHub Copilot CLI), расчёт экономии и
   окупаемости, мягкие месячные бюджеты и экспорт в CSV.
 - **Агенты ACP (`#/settings/acp`)** — установка и вход в **Google Antigravity** (`Gemini 4 Neon`, `Gemini 3.8 Flash`)
-  и **GitHub Copilot CLI** прямо из Настроек, с поддержкой ролей, картинок, «Сначала план» и авто-передачи.
+  и **GitHub Copilot CLI** прямо из Настроек, с поддержкой ролей, картинок, «Сначала план», авто-передачи и автоматическим восстановлением после прерванных ходов.
 
 <p align="center">
   <img src="docs/screenshots/ru/phone-light-board.png" alt="Доска внимания со сводкой «Пока вас не было» и блоком «Ждёт вас»" width="180">
@@ -202,7 +237,7 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 
 <table>
 <tr>
-<td width="25%"><img src="docs/screenshots/ru/phone-light-home.png" alt="Список чатов"></td>
+<td width="25%"><img src="docs/screenshots/ru/phone-light-home.png" alt="Список чатов с полем поиска по сообщениям"></td>
 <td width="25%"><img src="docs/screenshots/ru/phone-light-agents.png" alt="Ход, в котором работа отдана субагентам"></td>
 <td width="25%"><img src="docs/screenshots/ru/phone-light-agent-open.png" alt="Раскрытая карточка субагента: шаги и ответ"></td>
 <td width="25%"><img src="docs/screenshots/ru/phone-light-relay.png" alt="Отметка передачи между движками в одной ленте"></td>
@@ -217,7 +252,7 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 <td width="25%"><img src="docs/screenshots/ru/phone-light-relay-sheet.png" alt="Выбор движка и модели для продолжения"></td>
 <td width="25%"><img src="docs/screenshots/ru/phone-light-subscriptions.png" alt="Подписки: расход по провайдерам"></td>
 <td width="25%"><img src="docs/screenshots/ru/phone-dark-steps.png" alt="Шаги инструментов и файлы-результаты, тёмная тема"></td>
-<td width="25%"><img src="docs/screenshots/ru/phone-dark-home.png" alt="Список чатов, тёмная тема"></td>
+<td width="25%"><img src="docs/screenshots/ru/phone-dark-home.png" alt="Список чатов с полем поиска по сообщениям, тёмная тема"></td>
 </tr>
 <tr>
 <td valign="top"><b>Куда продолжить</b><br>Из меню чата в любой момент или прямо с плашки лимита. Папка остаётся той же.</td>
@@ -251,6 +286,7 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 |---|---|
 | **Четыре семейства движков, один интерфейс** | opencode (любой провайдер), Claude Code, Codex CLI и агенты ACP (Google Antigravity / Gemini и GitHub Copilot CLI) рядом; чат закрепляется за своим движком, моделью и агентом. Пикер группирует модели по подключённым провайдерам opencode (подписка, бесплатные, API) с кнопкой «Обновить список»; платные модели opencode с оплатой за токены скрыты от пользователей. Администратор может выдавать доступ к Claude, Codex и Gemini (ACP) каждому пользователю в Настройки → Пользователи (только в его папках и без shell).<br><img src="docs/screenshots/ru/phone-light-picker-codex-detail.png" alt="Выбор модели в чате Codex: закреплённый движок, список моделей и кнопка «Обновить список»" width="180"> <img src="docs/screenshots/ru/phone-light-settings-model.png" alt="Каталог моделей в настройках: группы Z.AI Coding Plan (opencode), Claude и Codex с моделями GLM-5.3 и кнопкой «Обновить список»" width="180"> <img src="docs/screenshots/ru/phone-light-picker-refresh-error.png" alt="Не удалось обновить список: пикер сохраняет прежние модели и показывает ошибку" width="180"> <img src="docs/screenshots/ru/phone-light-acp.png" alt="Настройки: агенты ACP с Google Antigravity и GitHub Copilot CLI" width="180"> |
 | **Доска внимания** | Единый экран для всех чатов и запусков Temporal: *Ждёт вас*, *Работает*, *Готово* и *Упало*, сводка «Пока вас не было», быстрые действия и push по категориям с тихими часами.<br><img src="docs/screenshots/ru/phone-light-board.png" alt="Доска внимания на телефоне" width="180"> |
+| **Поиск по сообщениям** | Полнотекстовый поиск по каждому вопросу и ответу во всех чатах: сниппеты с ролями «Вы:»/«Ответ:», подсветкой и счётчиком совпадений, переход сразу к сообщению (история догружается сама, затем подсветка), производный локальный SQLite FTS5 (trigram) индекс, изоляция тенантов и честная деградация к поиску по заголовкам, пока индекс строится.<br><img src="docs/screenshots/ru/phone-light-home-search.png" alt="Поиск по чатам: сниппеты с подсветкой, ролями и счётчиком совпадений" width="180"> |
 | **Мобильное ревью и «Сначала план»** | Очередь ревью по чатам и пайпам, удобный на телефоне дифф с выбором строк и черновиками комментариев, возврат агенту и принятие с коммитом. Режим *Сначала план* просит агента составить план в режиме чтения до правок.<br><img src="docs/screenshots/ru/phone-light-review.png" alt="Мобильный дифф ревью" width="180"> <img src="docs/screenshots/ru/phone-light-plan.png" alt="Карточка Плана 1 в чате Gemini" width="180"> |
 | **Изолированные Git Worktrees** | Своя рабочая копия и ветка на чат или пайп, раннее предупреждение о пересечении файлов и конфликтах при пробном слиянии, слияние squash/merge/ff с прогоном тестов и очистка забытых веток.<br><img src="docs/screenshots/ru/phone-light-worktree.png" alt="Чат с активной рабочей копией, плашкой ревью и предупреждением о конфликте" width="180"> <img src="docs/screenshots/ru/phone-light-worktrees.png" alt="Список рабочих копий проекта и настройки слияния" width="180"> |
 | **Расходы по ценам API** | Журнал ходов в SQLite по редактируемой таблице цен, реальные подписки (Claude Max, ChatGPT Plus, Google Antigravity, Copilot CLI) с экономией и окупаемостью, мягкие месячные бюджеты, сводки по чату/проекту/пайпу и экспорт в CSV.<br><img src="docs/screenshots/ru/phone-light-costs.png" alt="Экран «Расходы» на телефоне" width="180"> |
@@ -270,6 +306,7 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 | **Push-уведомления** | Уведомление, когда долгий ход завершился или агенту нужно ваше решение (Web Push, VAPID). |
 | **Телефон по QR-коду** | Настройки → Подключить телефон показывают одноразовый QR-код (действует 10 минут): навели камеру — телефон вошёл под вашей учётной записью без ввода токена. Нужен `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/ru/phone-light-pair.png" alt="Подключение телефона: QR-код, срок действия, одноразовая ссылка и копирование" width="180"> |
 | **Несколько пользователей** | Админ и пользователи: свои папки, системный промпт, набор MCP, квоты, rate-limit. |
+| **Настройки → О приложении** | Точная версия портала и каждого движка в одном месте — удобно, когда создаёте issue.<br><img src="docs/screenshots/ru/phone-light-settings-about.png" alt="Настройки, страница «О приложении»: Teleharness 2.5.4, opencode 2.2.6, Claude Code" width="180"> |
 | **Mobile-first** | Сделано под iOS Safari: учёт клавиатуры, safe-area, светлая и тёмная темы, русский и английский интерфейс. |
 | **Без runtime-зависимостей** | Бэкенд — чистый stdlib Node.js. |
 
@@ -303,7 +340,7 @@ npx github:al3x4kov/teleharness            # → http://127.0.0.1:4180/teleharne
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.5.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -322,7 +359,7 @@ claude setup-token                 # движок Claude: токен — в .env
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.5.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 

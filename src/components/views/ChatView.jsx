@@ -1,7 +1,7 @@
 // Chat: pushed screen wired to the store — header (back / title /
 // agent · model / stop), streaming message list, pinned composer.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { chatBackTarget, lastSourceRoute, navigate } from "../../lib/router.js";
+import { chatBackTarget, lastSourceRoute, navigate, useRoute } from "../../lib/router.js";
 import {
   active,
   busyMap,
@@ -96,6 +96,7 @@ export function dialogAnnouncement(d) {
 }
 
 export default function ChatView({ id }) {
+  const targetMid = useRoute().query?.mid ?? null; // FEAT-01.60
   const known = sessions.value.find((s) => s.id === id) ?? null;
   // Glass-overlay geometry (CHALLENGE M3): the header and the bottom stack
   // (stall / DialogBar / composer) are absolute overlays; the
@@ -342,6 +343,7 @@ export default function ChatView({ id }) {
           older={{ has: !!mine?.hasOlder, loading: !!mine?.loadingOlder, error: !!mine?.olderError, paged: !!mine?.olderLoaded }}
           onLoadOlder={() => loadOlder(id)}
           reverted={reverted}
+          targetMid={targetMid}
         />
       )}
       {/* BUG-01.38: the DialogBar mounts fresh per request, so it cannot be

@@ -16,6 +16,7 @@ before(async () => {
     openDrawer: "src/components/Menu.jsx#openDrawer",
     greetingText: "src/components/Menu.jsx#greetingText",
     initials: "src/components/Drawer.jsx#initials",
+    calcRecentLimit: "src/components/Drawer.jsx#calcRecentLimit",
   });
   t$ = createHarness(ui);
 });
@@ -88,7 +89,7 @@ test("пустой список чатов — без блока «Недавн�
 });
 
 test("инициалы и приветствие", () => {
-  assert.equal(ui.initials("Anna Kim"), "AK");
+  assert.equal(ui.initials("Alexander Kovalev"), "AK");
   assert.equal(ui.initials("admin"), "AD");
   assert.equal(ui.initials(""), "?");
   const g = ui.greetingText;
@@ -171,4 +172,60 @@ test("BUG-01.38: закрытие меню (Esc, затемнение, ✕) во
   await t$.flush();
   assert.notEqual(document.activeElement, menu, "новый экран сам решает, где фокус");
   location.hash = "";
+});
+
+test("FEAT-09.31: calcRecentLimit считает число недавних по свободной высоте (1440p / 1080p / 720p / pinned)", () => {
+  // 1440p: container ~1368, nav ~240, pinned 0, label 40, more 44, foot 76, row 46 → (1368 - 400)/46 = 21
+  assert.equal(ui.calcRecentLimit({ containerHeight: 1368, navHeight: 240, pinnedHeight: 0 }), 21);
+  // 1080p: container ~1008 → (1008 - 400)/46 = 13
+  assert.equal(ui.calcRecentLimit({ containerHeight: 1008, navHeight: 240, pinnedHeight: 0 }), 13);
+  // 720p: container ~648 → (648 - 400)/46 = 5 → минимум 8
+  assert.equal(ui.calcRecentLimit({ containerHeight: 648, navHeight: 240, pinnedHeight: 0 }), 8);
+  // С закреплёнными (2 чата ~132px) на 1080p: (1008 - 532)/46 = 10
+  assert.equal(ui.calcRecentLimit({ containerHeight: 1008, navHeight: 240, pinnedHeight: 132 }), 10);
+  // Нулевая высота → безопасный минимум 8
+  assert.equal(ui.calcRecentLimit({ containerHeight: 0 }), 8);
+});
+
+test("FEAT-09.31: Drawer на ПК (≥ 900px) показывает больше 8 недавних по высоте панели, на мобильном (< 900px) — 8", async () => {
+  const origW = window.innerWidth;
+  const origCH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+  const origOH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  const list = Array.from({ length: 25 }, (_, i) => ses("s" + i, "Чат " + i, 1000 * (i + 1)));
+  try {
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() { return this.classList?.contains("drawer-scroll") ? 1050 : 0; },
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get() {
+        if (this.classList?.contains("drawer-nav")) return 240;
+        if (this.classList?.contains("drawer-label")) return 40;
+        if (this.classList?.contains("drawer-more")) return 44;
+        if (this.classList?.contains("drawer-row")) return 46;
+        return 0;
+      },
+    });
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
+    t$.act(() => { ui.store.sessions.value = list; });
+    const h = t$.mount(ui.Drawer, { view: "home", chatId: null });
+    await t$.waitFor(() => $$(h.root, ".drawer-recent .drawer-row").length > 8);
+    // (1050 - (240 + 40 + 44 + 76)) / 46 = 14
+    assert.equal($$(h.root, ".drawer-recent .drawer-row").length, 14, "на 1440px ширины и 1050px высоты влезает 14 чатов");
+    assert.ok($(h.root, ".drawer-more"), "«Показать все» остаётся видимой");
+
+    // Уменьшаем окно до мобильной ширины → возвращается к 8
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 440 });
+    window.dispatchEvent(new window.Event("resize"));
+    await t$.waitFor(() => $$(h.root, ".drawer-recent .drawer-row").length === 8);
+    assert.equal($$(h.root, ".drawer-recent .drawer-row").length, 8, "на телефоне (< 900px) остаётся 8");
+    h.unmount();
+  } finally {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: origW });
+    if (origCH) Object.defineProperty(HTMLElement.prototype, "clientHeight", origCH);
+    else delete HTMLElement.prototype.clientHeight;
+    if (origOH) Object.defineProperty(HTMLElement.prototype, "offsetHeight", origOH);
+    else delete HTMLElement.prototype.offsetHeight;
+  }
 });

@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="930" viewBox="0 0 1400 930" font-family="Segoe UI, Inter, Arial, sans-serif">
+  
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1017"/><stop offset="1" stop-color="#111520"/></linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/></filter>
+    <marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3ecf8e"/></marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f8cff"/></marker>
+    <marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e07a52"/></marker>
+    <marker id="aT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8b8ff8"/></marker>
+    <style>
+      .t { fill:#e6e8ee; } .m { fill:#9aa3b2; } .d { fill:#6b7385; }
+      .mono { font-family: Cascadia Code, Consolas, DejaVu Sans Mono, monospace; }
+      .box { fill:#161a24; stroke:#2b3242; stroke-width:1.2; }
+      .chip { fill:#1e2432; stroke:#323a4d; stroke-width:1; }
+    </style>
+  </defs>
+  <rect width="1400" height="930" fill="url(#bg)"/>
+  <text x="60" y="62" font-size="30" font-weight="700" class="t">Teleharness — конвейер полнотекстового поиска по чатам (2.5.4)</text>
+  <text x="60" y="98" font-size="15" class="m">SQLite FTS5 trigram · полностью производный индекс · тенантная изоляция · сниппет с deep-link переходом в чат</text>
+  <text x="1210" y="62" font-size="12" class="d" text-anchor="end">сверено с кодом 2.5.4</text>
+  <rect x="60" y="170" width="300" height="390" rx="12" class="box"/>
+  <circle cx="86" cy="200" r="6" fill="#3ecf8e"/>
+  <text x="102" y="205" font-size="14" font-weight="700" class="t">1 · Приём</text>
+  <text x="80" y="252" font-size="12.5" class="t">Каждый новый ход в чате</text>
+  <text x="80" y="290" font-size="12.5" class="t">вопрос → <tspan class='mono'>typedText</tspan></text>
+  <rect x="78" y="312" width="264" height="25" rx="7" class="chip"/>
+  <text x="90" y="332" font-size="11.5" class="m">без [obsidian-cache] и директив</text>
+  <text x="80" y="363" font-size="12.5" class="t">ответ → финальные text-части</text>
+  <rect x="78" y="385" width="264" height="25" rx="7" class="chip"/>
+  <text x="90" y="405" font-size="11.5" class="m">без tool / reasoning / synthetic</text>
+  <rect x="400" y="170" width="300" height="390" rx="12" class="box"/>
+  <circle cx="426" cy="200" r="6" fill="#4f8cff"/>
+  <text x="442" y="205" font-size="14" font-weight="700" class="t">2 · Производный индекс</text>
+  <text x="420" y="252" font-size="12.5" class="t"><tspan class='mono'>SQLite FTS5</tspan> · trigram</text>
+  <rect x="418" y="274" width="264" height="41" rx="7" class="chip"/>
+  <text x="430" y="294" font-size="11.5" class="m">chat-search.sqlite · WAL · :memory: в</text>
+  <text x="430" y="310" font-size="11.5" class="m">демо</text>
+  <rect x="418" y="325" width="264" height="41" rx="7" class="chip"/>
+  <text x="430" y="345" font-size="11.5" class="m">полностью производный — удаление файла</text>
+  <text x="430" y="361" font-size="11.5" class="m">БД пересобирает</text>
+  <text x="420" y="392" font-size="12.5" class="m"><tspan class='mono'>onTurnDone / onTurnStart</tspan> — синк</text>
+  <text x="420" y="411" font-size="12.5" class="m"><tspan class='mono'>markDirty</tspan> — prompt / undo / revert</text>
+  <text x="420" y="430" font-size="12.5" class="m"><tspan class='mono'>forget</tspan> — чат удалён</text>
+  <rect x="418" y="452" width="264" height="57" rx="7" class="chip"/>
+  <text x="426" y="472" font-size="11.5" class="m">первичная индексация в фоне:</text>
+  <text x="426" y="488" font-size="10.2" class="m"><tspan class='mono'>TELEHARNESS_SEARCH_INDEX_DELAY_MS</tspan> (10 с)</text>
+  <text x="426" y="504" font-size="10.2" class="m"><tspan class='mono'>TELEHARNESS_SEARCH_NO_BG=1</tspan> — выключает</text>
+  <rect x="740" y="170" width="300" height="390" rx="12" class="box"/>
+  <circle cx="766" cy="200" r="6" fill="#e07a52"/>
+  <text x="782" y="205" font-size="14" font-weight="700" class="t">3 · Query API</text>
+  <text x="760" y="252" font-size="12.5" class="t"><tspan class='mono'>GET /teleharness/api/</tspan></text>
+  <text x="760" y="271" font-size="12.5" class="t"><tspan class='mono'>session/search?q=…&amp;limit=40</tspan></text>
+  <text x="760" y="309" font-size="12.5" class="t">тенантная изоляция:</text>
+  <rect x="758" y="331" width="264" height="41" rx="7" class="chip"/>
+  <text x="770" y="351" font-size="11.5" class="m">admin → все чаты · тенант → только</text>
+  <text x="770" y="367" font-size="11.5" class="m">allowedIds</text>
+  <rect x="758" y="382" width="264" height="25" rx="7" class="chip"/>
+  <text x="770" y="402" font-size="11.5" class="m">сбой API → поиск только по названиям</text>
+  <rect x="758" y="417" width="264" height="25" rx="7" class="chip"/>
+  <text x="770" y="437" font-size="11.5" class="m">ensureFresh перед выдачей</text>
+  <rect x="1080" y="170" width="260" height="390" rx="12" class="box"/>
+  <circle cx="1106" cy="200" r="6" fill="#8b8ff8"/>
+  <text x="1122" y="205" font-size="14" font-weight="700" class="t">4 · Сниппет и переход</text>
+  <text x="1100" y="252" font-size="12.5" class="m">сниппет с ролями</text>
+  <text x="1100" y="271" font-size="12.5" class="m">«Вы / Ответ», запрос в</text>
+  <text x="1100" y="290" font-size="12.5" class="m">&lt;mark&gt;, «совпадений: N»</text>
+  <text x="1100" y="328" font-size="12.5" class="t">deep-link</text>
+  <text x="1100" y="347" font-size="12.5" class="t"><tspan class='mono'>#/chat/:id?mid=…</tspan></text>
+  <rect x="1098" y="369" width="224" height="57" rx="7" class="chip"/>
+  <text x="1110" y="389" font-size="11.5" class="m">автодогрузка истории (до 20</text>
+  <text x="1110" y="405" font-size="11.5" class="m">страниц) → скролл →</text>
+  <text x="1110" y="421" font-size="11.5" class="m">.is-search-hit ~3,2 с</text>
+  <line x1="368" y1="365" x2="392" y2="365" stroke="#3ecf8e" stroke-width="2" marker-end="url(#aG)"/>
+  <line x1="708" y1="365" x2="732" y2="365" stroke="#4f8cff" stroke-width="2" marker-end="url(#aB)"/>
+  <line x1="1048" y1="365" x2="1072" y2="365" stroke="#e07a52" stroke-width="2" marker-end="url(#aO)"/>
+  <path d="M 1210 560 L 1210 600 L 1030 600 L 1030 614" fill="none" stroke="#8b8ff8" stroke-width="2" marker-end="url(#aT)"/>
+  <rect x="60" y="620" width="620" height="230" rx="12" class="box"/>
+  <circle cx="86" cy="650" r="6" fill="#3ecf8e"/>
+  <text x="102" y="655" font-size="14" font-weight="700" class="t">HomeView · живой поиск</text>
+  <rect x="80" y="686" width="212" height="34" rx="8" class="chip"/>
+  <text x="186" y="708" text-anchor="middle" font-size="11.5" class="m">дебаунс 160 мс · AbortController</text>
+  <rect x="304" y="686" width="204" height="34" rx="8" class="chip"/>
+  <text x="406" y="708" text-anchor="middle" font-size="11.5" class="m">опрос статуса индексации 1,5 с</text>
+  <rect x="520" y="686" width="128" height="34" rx="8" class="chip"/>
+  <text x="584" y="708" text-anchor="middle" font-size="11.5" class="m">роли «Вы / Ответ»</text>
+  <rect x="80" y="732" width="174" height="34" rx="8" class="chip"/>
+  <text x="167" y="754" text-anchor="middle" font-size="11.5" class="m">подсветка запроса &lt;mark&gt;</text>
+  <rect x="266" y="732" width="168" height="34" rx="8" class="chip"/>
+  <text x="350" y="754" text-anchor="middle" font-size="11.5" class="m">счётчик «совпадений: N»</text>
+  <rect x="446" y="732" width="196" height="34" rx="8" class="chip"/>
+  <text x="544" y="754" text-anchor="middle" font-size="11.5" class="m">деградация → только названия</text>
+  <rect x="720" y="620" width="620" height="230" rx="12" class="box"/>
+  <circle cx="746" cy="650" r="6" fill="#8b8ff8"/>
+  <text x="762" y="655" font-size="14" font-weight="700" class="t">ChatView · deep-link переход</text>
+  <rect x="740" y="686" width="170" height="34" rx="8" class="chip"/>
+  <text x="825" y="708" text-anchor="middle" font-size="11.5" class="m">targetMid из route.query</text>
+  <rect x="922" y="686" width="188" height="34" rx="8" class="chip"/>
+  <text x="1016" y="708" text-anchor="middle" font-size="11.5" class="m">автодогрузка до 20 страниц</text>
+  <rect x="1122" y="686" width="152" height="34" rx="8" class="chip"/>
+  <text x="1198" y="708" text-anchor="middle" font-size="11.5" class="m">скролл к сообщению</text>
+  <rect x="740" y="732" width="138" height="34" rx="8" class="chip"/>
+  <text x="809" y="754" text-anchor="middle" font-size="11.5" class="m">.is-search-hit ~3,2 с</text>
+  <rect x="890" y="732" width="252" height="34" rx="8" class="chip"/>
+  <text x="1016" y="754" text-anchor="middle" font-size="11.5" class="m">поиск внутри merged-ходов (mergedIds)</text>
+  <text x="60" y="895" font-size="12" class="d">Teleharness 2.5.4 · chat-search.js / server.js / routes/session.js / HomeView / MessageList</text>
+  </svg>

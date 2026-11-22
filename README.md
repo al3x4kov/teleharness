@@ -13,7 +13,7 @@ mobile diff review with Plan-First, isolated git worktrees, API-equivalent cost 
 multi-agent pipelines on [Temporal](https://temporal.io).
 All of it runs on the CLI subscriptions you already pay for, not a metered API.
 
-**Chat** · **Board & Review** · **Worktrees** · **Relay** · **Pipelines** · **on your subscriptions** · **self-hosted**
+**Chat** · **Search** · **Board & Review** · **Worktrees** · **Relay** · **Pipelines** · **on your subscriptions** · **self-hosted**
 
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
@@ -22,6 +22,7 @@ All of it runs on the CLI subscriptions you already pay for, not a metered API.
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
 [What it does](#what-it-does) •
+[Search](#find-any-message-in-seconds) •
 [Board, Review & Worktrees](#board-mobile-review-worktrees-and-costs) •
 [Switch CLIs](#switch-cli-mid-conversation) •
 [Pipelines](#pipelines-that-survive-restarts-temporal) •
@@ -55,6 +56,40 @@ All of it runs on the CLI subscriptions you already pay for, not a metered API.
 </tr>
 </table>
 
+## Find any message in seconds
+
+The chat list has a search field that goes through **every question and answer you have ever exchanged** — not just
+chat titles. Matches come back live while you type, as highlighted snippets with «You:» / «Answer:» roles and a
+matches count; tapping one jumps straight to the message: the chat loads older history until the message is reachable,
+scrolls to it and highlights it for a few seconds — even inside compact merged turns. Under the hood is a local
+SQLite FTS5 (trigram) index, fully derived from your chats and kept fresh as you talk; while it is still building
+(or unavailable), the portal says so honestly and falls back to searching titles. Admins search every chat, users
+only their own folders.
+
+<p align="center">
+  <img src="docs/screenshots/phone-light-home-search.png" alt="Chat search on a phone: the query token returns two matching chats with highlighted Answer snippets and a matches count" width="180">
+  <img src="docs/screenshots/desktop-light-home-search.png" alt="Message search on desktop: highlighted snippets with roles and a matches count" width="600">
+</p>
+<p align="center"><sub>Live search with per-message snippets and a matches count; every hit deep-links to the exact message.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/search.gif" alt="Typing a query, opening a hit, and the chat scrolling to and highlighting the message" width="200">
+  <img src="docs/screenshots/phone-light-home-search-off.png" alt="Search degraded to titles with an honest banner while the index is unavailable" width="180">
+</p>
+<p align="center"><sub>Jump to a message from a hit (older history auto-loads, then highlight) — and the honest fallback banner while the index is unavailable.</sub></p>
+
+<p align="center"><img src="docs/search-pipeline.png" alt="Search pipeline: messages are cleaned and fed into a derived SQLite FTS5 trigram index, queried through a tenant-isolated API, and rendered as snippets with deep links into the chat" width="820"></p>
+<p align="center"><sub>How it works: a derived index that can always rebuild itself, a tenant-isolated query API, snippet rendering and deep links. More in <a href="docs/architecture.md">docs/architecture.md</a>.</sub></p>
+
+On desktop (≥ 900 px) the sidebar's **Recent** list now fills the panel height instead of a fixed eight entries —
+more of your chats within reach, up to 100; on phones and narrow windows it stays 8.
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-drawer-1440.png" alt="Desktop sidebar at 2560 by 1440: the Recent list fills the panel with sixteen rows" width="410">
+  <img src="docs/screenshots/desktop-light-drawer-720.png" alt="Desktop sidebar at 1280 by 720: eight recent chats fill the smaller panel" width="410">
+</p>
+<p align="center"><sub>Adaptive «Recent» in the desktop sidebar: 16 rows at 2560×1440, 8 at 1280×720 (minimum 8, capped at 100).</sub></p>
+
 ## Board, mobile review, worktrees and costs
 
 Run several coding agents at once without living in a terminal:
@@ -70,7 +105,7 @@ Run several coding agents at once without living in a terminal:
   compared against your real subscriptions (Claude Max, ChatGPT Plus, Google Antigravity, GitHub Copilot CLI) to show
   actual savings, payback multiplier, soft monthly budgets and CSV export.
 - **ACP Agents (`#/settings/acp`)** — install and sign in to **Google Antigravity** (`Gemini 4 Neon`, `Gemini 3.8 Flash`)
-  and **GitHub Copilot CLI** right from Settings, with roles, vision, Plan-First and Auto-Relay support.
+  and **GitHub Copilot CLI** right from Settings, with roles, vision, Plan-First, Auto-Relay, and automatic stale-session recovery after interrupted turns.
 
 <p align="center">
   <img src="docs/screenshots/phone-light-board.png" alt="Attention Board with While you were away summary and Waiting for you section" width="180">
@@ -200,7 +235,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 
 <table>
 <tr>
-<td width="25%"><img src="docs/screenshots/phone-light-home.png" alt="Chat list"></td>
+<td width="25%"><img src="docs/screenshots/phone-light-home.png" alt="Chat list with the message search field"></td>
 <td width="25%"><img src="docs/screenshots/phone-light-agents.png" alt="A turn that delegates work to subagents"></td>
 <td width="25%"><img src="docs/screenshots/phone-light-agent-open.png" alt="A subagent card opened: steps and the answer"></td>
 <td width="25%"><img src="docs/screenshots/phone-light-relay.png" alt="Handoff mark between two engines in one feed"></td>
@@ -215,7 +250,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 <td width="25%"><img src="docs/screenshots/phone-light-relay-sheet.png" alt="Choosing the engine and model to continue on"></td>
 <td width="25%"><img src="docs/screenshots/phone-light-subscriptions.png" alt="Subscriptions: usage per provider"></td>
 <td width="25%"><img src="docs/screenshots/phone-dark-steps.png" alt="Tool steps and result files, dark theme"></td>
-<td width="25%"><img src="docs/screenshots/phone-dark-home.png" alt="Chat list, dark theme"></td>
+<td width="25%"><img src="docs/screenshots/phone-dark-home.png" alt="Chat list with the message search field, dark theme"></td>
 </tr>
 <tr>
 <td valign="top"><b>Pick where to continue</b><br>From the chat menu at any time, or straight from the limit notice. The folder stays the same.</td>
@@ -249,6 +284,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 |---|---|
 | **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. The picker groups models per connected OpenCode provider (subscription plan, free models, API) with a *Refresh* button; pay-per-token OpenCode models are hidden from tenants. Admins can grant Claude, Codex, and Gemini (ACP) per tenant in Settings → Users (scoped to the user's folders, no shell).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Chat model picker on a Codex chat: locked engine, model list and Refresh list button" width="180"> <img src="docs/screenshots/phone-light-settings-model.png" alt="Model catalog in Settings: Z.AI Coding Plan (opencode), Claude and Codex groups with GLM-5.3 models and Refresh list" width="180"> <img src="docs/screenshots/phone-light-picker-refresh-error.png" alt="Refresh failed: the picker keeps the saved models and shows the error" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
 | **Attention Board** | One screen for every chat and Temporal run grouped into *Waiting for you*, *Working*, *Done* and *Failed*, with a *While you were away* recap, quick actions and per-category Web Push notifications with quiet hours.<br><img src="docs/screenshots/phone-light-board.png" alt="Attention Board on a phone" width="180"> |
+| **Message search** | Full-text search across every question and answer in every chat: highlighted snippets with «You:» / «Answer:» roles and a matches count, a deep link to the exact message (older history auto-loads, then highlight), a derived local SQLite FTS5 (trigram) index, tenant isolation and an honest fallback to title search while the index builds.<br><img src="docs/screenshots/phone-light-home-search.png" alt="Chat search: highlighted snippets with roles and a matches count" width="180"> |
 | **Mobile Review & Plan-First** | Review queue across chats and runs, touch-friendly diff with line selection and persistent inline draft comments, return-to-agent and accept/commit. *Plan first* makes the agent propose a read-only plan and wait for approval before editing files.<br><img src="docs/screenshots/phone-light-review.png" alt="Mobile diff viewer" width="180"> <img src="docs/screenshots/phone-light-plan.png" alt="Gemini Plan 1 approval card" width="180"> |
 | **Isolated Git Worktrees** | Give each chat or pipeline run its own git worktree and branch, detect cross-chat file overlaps and dry-run merge conflicts, merge with squash/merge/ff after running tests, and prune orphaned branches.<br><img src="docs/screenshots/phone-light-worktree.png" alt="Chat with active worktree pill, review plaque and conflict warning" width="180"> <img src="docs/screenshots/phone-light-worktrees.png" alt="Project worktrees list and merge settings" width="180"> |
 | **API-equivalent costs** | SQLite turn cost log priced against an editable table, real subscriptions (Claude Max, ChatGPT Plus, Google Antigravity, Copilot CLI) with savings and payback multiplier, soft monthly budgets, per-chat / per-project / per-run totals and CSV export.<br><img src="docs/screenshots/phone-light-costs.png" alt="Costs overview on a phone" width="180"> |
@@ -268,6 +304,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Push notifications** | Get notified when a long turn is done or an agent needs your decision (Web Push, VAPID). |
 | **Phone pairing by QR** | Settings → Connect a phone shows a one-time QR code (valid 10 minutes); scan it and the phone is signed in to your account — no token typing. Needs `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/phone-light-pair.png" alt="Connect a phone: QR code, expiry, one-time link and Copy" width="180"> |
 | **Multi-user** | Admin and users with own folders, system prompts, MCP sets, upload and voice quotas, rate limits. |
+| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.5.4, opencode 2.2.6, Claude Code" width="180"> |
 | **Mobile-first** | Built for iOS Safari: keyboard-aware layout, safe areas, light and dark themes, English and Russian UI. |
 | **Zero runtime dependencies** | The backend is plain Node.js stdlib. |
 
@@ -301,7 +338,7 @@ found (and how to install the missing ones) and prints the admin token. Options:
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.5.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -320,7 +357,7 @@ claude setup-token                 # Claude engine: put the token into .env as C
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.4.9 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.5.4 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 

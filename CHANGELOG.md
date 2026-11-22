@@ -6,6 +6,30 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.5.4] — 2026-11-23
+
+This release combines the 2.5.3 and 2.5.4 changes (everything since v2.5.2).
+
+### Added
+- **Full-text search across chat messages.** A local SQLite FTS5 trigram index (WAL, fully derived — it rebuilds
+  itself if the file is deleted) indexes every chat question (cleaned of system injections) and the final text parts
+  of answers, across OpenCode and Claude/Codex/ACP chats. `GET /teleharness/api/session/search` is tenant-isolated
+  (admins see everything, users only their own directories), keeps itself fresh while you type (debounced live
+  updates, indexing progress is reported honestly), and the chat list shows matching chats with a highlighted
+  snippet («You:» / «Answer:» roles, `<mark>` highlights, safe regex splitting — no raw HTML). Tapping a hit deep-links
+  to `#/chat/:id?mid=…`: the chat auto-loads older history pages until the message is reachable, widens its window,
+  scrolls to it and highlights it for a few seconds (works across compact merged turns too).
+- **Adaptive recent chats in the desktop sidebar.** On screens ≥ 900 px the «Recent» section fills the available
+  panel height (via a `ResizeObserver`, capped at 100, minimum 8) instead of a fixed list; below 900 px it stays 8.
+
+### Fixed
+- **Antigravity ACP stale-session guard (post-answer hangs).** An ACP turn interrupted by a restart, crash, stop or
+  timeout could leave a non-terminal step row (pending/running/generating/waiting/queued) in the agent's SQLite
+  database, after which `session/prompt` never reached idle and the chat hung after its answer. The portal now clears
+  the saved ACP session on any abnormal exit and on restart recovery, and — before resuming an Antigravity session —
+  does a read-only SQLite check for non-terminal steps, starting a fresh session with the chat history when one is
+  found (a damaged or hot-WAL database skips resume for the same reason).
+
 ## [2.5.2] — 2026-11-22
 
 ### Added

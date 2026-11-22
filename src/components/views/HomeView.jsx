@@ -29,6 +29,7 @@ import { MenuButton, PinIcon } from "../Menu.jsx";
 import { bindingOf } from "../../lib/engine.js";
 import { locale, t } from "../../lib/i18n.js";
 import { board } from "../../lib/attention.js"; // FEAT-20.2
+import { api } from "../../lib/api.js"; // FEAT-01.60: серверный поиск по сообщениям
 
 export function BoardStrip({ counts = board.value?.counts }) {
   const needs = Number(counts?.needs) || 0;
@@ -159,7 +160,26 @@ export function rowState(id) {
   return null;
 }
 
-export function SessionBody({ session: s, pinned = false }) {
+// FEAT-01.60: безопасное разбиение сниппета на обычные и подсвеченные части (без raw HTML).
+export function highlightParts(text, query) {
+  const src = String(text ?? "");
+  const words = [...new Set(String(query ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean))].sort((a, b) => b.length - a.length);
+  if (!src || words.length === 0) return [{ text: src, hit: false }];
+  const esc = words.map((w) => w.replace(/[.*+?^$()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${esc.join("|")})`, "gi");
+  const out = [];
+  let last = 0;
+  for (const m of src.matchAll(re)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push({ text: src.slice(last, i), hit: false });
+    if (m[0]) out.push({ text: m[0], hit: true });
+    last = i + m[0].length;
+  }
+  if (last < src.length) out.push({ text: src.slice(last), hit: false });
+  return out.length > 0 ? out : [{ text: src, hit: false }];
+}
+
+export function SessionBody({ session: s, pinned = false, searchHit = null, searchQuery = "" }) {
   const tokens = tokensTotal(s);
   const state = rowState(s.id);
   return (
@@ -173,7 +193,7 @@ export function SessionBody({ session: s, pinned = false }) {
         <div class="session-title">{chatTitle(s)}</div>
         <div class="session-meta-row">
           <span class="session-meta" title={t("home.tokensTitle")}>
-            {metaText(s)}{tokens >= 1000 ? ` · ${fmtTokensShort(tokens)}` : ""}
+            {metaText(s)}{tokens >= 1000 ? ` · ${fmtTokensShort(tokens)}` : ""}{searchHit?.matchCount > 1 ? ` · ${t("home.searchMatches", { count: searchHit.matchCount })}` : ""}
           </span>
           {/* BUG-154: состояние — под заголовком, а не колонкой справа: на 402px
               «работает» + «Claude» съедали заголовок до «Проверка зад…». */}
@@ -186,6 +206,14 @@ export function SessionBody({ session: s, pinned = false }) {
             </span>
           )}
         </div>
+        {searchHit?.snippet && (
+          <div class="session-snippet" data-req="FEAT-01.60">
+            <span class="snippet-role">{searchHit.role === "user" ? t("home.snippetYou") : t("home.snippetAnswer")}</span>
+            {highlightParts(searchHit.snippet, searchQuery).map((part, i) =>
+              part.hit ? <mark key={i} class="search-mark">{part.text}</mark> : part.text
+            )}
+          </div>
+        )}
       </div>
       {/* Only the non-default engine is marked: a z.ai badge on every row
           would be noise (the 2026-11-01 redesign removed per-row model). */}
@@ -223,7 +251,7 @@ export function SessionLine({ session: s }) {
 // not an element property, so preact would derive the event name "TouchMove"
 // and the props would never fire there.
 // origin: kept for call-site compatibility; «Назад» comes from the router.
-export function SessionRow({ session: s, open, onOpen, onRename, onDelete, origin = "/", pinned = false }) {
+export function SessionRow({ session: s, open, onOpen, onRename, onDelete, origin = "/", pinned = false, searchHit = null, searchQuery = "" }) {
   const contentRef = useRef(null);
   const openRef = useRef(open);
   openRef.current = open;
@@ -305,10 +333,13 @@ export function SessionRow({ session: s, open, onOpen, onRename, onDelete, origi
   }
 
   const name = chatTitle(s);
+  const href = searchHit?.messageId
+    ? `#/chat/${encodeURIComponent(s.id)}?mid=${encodeURIComponent(searchHit.messageId)}`
+    : "#/chat/" + s.id;
   return (
     <div class={"swipe" + (open ? " is-open" : "")}>
-      <a class={"session-row swipe-content" + (pinned ? " is-pinned" : "")} href={"#/chat/" + s.id} ref={contentRef} onClick={onClick}>
-        <SessionBody session={s} pinned={pinned} />
+      <a class={"session-row swipe-content" + (pinned ? " is-pinned" : "")} href={href} ref={contentRef} onClick={onClick}>
+        <SessionBody session={s} pinned={pinned} searchHit={searchHit} searchQuery={searchQuery} />
       </a>
       {/* ISSUE-014: the actions come AFTER the row link in DOM order — Tab
           forward from the row reaches ✎/🗑 (they used to precede it, so only
@@ -455,6 +486,44 @@ export default function HomeView() {
   const [deleting, setDeleting] = useState(null);
   const [creating, setCreating] = useState(false);
   const [waitingOnly, setWaitingOnly] = useState(false); // FEAT-18.3: «Ждут вас»
+  // FEAT-01.60: серверный поиск по текстам вопросов и ответов.
+  const [searchRes, setSearchRes] = useState({ query: "", hits: [], loading: false, error: false, indexing: null });
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    const low = trimmed.toLowerCase();
+    if (!low) {
+      searchSeq.current += 1;
+      setSearchRes({ query: "", hits: [], loading: false, error: false, indexing: null });
+      return undefined;
+    }
+    const seq = ++searchSeq.current;
+    const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+    let pollTimer = null;
+    const run = async () => {
+      try {
+        const res = await api.searchSessions(trimmed, { limit: 40, signal: ac?.signal });
+        if (seq !== searchSeq.current) return;
+        const hits = Array.isArray(res?.hits) ? res.hits : [];
+        const indexing = res?.indexing ?? null;
+        setSearchRes({ query: low, hits, loading: false, error: Boolean(res?.unavailable), indexing });
+        if (indexing && !indexing.ready && indexing.total > 0 && !res?.unavailable) {
+          pollTimer = setTimeout(() => { if (seq === searchSeq.current) void run(); }, 1500);
+        }
+      } catch (err) {
+        if (err?.name === "AbortError" || seq !== searchSeq.current) return;
+        setSearchRes({ query: low, hits: [], loading: false, error: true, indexing: null });
+      }
+    };
+    setSearchRes((prev) => (prev.query === low ? { ...prev, loading: true, error: false } : { query: low, hits: [], loading: true, error: false, indexing: null }));
+    const timer = setTimeout(() => void run(), 160);
+    return () => {
+      clearTimeout(timer);
+      if (pollTimer) clearTimeout(pollTimer);
+      ac?.abort();
+    };
+  }, [query]);
 
   async function newChat() {
     if (creating) return;
@@ -478,8 +547,12 @@ export default function HomeView() {
   );
   const waiting = waitingChats(visible);
   const base = waitingOnly ? waiting : visible;
+  const hitsById = new Map();
+  if (q && searchRes.query === q) {
+    for (const h of searchRes.hits) if (h?.sessionId) hitsById.set(h.sessionId, h);
+  }
   const filtered = q
-    ? base.filter((s) => (s.title ?? "").toLowerCase().includes(q) || chatTitle(s).toLowerCase().includes(q))
+    ? base.filter((s) => (s.title ?? "").toLowerCase().includes(q) || chatTitle(s).toLowerCase().includes(q) || hitsById.has(s.id))
     : base;
   // FEAT-01.69: «Закреплённые» — над датами, в порядке закрепления; в датах
   // их уже нет. Н14: больше PINNED_FOLD — «Ещё N».
@@ -523,10 +596,20 @@ export default function HomeView() {
         <>
           <BoardStrip />
           <input
-            class="search home-search" type="search" placeholder={t("home.search")} value={query}
+            class="search home-search" type="search" placeholder={t("home.searchMessages")} value={query}
             aria-label={t("home.search")} autocomplete="off" spellcheck={false}
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
+          {q && searchRes.query === q && searchRes.indexing && !searchRes.indexing.ready && searchRes.indexing.total > 0 && (
+            <p class="search-status" role="status">
+              {t("home.searchIndexing", { done: searchRes.indexing.indexed, total: searchRes.indexing.total })}
+            </p>
+          )}
+          {q && searchRes.query === q && searchRes.error && (
+            <p class="search-status" role="status">
+              {t("home.searchUnavailable")}
+            </p>
+          )}
           {(waiting.length > 0 || waitingOnly) && (
             <div class="list-filters" role="group" aria-label={t("home.filterAria")} data-req="FEAT-18.3">
               <button
@@ -557,6 +640,7 @@ export default function HomeView() {
                 {pinnedShown.map((s) => (
                   <SessionRow
                     key={s.id} session={s} open={openId === s.id} pinned
+                    searchHit={hitsById.get(s.id) ?? null} searchQuery={q}
                     onOpen={(id) => setOpenId(id)}
                     onRename={setRenaming} onDelete={setDeleting}
                   />
@@ -576,6 +660,7 @@ export default function HomeView() {
                 {g.items.map((s) => (
                   <SessionRow
                     key={s.id} session={s} open={openId === s.id}
+                    searchHit={hitsById.get(s.id) ?? null} searchQuery={q}
                     onOpen={(id) => setOpenId(id)}
                     onRename={setRenaming} onDelete={setDeleting}
                   />

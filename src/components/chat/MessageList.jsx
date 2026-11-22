@@ -69,7 +69,15 @@ export function feedAnnouncement(wasBusy, busy, tail) {
 // keyboards and as «Повторить» after a failure.
 const NO_OLDER = { has: false, loading: false, error: false, paged: false };
 
-export default function MessageList({ sessionId, messages, streamingId, busy = false, live = null, older = NO_OLDER, onLoadOlder, reverted = false }) {
+// FEAT-01.60: поиск сообщения в ленте (с учётом объединённых ходов compactFeed).
+export function findMessageIndex(list, targetMid) {
+  if (!targetMid || !Array.isArray(list)) return -1;
+  return list.findIndex((m) => m?.info?.id === targetMid || (Array.isArray(m?.mergedIds) && m.mergedIds.includes(targetMid)));
+}
+
+const MAX_SEARCH_PAGES = 20;
+
+export default function MessageList({ sessionId, messages, streamingId, busy = false, live = null, older = NO_OLDER, onLoadOlder, reverted = false, targetMid = null }) {
   useTicker(Boolean(live));
   const [announce, setAnnounce] = useState("");
   const wasBusy = useRef(busy);
@@ -102,6 +110,10 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
   // A server page asked for (BUG-08.8): {firstId, h0, top} — the first
   // message on screen and the scroll geometry before the prepend.
   const anchorRef = useRef(null);
+  // FEAT-01.60: переход к найденному сообщению (автодогрузка истории + подсветка).
+  const [highlightMid, setHighlightMid] = useState(null);
+  const jumpDoneRef = useRef(null);
+  const jumpPagesRef = useRef(0);
 
   useEffect(() => {
     // new session: drop local history window, snap to bottom
@@ -111,8 +123,17 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
     anchorRef.current = null;
     pinnedRef.current = true;
     setPinned(true);
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    jumpDoneRef.current = null;
+    jumpPagesRef.current = 0;
+    setHighlightMid(null);
+    if (scrollRef.current && !targetMid) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [sessionId]);
+
+  useEffect(() => {
+    jumpDoneRef.current = null;
+    jumpPagesRef.current = 0;
+    setHighlightMid(null);
+  }, [sessionId, targetMid]);
 
   // BUG-092: files the agent made per closed turn (script-made ones too) —
   // re-asked only when a turn closes (the key inside skips repeats).
@@ -256,6 +277,42 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
     setExhausted(true);
   }
 
+  // FEAT-01.60: автодогрузка и прокрутка к найденному сообщению targetMid.
+  useEffect(() => {
+    if (!targetMid) return undefined;
+    const key = `${sessionId}:${targetMid}`;
+    if (jumpDoneRef.current === key) return undefined;
+    const idx = findMessageIndex(all, targetMid);
+    if (idx < 0) {
+      if (older.has && !older.loading && !older.error && typeof onLoadOlder === "function" && jumpPagesRef.current < MAX_SEARCH_PAGES) {
+        jumpPagesRef.current += 1;
+        onLoadOlder();
+      }
+      return undefined;
+    }
+    const needWindow = all.length - idx + 10;
+    if (needWindow > windowSize) {
+      setWindowSize(needWindow);
+      return undefined;
+    }
+    const matchedId = all[idx]?.info?.id ?? targetMid;
+    const el = scrollRef.current;
+    const targetEl = el?.querySelector?.(`[data-mid="${String(matchedId).replace(/"/g, "")}"]`);
+    if (!el || !targetEl) return undefined;
+    jumpDoneRef.current = key;
+    pinnedRef.current = false;
+    setPinned(false);
+    const head = parseFloat(getComputedStyle(el).getPropertyValue("--chat-head-h")) || 57;
+    const rect = targetEl.getBoundingClientRect();
+    const wrapRect = el.getBoundingClientRect();
+    const relTop = el.scrollTop + (rect.top - wrapRect.top);
+    const centerOff = Math.max(head + 16, (el.clientHeight - rect.height) / 3);
+    el.scrollTop = Math.max(0, relTop - centerOff);
+    setHighlightMid(matchedId);
+    const t = setTimeout(() => setHighlightMid((cur) => (cur === matchedId ? null : cur)), 3200);
+    return () => clearTimeout(t);
+  }, [sessionId, targetMid, all.length, windowSize, older.has, older.loading, older.error]);
+
   return (
     <div class="chat-scroll-wrap">
       <div class="chat-messages" ref={scrollRef} onScroll={onScroll}>
@@ -286,6 +343,7 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
                 showMeta={!streaming && id === lastAssistantId && m.info?.time?.completed != null}
                 reveal={id === revealId}
                 onRevealed={onRevealed}
+                highlighted={id === highlightMid}
               />
               </Fragment>
             );

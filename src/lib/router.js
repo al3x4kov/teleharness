@@ -51,6 +51,15 @@ function decode(seg) {
   }
 }
 
+export function parseQuery(hash = typeof location !== "undefined" ? location.hash : "") {
+  const h = String(hash ?? "");
+  const q = h.indexOf("?");
+  if (q < 0) return {};
+  const out = {};
+  for (const [k, v] of new URLSearchParams(h.slice(q + 1))) out[k] = v;
+  return out;
+}
+
 export function cleanPath(hash = location.hash) {
   let h = String(hash).replace(/^#/, "");
   if (!h.startsWith("/")) h = "/" + h;
@@ -73,7 +82,7 @@ export function match(path) {
   return null;
 }
 
-const HOME = { view: "home", path: "/", params: {} };
+const HOME = { view: "home", path: "/", params: {}, query: {} };
 const route = signal(HOME);
 // Last non-chat screen the user came from (R-23 / BUG-02.6: «Назад» returns to
 // the source — a project chat goes back to its project, not to «Чаты»).
@@ -214,7 +223,7 @@ function refresh() {
   }
   if (m) {
     track(m.path);
-    setRoute(m);
+    setRoute({ ...m, query: parseQuery() });
     return;
   }
   pendingReplace = true;

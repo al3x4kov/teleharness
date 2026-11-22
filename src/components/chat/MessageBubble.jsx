@@ -99,7 +99,7 @@ const BookIcon = () => (
   </svg>
 );
 
-export default function MessageBubble({ msg, streaming = false, showRole = true, showMeta = false, reveal = false, onRevealed }) {
+export default function MessageBubble({ msg, streaming = false, showRole = true, showMeta = false, reveal = false, onRevealed, highlighted = false }) {
   const [copied, setCopied] = useState(null); // null | "ok" | "fail"
   const [viewer, setViewer] = useState(null);
   const flashTimer = useRef(0);
@@ -431,7 +431,8 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
     return (
       <>
         <div
-          class="msg msg-user"
+          class={"msg msg-user" + (highlighted ? " is-search-hit" : "")}
+          data-mid={info.id ?? undefined}
           onContextMenu={onContextMenu}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -534,7 +535,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
 
   return (
     <div
-      class={"msg msg-assistant" + (streaming || revealing ? " is-streaming" : "")}
+      class={"msg msg-assistant" + (streaming || revealing ? " is-streaming" : "") + (highlighted ? " is-search-hit" : "")}
       data-mid={info.id ?? undefined}
       onContextMenu={onContextMenu}
       onTouchStart={onTouchStart}

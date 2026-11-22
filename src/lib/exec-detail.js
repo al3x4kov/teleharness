@@ -31,7 +31,8 @@ export function mergeTurn(steps) {
   });
   const info = { ...(last?.info ?? {}) };
   if (error) info.error = error;
-  return { info, parts, compact: true };
+  const mergedIds = steps.map((s) => s?.info?.id).filter(Boolean);
+  return { info, parts, compact: true, mergedIds };
 }
 
 export function compactFeed(messages, { busy = false } = {}) {

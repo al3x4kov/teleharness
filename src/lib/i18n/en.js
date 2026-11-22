@@ -107,6 +107,13 @@ export default {
   "home.emptyHint": "New chats start instantly with the model from Settings — you can switch it right in the chat.",
   "home.loadingChats": "Loading chats…",
   "home.search": "Search chats",
+  // FEAT-01.60: full-text search across chat messages.
+  "home.searchMessages": "Search chats and messages",
+  "home.searchMatches": "matches: {count}",
+  "home.snippetYou": "You:",
+  "home.snippetAnswer": "Answer:",
+  "home.searchIndexing": "Indexing chat history ({done}/{total})…",
+  "home.searchUnavailable": "Message search is unavailable right now — showing title matches only.",
   "home.resetSearch": "Clear search",
   "home.more": "{count} more",
   "home.collapse": "Show less",

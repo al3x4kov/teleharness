@@ -94,8 +94,8 @@ export function explainApiError(err, what = t("api.failed")) {
   return t("api.err.rejected", { what, status });
 }
 
-async function json(method, path, body) {
-  const res = await request(method, path, body);
+async function json(method, path, body, opts) {
+  const res = await request(method, path, body, opts);
   return res.json();
 }
 
@@ -234,6 +234,11 @@ export const api = {
   },
 
   listSessions: () => json("GET", "/session"),
+  // FEAT-01.60: серверный полнотекстовый поиск по вопросам и ответам.
+  searchSessions: (q, { limit = 30, signal } = {}) => {
+    const qs = new URLSearchParams({ q: String(q ?? ""), limit: String(limit) });
+    return json("GET", `/session/search?${qs}`, undefined, { signal });
+  },
   getMessages: (id, { limit, before, directory } = {}) => {
     const q = new URLSearchParams();
     if (limit != null) q.set("limit", String(limit));

@@ -19,6 +19,38 @@ import { t } from "../lib/i18n.js";
 export { closeDrawer, drawerOpen, openDrawer, MenuButton, TeleharnessMark } from "./Menu.jsx";
 
 export const RECENT_LIMIT = 8;
+export const DESKTOP_BP = 900;
+export const RECENT_MAX = 100;
+export const DEFAULT_ROW_H = 46;
+export const DEFAULT_FOOT_H = 76;
+export const DEFAULT_LABEL_H = 40;
+export const DEFAULT_MORE_H = 44;
+
+// FEAT-09.31: сколько строк «Недавних» помещается в свободную высоту
+// левой панели на ПК (≥ 900px) без пустоты снизу и без лишнего скролла.
+export function calcRecentLimit({
+  containerHeight = 0,
+  navHeight = 0,
+  pinnedHeight = 0,
+  labelHeight = DEFAULT_LABEL_H,
+  moreHeight = DEFAULT_MORE_H,
+  footReserve = DEFAULT_FOOT_H,
+  rowHeight = DEFAULT_ROW_H,
+  min = RECENT_LIMIT,
+  max = RECENT_MAX,
+} = {}) {
+  const ch = Number(containerHeight) || 0;
+  const rh = Number(rowHeight) > 0 ? Number(rowHeight) : DEFAULT_ROW_H;
+  if (ch <= 0) return min;
+  const used =
+    (Number(navHeight) || 0) +
+    (Number(pinnedHeight) || 0) +
+    (Number(labelHeight) || 0) +
+    (Number(moreHeight) || 0) +
+    (Number(footReserve) || 0);
+  const fit = Math.floor((ch - used) / rh);
+  return Math.max(min, Math.min(max, fit));
+}
 
 function Svg({ children, size = 22 }) {
   return (
@@ -59,6 +91,11 @@ export default function Drawer({ view, chatId }) {
   const open = drawerOpen.value;
   const [creating, setCreating] = useState(false);
   const panelRef = useRef(null);
+  const scrollRef = useRef(null);
+  const navRef = useRef(null);
+  const pinnedRef = useRef(null);
+  const recentRef = useRef(null);
+  const [recentLimit, setRecentLimit] = useState(RECENT_LIMIT);
   useEffect(() => { startTemporalAttention(); return stopTemporalAttention; }, []); // FEAT-19.14
 
   // Смена экрана закрывает панель (выбор пункта = переход).
@@ -121,7 +158,56 @@ export default function Drawer({ view, chatId }) {
   const { pinned, rest } = splitPinned(all, pins.value);
   const [pinsOpen, setPinsOpen] = useState(false);
   const pinnedShown = pinsOpen || pinned.length <= PINNED_FOLD + 1 ? pinned : pinned.slice(0, PINNED_FOLD);
-  const recent = rest.slice(0, RECENT_LIMIT);
+
+  // FEAT-09.31: на ПК (≥ 900px) пересчитываем число «Недавних» по свободной высоте панели.
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl || typeof window === "undefined") return undefined;
+    const measure = () => {
+      if ((window.innerWidth || 0) < DESKTOP_BP) {
+        setRecentLimit(RECENT_LIMIT);
+        return;
+      }
+      const ch = scrollEl.clientHeight || 0;
+      if (ch <= 0) {
+        setRecentLimit(RECENT_LIMIT);
+        return;
+      }
+      let footReserve = DEFAULT_FOOT_H;
+      try {
+        const pb = parseFloat(getComputedStyle(scrollEl).paddingBottom);
+        if (Number.isFinite(pb) && pb > 0) footReserve = pb;
+      } catch {}
+      const navHeight = navRef.current?.offsetHeight || 0;
+      const pinnedHeight = pinnedRef.current?.offsetHeight || 0;
+      const recentEl = recentRef.current;
+      const labelHeight = recentEl?.querySelector?.(".drawer-label")?.offsetHeight || DEFAULT_LABEL_H;
+      const moreHeight = recentEl?.querySelector?.(".drawer-more")?.offsetHeight || DEFAULT_MORE_H;
+      const rowHeight = recentEl?.querySelector?.(".drawer-row")?.offsetHeight || DEFAULT_ROW_H;
+      const next = calcRecentLimit({
+        containerHeight: ch,
+        navHeight,
+        pinnedHeight,
+        labelHeight,
+        moreHeight,
+        footReserve,
+        rowHeight,
+      });
+      setRecentLimit((prev) => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(scrollEl);
+    if (navRef.current) ro?.observe(navRef.current);
+    if (pinnedRef.current) ro?.observe(pinnedRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [pinnedShown.length, rest.length]);
+
+  const recent = rest.slice(0, recentLimit);
   const row = (s, isPinned) => {
     const cur = view === "chat" && chatId === s.id;
     return (
@@ -163,8 +249,8 @@ export default function Drawer({ view, chatId }) {
             <Glyph name="close" size={20} />
           </button>
         </div>
-        <div class="drawer-scroll">
-          <ul class="drawer-nav">
+        <div class="drawer-scroll" ref={scrollRef}>
+          <ul class="drawer-nav" ref={navRef}>
             {NAV.map((n) => (
               <li key={n.view}>
                 <a class={"drawer-item" + (view === n.view || (n.view === "board" && view === "reviewItem") ? " is-active" : "")} href={n.href}
@@ -182,7 +268,7 @@ export default function Drawer({ view, chatId }) {
             ))}
           </ul>
           {pinned.length > 0 && (
-            <section class="drawer-recent drawer-pinned" aria-label={t("home.pinnedGroup")} data-req="FEAT-01.69">
+            <section class="drawer-recent drawer-pinned" ref={pinnedRef} aria-label={t("home.pinnedGroup")} data-req="FEAT-01.69">
               <h2 class="drawer-label">{t("home.pinnedGroup")}</h2>
               <ul>{pinnedShown.map((s) => row(s, true))}</ul>
               {pinned.length > pinnedShown.length && (
@@ -193,7 +279,7 @@ export default function Drawer({ view, chatId }) {
             </section>
           )}
           {recent.length > 0 && (
-            <section class="drawer-recent" aria-label={t("drawer.recent")}>
+            <section class="drawer-recent" ref={recentRef} aria-label={t("drawer.recent")} data-req="FEAT-09.31">
               <h2 class="drawer-label">{t("drawer.recent")}</h2>
               <ul>{recent.map((s) => row(s, false))}</ul>
               <a class="drawer-more" href="#/">{t("drawer.showAll")} <Glyph name="chevron" size={14} /></a>

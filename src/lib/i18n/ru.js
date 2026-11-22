@@ -107,6 +107,13 @@ export default {
   "home.emptyHint": "Новый чат создаётся мгновенно с моделью из Настроек — сменить её можно прямо в чате.",
   "home.loadingChats": "Загрузка чатов…",
   "home.search": "Поиск по чатам",
+  // FEAT-01.60: полнотекстовый поиск по сообщениям чатов.
+  "home.searchMessages": "Поиск по чатам и сообщениям",
+  "home.searchMatches": "совпадений: {count}",
+  "home.snippetYou": "Вы:",
+  "home.snippetAnswer": "Ответ:",
+  "home.searchIndexing": "Индексируем историю чатов ({done}/{total})…",
+  "home.searchUnavailable": "Поиск по сообщениям сейчас недоступен — показаны совпадения по названиям.",
   "home.resetSearch": "Сбросить поиск",
   "home.more": "Ещё {count}",
   "home.collapse": "Свернуть",

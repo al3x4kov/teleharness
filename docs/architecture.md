@@ -178,6 +178,7 @@ regenerateToken`, `isAbsoluteDir`, `EventHub.syncDirectories`. Путь
 | `lib/static.js` | 102 | статика `public/` (или `TELEHARNESS_PUBLIC_DIR`): защита от traversal, ETag/304 | `serveStatic` |
 | `lib/usage.js` | 132 | квота z.ai: RAW-ключ, Bearer — запасной, кэш 60 с | `usageStats, normalizeUsage` |
 | `lib/host.js` | 166 | CPU/RAM/диски/температура (CIM, кэш 10 с), детектор «замёрзшего» датчика, температура SSD из SMART (`diskTempC`, под Limited-токеном недоступна), версия opencode из `/global/health` | `hostStats, thermalCelsius, trackTempStuck, diskTempCelsius, opencodeVersion` |
+| **`lib/chat-search.js`** | 509 | **2.5.4**: полнотекстовый поиск по сообщениям чатов (FEAT-01.60) — SQLite FTS5 trigram-индекс (`node:sqlite`, WAL), полностью производный: удаление файла → перестройка; в индексе typedText вопросов (без системных вставок) и финальные text-части ответов opencode и Claude/Codex/ACP; фоновая первичная индексация, `ensureFresh` перед выдачей, инкрементальная докачка грязных сессий | `ChatSearchIndex` |
 | `lib/mock.js` | 129 | `TELEHARNESS_MOCK=1`: ответы из фикстур, SSE из `events.sse`, запись POST в `_captured.jsonl` | `mockHandler` |
 | `ops/portal-server.js` | 394 | edge :80/:443: allow-list статики, отказ алиасам путей (ADR-008); перезапись `x-forwarded-*`/`forwarded`/`x-real-ip`, XFP по листенеру, XFF по сокету; на `/tv/api` вырезаются кука портала и `authorization`; свой access-лог `edge-YYYYMMDD.log`, `x-request-id`; `/teleharness/api/healthz` снаружи → 404 (ADR-009); env-оверрайды для тестов (`TELEHARNESS_EDGE_ROOT/…_LOG_DIR/…_UPSTREAM`) | — |
 
@@ -224,6 +225,7 @@ store-фасад (integration.md §1); `globalThis.__teleharnessActiveId` уда
 | `/session/:id/binding` | PATCH | все (тенант — в скоупе) | смена модели/агента; гейт тенанта; 409 «engine locked» после первого сообщения |
 | `/session/:id/binding` c `{relay:true, model, agent?, reason?}` | PATCH | все (тенант — в скоупе) | передача чата на другую модель или движок (FEAT-11.18, 1.19.0): 409 во время хода, 400 для пустого чата и той же модели; журнал пишется принудительно, отметка — в `relays.json`, лента сообщений сливается из обоих движков по времени; первый запрос после передачи получает скрытую (synthetic) часть с ходами, которых у движка нет (BUG-232, 1.19.2: до 8000 знаков, обрезка названа, остальное — в журнале) |
 | `/session/:id/message` | GET | все | пагинация `limit`/`before` (`x-teleharness-has-more`, `x-teleharness-next-before`); Claude-история → `mergedMessages`; для не-admin tool-части редактируются (`redactMessages`) |
+| `/session/search?q=` | GET | все (тенант — свой скоуп) | **2.5.4** (FEAT-01.60): полнотекстовый поиск по сообщениям (`lib/chat-search.js`): `limit`, `ensureFresh` перед выдачей; admin — все чаты, тенант — свои каталоги (+локальные Claude-чаты через `dirAllowed`); маршрут объявлен в `routes/session.js` до параметрических `/:id/*` |
 | `/session/:id/prompt` | POST | все | гейт тенанта до любых побочных эффектов; квота тела тенанта (8 МБ) и rate limit; `materializeFileParts` → привязка → Claude (`dispatch({access})`, 204; при занятом ходе — в очередь, 409 только при переполнении) или `hub.prepareForPrompt` + промпт opencode через адаптер `lib/oc-client.js` (600 с); admin-каталог — из индекса сессий |
 | `/session/:id/abort` | POST | все | живой Claude-ход → kill + отмена очереди; иначе upstream abort |
 | `/session/:id` | PATCH/DELETE | все | переименование/удаление; DELETE: скоуп → upstream 2xx → `claude.forget`/`bindings.forget` (ADR-001 шаг 1, BUG-12.6) |
@@ -275,6 +277,14 @@ store-фасад (integration.md §1); `globalThis.__teleharnessActiveId` уда
 | `src/lib/store/state.js` `sanitizePrefs` | недоступная сохранённая модель → дефолт + предупреждение | BUG-03.15 |
 
 **Окружение прода (1.9.0).** Переменная пользователя `TELEHARNESS_CLAUDE_MCP_CONFIG=D:\Apps\teleharness\ops\claude\mcp-playwright.json` (Playwright MCP для Claude-чатов admin). `TELEHARNESS_KB_ROOT` по умолчанию `D:\Vault\agents`.
+
+### 2.6. Что изменилось в 2.5.3–2.5.4 (релиз 2.5.4, 2026-11-23)
+
+| Модуль | Что | Item |
+|---|---|---|
+| `lib/chat-search.js`, `GET /session/search` | полнотекстовый поиск по вопросам и ответам всех чатов: SQLite FTS5 trigram-индекс (node:sqlite, WAL), полностью производный (перестраивается при удалении файла); в индекс — typedText вопросов без системных вставок и финальные text-части ответов opencode и Claude/Codex/ACP; фоновая первичная индексация + `ensureFresh` перед выдачей, `markDirty` на prompt/undo/revert и hub-события, `forget` при удалении чата; admin — все чаты, тенант — только свои каталоги (+локальные Claude-чаты через `dirAllowed`); клиент — сниппеты «Вы:/Ответ:» с подсветкой и deep-link `#/chat/:id?mid=…` (автодогрузка истории до 20 страниц, прокрутка, `.is-search-hit`, включая компактные merged-ходы); env — `TELEHARNESS_SEARCH_NO_BG` / `TELEHARNESS_SEARCH_INDEX_DELAY_MS` (§5.1). Схема: [search-pipeline.svg](search-pipeline.svg), RU — [search-pipeline.ru.svg](search-pipeline.ru.svg) | FEAT-01.60 |
+| `src/components/Drawer.jsx` | адаптивные «Недавние» в боковой панели ПК (≥ 900 px): `calcRecentLimit()` по высоте панели + ResizeObserver/resize, минимум 8, максимум 100; < 900 px — фиксированные 8 | FEAT-09.31 |
+| `lib/acp-chat.js`, `lib/acp-shim.mjs`, `lib/claude.js` | guard «протухшей» ACP-сессии Antigravity: сброс `acpSessions` при любом прерывании/ошибке ACP-хода и в `#recover()`, `acpSessionKey` в claude-runs.json; read-only SQLite-проверка нетерминальных шагов (1,2,8,9,11) в БД сессии перед `session/load`, повреждённая БД/горячий WAL → тоже чистая сессия. Подробно — §5.1, `TELEHARNESS_ACP_POST_ANSWER_IDLE_MS` | BUG-298 |
 
 ## 3. Потоки данных
 
@@ -499,7 +509,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `session-bindings.json` | lib/binding.js | `{version:1, sessions:{sid:{engine,model,agent,prompted,at}}}` | `writeJsonAtomic`, ошибки в лог | карантин `.corrupt-<ts>`, старт с пустого | 1,1 КБ |
 | `relays.json` | lib/relay.js | `{sid:[{at, from:{engine,providerID,modelID}, to:{…}, reason}]}` (до 50 отметок на чат) | `writeJsonAtomic`, ошибки в лог | карантин, старт с пустого; отметки пропадут из ленты, сами ходы целы |
 | `claude-sessions.json` | lib/claude.js | `{version:1, sessions:{sid:{directory,claudeSid,messages:[{info,parts}]}}}` | 1.7.0: `writeJsonAtomic` (tmp+rename), картинки — ссылки на `.teleharness-uploads/…` | карантин `.corrupt-<ts>`, старт с пустого без затирания (до 1.7.0 — потеря всей истории, R11) | растёт; файл-на-сессию (S6) не сделан |
-| `claude-runs.json` | lib/claude.js | **1.7.0**: живые ходы `{pid, image, spawnedAt, claudeSid, userMsgId, modelID}` | атомарно | — | малый |
+| `claude-runs.json` | lib/claude.js | **1.7.0 / 2.5.4 (BUG-298)**: живые ходы `{pid, image, spawnedAt, claudeSid, userMsgId, modelID, engine?, providerID?, acpSessionKey?}`; при рестарте `#recover()` сбрасывает `entry.acpSessions[acpSessionKey]` прерванного ACP-хода | атомарно | — | малый |
 | `claude-models.json` | lib/claude.js | **1.7.0**: необязательное переопределение каталога Claude-моделей | вручную | неизвестная модель → 400 | — |
 | `hub-pending.json` | lib/hub.js | **1.7.0**: счётчики автоповторов pending-промптов | tmp + rename | — | малый |
 | `logs/access-YYYYMMDD.log` | lib/accesslog.js | **1.7.0**: JSON-строка на запрос | append, ротация 10 МБ, 14 дней | — | — |
@@ -621,7 +631,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_ANTHROPIC_ADMIN_KEY` | `lib/subscriptions.js` | ключ администратора Anthropic API — карточка трат «Anthropic API»; пусто → карточки нет |
 | `TELEHARNESS_JOURNAL_DEBOUNCE_MS` | `server.js` | пауза перед пересборкой журнала чата после конца хода; пусто → 3000 |
 | `TELEHARNESS_AUTO_RELAY_DELAY_MS` | `server.js` | пауза перед автоматической передачей чата при лимите (FEAT-18.6), чтобы ход успел закрыться; пусто → 1500 |
-| `TELEHARNESS_ACP_POST_ANSWER_IDLE_MS` | `lib/claude.js` | BUG-294: сторож зависшего ACP `session/prompt` после готового ответа (0 открытых задач и субагентов) — мягко завершает ход без `[Прервано]`, сохраняет очередь и сбрасывает битую ACP-сессию; пусто → 600000 (10 мин), `0` = выкл. |
+| `TELEHARNESS_ACP_POST_ANSWER_IDLE_MS` | `lib/claude.js` | BUG-294 / BUG-298: сторож зависшего ACP `session/prompt` после готового ответа (0 открытых задач и субагентов) — мягко завершает ход без `[Прервано]`, сохраняет очередь и сбрасывает битую ACP-сессию; пусто → 600000 (10 мин), `0` = выкл. Дополнительно в 2.5.4 (BUG-298) `lib/claude.js` сбрасывает `entry.acpSessions` при любом прерывании/ошибке ACP-хода и в `#recover()`, а `lib/acp-shim.mjs` + `antigravitySessionHasStaleSteps()` (`lib/acp-chat.js`) в read-only режиме проверяют SQLite-БД Antigravity перед `session/load` на нетерминальные шаги (`1,2,8,9,11`) и при обнаружении стартуют чистую сессию с историей чата. |
 | `TELEHARNESS_CODEX_SHIM` | `lib/claude.js`, `server.js` | посредник Codex, который раннер запускает для моделей Codex (FEAT-18.7), и разовый запрос «Предложить сообщение» (`--teleharness-oneshot`, FEAT-18.8); пусто → `lib/codex-shim.mjs` |
 | `TELEHARNESS_ACP` | `lib/auth.js`, маршруты ACP | При значении `off` отключает каталог, установку, вход и ходы агентов ACP (FEAT-20.4). |
 | `TELEHARNESS_CODEX` | `lib/codex-catalog.js` | `off` — движок Codex выключен, посредник не запускается (FEAT-18.7); пусто → Codex предлагается, когда codex установлен и в нём выполнен вход |
@@ -632,6 +642,8 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_COST_LEDGER` | `server.js` | FEAT-20.6: файл журнала расхода по ценам API (SQLite); пусто → `<data>\usage-ledger.sqlite` |
 | `TELEHARNESS_COST_NO_BACKFILL` | `server.js` | FEAT-20.6: непусто → учёт истории (claude-sessions.json, opencode) при старте не запускается (тесты) |
 | `TELEHARNESS_COST_BACKFILL_DELAY_MS` | `server.js` | FEAT-20.6: пауза перед учётом истории после старта; пусто → 15000 |
+| `TELEHARNESS_SEARCH_NO_BG` | `server.js` | FEAT-01.60: непусто → фоновая индексация истории для поиска по чатам при старте не запускается (тесты) |
+| `TELEHARNESS_SEARCH_INDEX_DELAY_MS` | `server.js` | FEAT-01.60: пауза перед фоновой индексацией истории после старта; пусто → 10000 |
 
 Схему читает только `lib/config.js` (`loadConfig`); `TELEHARNESS_UPSTREAM` ещё читают напрямую
 `lib/proxy.js` и `lib/host.js` (перенос на `config` — остаток ADR-006). Плагины opencode
