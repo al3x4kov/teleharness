@@ -131,22 +131,30 @@ subscriptions within their limits.
 
 <p align="center">
   <img src="docs/screenshots/phone-light-temporal-runs.png" alt="Runs: a block of runs waiting for your decision, statuses without extra taps" width="200">
-  <img src="docs/screenshots/phone-light-temporal-editor.png" alt="Pipe editor: a Codex step with {{input.branch}} and {{steps.review}}" width="200">
+  <img src="docs/screenshots/phone-light-temporal-editor.png" alt="Pipe editor: an OpenCode model step with the GLM-5.3-Flash subscription model" width="200">
   <img src="docs/screenshots/phone-light-temporal-result.png" alt="Run result: the final answer and the run files" width="200">
   <img src="docs/screenshots/phone-light-temporal-condition.png" alt="A condition that was false: the next step is skipped" width="200">
 </p>
 
-Steps: *Model* (Claude, Codex or Gemini ACP), *Human decision* (with up to 3 rework cycles back to a model step),
+Steps: *Model* (Claude, Codex, Gemini ACP or OpenCode — GLM models are loaded from your connected OpenCode
+providers), *Human decision* (with up to 3 rework cycles back to a model step),
 *Open PR* (isolated worktree → draft PR or same-branch CI fix, with approval gate for `.github/workflows`), *Timer*,
 *Join*, *Condition*, *Artifact*; run inputs as `{{input.name}}`, earlier answers as `{{steps.id}}`; schedules with a
 preview of the next runs; and **GitHub Background Agents** (webhooks or 2-min polling on issue labels, `/agent`
-commands and red CI, with trusted authors, 14-day event journal and admin kill-switch). Optional, Linux and macOS —
+commands and red CI, with trusted authors, 14-day event journal and admin kill-switch). A model step runs as a turn
+of your own chat on the subscription; when OpenCode reports a quota limit, the run parks in *Waiting for
+subscription quota* instead of failing. Optional, Linux and macOS —
 see [docs/temporal.md](docs/temporal.md). Try it without any setup in `npm run demo`.
 
 <p align="center">
   <img src="docs/screenshots/desktop-light-temporal-triggers.png" alt="Temporal Triggers: GitHub background agents with webhook and polling status" width="820">
 </p>
 <p align="center"><sub>GitHub Background Agents: trigger pipelines on issue labels, comment commands or red CI and open draft PRs automatically.</sub></p>
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-temporal-runs.png" alt="Runs on desktop: a run waiting for subscription quota, filters and statuses" width="820">
+</p>
+<p align="center"><sub>Runs list: when a subscription (including OpenCode) hits its quota, the step parks in <i>Waiting for subscription quota</i> — the run stays resumable instead of failing.</sub></p>
 
 ## Why Teleharness
 
@@ -160,8 +168,9 @@ chain them into pipelines:
   have configured there — agents, skills, plugins, MCP — works from your phone.
 - **Many providers through one portal.** opencode talks to Z.ai GLM, OpenAI, Google Gemini, Anthropic,
   OpenRouter, local models and more; Claude Code brings your Claude subscription, Codex your ChatGPT
-  subscription. Pick the engine and model per chat.
-- **Agents that work while you're away.** Pipelines on Temporal run multi-step jobs across Claude and Codex, stop for
+  subscription. Pick the engine and model per chat — the picker auto-loads each OpenCode provider's model list and
+  refreshes it on demand.
+- **Agents that work while you're away.** Pipelines on Temporal run multi-step jobs across Claude, Codex, Gemini ACP and opencode, stop for
   your approval and resume after restarts — on your subscriptions, never a paid API.
 - **A task survives a usage limit.** When a subscription runs out mid-task, hand the chat over to another
   engine or model: same folder, one feed, and the new engine receives the turns it missed.
@@ -238,7 +247,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 
 | | |
 |---|---|
-| **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. Admins can grant Claude, Codex, and Gemini (ACP) per tenant in Settings → Users (scoped to the user's folders, no shell).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Model picker with opencode, Claude, Codex and ACP engine groups" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
+| **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. The picker groups models per connected OpenCode provider (subscription plan, free models, API) with a *Refresh* button; pay-per-token OpenCode models are hidden from tenants. Admins can grant Claude, Codex, and Gemini (ACP) per tenant in Settings → Users (scoped to the user's folders, no shell).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Chat model picker on a Codex chat: locked engine, model list and Refresh list button" width="180"> <img src="docs/screenshots/phone-light-settings-model.png" alt="Model catalog in Settings: Z.AI Coding Plan (opencode), Claude and Codex groups with GLM-5.3 models and Refresh list" width="180"> <img src="docs/screenshots/phone-light-picker-refresh-error.png" alt="Refresh failed: the picker keeps the saved models and shows the error" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
 | **Attention Board** | One screen for every chat and Temporal run grouped into *Waiting for you*, *Working*, *Done* and *Failed*, with a *While you were away* recap, quick actions and per-category Web Push notifications with quiet hours.<br><img src="docs/screenshots/phone-light-board.png" alt="Attention Board on a phone" width="180"> |
 | **Mobile Review & Plan-First** | Review queue across chats and runs, touch-friendly diff with line selection and persistent inline draft comments, return-to-agent and accept/commit. *Plan first* makes the agent propose a read-only plan and wait for approval before editing files.<br><img src="docs/screenshots/phone-light-review.png" alt="Mobile diff viewer" width="180"> <img src="docs/screenshots/phone-light-plan.png" alt="Gemini Plan 1 approval card" width="180"> |
 | **Isolated Git Worktrees** | Give each chat or pipeline run its own git worktree and branch, detect cross-chat file overlaps and dry-run merge conflicts, merge with squash/merge/ff after running tests, and prune orphaned branches.<br><img src="docs/screenshots/phone-light-worktree.png" alt="Chat with active worktree pill, review plaque and conflict warning" width="180"> <img src="docs/screenshots/phone-light-worktrees.png" alt="Project worktrees list and merge settings" width="180"> |
@@ -249,7 +258,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Agent steps** | Live turn progress: reasoning, tool calls with output, background tasks. Each subagent run is a card with its duration, step count and tokens; open it to see every step — runs of the same tool fold into one line that expands on tap, and *Show all steps (N)* lists them one by one. Undo a turn and its file edits.<br><img src="docs/screenshots/phone-light-agent-steps.png" alt="A subagent card with 14 steps: a folded line of commands opened step by step" width="180"> |
 | **Turn changes and Git** | An answer that edited files gets a *Changes · N files* row: open it for a per-file diff — what this turn changed, or the file now against the last commit (one column on a phone, two panes on a desktop). The Git screen of the chat folder shows the branch, ahead/behind and changed files: tick the files to commit, let the chat's own model suggest the message in a separate short request (it never lands in the chat history), commit, and push — push is for the admin only. Other users work with git in their own folders, without push or branch switching. Settings → Git holds the commit author, the message language and the default selection. |
 | **Background subagents keep working** | Claude Code answers right away while subagents it started in the background keep running after the answer. A band above the composer shows who is still working; a new message waits in the queue, and Claude picks up their results and answers again when they finish. |
-| **Temporal pipelines & GitHub Background Agents** *(optional)* | Multi-step scenarios that survive restarts: Claude, Codex or Gemini (ACP) steps, human approvals with rework loops (up to 3 cycles), *Open PR* steps in isolated worktrees, timers, conditions and saved artifacts. Connect a fine-grained GitHub PAT in Settings → GitHub to trigger pipes automatically via webhook or polling (*Issue → PR*, *Fix CI*, *Nightly dependency update*) with trusted authors, event journal and an admin kill-switch. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision and GitHub PR run" width="180"> <img src="docs/screenshots/phone-light-temporal-triggers.png" alt="Temporal Triggers list on a phone" width="180"> <img src="docs/screenshots/phone-light-github.png" alt="Settings: GitHub fine-grained token and repository readiness" width="180"> |
+| **Temporal pipelines & GitHub Background Agents** *(optional)* | Multi-step scenarios that survive restarts: Claude, Codex, Gemini (ACP) or OpenCode (GLM) steps, human approvals with rework loops (up to 3 cycles), *Open PR* steps in isolated worktrees, timers, conditions and saved artifacts. Connect a fine-grained GitHub PAT in Settings → GitHub to trigger pipes automatically via webhook or polling (*Issue → PR*, *Fix CI*, *Nightly dependency update*) with trusted authors, event journal and an admin kill-switch. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision and GitHub PR run" width="180"> <img src="docs/screenshots/phone-light-temporal-triggers.png" alt="Temporal Triggers list on a phone" width="180"> <img src="docs/screenshots/phone-light-github.png" alt="Settings: GitHub fine-grained token and repository readiness" width="180"> |
 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. Optionally automatic, with your own order of backup models. |
 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
 | **Reliable streaming** | One SSE hub for every engine with replay, stall detection and loop protection — survives flaky mobile networks. |

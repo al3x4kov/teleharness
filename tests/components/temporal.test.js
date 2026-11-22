@@ -495,3 +495,24 @@ test("TASK-20.34 п.1 / FEAT-20.1 кр. 14: RunDetail показывает «Д�
  await h.waitFor(()=>lim.root.textContent.includes("Лимит доработок исчерпан (3 из 3)"));
  assert.equal($(lim.root,'[data-action="rework"]').disabled,true);
 });
+
+test("FEAT-19.31: DefinitionEditor и RunDetail показывают OpenCode и GLM-5.3-Flash из modelLabels",async()=>{
+ const r=record();
+ r.draft.steps=[{id:"s1",name:"Реализация GLM",type:"model",engine:"opencode",model:"glm-5.3-flash",instruction:"Сделай",timeoutSeconds:300,maxAttempts:2,dependsOn:[]}];
+ const labels={"glm-5.3-flash":"GLM-5.3-Flash","glm-5.3":"GLM-5.3"};
+ const {root}=h.mount(ui.DefinitionEditor,{record:r,pipelineAvailable:true,engines:["claude","codex","acp","opencode"],subscriptionModels:{opencode:["glm-5.3-flash","glm-5.3"]},modelLabels:labels});
+ assert(root.textContent.includes("OpenCode"));
+ assert(root.textContent.includes("GLM-5.3-Flash"));
+ assert(root.textContent.includes("Все шаги можно исполнить"));
+ h.click(byText(root,"Реализация GLM"));await h.flush();
+ const engineSel=$(root,'select[aria-label="Движок"]');
+ assert.equal(engineSel.value,"opencode");
+ const modelSel=$(root,'select[aria-label="Модель подписки"]');
+ assert.equal(modelSel.value,"glm-5.3-flash");
+ assert(modelSel.textContent.includes("GLM-5.3-Flash"));
+ h.cleanup();
+ installFetch([{path:"/teleharness/api/temporal/runs/w-oc",reply:()=>detail({status:"COMPLETED",steps:[{id:"s1",name:"Шаг GLM",type:"model",engine:"opencode",model:"glm-5.3-flash",dependsOn:[]}],state:{steps:{s1:"completed"}},summary:{kind:"ok"},closeTime:new Date().toISOString()})}]);
+ const run=h.mount(ui.RunDetail,{workflowId:"w-oc",modelLabels:labels});
+ await h.waitFor(()=>run.root.textContent.includes("Шаг GLM"));
+ assert(run.root.textContent.includes("OpenCode · GLM-5.3-Flash"));
+});

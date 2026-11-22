@@ -329,7 +329,7 @@ export const api = {
   // dialog modals from this, because a permission.asked that fired before the
   // page opened never re-fires over SSE.
   getDialogs: () => json("GET", "/dialogs"),
-  getProvider: () => json("GET", "/provider"),
+  getProvider: ({ force = false } = {}) => json("GET", force ? "/provider?refresh=1" : "/provider"),
   getAgents: () => json("GET", "/agent"),
   getProjects: () => json("GET", "/project"),
   getMcp: () => json("GET", "/mcp"),

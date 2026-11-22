@@ -7,7 +7,7 @@ import { createPortal } from "preact/compat";
 import {
   agents, agentsError, claudeAgents, claudeAgentsError, providerCfg, providerError, refreshAgents, refreshClaudeAgents, refreshProvider,
 } from "../lib/store.js";
-import { ENGINE_LABEL, acpProviderName, engineOf, WORKING_MODELS, workingModels } from "../lib/engine.js";
+import { ENGINE_LABEL, acpProviderName, engineOf, opencodeProviderName, WORKING_MODELS, workingModels } from "../lib/engine.js";
 import { locale, t } from "../lib/i18n.js";
 import "./views.css";
 
@@ -23,6 +23,7 @@ const GLYPHS = {
   copy: ["M9 9h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1Z", "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"],
   key: ["M21 12a9 9 0 0 1-15.5 6.2L3 16", "M3 21v-5h5", "M3 12a9 9 0 0 1 15.5-6.2L21 8", "M21 3v5h-5"],
   alert: ["M12 9v4", "M12 17h.01", "M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"],
+  refresh: ["M21 12a9 9 0 0 1-15.5 6.2L3 16", "M3 21v-5h5", "M3 12a9 9 0 0 1 15.5-6.2L21 8", "M21 3v5h-5"],
   image: [
     "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
     "M11 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
@@ -193,9 +194,9 @@ function modelTitle(m) {
   return m.label.endsWith(suffix) ? m.label.slice(0, -suffix.length) : m.label;
 }
 
-// Inside the z.ai group: the user's plan first, then the vision add-on —
-// alphabetical order buried the paid GLM models (BUG-11.11).
-const PROVIDER_ORDER = ["zai-coding-plan", "teleharness", "opencode"];
+// FEAT-11.23: порядок групп провайдеров opencode — сначала подписка z.ai,
+// затем бесплатные OpenCode Zen, затем pay-per-token API, далее остальные по алфавиту.
+const PROVIDER_ORDER = ["zai-coding-plan", "opencode", "zai", "teleharness"];
 const providerRank = (pid) => {
   const i = PROVIDER_ORDER.indexOf(pid);
   return i === -1 ? PROVIDER_ORDER.length : i;
@@ -217,12 +218,25 @@ const acpProviderSub = (pid) => (
   : t("pickers.acpSub.default")
 );
 
+// FEAT-11.23: подзаголовок группы провайдера opencode (движок + суть источника моделей).
+const opencodeProviderSub = (pid) => (
+  pid === "zai-coding-plan" ? t("pickers.ocSub.plan")
+  : pid === "opencode" ? t("pickers.ocSub.free")
+  : pid === "zai" || pid === "teleharness" ? t("pickers.ocSub.api")
+  : t("pickers.ocSub.default")
+);
+
 // Pure: catalog → [{key?, engine, title, sub, models}] (empty groups dropped).
 // BUG-287 / BRIEF-20.4: каждый ACP-агент получает свою группу «<Имя агента> · ACP».
 export function modelGroups(cfg, { engine = null, query = "", keep = null } = {}) {
   const q = query.trim().toLowerCase();
   const pool = workingModels(cfg, { keep }).filter(
-    (m) => (!engine || engineOf(m.providerID) === engine) && (!q || m.label.toLowerCase().includes(q)),
+    (m) =>
+      (!engine || engineOf(m.providerID) === engine) &&
+      (!q ||
+        m.label.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
+        opencodeProviderName(m.providerID, cfg?.providers).toLowerCase().includes(q)),
   );
   const isDefault = (m) => cfg?.defaults?.[m.providerID] === m.id;
   const out = [];
@@ -240,6 +254,30 @@ export function modelGroups(cfg, { engine = null, query = "", keep = null } = {}
             engine: "acp",
             title: `${acpProviderName(pid)} · ACP`,
             sub: acpProviderSub(pid),
+            models,
+          });
+        }
+      }
+      continue;
+    }
+    // FEAT-11.23: каждый подключённый провайдер opencode получает свою группу
+    // с человекочитаемым именем и пометкой движка opencode.
+    if (g.engine === "opencode") {
+      const ocModels = pool.filter((m) => engineOf(m.providerID) === "opencode");
+      const providers = [...new Set(ocModels.map((m) => m.providerID))].sort(
+        (a, b) => providerRank(a) - providerRank(b) || opencodeProviderName(a, cfg?.providers).localeCompare(opencodeProviderName(b, cfg?.providers), locale()),
+      );
+      for (const pid of providers) {
+        const models = ocModels
+          .filter((m) => m.providerID === pid)
+          .sort((a, b) => Number(isDefault(b)) - Number(isDefault(a)) || modelTitle(a).localeCompare(modelTitle(b), locale(), { numeric: true }));
+        if (models.length > 0) {
+          out.push({
+            key: pid,
+            engine: "opencode",
+            providerID: pid,
+            title: opencodeProviderName(pid, cfg?.providers),
+            sub: opencodeProviderSub(pid),
             models,
           });
         }
@@ -298,10 +336,20 @@ function NothingFound({ query, onReset }) {
 // note: explanatory line on top of the list (why the other engine is gone).
 export function ModelPicker({ value, onPick, engine = null, note = null }) {
   const [query, setQuery] = useState("");
+  const [refreshState, setRefreshState] = useState("idle"); // idle | loading | error
   const [catalog, retry] = useCatalog();
   const cfg = providerCfg.value;
   const groups = cfg ? modelGroups(cfg, { engine, query, keep: value }) : [];
   const isActive = (m) => value?.providerID === m.providerID && (value?.modelID ?? m.id) === m.id;
+
+  // FEAT-11.23: ручное обновление каталога (?refresh=1) — 60 с кэш сервера сбрасывается,
+  // при сбое прежний список сохраняется и показывается ошибка.
+  const onRefresh = async () => {
+    if (refreshState === "loading") return;
+    setRefreshState("loading");
+    const ok = await refreshProvider({ force: true });
+    setRefreshState(ok ? "idle" : "error");
+  };
 
   return (
     <div class="picker">
@@ -357,7 +405,21 @@ export function ModelPicker({ value, onPick, engine = null, note = null }) {
               ))}
             </section>
           ))}
-          <p class="picker-foot">{t("pickers.modelsFoot")}</p>
+          <div class="picker-foot-row">
+            <p class={"picker-foot" + (refreshState === "error" ? " is-error" : "")} role={refreshState === "error" ? "status" : undefined}>
+              {refreshState === "error"
+                ? t("pickers.refreshFailed")
+                : t("pickers.modelsFootAuto")}
+            </p>
+            <button
+              type="button"
+              class="btn picker-refresh"
+              disabled={refreshState === "loading"}
+              onClick={onRefresh}
+            >
+              {refreshState === "loading" ? t("pickers.refreshing") : (<><Glyph name="refresh" size={15} />{t("pickers.refresh")}</>)}
+            </button>
+          </div>
         </>
       )}
     </div>

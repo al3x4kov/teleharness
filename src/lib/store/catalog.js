@@ -99,10 +99,10 @@ export function freshSessionList() {
   return sessionsInflight ?? refreshSessions();
 }
 
-// Model catalog (the picker's «Повторить» calls this too). true = loaded.
-export async function refreshProvider() {
+// Model catalog (the picker's «Повторить» and «Обновить список» call this). true = loaded.
+export async function refreshProvider({ force = false } = {}) {
   try {
-    providerCfg.value = normalizeProviders(await api.getProvider());
+    providerCfg.value = normalizeProviders(await api.getProvider({ force }));
     providerError.value = false;
     return true;
   } catch {

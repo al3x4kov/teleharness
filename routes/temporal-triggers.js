@@ -99,7 +99,7 @@ export function triggerRoutes(deps) {
         }
         return { ...templateFace(t), ready: { ok: missing.length === 0, missing } };
       });
-      sendJson(res, 200, { templates, readiness: { github: { ok: githubOk, login: c?.login ?? null }, engines: { claude: models.claude ?? [], codex: models.codex ?? [], acp: models.acp ?? [] } } });
+      sendJson(res, 200, { templates, readiness: { github: { ok: githubOk, login: c?.login ?? null }, engines: { claude: models.claude ?? [], codex: models.codex ?? [], acp: models.acp ?? [], opencode: models.opencode ?? [] } } });
     }),
 
     // FEAT-20.3 1.15/1.18: «Готовность» мастера — что блокирует запуск шаблона.

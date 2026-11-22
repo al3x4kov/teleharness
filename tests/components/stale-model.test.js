@@ -25,14 +25,14 @@ afterEach(() => {
 });
 
 const ADMIN = { id: "admin", name: "Владелец", role: "admin" };
-const m = (providerID, id, name) => ({ id, providerID, label: `${name} (${providerID})`, status: "active" });
+const m = (providerID, id, name, status = "active") => ({ id, providerID, label: `${name} (${providerID})`, status });
 // Каталог как после normalizeProviders: Coding Plan + платный teleharness (из него рабочая только vision-модель).
 const CATALOG = {
   models: [
     m("zai-coding-plan", "glm-5.3-flash", "GLM-5.3-Flash"),
     m("zai-coding-plan", "glm-5.3", "GLM-5.3"),
     m("zai", "glm-5v-turbo", "GLM-5V-Turbo"),
-    m("zai", "glm-4.5", "GLM-4.5"),
+    m("zai", "glm-4.5", "GLM-4.5", "deprecated"),
   ],
   defaults: {},
   connected: ["zai-coding-plan", "zai"],
@@ -81,7 +81,7 @@ test("BUG-137: Настройки — у поля модели предупре�
   const raw = {
     all: CATALOG.connected.map((pid) => ({
       id: pid,
-      models: Object.fromEntries(CATALOG.models.filter((x) => x.providerID === pid).map((x) => [x.id, { id: x.id, name: x.label.replace(` (${pid})`, ""), providerID: pid, status: "active" }])),
+      models: Object.fromEntries(CATALOG.models.filter((x) => x.providerID === pid).map((x) => [x.id, { id: x.id, name: x.label.replace(` (${pid})`, ""), providerID: pid, status: x.status }])),
     })),
     default: {},
     connected: CATALOG.connected,

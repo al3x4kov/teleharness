@@ -89,10 +89,9 @@ test("small_model → agents.title.model = Flash; лимит Flash 262K пере
   assert.equal("whitelist" in p, false, "whitelist в v2 нет аналога — его заменяют policies")
 })
 
-test("policies = whitelist-эквивалент: deny всем провайдерам, allow zai-coding-plan (последний выигрывает)", () => {
+test("FEAT-11.23: policies запрещают только anthropic (Claude идёт через Claude Code CLI), открывая подключённые/бесплатные провайдеры opencode", () => {
   assert.deepEqual(cfg.policies, [
-    { action: "provider.use", resource: "*", effect: "deny" },
-    { action: "provider.use", resource: "zai-coding-plan", effect: "allow" },
+    { action: "provider.use", resource: "anthropic", effect: "deny" },
   ])
 })
 

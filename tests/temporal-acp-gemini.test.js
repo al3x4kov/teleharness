@@ -113,7 +113,7 @@ test("FEAT-19.30: /capabilities и права доступа для admin, те�
   // Admin sees acp + Gemini model + label
   const adminCaps = await call(admin, "GET", "/capabilities");
   assert.equal(adminCaps.status, 200);
-  assert.deepEqual(adminCaps.body.engines, ["claude", "codex", "acp"]);
+  assert.deepEqual(adminCaps.body.engines, ["claude", "codex", "acp", "opencode"]);
   assert.deepEqual(adminCaps.body.subscriptionModels.acp, [ACP_MODEL]);
   assert.equal(adminCaps.body.modelLabels[ACP_MODEL], ACP_LABEL);
 

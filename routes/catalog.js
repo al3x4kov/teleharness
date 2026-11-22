@@ -163,15 +163,18 @@ export function catalogRoutes(deps) {
       method: "GET",
       path: "/teleharness/api/provider",
       scope: "user",
-      handler: async ({ req, res, user, admin }) => {
+      handler: async ({ req, res, url, user, admin }) => {
         const { claude, upstream } = deps;
         // v2fix2: в v2-режиме источником тела каталога служит готовая функция
         // из server.js (deps.providerCatalog — клиент адаптера + модели);
         // без неё handleProvider читает ${upstream}/provider как в v1.
+        // FEAT-11.23: ?refresh=1 сбрасывает 60 с кэш каталога по запросу пользователя.
         const catalogSource = deps.oc ? deps.providerCatalog ?? null : null;
+        const qRefresh = url?.searchParams?.get("refresh");
+        const force = qRefresh === "1" || qRefresh === "true";
         const acpIds = deps.acpReady?.(user) ?? [];
-        if (admin && !acpIds.length) return claude.handleProvider(req, res, upstream, { catalog: catalogSource });
-        const captured = await deps.captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, upstream, { catalog: catalogSource }));
+        if (admin && !acpIds.length) return claude.handleProvider(req, res, upstream, { catalog: catalogSource, force });
+        const captured = await deps.captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, upstream, { catalog: catalogSource, force }));
         if (captured.status !== 200) return sendJson(res, captured.status === 304 ? 502 : captured.status, { error: "provider unavailable" });
         let catalog;
         try {

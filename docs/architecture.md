@@ -606,7 +606,7 @@ keepalive подделывался событием `busy`, запись ист�
 | `TELEHARNESS_TEMPORAL_TEST_QUEUE` | `server.js` | Отдельная очередь qa-* только для изолированных стендовых прогонов. |
 | `TELEHARNESS_TEMPORAL_OC_DIRECTORY` | `server.js` | Приватный каталог выделенного подписочного opencode с password и work. При отсутствии движок выключен. |
 | `TELEHARNESS_TEMPORAL_PIPELINES` | `server.js` | Включает защищённый сокет worker, исполнение, управление и расписания. По умолчанию выключено. |
-| `TELEHARNESS_TEMPORAL_MODELS` | `server.js` | FEAT-19.16: движки модельных шагов пайпов (`claude,codex`); шаг выполняется ходом чата портала. По умолчанию пусто — модельных шагов нет. |
+| `TELEHARNESS_TEMPORAL_MODELS` | `server.js` | FEAT-19.16 / FEAT-19.30 / FEAT-19.31: движки модельных шагов пайпов (`claude,codex,acp,opencode`); шаг выполняется ходом чата портала. По умолчанию пусто — модельных шагов нет. |
 | `TELEHARNESS_TEMPORAL_SUBSCRIPTION_ATTESTED` | `server.js` | FEAT-19.16: `1` — владелец подтвердил, что Claude работает только по подписке (у токена сервера нет usage API). |
 | `TELEHARNESS_TEMPORAL_CODEX_HOME` | `server.js` | FEAT-19.16: домашняя папка с входом Codex для текстового шага тенанта; по умолчанию — домашняя папка портала. |
 | `TELEHARNESS_TEMPORAL_STAGE_TIMERS` | `server.js` | FEAT-19.6. Значение 1 включает запуск таймеров и журнал только при TELEHARNESS_ENV=stand. По умолчанию выключено. |

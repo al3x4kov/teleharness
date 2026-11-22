@@ -106,9 +106,14 @@ export function normalizeProviders(resp) {
   const connected = Array.isArray(resp?.connected) ? resp.connected : [];
   const allow = new Set(connected.length > 0 ? connected : null); // empty list = no filtering (mock/older servers)
   const models = [];
+  const providers = {};
   for (const provider of resp?.all ?? []) {
     if (allow.size > 0 && !allow.has(provider.id)) continue;
+    if (typeof provider.id === "string" && typeof provider.name === "string" && provider.name.trim()) {
+      providers[provider.id] = provider.name.trim();
+    }
     for (const model of Object.values(provider.models ?? {})) {
+      if (model?.enabled === false) continue;
       const providerID = model.providerID ?? provider.id;
       if (allow.size > 0 && !allow.has(providerID)) continue;
       models.push({
@@ -123,7 +128,7 @@ export function normalizeProviders(resp) {
   }
   const isDefault = (m) => defaults[m.providerID] === m.id;
   models.sort((a, b) => Number(isDefault(b)) - Number(isDefault(a)) || a.label.localeCompare(b.label));
-  return { models, defaults, connected };
+  return { models, defaults, connected, providers };
 }
 
 // ISSUE-007: opencode's own service agents (compaction/summary/title, flagged

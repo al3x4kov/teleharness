@@ -208,7 +208,7 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
                     <span class="t-node" aria-hidden="true">{quota ? "⧗" : icon}</span>
                     <div class="t-tlbody">
                       <b>{step.name}</b>
-                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : note}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
+                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : note}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
                       {result && (
                         <div class={"t-prbox" + (result.tone === "off" ? " t-prbox-off" : "")}>
                           <b>{result.title}</b>

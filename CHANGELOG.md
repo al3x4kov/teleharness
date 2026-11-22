@@ -6,6 +6,26 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.5.2] — 2026-11-22
+
+### Added
+- **OpenCode (GLM) steps in Temporal pipelines.** A *Model* step can now run on OpenCode with `glm-5.3-flash` or
+  `glm-5.3`: the model catalog is loaded from your connected OpenCode providers (60-second cache, a fallback list in
+  demo mode), permission and question prompts are answered non-interactively so a background step never hangs on a
+  dialog, the run detail shows the OpenCode engine label, and a subscription quota error parks the run in
+  *Waiting for subscription quota* instead of failing it.
+- **Auto-loaded model catalog in the chat picker.** The picker builds a group per connected OpenCode provider —
+  subscription plans, free models and API keys — shows a *Refresh* button with loading and error states, keeps the
+  saved models when a refresh fails (HTTP 502 does not wipe the cache), and hides pay-per-token OpenCode models from
+  tenant users.
+
+### Changed
+- Per-tenant policy now covers OpenCode: tenants are served subscription and free (`cost = 0`) OpenCode models, while
+  pay-per-token models are hidden and rejected server-side. Refreshed EN & RU demo, screenshots and GIFs with the GLM steps and the new picker states.
+
+### Fixed
+- Image support for chat models now follows the OpenCode 2.x `capabilities.input` array instead of assuming text-only.
+
 ## [2.5.1] — 2026-11-22
 
 ### Added

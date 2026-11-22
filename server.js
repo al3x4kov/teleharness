@@ -863,17 +863,34 @@ if (!MOCK) hub.onEvent((data) => journal.note(data));
 // доступ к папке. На папку журналов зоны ЭТОГО чата портал отвечает сам, один раз на запрос.
 if (!MOCK)
   hub.onEvent((data, evtDir) => {
-    if (typeof data !== "string" || !data.includes('"permission.asked"')) return;
+    if (typeof data !== "string" || (!data.includes('"permission.asked"') && !data.includes('"question.asked"'))) return;
     let evt;
     try {
       evt = JSON.parse(data);
     } catch {
       return;
     }
-    const p = evt?.type === "permission.asked" ? evt.properties : null;
+    const type = evt?.type;
+    if (type !== "permission.asked" && type !== "question.asked") return;
+    const p = evt.properties ?? null;
     const requestID = p?.id ?? p?.requestID;
     if (!p?.sessionID || typeof requestID !== "string") return;
     if (isRunnerEngine(p.teleharness?.engine)) return; // FEAT-18.4: the Claude bridge asks the person (FEAT-18.7: Codex too)
+    // FEAT-19.31: фоновый OpenCode-шаг пайпа не должен зависать на интерактивном диалоге.
+    if (temporalChatSteps?.owns(p.sessionID)) {
+      (async () => {
+        const meta = temporalChatSteps.meta?.(p.sessionID);
+        const dir = meta?.directory ?? evtDir ?? (await resolveSessionDir(p.sessionID));
+        if (type === "permission.asked") {
+          const reply = meta?.admin === true ? "once" : "reject";
+          await OC.replyPermission({ directory: dir, sessionID: p.sessionID, requestID, reply, timeoutMs: DEFAULT_OPTS.timeoutMs });
+        } else {
+          await OC.rejectQuestion({ directory: dir, requestID, formID: p.formID ?? requestID, message: "Автоматический шаг пайпа без интерактивного пользователя; действуй по инструкции самостоятельно.", timeoutMs: DEFAULT_OPTS.timeoutMs });
+        }
+      })().catch((err) => errLog("temporal.opencode.dialog", err));
+      return;
+    }
+    if (type !== "permission.asked") return;
     (async () => {
       const dir = evtDir ?? (await resolveSessionDir(p.sessionID));
       if (!dir || !isJournalAccess(p, kbZoneOfDir(dir)?.root ?? null)) return;
@@ -930,7 +947,7 @@ if (config.TELEHARNESS_PUSH) {
       subject: config.TELEHARNESS_PUSH_SUBJECT,
       recipients: pushRecipients,
       chatInfo: pushChatInfo,
-      isManaged: (sid) => isRunnerEngine(engineOfChat(sid)),
+      isManaged: (sid) => isRunnerEngine(engineOfChat(sid)) || Boolean(temporalChatSteps?.owns(sid)),
       prefsOf: (userId) => attention.user(userId)?.push ?? null, // FEAT-20.2: виды и тихие часы
       activeAt: (userId) => attention.user(userId)?.lastActiveAt ?? null, // FEAT-20.2: смотрит портал на любом устройстве
       debounceMs: config.TELEHARNESS_PUSH_DEBOUNCE_MS,
@@ -1019,12 +1036,23 @@ const github = (() => {
 const attentionObserver = new OutcomeObserver({
   isManaged: (sid) => isRunnerEngine(engineOfChat(sid)),
   onTurnStart: (sid, dir) => reviewTurnStart(sid, dir), // FEAT-20.1
-  onTurnEnd: (sid, rec, dir) => reviewTurnEnd(sid, dir, { interrupted: rec?.kind !== "done" }), // FEAT-20.1
+  onTurnEnd: (sid, rec, dir) => {
+    if (temporalChatSteps?.owns(sid)) {
+      temporalChatSteps.onTurnEnd({
+        sid,
+        error: rec?.error ?? (rec?.kind === "done" || rec?.kind === "stopped" ? null : rec?.kind),
+        reason: rec?.kind === "stopped" ? "user" : rec?.kind === "stalled" ? "stalled" : null,
+      });
+      return;
+    }
+    reviewTurnEnd(sid, dir, { interrupted: rec?.kind !== "done" }); // FEAT-20.1
+  },
   onOutcome: (sid, rec, dir) => {
-    if (sessionIndex.recById.get(sid)?.parentID) return; // исход субагента — не исход чата
+    if (temporalChatSteps?.owns(sid) || sessionIndex.recById.get(sid)?.parentID) return; // шаг пайпа / исход субагента — не исход чата
     attentionOutcome(sid, rec, dir);
   },
   onAsk: (sid, dir) => {
+    if (temporalChatSteps?.owns(sid)) return;
     void (async () => {
       const d = claude.dirOf(sid) ?? (await resolveSessionDir(sid).catch(() => null)) ?? dir;
       const users = pushRecipients(d);
@@ -1444,7 +1472,7 @@ async function tenantVisionModel(user, binding, parsed) {
     const codexAllowed = engineAllowed(user, "codex");
     return visionSibling(catalog, model, {
       preferred: config.TELEHARNESS_TENANT_VISION_MODEL,
-      allowed: (m) => modelInCatalog(catalog, m, { claudeAllowed, codexAllowed }) !== false,
+      allowed: (m) => modelInCatalog(catalog, m, { claudeAllowed, codexAllowed, paidOpencodeAllowed: isAdmin(user) }) !== false,
     });
   } catch {
     return null;
@@ -1758,12 +1786,56 @@ const acpTemporalCatalog = () => {
   }
   return out;
 };
+// FEAT-19.31: каталог моделей OpenCode (zai-coding-plan: GLM-5.3-Flash / GLM-5.3 и др.) для Temporal пайпов.
+const OPENCODE_FALLBACK_MODELS = [
+  { id: "glm-5.3-flash", name: "GLM-5.3-Flash", providerID: "zai-coding-plan" },
+  { id: "glm-5.3", name: "GLM-5.3", providerID: "zai-coding-plan" },
+];
+let opencodeCatalogCache = { at: 0, list: [] };
+let opencodeCatalogBusy = null;
+async function refreshOpencodeCatalog() {
+  if (MOCK) return opencodeCatalogCache.list;
+  if (opencodeCatalogBusy) return opencodeCatalogBusy;
+  opencodeCatalogBusy = (async () => {
+    try {
+      const cat = OC.api === "v2" ? await OC.listProviders({ timeoutMs: 10_000 }) : null;
+      const connected = new Set(Array.isArray(cat?.connected) ? cat.connected : []);
+      const providers = Array.isArray(cat?.all) ? cat.all.filter((p) => p?.id && (!connected.size || connected.has(p.id)) && !isRunnerEngine(engineOf(p.id))) : [];
+      providers.sort((a, b) => (a.id === "zai-coding-plan" ? -1 : b.id === "zai-coding-plan" ? 1 : a.id.localeCompare(b.id)));
+      const out = [];
+      const seen = new Set();
+      for (const p of providers) {
+        const entries = Object.entries(p.models ?? {});
+        entries.sort(([a], [b]) => (a === "glm-5.3-flash" ? -1 : b === "glm-5.3-flash" ? 1 : a.localeCompare(b)));
+        for (const [mid, info] of entries) {
+          if (!mid || seen.has(mid)) continue;
+          seen.add(mid);
+          const name = typeof info?.name === "string" && info.name.trim() ? info.name.trim() : mid === "glm-5.3-flash" ? "GLM-5.3-Flash" : mid === "glm-5.3" ? "GLM-5.3" : mid;
+          out.push({ id: mid, name, providerID: p.id });
+        }
+      }
+      if (out.length) opencodeCatalogCache = { at: Date.now(), list: out };
+    } catch (err) {
+      errLog("temporal.opencode.catalog", err);
+    } finally {
+      opencodeCatalogBusy = null;
+    }
+    return opencodeCatalogCache.list;
+  })();
+  return opencodeCatalogBusy;
+}
+const opencodeTemporalCatalog = () => {
+  if (!MOCK && Date.now() - opencodeCatalogCache.at > 60_000) refreshOpencodeCatalog().catch(() => {});
+  return opencodeCatalogCache.list.length ? opencodeCatalogCache.list : OPENCODE_FALLBACK_MODELS;
+};
 const temporalDeps={sendJson,readJsonBody,dirAllowed,engineAllowed,getUser,errLog,
+  // FEAT-19.30 / FEAT-19.31: читаемые названия моделей для UI Temporal (отдаются с фильтрацией по правам пользователя).
   get modelLabels() {
     const out = {};
     for (const m of CLAUDE_MODELS) out[m.id] = m.name;
     for (const m of codexCatalog.models()) out[m.id] = m.name;
     for (const m of acpTemporalCatalog()) out[m.id] = m.name;
+    for (const m of opencodeTemporalCatalog()) out[m.id] = m.name;
     return out;
   },
   // BUG-251 / FEAT-19.16: pipe folders and the project picker (no typed paths).
@@ -1811,17 +1883,54 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
   };
   temporalChatSteps=chatStepRunner({
     registerStep:(x)=>costLedger.registerStep(x),
-    createSession:async({user,directory,project,engine,model})=>{
+    createSession:async({user,directory,project,engine,model,worktree=null})=>{
+      const admin=isAdmin(user);
+      const targetDir=engine==="opencode"?(admin?(worktree?.path??directory):(project||directory)):(admin||!project?directory:project);
       mkdirSync(directory,{recursive:true});
-      const created=await OC.createSession({directory:isAdmin(user)||!project?directory:project,timeoutMs:DEFAULT_OPTS.timeoutMs});
-      const providerID=engine==="codex"?CODEX_PROVIDER:engine==="acp"?(acpTemporalCatalog().find(m=>m.id===model)?.providerID??(Object.hasOwn(ACP_PROVIDERS,model)?model:"acp-antigravity")):CLAUDE_PROVIDER;
+      mkdirSync(targetDir,{recursive:true});
+      const created=await OC.createSession({directory:targetDir,timeoutMs:DEFAULT_OPTS.timeoutMs});
+      const providerID=engine==="codex"?CODEX_PROVIDER:engine==="acp"?(acpTemporalCatalog().find(m=>m.id===model)?.providerID??(Object.hasOwn(ACP_PROVIDERS,model)?model:"acp-antigravity")):engine==="opencode"?(opencodeTemporalCatalog().find(m=>m.id===model)?.providerID??"zai-coding-plan"):CLAUDE_PROVIDER;
       const binding=makeBinding({model:{providerID,modelID:model}});
       if(!created?.id||!binding) throw new Error("step chat not created");
       bindings.set(created.id,binding);hub.syncDirectories();fetchSessionIndex(true).catch(()=>{});
       return created.id;
     },
-    dispatchTurn:async({res,sid,directory,project,user,text,worktree=null})=>{
+    dispatchTurn:async({res,sid,directory,project,user,text,engine=null,worktree=null})=>{
       const admin=isAdmin(user),binding=bindings.get(sid);
+      const effEngine=engine??binding?.engine??"claude";
+      if(effEngine==="opencode") {
+        const dir=admin?(worktree?.path??directory):(project||directory);
+        if(!admin && OC.api==="v2" && !(await sandboxPluginConfirmed())) { res.writeHead(403); return res.end(JSON.stringify({error:"sandbox plugin inactive"})); }
+        let agent=null;
+        if(!admin) {
+          const agents=await agentList();
+          agent=defaultTenantAgent(agents,config.TELEHARNESS_TENANT_AGENT);
+          if(!agent || !agentAllowedForTenant(agent,agents)) { res.writeHead(403); return res.end(JSON.stringify({error:"agent not allowed"})); }
+        }
+        const race=await markPrompted(sid,binding);if(race){res.writeHead(409);return res.end(race);}
+        try { await instanceHealth.ready(dir); await instanceHealth.heal(dir); instanceHealth.warm(dir); } catch (err) { errLog("temporal.opencode.health", err); }
+        const sysTurn=withUserSystem({parts:[{type:"text",text}]},getSystemPrompt(user.id),{admin,portal:""});
+        const sysMeta=typeof sysTurn?.system==="string" && sysTurn.system ? {system:sysTurn.system} : null;
+        const modelRef=cleanModel(binding?.model);
+        const variant=modelRef ? withGlmVariant({model:modelRef},config.TELEHARNESS_GLM_VARIANT).variant??null : null;
+        try {
+          if(OC.api==="v2") {
+            await OC.enqueueTurn(sid,async()=>{
+              if(modelRef) await OC.setSessionModel(sid,{model:{providerID:modelRef.providerID,modelID:modelRef.modelID,...(variant?{variant}:{})},timeoutMs:DEFAULT_OPTS.timeoutMs});
+              if(agent) await OC.setSessionAgent(sid,{agent,timeoutMs:DEFAULT_OPTS.timeoutMs});
+              if(admin) await applyOcPermMode(sid,dir,"full");
+              await OC.prompt({directory:dir,sessionID:sid,parts:sysTurn.parts,...(sysMeta?{metadata:sysMeta}:{}),timeoutMs:PROMPT_OPTS.timeoutMs});
+            });
+          } else {
+            await OC.prompt({directory:dir,sessionID:sid,parts:sysTurn.parts,...(modelRef?{model:modelRef}:{}),...(agent?{agent}:{}),...(variant?{variant}:{}),...(sysMeta?.system?{system:sysMeta.system}:{}),timeoutMs:PROMPT_OPTS.timeoutMs});
+          }
+          res.writeHead(204);
+          return res.end();
+        } catch (err) {
+          res.writeHead(err?.status || 502);
+          return res.end(JSON.stringify({error:err?.message ?? "opencode prompt failed"}));
+        }
+      }
       const chatDir=admin||!project?directory:project,workDir=worktree?.path??(admin||!project?null:directory);
       const race=await markPrompted(sid,binding);if(race){res.writeHead(409);return res.end(race);}
       return claude.dispatch({res,sid,dir:chatDir,body:Buffer.from(JSON.stringify(applyBinding({parts:[{type:"text",text}]},binding))),
@@ -1832,8 +1941,9 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
         writableRoots:worktree?.commonDir?[worktree.commonDir]:null});
     },
     prepareWorktree:prepareRunWorktree,
-    messagesOf:(sid)=>claude.messages(sid),abort:(sid)=>claude.abort(sid),
-    setTitle:(sid,title)=>claude.setTitle(sid,title,"user"),
+    messagesOf:async(sid,meta)=>meta?.engine==="opencode"?(await OC.listMessages(sid,{directory:meta.directory,timeoutMs:DEFAULT_OPTS.timeoutMs})).messages:claude.messages(sid),
+    abort:(sid,meta)=>{if(meta?.engine==="opencode") OC.abort(sid,{directory:meta.directory}).catch(()=>{}); else claude.abort(sid);},
+    setTitle:(sid,title,meta)=>{if(meta?.engine==="opencode") OC.patchSession(sid,{directory:meta.directory,title,timeoutMs:DEFAULT_OPTS.timeoutMs}).catch(()=>{}); else claude.setTitle(sid,title,"user");},
     isLimit:(err,engine)=>isLimitError(err,{engine}),
   });
   if(enabled.has("claude")) options.chatModels={...options.chatModels,claude:()=>CLAUDE_MODELS.map(m=>m.id)};
@@ -1849,6 +1959,11 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
         }
       }
     }
+  }
+  // FEAT-19.31: OpenCode (GLM-5.3-Flash / GLM-5.3) в модельных шагах Temporal + прогрев каталога провайдеров.
+  if(enabled.has("opencode")) {
+    options.chatModels={...options.chatModels,opencode:()=>opencodeTemporalCatalog().map(m=>m.id)};
+    refreshOpencodeCatalog().catch(()=>{});
   }
   options.chatSteps=temporalChatSteps;
   options.prStep=prStepRunner({
@@ -2142,7 +2257,7 @@ async function autoRelayModelOk(user, model) {
   const m = cleanModel(model);
   if (!m || !engineAllowed(user, engineOf(m.providerID))) return false;
   const catalog = await providerCatalogJson(user);
-  return modelInCatalog(catalog, m, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex"), acpAllowed: engineAllowed(user, "acp") }) !== false;
+  return modelInCatalog(catalog, m, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex"), acpAllowed: engineAllowed(user, "acp"), paidOpencodeAllowed: isAdmin(user) }) !== false;
 }
 
 // Чья настройка действует для чата: тенант, которому принадлежит папка чата (как журнал

@@ -74,7 +74,7 @@ export function temporalRoutes(deps) {
       const modelLabels=Object.fromEntries(Object.entries(deps.modelLabels??{}).filter(([id])=>allowedIds.has(id)));
       return deps.sendJson(res,200,{definitions:true,subscriptionModels,modelLabels,pipelineAvailable:!!deps.startPipeline,schedulesAvailable:!!deps.schedules,runListAvailable:typeof deps.listRuns==="function",timerStartAvailable:typeof deps.startTimer==="function",triggersAvailable:typeof deps.enabledTriggers==="function",
         triggers:{available:typeof deps.enabledTriggers==="function",publicUrl:Boolean(deps.publicUrl),adminStopped:deps.adminStopped?deps.adminStopped():false,claudeLeftToday:deps.claudeLeftToday?deps.claudeLeftToday():null},
-        execution:{available:!!deps.startPipeline,reason:deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено"},engines:["claude","codex","acp"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"});
+        execution:{available:!!deps.startPipeline,reason:deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено"},engines:["claude","codex","acp","opencode"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"});
     }),
     route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})$/, async ({user,res,match})=>{
       if (!deps.lookupRun) throw new DefinitionError(503,"Исполнение Temporal ещё не подключено");

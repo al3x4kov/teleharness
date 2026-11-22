@@ -88,14 +88,16 @@ test("PickerSheet: портал в body, role=dialog с заголовком; Es
 
 // ---- ModelPicker ------------------------------------------------------------------
 
-test("ModelPicker: две группы движков (z.ai первой), только рабочие модели, галочка на текущей", () => {
+test("ModelPicker: группы по провайдерам opencode + Claude (z.ai первой), галочка на текущей (FEAT-11.23)", () => {
   ui.store.providerCfg.value = CFG;
   const { root } = t$.mount(ui.ModelPicker, { value: GLM, onPick() {} });
-  assert.deepEqual(groupTitles(root).length, 2);
-  const [teleharness, claude] = $$(root, "section");
-  assert.match(teleharness.getAttribute("aria-label"), /^opencode/); // TASK-01.84
-  assert.equal(!!$(claude, ".engine-dot.is-claude"), true, "вторая группа — Claude");
-  assert.deepEqual(names(teleharness), ["GLM-5.3", "GLM-5.3 Flash", "GLM-5V-Turbo"], "план z.ai, затем vision-модель; без GLM-4.5 и Big Pickle");
+  assert.deepEqual(groupTitles(root), ["Z.AI Coding Plan", "OpenCode", "Z.AI", "Claude · подписка"]);
+  const [zaiPlan, ocFree, zaiApi, claude] = $$(root, "section");
+  assert.match(zaiPlan.getAttribute("aria-label"), /^Z\.AI Coding Plan/);
+  assert.equal(!!$(claude, ".engine-dot.is-claude"), true, "последняя группа — Claude");
+  assert.deepEqual(names(zaiPlan), ["GLM-5.3", "GLM-5.3 Flash"]);
+  assert.deepEqual(names(ocFree), ["Big Pickle"]);
+  assert.deepEqual(names(zaiApi), ["GLM-4.5", "GLM-5V-Turbo"]);
   assert.deepEqual(names(claude), ["Claude Sonnet 5", "Claude Opus 5.5"], "дефолт Claude — первым");
   assert.equal(root.textContent.includes("(zai-coding-plan)"), false, "id провайдера в названии не показывается");
   const active = $$(root, "button.picker-row").filter((b) => b.getAttribute("aria-pressed") === "true");
@@ -103,7 +105,8 @@ test("ModelPicker: две группы движков (z.ai первой), то�
   assert.equal($(active[0], ".picker-row-name").textContent, "GLM-5.3 Flash");
   assert.ok($(active[0], ".picker-check"));
   assert.ok(byText(root, ".glyph-label", "картинки"), "у vision-модели метка «картинки»");
-  assert.match($(root, ".picker-foot").textContent, /только модели, которые сейчас отвечают/);
+  assert.match($(root, ".picker-foot").textContent, /Модели подгружаются автоматически из opencode/);
+  assert.ok(byText(root, "button.picker-refresh", "Обновить список"), "кнопка ручного обновления в футере");
 });
 
 test("ModelPicker: выбор строки → onPick({providerID, modelID})", () => {
@@ -114,10 +117,10 @@ test("ModelPicker: выбор строки → onPick({providerID, modelID})", (
   assert.deepEqual(picked, [{ providerID: "anthropic", modelID: "claude-opus-5-5" }]);
 });
 
-test("ModelPicker: engine=opencode — только свой движок и пояснение (закреплённый чат)", () => {
+test("ModelPicker: engine=opencode — только opencode-провайдеры и пояснение (закреплённый чат)", () => {
   ui.store.providerCfg.value = CFG;
   const { root } = t$.mount(ui.ModelPicker, { value: GLM, engine: "opencode", note: "Движок чата закреплён." });
-  assert.equal(groupTitles(root).length, 1);
+  assert.deepEqual(groupTitles(root), ["Z.AI Coding Plan", "OpenCode", "Z.AI"]);
   assert.equal(root.textContent.includes("Claude"), false);
   assert.equal($(root, ".picker-note").textContent, "Движок чата закреплён.");
 });
@@ -129,12 +132,53 @@ test("ModelPicker: поиск фильтрует; пусто → «Ничего 
   assert.equal(search.getAttribute("aria-label"), "Поиск модели");
   t$.typeInto(search, "opus");
   assert.deepEqual(names(root), ["Claude Opus 5.5"]);
+  t$.typeInto(search, "big-pickle");
+  assert.deepEqual(names(root), ["Big Pickle"]);
   t$.typeInto(search, "  нет-такой ");
   assert.equal(names(root).length, 0);
   assert.match($(root, ".picker-empty").textContent, /Ничего не найдено по «нет-такой»/);
   t$.click(byText(root, "button", "Сбросить"));
-  assert.equal(names(root).length, 5);
+  assert.equal(names(root).length, 7);
   assert.equal(search.value, "");
+});
+
+test("ModelPicker: кнопка «Обновить список» шлёт ?refresh=1, при ошибке 502 сохраняет кеш и показывает ошибку (FEAT-11.23)", async () => {
+  ui.store.providerCfg.value = CFG;
+  let mode = "fail";
+  const FRESH = {
+    all: [
+      { id: "zai-coding-plan", name: "Z.AI Coding Plan", models: { "glm-5.3-flash": { id: "glm-5.3-flash", name: "GLM-5.3 Flash", status: "active" } } },
+      { id: "opencode", name: "OpenCode", models: { "deepseek-v4.1-flash-free": { id: "deepseek-v4.1-flash-free", name: "DeepSeek Free", status: "active" } } },
+    ],
+    default: {},
+    connected: ["zai-coding-plan", "opencode"],
+  };
+  installFetch([
+    {
+      method: "GET",
+      path: "/teleharness/api/provider",
+      reply: (req) => {
+        if (req.query?.refresh !== "1") return { status: 400, body: { error: "missing refresh=1" } };
+        return mode === "fail" ? { status: 502, body: { error: "upstream down" } } : FRESH;
+      },
+    },
+  ]);
+  const { root } = t$.mount(ui.ModelPicker, { value: GLM });
+  assert.equal(names(root).length, 7);
+
+  t$.click(byText(root, "button.picker-refresh", "Обновить список"));
+  await t$.waitFor(() => $(root, ".picker-foot.is-error"));
+  assert.match($(root, ".picker-foot.is-error").textContent, /Не удалось обновить список/);
+  assert.equal(names(root).length, 7, "при ошибке обновления прежний список остаётся доступным");
+
+  mode = "ok";
+  t$.click(byText(root, "button.picker-refresh", "Обновить список"));
+  await t$.waitFor(() => names(root).includes("DeepSeek Free"));
+  assert.equal($(root, ".picker-foot.is-error"), null, "после успешного обновления ошибка исчезает");
+  assert.deepEqual(groupTitles(root), ["Z.AI Coding Plan", "OpenCode"]);
+  assert.deepEqual(names(root), ["GLM-5.3 Flash", "DeepSeek Free"]);
+  const refreshCalls = fetchCalls.filter((c) => c.path === "/teleharness/api/provider" && c.query?.refresh === "1");
+  assert.equal(refreshCalls.length, 2);
 });
 
 test("ModelPicker: каталог грузится — скелетон «Загрузка моделей…»; ошибка /provider → «Повторить» → список", async () => {

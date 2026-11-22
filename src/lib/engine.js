@@ -138,39 +138,45 @@ export function prettyModelId(modelID) {
 function connectedModels(cfg) {
   const connected = Array.isArray(cfg?.connected) ? cfg.connected : [];
   return (cfg?.models ?? []).filter(
-    (m) => (m.status ?? "active") === "active" && (connected.length === 0 || connected.includes(m.providerID)),
+    (m) => m?.enabled !== false && (m.status ?? "active") === "active" && (connected.length === 0 || connected.includes(m.providerID)),
   );
 }
 
-// FEAT-03.2: «connected» is not «works on my token». Of the opencode
-// providers only the z.ai Coding Plan is paid by the user's token; the
-// pay-per-token `zai` API contributes just its vision model (the plan has
-// none), and the free `opencode` provider (Zen «*-free» models, big-pickle)
-// is not on the token at all. List from BRIEF-09 / pickers.html (PK-3):
-// GLM-5.3-Flash, GLM-5.3, GLM-5.3 Highspeed, GLM-5V-Turbo. null = every
-// active model of that provider. Claude models come from the portal's own
-// claude CLI catalog (server-side, Г3) and are all kept.
+// FEAT-11.23: автоподгрузка моделей opencode — жёсткий белый список на клиенте
+// снят: доступность провайдеров и моделей управляется конфигом opencode и
+// серверной политикой (lib/policy.js). WORKING_MODELS оставлен для совместимости
+// импортов; workingModels возвращает все активные модели подключённых провайдеров.
 export const WORKING_MODELS = {
   "zai-coding-plan": null,
-  zai: ["glm-5v-turbo"],
+  opencode: null,
+  zai: null,
   anthropic: null,
   "acp-antigravity": null,
   "acp-gemini": null,
   "acp-github-copilot-cli": null,
-  "openai-codex": null, // FEAT-18.7: каталог Codex приходит только когда codex установлен и вошёл
+  "openai-codex": null,
 };
 
+export const OPENCODE_PROVIDER_LABELS = Object.freeze({
+  "zai-coding-plan": "Z.AI Coding Plan",
+  opencode: "OpenCode",
+  zai: "Z.AI",
+  openrouter: "OpenRouter",
+  deepseek: "DeepSeek",
+  openai: "OpenAI",
+  google: "Google Gemini",
+  xai: "xAI",
+  moonshotai: "Moonshot (Kimi)",
+});
+
+export function opencodeProviderName(providerID, providers = null) {
+  const custom = providers && typeof providers[providerID] === "string" ? providers[providerID].trim() : "";
+  if (custom) return custom;
+  return OPENCODE_PROVIDER_LABELS[providerID] ?? prettyModelId(providerID);
+}
+
 export function workingModels(cfg, { keep = null } = {}) {
-  const pool = connectedModels(cfg);
-  const ok = pool.filter((m) => {
-    if (!(m.providerID in WORKING_MODELS)) return false;
-    const allow = WORKING_MODELS[m.providerID];
-    return allow == null || allow.includes(m.id);
-  });
-  // Unknown catalog (other plan, mock without these providers): never show an
-  // empty sheet — fall back to everything connected.
-  const opencodeOk = ok.some((m) => engineOf(m.providerID) === "opencode");
-  const base = opencodeOk ? ok : [...pool.filter((m) => engineOf(m.providerID) === "opencode"), ...ok];
+  const base = connectedModels(cfg);
   // The chat's current model stays visible (with its check) even if filtered.
   if (keep?.modelID && !base.some((m) => m.providerID === keep.providerID && m.id === keep.modelID)) {
     const cur = (cfg?.models ?? []).find((m) => m.providerID === keep.providerID && m.id === keep.modelID);

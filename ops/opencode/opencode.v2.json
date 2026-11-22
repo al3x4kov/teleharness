@@ -64,8 +64,7 @@
   },
 
   "policies": [
-    { "action": "provider.use", "resource": "*", "effect": "deny" },
-    { "action": "provider.use", "resource": "zai-coding-plan", "effect": "allow" }
+    { "action": "provider.use", "resource": "anthropic", "effect": "deny" }
   ],
 
   "permissions": [

@@ -225,34 +225,34 @@ const claudeModels = [
   { id: "claude-sonnet-5-5", providerID: "anthropic", label: "Claude Sonnet 5.5 (anthropic)", status: "active" },
 ];
 
-test("Model picker data: two engine groups, z.ai first, only working models", () => {
+test("Model picker data: opencode grouped by provider, z.ai first, all connected active models (FEAT-11.23)", () => {
   const cfg = fixtureProviders();
   cfg.models.push(...claudeModels);
   cfg.connected = [...cfg.connected, "anthropic"];
   const groups = M.pickers.modelGroups(cfg);
-  assert.deepEqual(groups.map((g) => g.title), ["opencode", "Claude · подписка"]);
-  const teleharness = groups[0].models.map((m) => `${m.providerID}/${m.id}`);
-  assert.ok(teleharness.includes("zai-coding-plan/glm-5.3-flash"));
-  assert.ok(teleharness.includes("zai/glm-5v-turbo"));
-  assert.ok(!teleharness.some((x) => x.startsWith("opencode/")), "free opencode models are not on the token");
-  assert.ok(!teleharness.includes("zai/glm-4.5"), "legacy pay-per-token GLM hidden");
-  assert.ok(teleharness.length <= 5, `≈4 GLM rows, got ${teleharness.length}`);
-  assert.equal(groups[1].models.length, 2);
+  assert.deepEqual(groups.map((g) => g.title), ["Z.AI Coding Plan", "OpenCode", "Z.AI", "Claude · подписка"]);
+  const allOc = groups.filter((g) => g.engine === "opencode").flatMap((g) => g.models.map((m) => `${m.providerID}/${m.id}`));
+  assert.ok(allOc.includes("zai-coding-plan/glm-5.3-flash"));
+  assert.ok(allOc.includes("zai/glm-5v-turbo"));
+  assert.ok(allOc.includes("opencode/big-pickle"), "connected opencode models load dynamically");
+  assert.ok(allOc.length >= 20, `all connected opencode models are shown, got ${allOc.length}`);
+  assert.equal(groups.at(-1).models.length, 2);
   // search hides the whole empty group
   assert.deepEqual(M.pickers.modelGroups(cfg, { query: "opus" }).map((g) => g.engine), ["claude"]);
-  // the chat's current (filtered) model stays visible
-  const kept = M.pickers.modelGroups(cfg, { keep: { providerID: "opencode", modelID: "big-pickle" } });
-  assert.ok(kept[0].models.some((m) => m.id === "big-pickle"));
+  // the chat's current (unconnected/deprecated) model stays visible via keep
+  cfg.models.push({ id: "legacy-x", providerID: "custom-old", label: "Legacy X (custom-old)", status: "deprecated" });
+  const kept = M.pickers.modelGroups(cfg, { keep: { providerID: "custom-old", modelID: "legacy-x" } });
+  assert.ok(kept.some((g) => g.models.some((m) => m.id === "legacy-x")));
 });
 
-test("FEAT-18.7: Codex — третья группа «Codex · подписка», основная модель первой; без Codex группы нет", () => {
+test("FEAT-18.7: Codex — группа «Codex · подписка», основная модель первой; без Codex группы нет", () => {
   const cfg = fixtureProviders();
   cfg.models.push(...claudeModels, { id: "gpt-6-astra", providerID: "openai-codex", label: "GPT-6-Astra (openai-codex)", status: "active" }, { id: "gpt-6.1-sol", providerID: "openai-codex", label: "GPT-6.1-Sol (openai-codex)", status: "active" });
   cfg.connected = [...cfg.connected, "anthropic", "openai-codex"];
   cfg.defaults = { ...(cfg.defaults ?? {}), "openai-codex": "gpt-6.1-sol" };
   const groups = M.pickers.modelGroups(cfg);
-  assert.deepEqual(groups.map((g) => g.title), ["opencode", "Claude · подписка", "Codex · подписка"]);
-  assert.deepEqual(groups[2].models.map((m) => m.id), ["gpt-6.1-sol", "gpt-6-astra"]);
+  assert.deepEqual(groups.map((g) => g.title), ["Z.AI Coding Plan", "OpenCode", "Z.AI", "Claude · подписка", "Codex · подписка"]);
+  assert.deepEqual(groups.at(-1).models.map((m) => m.id), ["gpt-6.1-sol", "gpt-6-astra"]);
   assert.deepEqual(M.pickers.modelGroups(cfg, { engine: "codex" }).map((g) => g.engine), ["codex"]);
   const noCodex = fixtureProviders();
   assert.ok(!M.pickers.modelGroups(noCodex).some((g) => g.engine === "codex"));
