@@ -588,3 +588,21 @@ test("settings: defaults (squash, 10 min, link, .env on), validation, project me
   assert.equal(s.mergeMethod, "merge");
   assert.equal(s.defaultByProject["/p"], true);
 });
+
+test("TASK-20.34 п.4 / FEAT-20.7 кр. 12: continueAfterMerge переводит merged → ready и снимает canUndoMerge", async () => {
+  const { svc } = makeSvc();
+  const repo = makeRepo();
+  const it = await svc.create({ owner: "u", sid: "ses_cont", dir: repo, text: "feature cont" });
+  writeFileSync(path.join(it.path, "c.txt"), "hello\n");
+  sh(it.path, "add", "c.txt");
+  sh(it.path, "commit", "-q", "-m", "feat");
+  await assert.rejects(svc.continueAfterMerge(it), (e) => e.status === 409 && e.extra.kind === "bad");
+  const op = await svc.merge(it, { method: "squash", skipTests: true, reason: "test" });
+  await waitOp(svc, op);
+  assert.equal(it.state, "merged");
+  assert.equal((await svc.status(it)).canUndoMerge, true);
+  const res = await svc.continueAfterMerge(it);
+  assert.deepEqual(res, { ok: true, state: "ready" });
+  assert.equal(it.state, "ready");
+  assert.equal((await svc.status(it)).canUndoMerge, false);
+});

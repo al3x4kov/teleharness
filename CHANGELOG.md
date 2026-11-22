@@ -6,6 +6,38 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.5.1] — 2026-11-22
+
+### Added
+- **GitHub Background Agents & `pull_request` step.** Connect a fine-grained GitHub PAT in Settings → GitHub
+  (stored encrypted on the server, never exposed to agents), then create webhook or 2-minute polling triggers in
+  Temporal → Triggers from built-in templates (*Issue → PR*, *Fix CI*, *Nightly dependency update*) or custom pipes.
+  The `pull_request` step commits in an isolated worktree and opens a draft PR (or pushes a fix to the same branch
+  on red CI), requires explicit human approval when CI files (`.github/workflows`) are modified, tracks trusted
+  authors, rate limits, and 14-day event journals with safe replay, and gives admins a global kill-switch and daily
+  background Claude quota in Settings → Background agents.
+- **Gemini (ACP) in Temporal pipelines & MCP server forwarding in ACP.** Pick Gemini (ACP) models with readable
+  labels in Temporal pipe steps, and forward configured MCP servers into ACP `session/new` (respecting per-tenant
+  allowlists).
+- **Per-tenant Codex & Gemini (ACP) access.** Admins can grant or revoke Codex and Gemini (ACP) per user in
+  Settings → Users; tenant runs stay scoped to the user's own folders without shell commands or bypass modes.
+- **Approval rework loop & *Plan → approve → code → review* template.** Configure an approval step to send work back
+  to an earlier model step with review notes (up to 3 rework cycles), and start from the built-in
+  *Plan → approve → code → review* template.
+- **Attention Board desktop/tablet preview pane.** On screens ≥ 768 px, clicking any card on *All* or *Needs review*
+  opens a right-hand preview pane with full context and quick actions without auto-marking the item as seen.
+- **Worktree *Continue in this copy*.** Reopen a merged worktree directly from the Worktree sheet to keep iterating on
+  the same branch and working copy.
+
+### Changed
+- Full English and Russian localization across GitHub settings, Background agents admin controls, Temporal triggers,
+  PR step outcomes, rework sheets, and the Attention Board preview pane.
+- Updated `npm run demo` with synthetic GitHub connection, active triggers and event journal, a completed GitHub
+  *Issue → PR* run, Gemini (ACP) in Temporal, and approval rework, plus refreshed EN & RU screenshots.
+
+### Fixed
+- Cross-OS git `askpass` helper in the `pull_request` step (`.cmd` on Windows, `0700` `.sh` on POSIX).
+
 ## [2.4.9] — 2026-11-22
 
 ### Added

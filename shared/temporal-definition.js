@@ -1,6 +1,6 @@
 // FEAT-19.4: portable definition validation; never evaluates code or expressions.
 import { templateRefs } from "./temporal-template.js";
-export const STEP_TYPES = ["model", "approval", "timer", "condition", "parallel", "artifact"];
+export const STEP_TYPES = ["model", "approval", "timer", "condition", "parallel", "artifact", "pull_request"];
 const ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
 const reserved = new Set(["__proto__", "prototype", "constructor"]);
 const key = v => typeof v === "string" && ID.test(v) && !reserved.has(v);
@@ -67,6 +67,13 @@ export const VALIDATION_MESSAGES = {
   artifactFile: "Артефакт: имя файла с расширением .md, .txt, .json, .csv или .html",
   refInput: "Нет входа «{name}» для {token}",
   refStep: "{token}: можно ссылаться только на шаги, после которых идёт этот",
+  reworkTarget: "Доработка: укажите предыдущий модельный шаг",
+  maxReworks: "Лимит доработок: от 1 до 3",
+  prSource: "PR: выберите модельный шаг, который идёт раньше — его ответ станет описанием PR",
+  prMode: "PR: режим «новая ветка» или «та же ветка»",
+  prFields: "PR: ветка, база и заголовок — строки до 200 символов",
+  prRefInput: "PR: нет входа «{name}» для {token}",
+  prRefStep: "PR: в ветке и заголовке допустимы только входы ({token} — нет)",
 };
 const fill = (s, params) => s.replace(/\{(\w+)\}/g, (m, k) => (params && k in params ? String(params[k]) : m));
 
@@ -97,7 +104,7 @@ export function validateDefinition(value, { tr } = {}) {
     if (!text(step.name,160)) error(step.id,msg("stepName"));
     if (!Array.isArray(step.dependsOn) || step.dependsOn.length > 64 || step.dependsOn.some(d=>!key(d)) || new Set(step.dependsOn).size !== step.dependsOn.length) error(step.id,msg("dependsOn"));
     if (step.type === "model") {
-      if (!["opencode","claude","codex"].includes(step.engine)) error(step.id,msg("engine"));
+      if (!["opencode","claude","codex","acp"].includes(step.engine)) error(step.id,msg("engine"));
       if (!text(step.model,160) || !text(step.instruction,16000)) error(step.id,msg("modelInstruction"));
       if (!integer(step.timeoutSeconds,1,86400) || !integer(step.maxAttempts,1,10)) error(step.id,msg("modelLimits"));
       // FEAT-20.7: «Отдельная рабочая копия» — одна копия запуска для всех шагов с галочкой
@@ -154,6 +161,24 @@ export function validateDefinition(value, { tr } = {}) {
     if (step.type==="artifact") {
       if (!key(step.source) || !prior.has(step.source)) error(id,msg("artifactSource"));
       if (typeof step.filename!=="string" || !/^[^\\/:*?"<>|\u0000-\u001f]{1,100}\.(md|txt|json|csv|html)$/i.test(step.filename) || step.filename.startsWith(".")) error(id,msg("artifactFile"));
+    }
+    if (step.type==="approval") {
+      if (step.reworkTarget !== undefined && (!key(step.reworkTarget) || !prior.has(step.reworkTarget) || byId.get(step.reworkTarget)?.type !== "model")) {
+        error(id, msg("reworkTarget"));
+      }
+      if (step.maxReworks !== undefined && !integer(step.maxReworks, 1, 3)) {
+        error(id, msg("maxReworks"));
+      }
+    }
+    if (step.type==="pull_request") {
+      if (!key(step.source) || !prior.has(step.source) || byId.get(step.source)?.type!=="model") error(id,msg("prSource"));
+      if (step.mode!==undefined && !["new","same-branch"].includes(step.mode)) error(id,msg("prMode"));
+      const branchFields=[step.branch,step.base,step.title].filter((v)=>v!==undefined);
+      for (const v of branchFields) if (typeof v!=="string" || v.length>200) { error(id,msg("prFields")); break; }
+      for (const ref of branchFields.filter((v)=>typeof v==="string").flatMap(templateRefs)) {
+        if (ref.kind==="input" && !inputNames.has(ref.name)) error(id,msg("prRefInput",{name:ref.name,token:ref.token}));
+        if (ref.kind==="steps") error(id,msg("prRefStep",{token:ref.token}));
+      }
     }
   }
   return {valid:errors.length===0,errors};

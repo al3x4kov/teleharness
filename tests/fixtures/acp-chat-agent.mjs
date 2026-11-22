@@ -4,6 +4,7 @@ const send = (value) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ..
 if (process.argv.includes("--device-code")) process.exit(0);
 let loaded = false;
 let modelId = "default";
+let seenMcpServers = [];
 let waiting;
 for await (const line of readline.createInterface({ input: process.stdin })) {
   const { id, method, params, result } = JSON.parse(line);
@@ -24,17 +25,19 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
       result: { protocolVersion: 1, agentCapabilities: { loadSession: true }, authMethods: [{ id: "oauth-personal" }] },
     });
   if (method === "authenticate") send({ id, result: {} });
-  if (method === "session/new") send({ id, result: { sessionId: "s-test" } });
+  if (method === "session/new") { seenMcpServers = params?.mcpServers ?? []; send({ id, result: { sessionId: "s-test" } }); }
   if (method === "session/load") {
     if (params.sessionId === "missing") send({ id, error: { code: -32602, message: "unknown session" } });
     else {
       loaded = true;
+      seenMcpServers = params?.mcpServers ?? [];
       send({ id, result: {} });
     }
   }
   if (method === "session/set_model") { modelId = params.modelId; send({ id, result: {} }); }
   if (method === "session/prompt") {
     if (params.prompt[0].text === "selected-model") send({method:"session/update",params:{sessionId:params.sessionId,update:{sessionUpdate:"agent_message_chunk",content:{type:"text",text:modelId}}}});
+    if (params.prompt[0].text === "mcp-servers") send({method:"session/update",params:{sessionId:params.sessionId,update:{sessionUpdate:"agent_message_chunk",content:{type:"text",text:JSON.stringify(seenMcpServers)}}}});
     if (params.prompt[0].text === "wait") continue;
     if (params.prompt[0].text === "ask") {
       waiting = id;

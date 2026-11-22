@@ -1,7 +1,8 @@
 // FEAT-19.4 / TASK-19.8: owner and current project/engine checks on the server.
 import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import { DefinitionError, slugOf } from "../lib/temporal/definitions.js";
-import { workspaceOf, isPipelineFolder, pipeEngineAllowed } from "../lib/temporal/workspace.js";
+import { workspaceOf, runFolderName, isPipelineFolder, pipeEngineAllowed } from "../lib/temporal/workspace.js";
 import { cleanInputs } from "../lib/temporal/inputs.js";
 import { listRunFiles } from "../lib/temporal/run-files.js";
 import { validateDefinition, validDraftShape } from "../shared/temporal-definition.js";
@@ -13,8 +14,10 @@ export function temporalRoutes(deps) {
   // FEAT-19.14: list summaries read Temporal through a cache (closed runs once).
   let summaries=null;
   const reader=()=>summaries??=deps.describeRun?runSummaryCache(id=>deps.describeRun(id)):null;
-  const stepShape=definition=>(definition.steps??[]).map(s=>({id:s.id,name:s.name,type:s.type,...(s.type==="model"?{engine:s.engine,model:s.model}:{}),...(s.type==="artifact"?{filename:s.filename,source:s.source}:{}),...(s.type==="condition"?{check:s.check}:{})}));
-  const source=id=>/^teleharness-scheduled?-/.test(String(id))?"schedule":"manual"; // schedule runs: teleharness-scheduled-<id>-<time>
+  const stepShape=definition=>(definition.steps??[]).map(s=>({id:s.id,name:s.name,type:s.type,...(s.type==="model"?{engine:s.engine,model:s.model}:{}),...(s.type==="artifact"?{filename:s.filename,source:s.source}:{}),...(s.type==="condition"?{check:s.check}:{}),...(s.type==="approval"&&s.reworkTarget?{reworkTarget:s.reworkTarget,maxReworks:s.maxReworks??3}:{}),...(s.type==="pull_request"?{mode:s.mode==='same-branch'?'same-branch':'new'}:{})}));
+  const source=(id,stored)=>stored??(/^teleharness-scheduled?-/.test(String(id))?"schedule":"manual");
+  const prOutcome=(detail,steps)=>{for(const [id,v] of Object.entries(detail?.state?.pr??{}))if(v&&steps.some(s=>s.id===id))return v;return null;};
+  const parseJson=(text)=>{if(typeof text!=="string"||!text)return null;try{return JSON.parse(text);}catch{return null;}};
   async function visibleRuns(user){
     const entries=await deps.listRuns(user.id);
     const visible=[];
@@ -24,7 +27,8 @@ export function temporalRoutes(deps) {
         const version=record.versions.find(v=>v.version===entry.version);
         if (!version) continue;
         access(user,version.definition,{engines:true});
-        visible.push({...entry,accepted:Boolean(entry.accepted),name:version.definition.name,source:source(entry.workflowId),steps:stepShape(version.definition),...(record.deletedAt?{pipeDeleted:true}:{})});
+        const {inputs,stepError,...rest}=entry;
+        visible.push({...rest,stepError:parseJson(stepError),accepted:Boolean(entry.accepted),name:version.definition.name,source:source(entry.workflowId,entry.source),steps:stepShape(version.definition),...(record.deletedAt?{pipeDeleted:true}:{})});
       } catch (error) {
         if (!(error instanceof DefinitionError && [403,404].includes(error.status))) throw error;
       }
@@ -35,7 +39,7 @@ export function temporalRoutes(deps) {
     const r=reader();
     if(!r) return runs.map(run=>({...run,summary:null}));
     const details=await r.many(runs.map(run=>run.workflowId));
-    return runs.map((run,i)=>({...run,summary:summarizeRun(details[i],run.steps)}));
+    return runs.map((run,i)=>({...run,summary:summarizeRun(details[i],run.steps),pr:prOutcome(details[i],run.steps)}));
   }
   function access(user,draft,{engines=false}={}) {
     if (!validDraftShape(draft)) throw new DefinitionError(400,"Некорректная структура черновика");
@@ -64,7 +68,14 @@ export function temporalRoutes(deps) {
   // null — исполнение Temporal не подключено.
   deps.boardRuns=async user=>deps.listRuns?withSummaries(await visibleRuns(user)):null;
   return [
-    route("GET",base+"/capabilities",({res,user})=>deps.sendJson(res,200,{definitions:true,subscriptionModels:Object.fromEntries(Object.entries(deps.subscriptionModels??{}).filter(([e])=>pipeEngineAllowed(deps.engineAllowed,user,e))),pipelineAvailable:!!deps.startPipeline,schedulesAvailable:!!deps.schedules,runListAvailable:typeof deps.listRuns==="function",timerStartAvailable:typeof deps.startTimer==="function",execution:{available:!!deps.startPipeline,reason:deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено"},engines:["claude","codex"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"})),
+    route("GET",base+"/capabilities",({res,user})=>{
+      const subscriptionModels=Object.fromEntries(Object.entries(deps.subscriptionModels??{}).filter(([e])=>pipeEngineAllowed(deps.engineAllowed,user,e)));
+      const allowedIds=new Set(Object.values(subscriptionModels).flat());
+      const modelLabels=Object.fromEntries(Object.entries(deps.modelLabels??{}).filter(([id])=>allowedIds.has(id)));
+      return deps.sendJson(res,200,{definitions:true,subscriptionModels,modelLabels,pipelineAvailable:!!deps.startPipeline,schedulesAvailable:!!deps.schedules,runListAvailable:typeof deps.listRuns==="function",timerStartAvailable:typeof deps.startTimer==="function",triggersAvailable:typeof deps.enabledTriggers==="function",
+        triggers:{available:typeof deps.enabledTriggers==="function",publicUrl:Boolean(deps.publicUrl),adminStopped:deps.adminStopped?deps.adminStopped():false,claudeLeftToday:deps.claudeLeftToday?deps.claudeLeftToday():null},
+        execution:{available:!!deps.startPipeline,reason:deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено"},engines:["claude","codex","acp"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"});
+    }),
     route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})$/, async ({user,res,match})=>{
       if (!deps.lookupRun) throw new DefinitionError(503,"Исполнение Temporal ещё не подключено");
       const row=await deps.lookupRun(user.id,match[1]);
@@ -80,7 +91,8 @@ export function temporalRoutes(deps) {
       const folder=deps.results?.runFolder?.(match[1]);
       let inputs={};try{inputs=JSON.parse(row.inputs||"{}")??{};}catch{}
       deps.sendJson(res,200,{...detail,resultSteps:deps.results?.steps(match[1])??[],name:version.definition.name,version:row.version,
-        definitionId:row.definitionId,directory:version.definition.directory,source:source(match[1]),steps,summary:summarizeRun(detail,steps),
+        definitionId:row.definitionId,directory:version.definition.directory,source:source(match[1],row.source),triggerId:row.triggerId??null,eventRef:row.eventRef??null,
+        eventUrl:row.eventUrl??null,attempt:Number.isSafeInteger(row.attempt)&&row.attempt>0?row.attempt:null,stepError:parseJson(row.stepError),steps,summary:summarizeRun(detail,steps),
         workspace,runFolder:folder?"runs/"+folder:null,files:folder?listRunFiles(workspace,"runs/"+folder):[],
         chats:deps.results?.chats?.(match[1])??{},inputs,...(record.deletedAt?{pipeDeleted:true}:{})});
     }),
@@ -94,13 +106,27 @@ export function temporalRoutes(deps) {
       deps.sendJson(res,200,{text});
     }),
     route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/actions$/,async({req,res,user,match})=>{
-      const command=await body(req,["action","actionId","runId","stepId","generation","reason"]);
+      const command=await body(req,["action","actionId","runId","stepId","generation","reason","note"]);
       if(!deps.applyAction) throw new DefinitionError(503,"Управление не подключено");
       const row=await deps.lookupRun(user.id,match[1]);
       if(!row) throw new DefinitionError(404,"Запуск не найден");
-      const v=deps.store.get(user.id,row.definitionId,{deleted:true}).versions.find(x=>x.version===row.version);
+      const record=deps.store.get(user.id,row.definitionId,{deleted:true});
+      const v=record.versions.find(x=>x.version===row.version);
       if(!v) throw new DefinitionError(404,"Версия не найдена");
       access(user,v.definition,{engines:true});
+      if(command.action==="rework"){
+        const step=v.definition.steps?.find(s=>s.id===command.stepId);
+        if(!step || step.type!=="approval" || !step.reworkTarget)
+          throw new DefinitionError(409,"Для этого шага доработка не настроена");
+        const note=typeof command.note==="string"?command.note.trim():"";
+        if(!note || note.length>8000)
+          throw new DefinitionError(400,"Укажите замечания для доработки (до 8000 символов)");
+        const workspace=workspaceOf(v.definition.directory,slugOf(record));
+        const folder=deps.results?.runFolder?.(match[1],()=>runFolderName(match[1]))??runFolderName(match[1]);
+        const dir=path.join(workspace,"runs",folder);
+        await mkdir(dir,{recursive:true});
+        await writeFile(path.join(dir,`rework-${step.reworkTarget}.md`),note,"utf8");
+      }
       deps.sendJson(res,200,await deps.applyAction(user.id,match[1],command));
     }),
     route("POST", base+"/runs", async ({req,res,user}) => {
@@ -184,6 +210,8 @@ export function temporalRoutes(deps) {
         }
         if (active) reasons.push(`у него активные расписания: ${active}. Поставьте их на паузу на вкладке «Расписания».`);
       }
+      const triggersOn=deps.enabledTriggers?.(user,id)??[];
+      if (triggersOn.length) reasons.push(`у него включённые триггеры GitHub (${triggersOn.map(t=>t.repo).join(", ")}). Выключите их на вкладке «Триггеры».`);
       if (reasons.length) throw new DefinitionError(409,`Пайп «${name}» нельзя удалить: ${reasons.join(" Кроме того, ")} Затем удалите пайп. Завершённые запуски и их файлы сохранятся.`);
       own(user,id); // re-check after the awaits, as publish does
       deps.sendJson(res,200,deps.store.remove(user.id,id));

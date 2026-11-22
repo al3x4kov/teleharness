@@ -107,6 +107,8 @@ export function stopBoard() {
   started = false;
   clearInterval(poll);
   poll = null;
+  clearTimeout(debounce);
+  debounce = null;
   if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisible);
 }
 

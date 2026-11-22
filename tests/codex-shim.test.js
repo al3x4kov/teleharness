@@ -519,3 +519,20 @@ test("FEAT-18.7: ошибка запуска codex CLI распознаётся 
   assert.equal(turnErrorKind("Codex usage limit reached: You've hit your usage limit", { engine: "codex" }), "limit");
   assert.ok(claudeAnswerError("Codex вернул ошибку"));
 });
+
+test("FEAT-20.35: --restricted (tenant) auto-declines item/permissions/requestApproval with empty permissions", async () => {
+  let asked = 0;
+  const r = await runShim({
+    args: ["--restricted", ...ASK],
+    prompt: "ESCALATE",
+    stream: true,
+    onControl: () => {
+      asked++;
+      return { behavior: "allow" };
+    },
+  });
+  assert.equal(asked, 0, "tenant escalation must not even prompt");
+  assert.equal(r.result?.is_error, false);
+  const ans = JSON.parse(r.result.result);
+  assert.deepEqual(ans, { permissions: {} });
+});

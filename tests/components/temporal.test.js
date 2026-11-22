@@ -437,3 +437,61 @@ test("BUG-264 п.6: расписание удалённого пайпа — «�
  assert(!root.textContent.includes("Срабатывания пропускаются"));assert(!$(root,'[role="switch"]'));
  assert.equal($(root,'a[href^="#/temporal/start/"]'),null);assert.equal($(root,'a[href^="#/temporal/pipe/"]'),null);
 });
+
+test("FEAT-19.30: DefinitionEditor показывает Gemini (ACP), читаемые modelLabels, подсказку тенанта и 0 замечаний готовности",async()=>{
+ const r=record();r.draft.steps=[{id:"s1",name:"Анализ Gemini",type:"model",engine:"acp",model:"gemini-4-neon-medium",instruction:"Проверь код",timeoutSeconds:300,maxAttempts:2,dependsOn:[]}];
+ const labels={"gemini-4-neon-medium":"Gemini 4 Neon (Medium)","claude-sonnet-4-6":"Claude Sonnet 4.6"};
+ const {root}=h.mount(ui.DefinitionEditor,{record:r,pipelineAvailable:true,engines:["claude","codex","acp"],subscriptionModels:{claude:["claude-sonnet-4-6"],acp:["gemini-4-neon-medium"]},modelLabels:labels,codexTextOnly:true});
+ assert(root.textContent.includes("Gemini (ACP)"));
+ assert(root.textContent.includes("Gemini 4 Neon (Medium)"));
+ assert(root.textContent.includes("Все шаги можно исполнить"));
+ h.click(byText(root,"Анализ Gemini"));await h.flush();
+ const engineSel=$(root,'select[aria-label="Движок"]');
+ assert.equal(engineSel.value,"acp");
+ assert(engineSel.textContent.includes("Gemini (ACP)"));
+ const modelSel=$(root,'select[aria-label="Модель подписки"]');
+ assert.equal(modelSel.value,"gemini-4-neon-medium");
+ assert(modelSel.textContent.includes("Gemini 4 Neon (Medium)"));
+ assert(root.textContent.includes("работает только с файлами внутри рабочей папки, без команд оболочки"));
+});
+test("FEAT-19.30: RunDetail отображает Gemini (ACP) и читаемое имя модели из modelLabels",async()=>{
+ installFetch([{path:"/teleharness/api/temporal/runs/w-acp",reply:()=>detail({status:"COMPLETED",steps:[{id:"s1",name:"Шаг Gemini",type:"model",engine:"acp",model:"gemini-4-neon-medium",dependsOn:[]}],state:{steps:{s1:"completed"}},summary:{kind:"ok"},closeTime:new Date().toISOString()})}]);
+ const {root}=h.mount(ui.RunDetail,{workflowId:"w-acp",modelLabels:{"gemini-4-neon-medium":"Gemini 4 Neon (Medium)"}});
+ await h.waitFor(()=>root.textContent.includes("Шаг Gemini"));
+ assert(root.textContent.includes("Gemini (ACP) · Gemini 4 Neon (Medium)"));
+});
+
+test("TASK-20.34 п.1 / FEAT-20.1 кр. 14: RunDetail показывает «Доработка N из 3», отправляет rework с замечаниями и блокирует на лимите",async()=>{
+ const sent=[];
+ const reworkDetail=(n)=>detail({
+  status:"RUNNING",
+  steps:[
+   {id:"code",name:"Реализация в копии",type:"model",engine:"claude",model:"claude-opus-5-5",dependsOn:[]},
+   {id:"review",name:"Ревью изменений",type:"approval",reworkTarget:"code",maxReworks:3,dependsOn:["code"]},
+  ],
+  state:{paused:false,pending:["review"],generation:"00000000-0000-4000-8000-000000000001",steps:{code:"completed",review:"running"},reworks:{review:n}},
+  summary:{kind:"wait",waiting:true},
+ });
+ installFetch([
+  {path:"/teleharness/api/temporal/runs/w-rw",reply:()=>reworkDetail(1)},
+  {method:"POST",path:"/teleharness/api/temporal/runs/w-rw/actions",reply:(c)=>{sent.push(c.body);return {accepted:true,action:c.body.action};}},
+ ]);
+ const {root}=h.mount(ui.RunDetail,{workflowId:"w-rw"});
+ await h.waitFor(()=>root.textContent.includes("Доработка: 1 из 3"));
+ const rwBtn=$(root,'[data-action="rework"]');
+ assert.ok(rwBtn && !rwBtn.disabled);
+ h.click(rwBtn);await h.flush();
+ const ta=$(document.body,'textarea[aria-label="Замечания для доработки"]')??$(root,'textarea[aria-label="Замечания для доработки"]');
+ assert.ok(ta);
+ h.act(()=>{ta.value="Поправь обработку ошибок";ta.dispatchEvent(new Event("input",{bubbles:true}));});await h.flush();
+ const confirm=$(document.body,'[data-action="confirm-rework"]')??$(root,'[data-action="confirm-rework"]');
+ h.click(confirm);await h.waitFor(()=>sent.length===1);
+ assert.equal(sent[0].action,"rework");
+ assert.equal(sent[0].stepId,"review");
+ assert.equal(sent[0].note,"Поправь обработку ошибок");
+ h.cleanup();
+ installFetch([{path:"/teleharness/api/temporal/runs/w-rw3",reply:()=>reworkDetail(3)}]);
+ const lim=h.mount(ui.RunDetail,{workflowId:"w-rw3"});
+ await h.waitFor(()=>lim.root.textContent.includes("Лимит доработок исчерпан (3 из 3)"));
+ assert.equal($(lim.root,'[data-action="rework"]').disabled,true);
+});

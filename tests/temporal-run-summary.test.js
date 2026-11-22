@@ -16,6 +16,11 @@ test("квота, пауза, идёт",()=>{
   assert.equal(summarizeRun(d("RUNNING",{paused:true,pending:["gate"],steps:{wait:"completed",gate:"running"}}),steps).kind,"paused");
   assert.equal(summarizeRun(d("RUNNING",{paused:false,pending:[],steps:{wait:"running"}}),steps).kind,"run");
 });
+test("FEAT-20.3: шаг PR ждёт GitHub — kind github и этот шаг текущий, а не «выполняется»",()=>{
+  const prSteps=[{id:"work",name:"Правки",type:"model"},{id:"pr",name:"Открыть PR",type:"pull_request"}];
+  const s=summarizeRun(d("RUNNING",{paused:false,pending:[],steps:{work:"completed",pr:"github_wait"},waitReasons:{pr:"github_auth"}}),prSteps);
+  assert.equal(s.kind,"github");assert.equal(s.current.id,"pr");assert.deepEqual(s.waitReasons,{pr:"github_auth"});assert.equal(s.waiting,false);
+});
 test("конечные статусы",()=>{
   for(const [st,k] of [["COMPLETED","ok"],["FAILED","err"],["TIMED_OUT","err"],["CANCELED","cancel"],["TERMINATED","term"]])
     assert.equal(summarizeRun(d(st,null),steps).kind,k);

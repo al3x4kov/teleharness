@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { modelBridge } from '../lib/temporal/model-bridge.js';
+import { modelBridge, listenModelBridge } from '../lib/temporal/model-bridge.js';
 
 const workflowId='11430397-c55f-447e-a6d8-39b914a278ad';
 function setup(role='tenant',engine='claude'){
@@ -134,4 +134,60 @@ test("listenModelBridge: a socket path over the OS limit fails with a clear reas
   const { listenModelBridge: listen, SOCKET_PATH_MAX } = await import("../lib/temporal/model-bridge.js");
   const long = "/tmp/" + "d".repeat(SOCKET_PATH_MAX) + "/worker.sock";
   await assert.rejects(listen(long, async () => ({})), (e) => /длиннее \d+ байт/.test(e.message) && e.message.includes("каталог данных"));
+});
+
+test('PR-шаг в мосту — поля из закреплённой версии, approved только для pull_request',async()=>{
+  const seen=[];
+  const steps=[{id:'m',type:'model',engine:'claude',model:'m',instruction:'x',dependsOn:[],timeoutSeconds:60,maxAttempts:1},
+    {id:'pr',type:'pull_request',source:'m',branch:'teleharness/fix',base:'main',title:'Фикс',mode:'same-branch',dependsOn:['m']}];
+  const mk=(prStep)=>modelBridge({lookupStart:async()=>({owner:'a',definitionId:'d',version:1,inputs:JSON.stringify({repo:'octo/hello'})}),
+    getUser:async()=>({id:'a',role:'admin'}),
+    store:{get:()=>({slug:'zadacha',versions:[{version:1,definition:{name:'Задача',directory:'/p',steps}}]})},
+    dirAllowed:()=>true,engineAllowed:()=>true,results:{read:async(_w,id)=>id==='m'?'описание PR':null},adapters:{},prStep});
+  const bridge=mk(async(ctx)=>{seen.push(ctx);return {state:'done',url:'https://gh/pull/1'};});
+  assert.deepEqual(await bridge('step',{workflowId,stepId:'pr'}),{state:'done',url:'https://gh/pull/1'});
+  assert.deepEqual(seen[0],{user:{id:'a',role:'admin'},workflowId,stepId:'pr',project:'/p',workspace:'/p/pipelines/zadacha',
+    pipeName:'Задача',pipeSlug:'zadacha',inputs:{repo:'octo/hello'},description:'описание PR',
+    branch:'teleharness/fix',base:'main',title:'Фикс',mode:'same-branch',approved:false,sourceEngine:'claude',signal:undefined});
+  assert.deepEqual(await bridge('step',{workflowId,stepId:'pr',approved:true}),{state:'done',url:'https://gh/pull/1'});
+  assert.equal(seen[1].approved,true);
+  const strict=mk(async()=>{throw new Error('не должен вызываться');});
+  await assert.rejects(strict('step',{workflowId,stepId:'m',approved:true}),e=>e.status===400);
+  await assert.rejects(strict('step',{workflowId,stepId:'pr',approved:'да'}),e=>e.status===400);
+});
+
+test('отказ шага PR сохраняется в запуск (текст, вид, коммит), успех снимает запись; сбой записи не подменяет шаг',async()=>{
+  const steps=[{id:'m',type:'model',engine:'claude',model:'m',instruction:'x',dependsOn:[],timeoutSeconds:60,maxAttempts:1},
+    {id:'pr',type:'pull_request',source:'m',dependsOn:['m']}];
+  const events=[];let impl=async()=>({state:'done',url:'https://gh/pull/1'});
+  const mk=(stepOutcome)=>modelBridge({lookupStart:async()=>({owner:'a',definitionId:'d',version:1,inputs:JSON.stringify({repo:'octo/hello'})}),
+    getUser:async()=>({id:'a',role:'admin'}),
+    store:{get:()=>({slug:'zadacha',versions:[{version:1,definition:{name:'Задача',directory:'/p',steps}}]})},
+    dirAllowed:()=>true,engineAllowed:()=>true,results:{read:async()=>null},adapters:{},prStep:async()=>impl(),stepOutcome});
+  const bridge=mk(async e=>events.push(e));
+  assert.deepEqual(await bridge('step',{workflowId,stepId:'pr'}),{state:'done',url:'https://gh/pull/1'});
+  assert.deepEqual(events,[{workflowId,stepId:'pr',error:null}],'успех — запись снята');
+  impl=async()=>{throw Object.assign(new Error('GitHub отклонил отправку: правило репозитория'),{status:409,code:'push_rejected',sha:'5be01d3'});};
+  await assert.rejects(bridge('step',{workflowId,stepId:'pr'}),e=>e.status===409,'исходный отказ пробрасывается воркеру');
+  assert.deepEqual(events[1],{workflowId,stepId:'pr',error:{message:'GitHub отклонил отправку: правило репозитория',code:'push_rejected',sha:'5be01d3'}});
+  impl=async()=>({state:'done',url:'https://gh/pull/1'});
+  const broken=mk(async()=>{throw new Error('sqlite locked');});
+  assert.deepEqual(await broken('step',{workflowId,stepId:'pr'}),{state:'done',url:'https://gh/pull/1'},'сбой записи не подменяет результат шага');
+});
+
+test('мост отвечает на отказ телом {error} — текст правила доезжает до воркера',{skip:process.platform==='win32'&&'unix socket'},async()=>{
+  const {mkdtempSync,rmSync}=await import('node:fs');const os=(await import('node:os')).default;const path=(await import('node:path')).default;const http=await import('node:http');
+  const dir=mkdtempSync(path.join(os.tmpdir(),'bridge-sock-'));
+  const post=(socket)=>new Promise((resolve,reject)=>{
+    const req=http.request({socketPath:socket,path:'/step',method:'POST',headers:{'content-type':'application/json','x-teleharness-deadline-ms':String(Date.now()+30000)}},res=>{
+      let body='';res.on('data',c=>body+=c);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(body)}));});
+    req.on('error',reject);req.end(JSON.stringify({workflowId,stepId:'pr'}));
+  });
+  const listen=async(name,invoke)=>{const socket=path.join(dir,name+'.sock');return {socket,server:await listenModelBridge(socket,invoke)};};
+  const a=await listen('a',async()=>{throw Object.assign(new Error('GitHub отклонил отправку: правило репозитория'),{status:409});});
+  const b=await listen('b',async()=>{throw new Error('temporal not reachable');});
+  try {
+    assert.deepEqual(await post(a.socket),{status:409,body:{error:'GitHub отклонил отправку: правило репозитория'}},'отказ — с текстом');
+    assert.deepEqual(await post(b.socket),{status:500,body:{error:'temporal not reachable'}},'сбой без кода — 500, текст обрезан до 300');
+  } finally { a.server.close();b.server.close();rmSync(dir,{recursive:true,force:true}); }
 });

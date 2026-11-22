@@ -16,9 +16,9 @@ function call(method, path, body) {
 }
 const json = async (m, p, b) => JSON.parse((await call(m, p, b)).body);
 
-test("demo: capabilities with Claude and Codex, runs in every state, one waiting for a decision", async () => {
+test("demo: capabilities with Claude, Codex and Gemini (ACP), runs in every state, one waiting for a decision", async () => {
   const caps = await json("GET", "/teleharness/api/temporal/capabilities");
-  assert.equal(caps.pipelineAvailable, true); assert.deepEqual(caps.engines, ["claude", "codex"]);
+  assert.equal(caps.pipelineAvailable, true); assert.deepEqual(caps.engines, ["claude", "codex", "acp"]);
   const runs = await json("GET", "/teleharness/api/temporal/runs");
   const kinds = runs.map((r) => r.summary.kind);
   for (const k of ["wait", "run", "quota", "ok", "err", "cancel"]) assert(kinds.includes(k), k);

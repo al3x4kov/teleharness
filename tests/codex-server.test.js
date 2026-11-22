@@ -22,17 +22,20 @@ writeFileSync(path.join(DATA, "codex-models.json"), JSON.stringify({ models: [{ 
 
 const http = await import("node:http");
 let created = 0;
+const sessions = [];
 const upstreamSrv = http.createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   req.resume();
   req.on("end", () => {
     if (req.method === "POST" && url.pathname === "/session") {
+      const rec = { id: `ses_k${++created}`, directory: url.searchParams.get("directory") || HOME };
+      sessions.push(rec);
       res.writeHead(200, { "content-type": "application/json" });
-      return res.end(JSON.stringify({ id: `ses_k${++created}`, directory: HOME }));
+      return res.end(JSON.stringify(rec));
     }
     if (url.pathname === "/session") {
       res.writeHead(200, { "content-type": "application/json" });
-      return res.end("[]");
+      return res.end(JSON.stringify(sessions));
     }
     if (url.pathname === "/provider") {
       res.writeHead(200, { "content-type": "application/json" });
@@ -117,10 +120,16 @@ test("FEAT-18.7: тенанту Codex не включается — нет в к
   assert.equal(denied.status, 403);
   const id = t.user?.id ?? t.id;
   const p = await api(`/teleharness/api/admin/users/${id}`, { method: "PATCH", body: { engines: ["opencode", "codex"] } });
-  assert.equal(p.status, 400, "Codex тенанту не включается до настройки песочницы Codex");
+  assert.equal(p.status, 200, "admin включает codex тенанту");
   const prov2 = await (await api("/teleharness/api/provider", { token: t.token })).json();
-  assert.equal(prov2.connected.includes("openai-codex"), false);
-  assert.equal((await api(`/teleharness/api/session`, { method: "POST", body: { model: CODEX }, token: t.token })).status, 403);
+  assert.equal(prov2.connected.includes("openai-codex"), true);
+  const ok = await api(`/teleharness/api/session`, { method: "POST", body: { model: CODEX }, token: t.token });
+  assert.equal(ok.status, 200);
+  const c2 = await ok.json();
+  assert.equal(c2.teleharness?.engine, "codex");
+  const tq = c2.directory ? `?directory=${encodeURIComponent(c2.directory)}` : "";
+  const full = await api(`/teleharness/api/session/${c2.id}/binding${tq}`, { method: "PATCH", body: { permMode: "full" }, token: t.token });
+  assert.equal(full.status, 403, "«Без вопросов» тенанту запрещено");
 });
 
 test("FEAT-18.7: в Codex-чате admin «Правки без вопросов» — 400, «Спрашивать» и «Без вопросов» — 200", async () => {

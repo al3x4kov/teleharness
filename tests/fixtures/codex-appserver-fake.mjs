@@ -138,6 +138,11 @@ async function runTurn(text) {
     note("error", { ...ids(), willRetry: false, error });
     return completed("failed", error);
   }
+  if (/ESCALATE/.test(text)) {
+    const reply = await serverRequest("item/permissions/requestApproval", { ...ids(), itemId: "call_esc1", permissions: { fileSystem: { write: ["/etc"] } }, reason: "Выйти за папку" });
+    await answer(JSON.stringify(reply.result ?? null));
+    return completed();
+  }
   if (/UNKNOWNREQ/.test(text)) {
     const reply = await serverRequest("item/tool/requestUserInput", { ...ids(), itemId: "q1", isBlocking: true, questions: [] });
     await answer(reply.error ? `error ${reply.error.code}` : "no error");

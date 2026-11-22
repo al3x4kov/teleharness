@@ -193,3 +193,39 @@ test("BUG-264 п.6: активное расписание — 409; на пауз
  assert.equal((await call("GET","/definitions")).body.length,1);
  down=false;paused=true;assert.equal((await call("DELETE",`/definitions/${id}`)).status,200);
 });
+
+test("FEAT-20.3 2.5: запуск от GitHub — источник, ссылка на событие, попытка, режим шага PR и текст отказа; список без входов, но с итогом шага PR",async t=>{
+ const {call,deps}=fixture(t);
+ const d=draft();d.inputs=[{name:"repo",type:"string",required:true},{name:"ci_log",type:"string",required:false},{name:"branch",type:"string",required:false}];
+ d.steps=[{id:"work",name:"Правки",type:"model",engine:"opencode",model:"project-default",instruction:"x",dependsOn:[],timeoutSeconds:60,maxAttempts:1},
+  {id:"pr",name:"Открыть PR",type:"pull_request",source:"work",mode:"same-branch",dependsOn:["work"]}];
+ const a=await call("POST","/definitions",{draft:d});const id=a.body.id;
+ assert.equal((await call("POST",`/definitions/${id}/publish`,{revision:1})).status,200);
+ const refused={owner:"alice",workflowId:"w5",definitionId:id,version:1,accepted:1,source:"github",triggerId:"tt",eventRef:"o/r · PR #320 · feature/upload · CI «test»",attempt:2,eventUrl:"https://github.com/o/r/pull/320",
+  inputs:JSON.stringify({repo:"o/r",ci_log:"FAIL tests/upload.test.js"}),stepError:JSON.stringify({stepId:"pr",message:"GitHub отклонил отправку",code:"push_rejected",sha:"5be01d3",at:1})};
+ const pushed={owner:"alice",workflowId:"w6",definitionId:id,version:1,accepted:1,source:"github",triggerId:"tt",eventRef:"o/r · PR #320 · feature/upload · CI «test»",attempt:1,eventUrl:"https://github.com/o/r/pull/320",
+  inputs:JSON.stringify({repo:"o/r",ci_log:"FAIL tests/upload.test.js"}),stepError:null};
+ deps.listRuns=async owner=>owner==="alice"?[refused,pushed]:[];
+ deps.lookupRun=async(owner,w)=>(await deps.listRuns(owner)).find(r=>r.workflowId===w);
+ deps.describeRun=async w=>w==="w5"?T(w,"FAILED",{steps:{work:"completed",pr:"running"}}):T(w,"COMPLETED",{steps:{work:"completed",pr:"completed"},
+  pr:{pr:{state:"done",url:"https://github.com/o/r/pull/320",outcome:"pushed",branch:"feature/upload",sha:"7c21e0a"}}});
+ const detail=await call("GET","/runs/w5");
+ assert.equal(detail.status,200);
+ assert.equal(detail.body.source,"github");assert.equal(detail.body.eventRef,"o/r · PR #320 · feature/upload · CI «test»");
+ assert.equal(detail.body.eventUrl,"https://github.com/o/r/pull/320");assert.equal(detail.body.attempt,2);
+ assert.deepEqual(detail.body.stepError,{stepId:"pr",message:"GitHub отклонил отправку",code:"push_rejected",sha:"5be01d3",at:1},"текст отказа шага читается с экрана запуска");
+ assert.deepEqual(detail.body.inputs,{repo:"o/r",ci_log:"FAIL tests/upload.test.js"},"входы — в деталях запуска");
+ assert.deepEqual(detail.body.steps[0],{id:"work",name:"Правки",type:"model",engine:"opencode",model:"project-default"});
+ assert.deepEqual(detail.body.steps[1],{id:"pr",name:"Открыть PR",type:"pull_request",mode:"same-branch"},"режим шага — «в ветку PR»");
+ // список: входы (лог до 64 КБ) не едут строками, попытка/ссылка/отказ/итог PR — едут
+ const list=await call("GET","/runs");
+ assert.equal(list.body.length,2);
+ for(const run of list.body) assert.equal(run.inputs,undefined,"входы не в списке");
+ const r5=list.body.find(r=>r.workflowId==="w5"),r6=list.body.find(r=>r.workflowId==="w6");
+ assert.equal(r5.attempt,2);assert.equal(r5.eventUrl,"https://github.com/o/r/pull/320");assert.equal(r5.stepError.code,"push_rejected");assert.equal(r5.pr,null);
+ assert.deepEqual(r6.pr,{state:"done",url:"https://github.com/o/r/pull/320",outcome:"pushed",branch:"feature/upload",sha:"7c21e0a"},"итог шага PR — в строке списка (T-16)");
+ assert.equal(r6.attempt,1);
+ // ручной запуск старой базы: без новых колонок — null, а не undefined-ошибка
+ const legacy=await call("GET","/runs/w5",undefined,{id:"alice",role:"tenant"});
+ assert.equal(legacy.status,200);
+});

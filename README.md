@@ -80,9 +80,9 @@ Run several coding agents at once without living in a terminal:
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/desktop-light-board.png" alt="Attention Board on desktop with four status columns" width="820">
+  <img src="docs/screenshots/desktop-light-board.png" alt="Attention Board on desktop with side preview pane" width="820">
 </p>
-<p align="center"><sub>Attention Board on desktop: review queues, waiting plans, running pipelines, completed and failed turns in one view.</sub></p>
+<p align="center"><sub>Attention Board on desktop: review queues, waiting plans, running pipelines, and a right-hand preview pane (≥ 768 px) without auto-marking items seen.</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/desktop-light-review.png" alt="Review screen on desktop with file list and diff pane" width="820">
@@ -136,9 +136,17 @@ subscriptions within their limits.
   <img src="docs/screenshots/phone-light-temporal-condition.png" alt="A condition that was false: the next step is skipped" width="200">
 </p>
 
-Steps: *Model* (Claude or Codex), *Human decision*, *Timer*, *Join*, *Condition*, *Artifact*; run inputs as
-`{{input.name}}`, earlier answers as `{{steps.id}}`; schedules with a preview of the next runs. Optional, Linux and
-macOS — see [docs/temporal.md](docs/temporal.md). Try it without any setup in `npm run demo`.
+Steps: *Model* (Claude, Codex or Gemini ACP), *Human decision* (with up to 3 rework cycles back to a model step),
+*Open PR* (isolated worktree → draft PR or same-branch CI fix, with approval gate for `.github/workflows`), *Timer*,
+*Join*, *Condition*, *Artifact*; run inputs as `{{input.name}}`, earlier answers as `{{steps.id}}`; schedules with a
+preview of the next runs; and **GitHub Background Agents** (webhooks or 2-min polling on issue labels, `/agent`
+commands and red CI, with trusted authors, 14-day event journal and admin kill-switch). Optional, Linux and macOS —
+see [docs/temporal.md](docs/temporal.md). Try it without any setup in `npm run demo`.
+
+<p align="center">
+  <img src="docs/screenshots/desktop-light-temporal-triggers.png" alt="Temporal Triggers: GitHub background agents with webhook and polling status" width="820">
+</p>
+<p align="center"><sub>GitHub Background Agents: trigger pipelines on issue labels, comment commands or red CI and open draft PRs automatically.</sub></p>
 
 ## Why Teleharness
 
@@ -230,7 +238,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 
 | | |
 |---|---|
-| **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. Codex and ACP chats are admin-only for now (in Temporal pipelines every user can use Codex, text-only).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Model picker with opencode, Claude, Codex and ACP engine groups" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
+| **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. Admins can grant Claude, Codex, and Gemini (ACP) per tenant in Settings → Users (scoped to the user's folders, no shell).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Model picker with opencode, Claude, Codex and ACP engine groups" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
 | **Attention Board** | One screen for every chat and Temporal run grouped into *Waiting for you*, *Working*, *Done* and *Failed*, with a *While you were away* recap, quick actions and per-category Web Push notifications with quiet hours.<br><img src="docs/screenshots/phone-light-board.png" alt="Attention Board on a phone" width="180"> |
 | **Mobile Review & Plan-First** | Review queue across chats and runs, touch-friendly diff with line selection and persistent inline draft comments, return-to-agent and accept/commit. *Plan first* makes the agent propose a read-only plan and wait for approval before editing files.<br><img src="docs/screenshots/phone-light-review.png" alt="Mobile diff viewer" width="180"> <img src="docs/screenshots/phone-light-plan.png" alt="Gemini Plan 1 approval card" width="180"> |
 | **Isolated Git Worktrees** | Give each chat or pipeline run its own git worktree and branch, detect cross-chat file overlaps and dry-run merge conflicts, merge with squash/merge/ff after running tests, and prune orphaned branches.<br><img src="docs/screenshots/phone-light-worktree.png" alt="Chat with active worktree pill, review plaque and conflict warning" width="180"> <img src="docs/screenshots/phone-light-worktrees.png" alt="Project worktrees list and merge settings" width="180"> |
@@ -241,7 +249,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Agent steps** | Live turn progress: reasoning, tool calls with output, background tasks. Each subagent run is a card with its duration, step count and tokens; open it to see every step — runs of the same tool fold into one line that expands on tap, and *Show all steps (N)* lists them one by one. Undo a turn and its file edits.<br><img src="docs/screenshots/phone-light-agent-steps.png" alt="A subagent card with 14 steps: a folded line of commands opened step by step" width="180"> |
 | **Turn changes and Git** | An answer that edited files gets a *Changes · N files* row: open it for a per-file diff — what this turn changed, or the file now against the last commit (one column on a phone, two panes on a desktop). The Git screen of the chat folder shows the branch, ahead/behind and changed files: tick the files to commit, let the chat's own model suggest the message in a separate short request (it never lands in the chat history), commit, and push — push is for the admin only. Other users work with git in their own folders, without push or branch switching. Settings → Git holds the commit author, the message language and the default selection. |
 | **Background subagents keep working** | Claude Code answers right away while subagents it started in the background keep running after the answer. A band above the composer shows who is still working; a new message waits in the queue, and Claude picks up their results and answers again when they finish. |
-| **Temporal pipelines** *(optional)* | Multi-step scenarios that survive restarts: Claude or Codex steps that work in the pipe's own folder (files included), your decision between steps, timers, conditions, saved artifacts, run inputs passed as `{{input.name}}` and earlier answers as `{{steps.id}}`. Runs show their status without extra taps, a *Waiting for you* block and a badge in the menu, a result block with the final answer, the run's files and each step's conversation; pause, cancel, terminate with a reason; schedules with a preview of the next runs. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision" width="180"> |
+| **Temporal pipelines & GitHub Background Agents** *(optional)* | Multi-step scenarios that survive restarts: Claude, Codex or Gemini (ACP) steps, human approvals with rework loops (up to 3 cycles), *Open PR* steps in isolated worktrees, timers, conditions and saved artifacts. Connect a fine-grained GitHub PAT in Settings → GitHub to trigger pipes automatically via webhook or polling (*Issue → PR*, *Fix CI*, *Nightly dependency update*) with trusted authors, event journal and an admin kill-switch. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision and GitHub PR run" width="180"> <img src="docs/screenshots/phone-light-temporal-triggers.png" alt="Temporal Triggers list on a phone" width="180"> <img src="docs/screenshots/phone-light-github.png" alt="Settings: GitHub fine-grained token and repository readiness" width="180"> |
 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. Optionally automatic, with your own order of backup models. |
 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
 | **Reliable streaming** | One SSE hub for every engine with replay, stall detection and loop protection — survives flaky mobile networks. |

@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { runAcpChat } from "../lib/acp-chat.js";
+import { runAcpChat , loadAcpMcpServers } from "../lib/acp-chat.js";
 test("ход получает две дельты, следующий ход загружает тот же разговор", async () => {
   for (const resume of [null, "s-test"]) {
     const child = spawn(process.execPath, ["tests/fixtures/acp-chat-agent.mjs"], { stdio: "pipe" });
@@ -115,7 +115,8 @@ test("каталог сохраняет обе группы ACP и не меня
     const catalog = acpProviderCatalog(base, [agent]);
     const key = catalog.connected[0];
     assert.equal(makeBinding({ model: { providerID: key, modelID: catalog.default[key] } }).engine, "acp");
-    assert.equal(engineAllowed({ role: "user", engines: ["acp"] }, "acp"), false);
+    assert.equal(engineAllowed({ role: "user", engines: ["opencode"] }, "acp"), false);
+    assert.equal(engineAllowed({ role: "user", engines: ["opencode", "acp"] }, "acp"), true);
   }
 });
 
@@ -165,4 +166,42 @@ test("терминал Antigravity на Linux находит bash и sudo в о�
   for await (const chunk of child.stdout) stdout += chunk;
   assert.match(stdout,/\/bash\n/);
   assert.match(stdout,/\/sudo\n/);
+});
+
+test("FEAT-20.21: loadAcpMcpServers конвертирует stdio/http/sse и пропускает disabled/битые конфиги", async (t) => {
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const dir = await mkdtemp(path.join(tmpdir(), "acp-mcp-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const cfgPath = path.join(dir, "mcp.json");
+  await writeFile(cfgPath, JSON.stringify({
+    mcpServers: {
+      playwright: { command: "npx", args: ["-y", "@playwright/mcp"], env: { HEADLESS: "1", IGNORED: null } },
+      remote: { type: "http", url: "https://mcp.example/v1", headers: { Authorization: "Bearer x" } },
+      off: { command: "echo", disabled: true },
+      broken: { args: ["no-cmd"] },
+    },
+  }));
+  const list = loadAcpMcpServers(cfgPath);
+  assert.deepEqual(list, [
+    { name: "playwright", command: "npx", args: ["-y", "@playwright/mcp"], env: [{ name: "HEADLESS", value: "1" }] },
+    { name: "remote", type: "http", url: "https://mcp.example/v1", headers: [{ name: "Authorization", value: "Bearer x" }] },
+  ]);
+  assert.deepEqual(loadAcpMcpServers(path.join(dir, "missing.json")), []);
+  assert.deepEqual(loadAcpMcpServers(null), []);
+});
+
+test("FEAT-20.21: runAcpChat передаёт mcpServers в session/new и session/load (и [] при discoverModels)", async () => {
+  const servers = [{ name: "playwright", command: "npx", args: ["-y", "@playwright/mcp"], env: [] }];
+  for (const resume of [null, "s-test"]) {
+    const child = spawn(process.execPath, ["tests/fixtures/acp-chat-agent.mjs"]);
+    const chunks = [];
+    try {
+      await runAcpChat(child, { cwd: process.cwd(), resume, mcpServers: servers, prompt: "mcp-servers", onText: (t) => chunks.push(t) });
+      assert.deepEqual(JSON.parse(chunks[0]), servers);
+    } finally {
+      child.kill();
+    }
+  }
 });

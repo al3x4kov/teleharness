@@ -5,13 +5,14 @@ import { api } from "../../lib/api.js";
 import { t, locale } from "../../lib/i18n.js";
 import { navigate } from "../../lib/router.js";
 import { me } from "../../lib/store.js";
-import { Banner, Empty, KINDS, Skeleton, StatusPill, errorText, usePoll, useNow, when, duration } from "./ui.jsx";
+import { Banner, Empty, KINDS, RunStatus, Skeleton, errorText, prNumber, prOutcome, sourceText, usePoll, useNow, when, duration } from "./ui.jsx";
 
-const ACTIVE = new Set(["wait", "run", "quota", "paused", "queued"]);
+const RUNNING = ["run", "quota", "paused", "queued", "github"];
+const ACTIVE = new Set(["wait", ...RUNNING]);
 const FILTERS = [
   ["all", () => true],
   ["wait", (r) => r.kind === "wait"],
-  ["run", (r) => ["run", "quota", "paused", "queued"].includes(r.kind)],
+  ["run", (r) => RUNNING.includes(r.kind)],
   ["err", (r) => ["err", "rejected", "unavailable"].includes(r.kind)],
   ["ok", (r) => ["ok", "cancel", "term"].includes(r.kind)],
   ["schedule", (r) => r.source === "schedule"],
@@ -26,18 +27,36 @@ export function RunRow({ run, now }) {
   const total = s.stepsTotal || run.steps?.length || 0;
   const step = s.current ? t("temporal.runs.stepOf", { index: s.current.index, total: s.stepsTotal, name: s.current.name })
     : kind === "ok" ? t("temporal.runs.stepsDone", { done: total, count: total }) : "";
-  return (
-    <a class="t-runrow" href={runHref(run.workflowId)} data-kind={kind}>
+  const result = prOutcome(run.pr, run.steps?.find((x) => x.type === "pull_request")?.mode);
+  const href = runHref(run.workflowId);
+  const links = [];
+  if (run.eventUrl && run.eventUrl !== result?.url) links.push({ href: run.eventUrl, text: t("temporal.gh.openGithub") });
+  if (result?.url) links.push({ href: result.url, text: `PR #${prNumber(result.url) ?? "—"} ↗` });
+  const open = () => navigate(href);
+  const own = (e) => !e.target.closest?.("a,button");
+  const body = (
+    <>
       <span class={"t-runicon " + (KINDS[kind] ?? KINDS.unavailable).cls} aria-hidden="true">{(KINDS[kind] ?? KINDS.unavailable).icon}</span>
       <span class="t-runmain">
         <b>{run.name}</b>
-        <span class="t-meta">{run.pipeDeleted ? t("temporal.runs.pipeDeleted") : ""}{t("temporal.runs.version", { n: run.version })} · {t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}{s.startTime ? " · " + when(s.startTime, now) : ""}</span>
+        <span class="t-meta">{run.pipeDeleted ? t("temporal.runs.pipeDeleted") : ""}{t("temporal.runs.version", { n: run.version })} · {sourceText(run)}{s.startTime ? " · " + when(s.startTime, now) : ""}</span>
+        {result && <span class="t-meta t-runpr">{result.title}</span>}
+        {links.length > 0 && (
+          <span class="t-runlinks">
+            {links.map((l) => <a key={l.href} class="t-btn t-runlink" href={l.href} target="_blank" rel="noreferrer">{l.text}</a>)}
+          </span>
+        )}
       </span>
       <span class="t-runside">
-        <StatusPill kind={kind} />
+        <RunStatus kind={kind} stepError={run.stepError} />
         {(step || s.startTime) && <span class="t-meta">{step}{step && s.startTime ? " · " : ""}{s.startTime ? duration(s.startTime, s.closeTime, now) : ""}</span>}
       </span>
-    </a>
+    </>
+  );
+  if (!links.length) return <a class="t-runrow" href={href} data-kind={kind}>{body}</a>;
+  return (
+    <div class="t-runrow" role="link" tabIndex={0} data-kind={kind} onClick={(e) => { if (own(e)) open(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" && own(e)) open(); }}>{body}</div>
   );
 }
 

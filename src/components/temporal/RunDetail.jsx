@@ -7,16 +7,18 @@ import { api } from "../../lib/api.js";
 import { t } from "../../lib/i18n.js";
 import { me } from "../../lib/store.js";
 import { useSeenOnOpen } from "../../lib/attention.js"; // FEAT-20.2
-import { Banner, Empty, Sheet, Skeleton, StatusPill, STEP_TYPES_UI, errorText, usePoll, useNow, when, duration } from "./ui.jsx";
+import { Banner, Empty, RunStatus, Sheet, Skeleton, STEP_TYPES_UI, errorText, ghWait, prOutcome, sourceText, stepErrorTitle, usePoll, useNow, when, duration } from "./ui.jsx";
+import { CI_ATTEMPTS_MAX } from "../../../shared/temporal-templates.js";
 import Markdown from "../chat/Markdown.jsx";
 import FileCard from "../chat/FileCard.jsx";
 import FileViewer from "../chat/FileViewer.jsx";
 import { RunWorktree } from "../chat/Worktree.jsx"; // FEAT-20.7
 import { RunCost } from "./RunCost.jsx"; // FEAT-20.6
 
-const ACTIVE = new Set(["wait", "run", "quota", "paused"]);
+const ACTIVE = new Set(["wait", "run", "quota", "paused", "github"]);
+const INPUT_PREVIEW = 240;
 const STEP_STATE = {
-  completed: ["done", "✓"], running: ["cur", "↻"], quota_wait: ["wait", "⧗"], rejected: ["fail", "✕"], waiting: ["todo", ""], skipped: ["skip", "↷"],
+  completed: ["done", "✓"], running: ["cur", "↻"], quota_wait: ["wait", "⧗"], rejected: ["fail", "✕"], waiting: ["todo", ""], skipped: ["skip", "↷"], github_wait: ["wait", "⧗"],
 };
 
 function Result({ workflowId, step, open: initiallyOpen = false, label = null }) {
@@ -34,7 +36,7 @@ function Result({ workflowId, step, open: initiallyOpen = false, label = null })
   );
 }
 
-export default function RunDetail({ workflowId }) {
+export default function RunDetail({ workflowId, modelLabels = {} }) {
   const [run, setRun] = useState(null), [error, setError] = useState(null), [gone, setGone] = useState(false);
   const [busy, setBusy] = useState(false), [toast, setToast] = useState(""), [sheet, setSheet] = useState(null);
   const [reason, setReason] = useState(""), [comment, setComment] = useState(""), [viewer, setViewer] = useState(null);
@@ -94,6 +96,18 @@ export default function RunDetail({ workflowId }) {
   // The decision block already shows that answer — no second copy as an interim result.
   const finalStep = lastAnswer && !decide.some((d) => before(d.id)?.id === lastAnswer.id) ? lastAnswer : null;
   const next = (id) => { const i = steps.findIndex((x) => x.id === id); return steps[i + 1]; };
+  const prSteps = steps.filter((x) => x.type === "pull_request");
+  const refusals = run.stepError && prSteps.some((x) => x.id === run.stepError.stepId) ? run.stepError : null;
+  const waitCut = !running && ["FAILED", "TIMED_OUT"].includes(run.status) && prSteps.some((x) => stepState[x.id] === "github_wait");
+  const lastAttempt = Number.isSafeInteger(run.attempt) && run.attempt >= CI_ATTEMPTS_MAX;
+  const ciLog = typeof run.inputs?.ci_log === "string" ? run.inputs.ci_log.trim() : "";
+  const shownInputs = Object.entries(run.inputs ?? {}).filter(([k]) => k !== "ci_log");
+  const githubLink = run.eventUrl ? <a class="t-btn" href={run.eventUrl} target="_blank" rel="noreferrer">{t("temporal.gh.openGithub")}</a> : null;
+  const toWorktree = () => {
+    const card = typeof document === "undefined" ? null : document.querySelector('.t-rundetail [data-req="FEAT-20.7"]');
+    if (card?.scrollIntoView) card.scrollIntoView({ block: "start", behavior: "smooth" });
+    else setToast(t("temporal.rd.worktreeNotHere"));
+  };
 
   const actions = running ? (
     <>
@@ -117,27 +131,44 @@ export default function RunDetail({ workflowId }) {
     <div class="t-rundetail">
       <div class="t-head">
         <div><h1>{run.name}</h1>
-          <p class="t-facts"><span>{t("temporal.runs.version", { n: run.version })}</span><span>{t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}</span>
+          <p class="t-facts"><span>{t("temporal.runs.version", { n: run.version })}</span><span>{run.eventUrl ? <a href={run.eventUrl} target="_blank" rel="noreferrer">{sourceText(run)} ↗</a> : sourceText(run)}</span>
             {run.startTime && <span>{t("temporal.rd.started", { when: when(run.startTime, now) })}</span>}
             {run.startTime && <span>{running ? t("temporal.rd.running") : t("temporal.rd.took")}{duration(run.startTime, run.closeTime, now)}</span>}
             {ACTIVE.has(kind) && <span>{t("temporal.rd.autoRefresh")}</span>}{run.pipeDeleted && <span>{t("temporal.rd.pipeDeleted")}</span>}</p></div>
-        <StatusPill kind={kind} />
+        <RunStatus kind={kind} stepError={run.stepError} />
       </div>
       {state.paused && running && <Banner icon="❚❚" title={t("temporal.rd.paused")}>{t("temporal.rd.pausedText")}</Banner>}
-      {kind === "err" && <Banner tone="err" icon="✕" title={t("temporal.rd.failed")}>{t("temporal.rd.failedText")}</Banner>}
+      {kind === "err" && !refusals && !waitCut && <Banner tone="err" icon="✕" title={t("temporal.rd.failed")}>{t("temporal.rd.failedText")}</Banner>}
       {kind === "unavailable" && <Banner tone="err" icon="?" title={t("temporal.view.down")}>{t("temporal.rd.downText")}</Banner>}
+      {waitCut && <Banner tone="err" icon="⧗" title={t("temporal.rd.waitCutTitle")} action={<button class="t-btn" type="button" data-action="to-worktree" onClick={toWorktree}>{t("temporal.rd.worktreeBtn")}</button>}>{t("temporal.rd.waitCutText")}</Banner>}
+      {lastAttempt && <Banner tone="warn" icon="✋" title={t("temporal.rd.lastAttemptTitle", { max: CI_ATTEMPTS_MAX })} action={githubLink}>{t("temporal.rd.lastAttemptText")}</Banner>}
       <div class="t-grid2">
         <div>
           {running && decide.map((step) => {
             const prev = before(step.id), after = next(step.id);
+            const reworkTarget = step.type === "approval" ? step.reworkTarget : null;
+            const maxReworks = step.maxReworks ?? 3;
+            const reworkCount = state.reworks?.[step.id] ?? 0;
+            const canRework = Boolean(reworkTarget) && reworkCount < maxReworks;
             return (
               <section class="t-decide" key={step.id} aria-labelledby={"t-d-" + step.id}>
-                <StatusPill kind="wait" />
+                <RunStatus kind="wait" />
                 <h2 id={"t-d-" + step.id}>{t("temporal.rd.decide", { name: step.name })}</h2>
-                {prev ? <><p class="t-muted t-small">{t("temporal.rd.resultOf", { name: prev.name })}</p><Result workflowId={workflowId} step={prev.id} open /></> : null}
+                {reworkTarget && (
+                  <p class="t-muted t-small" data-req="FEAT-20.1 кр. 14">
+                    {canRework ? t("temporal.rd.reworkCount", { n: reworkCount, max: maxReworks }) : t("temporal.rd.reworkLimit", { max: maxReworks })}
+                  </p>
+                )}
+                {step.type === "pull_request"
+                  ? <p class="t-muted t-small">{t("temporal.rd.ciFilesNote")}</p>
+                  : prev ? <><p class="t-muted t-small">{t("temporal.rd.resultOf", { name: prev.name })}</p><Result workflowId={workflowId} step={prev.id} open /></> : null}
                 <div class="t-row t-stretch">
                   <button class="t-btn t-primary" type="button" data-action="approve" disabled={busy || !allowed("approve")}
                     onClick={() => act("approve", { stepId: step.id, generation: state.generation })}>{t("temporal.rd.approve")}</button>
+                  {reworkTarget && (
+                    <button class="t-btn" type="button" data-action="rework" disabled={busy || !canRework || !allowed("approve")}
+                      onClick={() => setSheet({ rework: step })}>{t("temporal.rd.reworkBtn")}</button>
+                  )}
                   <button class="t-btn t-danger" type="button" data-action="reject" disabled={busy || !allowed("reject")}
                     onClick={() => setSheet({ reject: step })}>{t("temporal.rd.reject")}</button>
                 </div>
@@ -160,19 +191,39 @@ export default function RunDetail({ workflowId }) {
             <h2>{t("temporal.rd.steps")}</h2>
             <ol class="t-timeline">
               {steps.map((step, i) => {
-                const cut = !running && ["running", "quota_wait"].includes(stepState[step.id]) && run.status !== "COMPLETED";
-                const st = cut ? "stop" : pending.includes(step.id) ? "wait" : (STEP_STATE[stepState[step.id]]?.[0] ?? (run.status === "COMPLETED" ? "done" : "todo"));
+                const refused = refusals?.stepId === step.id ? refusals : null;
+                const cut = !running && ["running", "quota_wait", "github_wait"].includes(stepState[step.id]) && run.status !== "COMPLETED";
+                const st = refused ? "fail" : cut ? "stop" : pending.includes(step.id) ? "wait" : (STEP_STATE[stepState[step.id]]?.[0] ?? (run.status === "COMPLETED" ? "done" : "todo"));
                 const icon = st === "skip" ? "↷" : st === "stop" ? "■" : st === "wait" ? "◆" : st === "done" ? "✓" : st === "fail" ? "✕" : st === "cur" ? "↻" : String(i + 1);
-                const ty = STEP_TYPES_UI[step.type] ?? { label: step.type };
-                const note = st === "wait" ? t(stepState[step.id] === "quota_wait" ? "temporal.rd.st.quota" : "temporal.rd.st.wait")
-                  : ["skip", "stop", "cur", "done", "fail"].includes(st) ? t("temporal.rd.st." + st) : t(running ? "temporal.rd.st.ahead" : "temporal.rd.st.notRun");
+                const ty = step.type === "pull_request" ? { label: t("temporal.rd.portalStep") } : STEP_TYPES_UI[step.type] ?? { label: step.type };
+                const note = st === "wait" ? t(stepState[step.id] === "quota_wait" ? "temporal.rd.st.quota" : stepState[step.id] === "github_wait" ? "temporal.rd.st.githubWait" : "temporal.rd.st.wait")
+                  : st === "fail" ? t(refused ? "temporal.rd.st.refused" : "temporal.rd.st.fail")
+                  : ["skip", "stop", "cur", "done"].includes(st) ? t("temporal.rd.st." + st) : t(running ? "temporal.rd.st.ahead" : "temporal.rd.st.notRun");
                 const quota = running && stepState[step.id] === "quota_wait";
+                const pr = step.type === "pull_request" ? state.pr?.[step.id] ?? null : null;
+                const result = prOutcome(pr, step.mode);
+                const ghw = running && stepState[step.id] === "github_wait" && step.type === "pull_request" ? ghWait(state.waitReasons?.[step.id]) : null;
                 return (
                   <li key={step.id} class={"t-tl t-tl-" + (quota ? "wait" : st)}>
                     <span class="t-node" aria-hidden="true">{quota ? "⧗" : icon}</span>
                     <div class="t-tlbody">
                       <b>{step.name}</b>
-                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : "") + step.model : ""} · {quota ? t("temporal.rd.st.quota") : note}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
+                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : note}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
+                      {result && (
+                        <div class={"t-prbox" + (result.tone === "off" ? " t-prbox-off" : "")}>
+                          <b>{result.title}</b>
+                          {result.text && <p>{result.text}</p>}
+                          {result.link && <div class="t-row"><a class="t-btn t-primary" href={result.url} target="_blank" rel="noreferrer">{result.link}</a></div>}
+                        </div>
+                      )}
+                      {refused && (
+                        <div class="t-prbox t-prbox-err" role="alert">
+                          <b><span aria-hidden="true">✕ </span>{stepErrorTitle(refused.code)}</b>
+                          <p>{refused.message}</p>
+                          <div class="t-row"><button class="t-btn" type="button" data-action="to-worktree" onClick={toWorktree}>{t("temporal.rd.openWorktree")}</button></div>
+                        </div>
+                      )}
+                      {ghw && <Banner tone="warn" icon="⧗" title={ghw.title} action={ghw.needToken ? <a class="t-btn" href="#/settings/github">{t("temporal.rd.updateToken")}</a> : undefined}>{ghw.text}</Banner>}
                       {run.chats?.[step.id] && <a class="t-btn t-ghost t-tight" href={"#/chat/" + encodeURIComponent(run.chats[step.id])}>{t("temporal.rd.openStepChat")}</a>}
                       {quota && <Banner tone="warn" icon="⧗" title={t("temporal.rd.quotaTitle")}>{t("temporal.rd.quotaText")}</Banner>}
                       {results.has(step.id) && !decide.some((d) => before(d.id)?.id === step.id) && step.id !== finalStep?.id && <Result workflowId={workflowId} step={step.id} />}
@@ -183,6 +234,13 @@ export default function RunDetail({ workflowId }) {
             </ol>
             {!steps.length && <p class="t-muted">{t("temporal.rd.noSteps")}</p>}
           </section>
+          {ciLog && (
+            <section class="t-card" aria-labelledby="t-cilog-h">
+              <h2 id="t-cilog-h">{t("temporal.rd.ciLogTitle")}</h2>
+              <pre class="t-code">{ciLog}</pre>
+              <p class="t-help">{t("temporal.rd.ciLogHelp")}</p>
+            </section>
+          )}
         </div>
         <aside class="t-side">
           <section class="t-card">
@@ -190,10 +248,18 @@ export default function RunDetail({ workflowId }) {
             <dl class="t-kv">
               <dt>{t("temporal.rd.kv.pipe")}</dt><dd>{run.pipeDeleted ? <>{run.name} <span class="t-muted">{t("temporal.rd.kv.deleted")}</span></> : <a href={"#/temporal/pipe/" + encodeURIComponent(run.definitionId)}>{run.name}</a>}</dd>
               <dt>{t("temporal.rd.kv.version")}</dt><dd>{t("temporal.rd.kv.versionFixed", { n: run.version })}</dd>
-              <dt>{t("temporal.rd.kv.run")}</dt><dd>{t(run.source === "schedule" ? "temporal.source.schedule" : "temporal.source.manual")}</dd>
+              <dt>{t("temporal.rd.kv.run")}</dt><dd>{run.eventUrl ? <a href={run.eventUrl} target="_blank" rel="noreferrer">{sourceText(run)} ↗</a> : sourceText(run)}</dd>
+              {run.triggerId && <><dt>{t("temporal.rd.kv.trigger")}</dt><dd><a href={"#/temporal/triggers/" + encodeURIComponent(run.triggerId)}>{t("temporal.rd.kv.triggerLink")}</a></dd></>}
               {run.startTime && <><dt>{t("temporal.rd.kv.started")}</dt><dd>{when(run.startTime, now)}</dd></>}
               {run.closeTime && <><dt>{t("temporal.rd.kv.finished")}</dt><dd>{when(run.closeTime, now)}</dd></>}
-              {Object.keys(run.inputs ?? {}).length > 0 && <><dt>{t("temporal.rd.kv.inputs")}</dt><dd>{Object.entries(run.inputs).map(([k, v]) => <div key={k}><span class="t-mono">{k}</span>: {Array.isArray(v) ? v.join(", ") : String(v)}</div>)}</dd></>}
+              {shownInputs.length > 0 && <><dt>{t("temporal.rd.kv.inputs")}</dt><dd>{shownInputs.map(([k, v]) => {
+                const text = Array.isArray(v) ? v.join(", ") : String(v);
+                return (
+                  <div key={k}><span class="t-mono">{k}</span>: {text.length > INPUT_PREVIEW
+                    ? <>{text.slice(0, INPUT_PREVIEW).trim()}… <details class="t-more"><summary>{t("temporal.rd.showFull")}</summary><div class="t-prewrap">{text}</div></details></>
+                    : text}</div>
+                );
+              })}</dd></>}
               {run.runFolder && <><dt>{t("temporal.rd.kv.folder")}</dt><dd class="t-mono">{run.runFolder}</dd></>}
               {me.value?.role === "admin" && run.directory && <><dt>{t("temporal.rd.kv.project")}</dt><dd class="t-mono">{run.directory}</dd></>}
               <dt>ID</dt><dd class="t-mono">{workflowId}</dd>
@@ -243,6 +309,19 @@ export default function RunDetail({ workflowId }) {
           <div class="t-row t-stretch"><button class="t-btn" type="button" onClick={() => setSheet(null)}>{t("temporal.back")}</button>
             <button class="t-btn t-danger-fill" type="button" data-action="confirm-reject" disabled={busy}
               onClick={() => act("reject", { stepId: sheet.reject.id, generation: state.generation, ...(comment.trim() ? { reason: comment.trim() } : {}) })}>{t("temporal.rd.rejectBtn")}</button></div>
+        </Sheet>
+      )}
+      {sheet?.rework && (
+        <Sheet title={t("temporal.rd.reworkQ", { name: sheet.rework.name })} onClose={() => setSheet(null)}>
+          <ul class="t-consequences">
+            <li>{t("temporal.rd.rework1")}</li>
+            <li>{t("temporal.rd.rework2", { n: state.reworks?.[sheet.rework.id] ?? 0, max: sheet.rework.maxReworks ?? 3 })}</li>
+          </ul>
+          <label class="t-field"><span>{t("temporal.rd.reworkNote")} <span class="t-muted">{t("temporal.rd.requiredTag")}</span></span>
+            <textarea class="t-input" rows="4" aria-label={t("temporal.rd.reworkNote")} maxLength={8000} value={comment} onInput={(e) => setComment(e.currentTarget.value)} placeholder={t("temporal.rd.reworkPh")} /></label>
+          <div class="t-row t-stretch"><button class="t-btn" type="button" onClick={() => setSheet(null)}>{t("temporal.back")}</button>
+            <button class="t-btn t-primary" type="button" data-action="confirm-rework" disabled={busy || !comment.trim()}
+              onClick={() => act("rework", { stepId: sheet.rework.id, generation: state.generation, note: comment.trim() })}>{t("temporal.rd.reworkSend")}</button></div>
         </Sheet>
       )}
     </div>

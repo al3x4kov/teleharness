@@ -4,12 +4,14 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
 import { t, locale } from "../../lib/i18n.js";
+import { CI_ATTEMPTS_MAX } from "../../../shared/temporal-templates.js";
 
 export const KINDS = {
   wait: { cls: "t-wait", icon: "◆", get text() { return t("temporal.kind.wait"); } },
   run: { cls: "t-run", icon: "↻", get text() { return t("temporal.kind.run"); } },
   quota: { cls: "t-quota", icon: "⧗", get text() { return t("temporal.kind.quota"); } },
   paused: { cls: "t-off", icon: "❚❚", get text() { return t("temporal.kind.paused"); } },
+  github: { cls: "t-wait", icon: "⧗", get text() { return t("temporal.kind.github"); } },
   ok: { cls: "t-ok", icon: "✓", get text() { return t("temporal.kind.ok"); } },
   err: { cls: "t-err", icon: "✕", get text() { return t("temporal.kind.err"); } },
   rejected: { cls: "t-err", icon: "✕", get text() { return t("temporal.kind.rejected"); } },
@@ -143,9 +145,67 @@ export const STEP_TYPES_UI = {
   parallel: { icon: "⑂", get label() { return t("temporal.type.parallel"); } },
   condition: { icon: "⋔", get label() { return t("temporal.type.condition"); } },
   artifact: { icon: "▤", get label() { return t("temporal.type.artifact"); } },
+  pull_request: { icon: "⇡", get label() { return t("temporal.type.pull_request"); } },
 };
 
 export function errorText(e) {
   if (!e?.status) return t("temporal.err.offline");
   return e?.body?.error || t("temporal.err.generic");
+}
+
+export function sourceText(run) {
+  if (run.source === "github") {
+    const attempt = Number.isSafeInteger(run.attempt) && run.attempt > 0
+      ? t("temporal.gh.attempt", { n: run.attempt, max: CI_ATTEMPTS_MAX })
+      : "";
+    return `GitHub · ${run.eventRef ?? t("temporal.gh.event")}${attempt}`;
+  }
+  if (run.source === "schedule") return t("temporal.source.schedule");
+  return t("temporal.source.manual");
+}
+
+export function ghWait(reason = "") {
+  const kind = String(reason).replace(/^(?:github|push)_/, "");
+  if (kind === "auth") return { title: t("temporal.gh.wait.authTitle"), needToken: true, text: t("temporal.gh.wait.authText") };
+  if (kind === "network") return { title: t("temporal.gh.wait.netTitle"), text: t("temporal.gh.wait.netText") };
+  if (kind === "rate_limited") return { title: t("temporal.gh.wait.rateTitle"), text: t("temporal.gh.wait.rateText") };
+  if (kind === "server") return { title: t("temporal.gh.wait.srvTitle"), text: t("temporal.gh.wait.srvText") };
+  return { title: t("temporal.gh.wait.defTitle"), text: t("temporal.gh.wait.defText") };
+}
+
+export const prNumber = (url) => (/\/pull\/(\d+)/.exec(String(url ?? ""))?.[1] ?? null);
+const commit = (sha) => (sha ? ` ${sha}` : "");
+
+export function prOutcome(pr, mode = "new") {
+  if (!pr) return null;
+  if (pr.state === "no_changes") return { tone: "off", title: t("temporal.pr.noChangesTitle"), text: t("temporal.pr.noChangesText") };
+  if (pr.state !== "done") return null;
+  const number = prNumber(pr.url);
+  const link = pr.url ? (number ? t("temporal.pr.openNum", { n: number }) : t("temporal.pr.open")) : null;
+  if (pr.outcome === "pushed" || (!pr.outcome && mode === "same-branch"))
+    return { tone: "ok", title: t("temporal.pr.pushedTitle", { sha: commit(pr.sha), branch: pr.branch ?? t("temporal.pr.prBranch") }), text: [number ? `PR #${number}` : null, t("temporal.pr.ciRestart")].filter(Boolean).join(" · "), url: pr.url ?? null, link };
+  if (pr.outcome === "updated")
+    return { tone: "ok", title: number ? t("temporal.pr.updatedNum", { n: number }) : t("temporal.pr.updated"), text: t("temporal.pr.updatedText", { branch: pr.branch ?? "PR", sha: commit(pr.sha) }), url: pr.url ?? null, link };
+  if (pr.outcome === "created")
+    return { tone: "ok", title: number ? t("temporal.pr.createdNum", { n: number }) : t("temporal.pr.created"), text: [pr.branch, pr.base ? `→ ${pr.base}` : null].filter(Boolean).join(" "), url: pr.url ?? null, link };
+  if (pr.url) return { tone: "ok", title: number ? t("temporal.pr.readyNum", { n: number }) : t("temporal.pr.ready"), text: pr.branch ?? "", url: pr.url, link };
+  return null;
+}
+
+const STEP_ERROR_CODES = new Set(["branch_moved", "push_rejected", "github_rejected", "no_token", "worktree", "forbidden", "no_repo"]);
+export const stepErrorTitle = (code) => t(STEP_ERROR_CODES.has(code) ? "temporal.pr.err." + code : "temporal.pr.err.default");
+
+export function RunStatus({ kind, stepError = null }) {
+  if (stepError && kind === "err")
+    return <span class="t-pill t-err" data-kind="err"><i aria-hidden="true">✕</i>{stepErrorTitle(stepError.code)}</span>;
+  return <StatusPill kind={kind} />;
+}
+
+export function eventTarget(entry) {
+  const ev = entry?.eventJson ?? {};
+  const href = typeof ev.url === "string" && ev.url ? ev.url : null;
+  if (ev.kind === "ci_failed" && ev.prNumber != null && entry?.repo) {
+    try { return { href: `${new URL(ev.url).origin}/${entry.repo}/pull/${ev.prNumber}`, toPr: true }; } catch {}
+  }
+  return { href, toPr: false };
 }

@@ -51,7 +51,7 @@ import { GeminiLoginSessions } from "./lib/acp-login-session.js";
 import { CopilotLoginSessions } from "./lib/acp-copilot-login.js";
 import { AgyLoginSessions } from "./lib/acp-agy-login.js";
 import { launchCopilotLogin, launchGeminiLogin, launchAgyLogin, markAcpProfile, acpProfileReady } from "./lib/acp-login-launch.js";
-import { discoverAcpModels } from "./lib/acp-models.js";
+import { cachedAcpModels, discoverAcpModels } from "./lib/acp-models.js";
 import { acpProviderCatalog, AcpRegistry } from "./lib/acp-registry.js";
 import { AcpInstaller } from "./lib/acp-install.js";
 import { acpCatalogRoutes } from "./routes/acp-catalog.js";
@@ -65,6 +65,7 @@ import {scheduleRoutes} from "./routes/temporal-schedules.js";
 import { stageTimerStarter } from "./lib/temporal/stage-timer.js";
 import { DefinitionStore } from "./lib/temporal/definitions.js";
 import { chatStepRunner } from "./lib/temporal/chat-step.js";
+import { prStepRunner } from "./lib/temporal/pr-step.js";
 import { projectCandidate } from "./lib/temporal/workspace.js";
 import { PORTAL_FILE_RULE, SYSTEM_PROMPT_MAX, cleanSystemPrompt, withUserSystem, withUserSystemBody } from "./lib/user-prompt.js";
 import { withGlmVariant, withGlmVariantBody } from "./lib/glm-variant.js";
@@ -74,6 +75,19 @@ import { createInstanceReaper } from "./lib/instance-reaper.js";
 import { sessionRoutes } from "./routes/session.js";
 import { clearReverting, isReverting, markReverting, withSessionLock } from "./lib/session-lock.js"; // BUG-218 (design §1)
 import { pushRoutes } from "./routes/push.js";
+import { githubRoutes } from "./routes/github.js";
+import { loadKey, encrypt as encryptSecret, decrypt as decryptSecret, last4, redact } from "./lib/github/secrets.js";
+import { connectionService } from "./lib/github/connections.js";
+import { checkConnection, ghFetch, ghText, GhError } from "./lib/github/client.js";
+import { createTokenWatchdog } from "./lib/github/watchdog.js";
+import { triggerService } from "./lib/github/triggers.js";
+import { createDispatcher, cleanInputs, eventFace } from "./lib/github/dispatch.js";
+import { frameAgentText, fetchCiLog } from "./lib/github/ci-logs.js";
+import { createPermissionCache } from "./lib/github/permissions.js";
+import { createGithubHookHandler } from "./lib/github/hook.js";
+import { createGithubPoller } from "./lib/github/poller.js";
+import { triggerRoutes } from "./routes/temporal-triggers.js";
+import { randomUUID } from "node:crypto";
 import { attentionRoutes } from "./routes/attention.js"; // FEAT-20.2
 import { reviewRoutes } from "./routes/review.js"; // FEAT-20.1
 import { ReviewService, ReviewStore } from "./lib/review.js"; // FEAT-20.1
@@ -103,6 +117,7 @@ import {
   cleanGitSettings,
   PINS_MAX,
   engineAllowed,
+  adminUser,
   enginesOf,
   sessionCount,
   isAdmin,
@@ -136,7 +151,7 @@ import { ClaudeAgentCatalog, isClaudeAgentId } from "./lib/claude-agents.js";
 import { VoiceQuota, VoiceService } from "./lib/voice.js";
 import { voiceRoutes } from "./routes/voice.js";
 import { BindingStore, OC_PLAN_RULES, applyBinding, cleanModel, cleanPermMode, effectivePermMode, engineOf, makeBinding, ocPermRules, patchBinding, planUnsupported, resolveBinding } from "./lib/binding.js";
-import { isRunnerEngine, CLAUDE_PROVIDER, CODEX_PROVIDER, CLAUDE_MODELS } from "./shared/engine.js";
+import { isRunnerEngine, CLAUDE_PROVIDER, CODEX_PROVIDER, CLAUDE_MODELS, ACP_PROVIDERS } from "./shared/engine.js";
 import { createCodexCatalog } from "./lib/codex-catalog.js"; // FEAT-18.7 // FEAT-18.7: claude и codex — ходы раннера CLI
 import { CostLedger } from "./lib/cost/ledger.js"; // FEAT-20.6: журнал расхода по ценам API
 import { CostReports } from "./lib/cost/report.js";
@@ -926,6 +941,80 @@ if (config.TELEHARNESS_PUSH) {
     if (!MOCK) hub.onEvent((data, dir) => notifier.observe(data, dir));
   }
 }
+// GitHub integration: encrypted PAT storage, watchdog, triggers, dispatcher, webhook & poller.
+const github = (() => {
+  const key = loadKey(DATA_DIR);
+  const box = { encrypt: (t) => encryptSecret(key, t), decrypt: (b) => decryptSecret(key, b), last4, redact };
+  const connections = connectionService(path.join(DATA_DIR, "github-triggers.sqlite"));
+  const check = (token) => checkConnection(token, config.TELEHARNESS_GITHUB_API ? { apiBase: config.TELEHARNESS_GITHUB_API } : {});
+  const notify = (userId, kind, info) => {
+    const text = kind === "expired"
+      ? { title: `GitHub token expired (${info.login})`, body: "Background agents cannot start — reconnect in Settings → GitHub" }
+      : { title: `GitHub token expires in ${info.days}d (${info.login})`, body: "Refresh your connection in Settings → GitHub" };
+    const payload = { ...text, url: "/teleharness/#/settings/github", tag: "teleharness-github-token", kind: "error" };
+    return webPush?.notifier ? webPush.notifier.deliver(userId, "error", payload).catch(() => 0) : Promise.resolve(0);
+  };
+  const watchdog = createTokenWatchdog({ connections, check, secrets: box, notify, log: (m) => console.log(m) });
+  watchdog.start();
+  const gstore = triggerService(path.join(DATA_DIR, "github-triggers.sqlite"), { secrets: box });
+  const latestPublished = async (owner, definitionId) => {
+    try {
+      const versions = temporalDeps.store.get(owner, definitionId)?.versions ?? [];
+      return versions.length ? Math.max(...versions.map((v) => v.version)) : null;
+    } catch { return null; }
+  };
+  const frame = (s) => frameAgentText(s, 20_000);
+  const launch = async (trigger, ev, requestId, extra = {}) => {
+    if (!temporalDeps.startPipeline) throw new Error("Temporal-пайпы не подключены");
+    const version = trigger.version ?? (await latestPublished(trigger.owner, trigger.definitionId));
+    if (!version) throw new Error("У пайпа нет опубликованной версии");
+    const record = temporalDeps.store.get(trigger.owner, trigger.definitionId);
+    const versionDef = record?.versions?.find((v) => v.version === version)?.definition ?? null;
+    const framed = { ...ev, body: frame(ev.body), comment: ev.kind === "comment_command" ? frame(ev.body) : "" };
+    const inputs = cleanInputs(framed, Array.isArray(versionDef?.inputs) ? versionDef.inputs : []);
+    const face = eventFace(ev);
+    const eventRef = face.ref;
+    return temporalDeps.startPipeline({ owner: trigger.owner, definitionId: trigger.definitionId, version, requestId, inputs, source: "github", triggerId: trigger.id, eventRef, eventUrl: face.url, attempt: extra?.attempt ?? null });
+  };
+  const permissions = createPermissionCache({ apiBase: config.TELEHARNESS_GITHUB_API || undefined, log: (m) => console.log(m) });
+  const dispatcher = createDispatcher({
+    store: gstore, connections, launch, log: (m) => console.log(m),
+    describeRun: (id) => temporalDeps.describeRun(id),
+    ciLogFetch: async (userId, repo, runId) => {
+      const c = connections.get(userId);
+      if (!c?.tokenEnc) throw new Error("Нет подключения GitHub");
+      return fetchCiLog({
+        ghText: (_uid, pathname) => ghText(box.decrypt(c.tokenEnc), pathname, { apiBase: config.TELEHARNESS_GITHUB_API || undefined }),
+        userId,
+      }, repo, runId);
+    },
+    permissionCheck: async (login, repo, trigger) => {
+      const token = connections.get(trigger.owner);
+      return permissions.has(login, repo, token?.tokenEnc ? box.decrypt(token.tokenEnc) : null);
+    },
+  });
+  const githubHook = createGithubHookHandler({ store: gstore, dispatcher, sendJson, log: (m) => console.log(m) });
+  setImmediate(() => { dispatcher.resume().then((n) => { if (n) console.log(`github: доиграно доставок после рестарта: ${n}`); }).catch(() => {}); });
+  setInterval(() => { try { gstore.gc(); } catch (e) { console.error(`github gc: ${e?.message ?? e}`); } }, 3600_000).unref?.();
+  const poller = createGithubPoller({
+    store: gstore, dispatcher,
+    connectionToken: (owner) => {
+      const c = connections.get(owner);
+      return c?.tokenEnc ? box.decrypt(c.tokenEnc) : null;
+    },
+    apiBase: config.TELEHARNESS_GITHUB_API || undefined,
+    log: (m) => console.log(m),
+  });
+  poller.start();
+  setImmediate(() => { dispatcher.sweep().catch((e) => console.error(`github sweep: ${e?.message ?? e}`)); });
+  setInterval(() => { dispatcher.sweep().catch((e) => console.error(`github sweep: ${e?.message ?? e}`)); }, 60_000).unref?.();
+  const cancelRun = async (trigger, workflowId) => {
+    const described = await temporalDeps.describeRun(workflowId);
+    await temporalDeps.applyAction(trigger.owner, workflowId, { action: "cancel", runId: described.runId, actionId: randomUUID() });
+    return true;
+  };
+  return { connections, check, box, store: gstore, dispatcher, launch, cancelRun, hook: githubHook, poller };
+})();
 // FEAT-20.2: исходы opencode-чатов (busy → idle/error) и «ждёт вас» для сводки.
 const attentionObserver = new OutcomeObserver({
   isManaged: (sid) => isRunnerEngine(engineOfChat(sid)),
@@ -1368,9 +1457,9 @@ async function tenantVisionModel(user, binding, parsed) {
 // let it pass (the empty-turn detector stays the safety net).
 async function tenantModelProblem(user, model) {
   if (!model || isAdmin(user)) return null;
-  const catalog = await providerCatalogJson();
+  const catalog = await providerCatalogJson(user);
   if (!catalog) return null;
-  return modelInCatalog(catalog, model, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex") }) === false
+  return modelInCatalog(catalog, model, { claudeAllowed: engineAllowed(user, "claude"), codexAllowed: engineAllowed(user, "codex"), acpAllowed: engineAllowed(user, "acp") }) === false
     ? { status: 403, error: "model not allowed" }
     : null;
 }
@@ -1635,7 +1724,48 @@ function directoryShapeProblem(url) {
 // handler. Groups not migrated yet stay in the if-chain of handleApi below.
 const chatRouting=chatRoutingForPortal({directory:DATA_DIR,stage:process.env.TELEHARNESS_ENV==="stand",
   enabled:process.env.TELEHARNESS_TEMPORAL_NEW_CHATS==="1",service:process.env.TELEHARNESS_TEMPORAL_CHAT_PGSERVICE});
+const acpLogins = {
+  "antigravity":new AgyLoginSessions((owner,extraEnv)=>launchAgyLogin(DATA_DIR,owner,extraEnv),(owner,status)=>markAcpProfile(DATA_DIR,owner,"antigravity",status),owner=>acpProfileReady(DATA_DIR,owner,"antigravity")),
+  gemini:new GeminiLoginSessions(owner=>launchGeminiLogin(DATA_DIR,owner),(owner,status)=>markAcpProfile(DATA_DIR,owner,"gemini",status)),
+  "github-copilot-cli":new CopilotLoginSessions(owner=>launchCopilotLogin(DATA_DIR,owner),(owner,status)=>markAcpProfile(DATA_DIR,owner,"github-copilot-cli",status),owner=>acpProfileReady(DATA_DIR,owner,"github-copilot-cli"))
+};
+const ACP_PUBLIC_IDS = ["antigravity","github-copilot-cli"];
+const acpAuthOwner = user => (isAdmin(user) ? user.id : adminUser()?.id ?? null);
+const acpReady = user => {
+  const owner = acpAuthOwner(user);
+  return owner && engineAllowed(user,"acp") ? ACP_PUBLIC_IDS.filter(id=>acpLogins[id].get(owner).status==="ready" || acpProfileReady(DATA_DIR,owner,id)) : [];
+};
+const acpTemporalCatalog = () => {
+  if (process.env.TELEHARNESS_ACP === "off") return [];
+  const owner = adminUser()?.id ?? null;
+  if (!owner) return [];
+  const readyIds = ACP_PUBLIC_IDS.filter(id => acpLogins[id].get(owner).status === "ready" || acpProfileReady(DATA_DIR, owner, id));
+  const out = [];
+  const seen = new Set();
+  for (const id of readyIds) {
+    const providerID = "acp-" + id;
+    const cat = cachedAcpModels(DATA_DIR, owner, id);
+    const list = cat?.availableModels ?? [];
+    for (const m of list) {
+      if (!m?.modelId || seen.has(m.modelId)) continue;
+      seen.add(m.modelId);
+      out.push({ id: m.modelId, name: m.name || m.modelId, providerID });
+    }
+    if (!list.length && !seen.has(providerID)) {
+      seen.add(providerID);
+      out.push({ id: providerID, name: id === "antigravity" ? "Google Antigravity" : id, providerID });
+    }
+  }
+  return out;
+};
 const temporalDeps={sendJson,readJsonBody,dirAllowed,engineAllowed,getUser,errLog,
+  get modelLabels() {
+    const out = {};
+    for (const m of CLAUDE_MODELS) out[m.id] = m.name;
+    for (const m of codexCatalog.models()) out[m.id] = m.name;
+    for (const m of acpTemporalCatalog()) out[m.id] = m.name;
+    return out;
+  },
   // BUG-251 / FEAT-19.16: pipe folders and the project picker (no typed paths).
   ensureDir:(d)=>mkdirSync(d,{recursive:true}),
   defaultProject:(user)=>defaultDir(user,CHAT_DIR),
@@ -1647,7 +1777,15 @@ const temporalDeps={sendJson,readJsonBody,dirAllowed,engineAllowed,getUser,errLo
       .filter(d=>projectCandidate(d,{tenantHome:config.TELEHARNESS_TENANT_HOME,problem:dirProblem,exists:x=>{try{return statSync(x).isDirectory();}catch{return false;}}}))
       .slice(0,60); // BUG-253
   },
-  store:new DefinitionStore({file:path.join(DATA_DIR,"temporal-definitions.json")})};
+  store:new DefinitionStore({file:path.join(DATA_DIR,"temporal-definitions.json")}),
+  enabledTriggers:(user,definitionId)=>github.store.list(user.id).filter(t=>t.definitionId===definitionId&&t.enabled),
+  publicUrl: config.TELEHARNESS_PUBLIC_URL,
+  adminStopped: () => github.store.setting("adminStopped", false) === true,
+  claudeLeftToday: () => {
+    const limit = github.store.setting("claude_background_per_day", 10) ?? 10;
+    return Math.max(0, limit - github.store.startedPerDayAll());
+  },
+};
 if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
   const stage=process.env.TELEHARNESS_ENV === "stand";
   const options={socketPath:path.join(DATA_DIR,"temporal-private","worker.sock"),
@@ -1664,36 +1802,36 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
   const enabled=new Set(String(process.env.TELEHARNESS_TEMPORAL_MODELS??"").split(",").map(s=>s.trim()).filter(Boolean));
   // FEAT-19.16: a model step = a portal chat turn in the pipe folder (same engine
   // runner, tenant jail, permissions and limits as chats).
+  const prepareRunWorktree=({user,project,workspace,workflowId,pipeName})=>{
+    const existing=workflowId?worktrees.store.byRun(workflowId):null;
+    if(existing&&existing.state!=="orphaned") return existing;
+    const admin=isAdmin(user);
+    return worktrees.create({runId:workflowId,kind:"run",owner:user.id,tenant:!admin,dir:project,untrusted:!admin||isUnderAny(project,tenantRoots()),
+      title:pipeName,chatFolder:admin?null:path.join(workspace,".teleharness-run-copies",String(workflowId??"run").replace(/[^A-Za-z0-9_-]/g,"").slice(-24))});
+  };
   temporalChatSteps=chatStepRunner({
-    registerStep:(x)=>costLedger.registerStep(x), // FEAT-20.6: попытка шага → журнал расхода до хода
-    // BUG-257: a tenant may open only chats of its own folders (exact match) — its step
-    // chat lives in the project and the agent works in the pipe folder (workDir, FEAT-04.12).
+    registerStep:(x)=>costLedger.registerStep(x),
     createSession:async({user,directory,project,engine,model})=>{
       mkdirSync(directory,{recursive:true});
       const created=await OC.createSession({directory:isAdmin(user)||!project?directory:project,timeoutMs:DEFAULT_OPTS.timeoutMs});
-      const binding=makeBinding({model:{providerID:engine==="codex"?CODEX_PROVIDER:CLAUDE_PROVIDER,modelID:model}});
+      const providerID=engine==="codex"?CODEX_PROVIDER:engine==="acp"?(acpTemporalCatalog().find(m=>m.id===model)?.providerID??(Object.hasOwn(ACP_PROVIDERS,model)?model:"acp-antigravity")):CLAUDE_PROVIDER;
+      const binding=makeBinding({model:{providerID,modelID:model}});
       if(!created?.id||!binding) throw new Error("step chat not created");
       bindings.set(created.id,binding);hub.syncDirectories();fetchSessionIndex(true).catch(()=>{});
       return created.id;
     },
     dispatchTurn:async({res,sid,directory,project,user,text,worktree=null})=>{
       const admin=isAdmin(user),binding=bindings.get(sid);
-      const chatDir=admin||!project?directory:project,workDir=worktree?.path??(admin||!project?null:directory); // FEAT-20.7: шаг в копии запуска
+      const chatDir=admin||!project?directory:project,workDir=worktree?.path??(admin||!project?null:directory);
       const race=await markPrompted(sid,binding);if(race){res.writeHead(409);return res.end(race);}
       return claude.dispatch({res,sid,dir:chatDir,body:Buffer.from(JSON.stringify(applyBinding({parts:[{type:"text",text}]},binding))),
-        access:admin?"admin":"tenant",agent:null,
+        access:admin?"admin":"tenant",acpOwner:engineAllowed(user,"acp")?acpAuthOwner(user):null,agent:null,
         kbZone:kbZoneForUser(user,{admin,adminRoot:config.TELEHARNESS_KB_ROOT,tenantVault:config.TELEHARNESS_TENANT_VAULT,home:admin?HOME_DIR:null}),
         jail:admin?null:tenantJailFor(chatDir,config.TELEHARNESS_TENANT_HOME),systemPrompt:getSystemPrompt(user.id),portalNote:"",workDir,permMode:null,
+        nonInteractive:true,
         writableRoots:worktree?.commonDir?[worktree.commonDir]:null});
     },
-    // FEAT-20.7: рабочая копия запуска — одна на запуск (ветка teleharness/run-<пайп>-<id4>)
-    prepareWorktree:async({user,project,workspace,workflowId,pipeName})=>{
-      const existing=workflowId?worktrees.store.byRun(workflowId):null;
-      if(existing&&existing.state!=="orphaned") return existing;
-      const admin=isAdmin(user);
-      return worktrees.create({runId:workflowId,kind:"run",owner:user.id,tenant:!admin,dir:project,untrusted:!admin||isUnderAny(project,tenantRoots()),
-        title:pipeName,chatFolder:admin?null:path.join(workspace,".teleharness-run-copies",String(workflowId??"run").replace(/[^A-Za-z0-9_-]/g,"").slice(-24))});
-    },
+    prepareWorktree:prepareRunWorktree,
     messagesOf:(sid)=>claude.messages(sid),abort:(sid)=>claude.abort(sid),
     setTitle:(sid,title)=>claude.setTitle(sid,title,"user"),
     isLimit:(err,engine)=>isLimitError(err,{engine}),
@@ -1701,7 +1839,32 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
   if(enabled.has("claude")) options.chatModels={...options.chatModels,claude:()=>CLAUDE_MODELS.map(m=>m.id)};
   if(enabled.has("codex")) Object.assign(options,{chatModels:{...options.chatModels,codex:()=>codexCatalog.models().map(m=>m.id)},
     codexModels:()=>codexCatalog.models().map(m=>m.id),codexHome:process.env.TELEHARNESS_TEMPORAL_CODEX_HOME||undefined});
+  if(enabled.has("acp")) {
+    options.chatModels={...options.chatModels,acp:()=>acpTemporalCatalog().map(m=>m.id)};
+    const acpOwnerId=adminUser()?.id??null;
+    if(acpOwnerId && process.env.TELEHARNESS_ACP!=="off") {
+      for(const id of ACP_PUBLIC_IDS) {
+        if((acpLogins[id].get(acpOwnerId).status==="ready" || acpProfileReady(DATA_DIR,acpOwnerId,id)) && !cachedAcpModels(DATA_DIR,acpOwnerId,id)) {
+          discoverAcpModels(DATA_DIR,acpOwnerId,id).catch(()=>{});
+        }
+      }
+    }
+  }
   options.chatSteps=temporalChatSteps;
+  options.prStep=prStepRunner({
+    prepareWorktree:prepareRunWorktree,
+    gitAuthor:(uid)=>{const g=getGitSettings(uid);return {name:g.authorName,email:g.authorEmail};},
+    githubApi:async(userId,method,pathname,body)=>{
+      const c=github?.connections?.get(userId);
+      if(!c?.tokenEnc) throw new GhError(401,"auth","Нет подключения GitHub");
+      return ghFetch(github.box.decrypt(c.tokenEnc),pathname,{method,body,apiBase:config.TELEHARNESS_GITHUB_API||undefined});
+    },
+    githubToken:(userId)=>{
+      const c=github?.connections?.get(userId);
+      return c?.tokenEnc?github.box.decrypt(c.tokenEnc):null;
+    },
+    log:(m)=>console.log(m),
+  });
   Object.assign(temporalDeps,await connectPipeline(temporalDeps,options));
   Object.defineProperty(temporalDeps,"subscriptionModels",{get:()=>temporalDeps.listSubscriptionModels(),enumerable:true}); // FEAT-19.15: live Codex catalog
 } else if (process.env.TELEHARNESS_ENV==="stand" && process.env.TELEHARNESS_TEMPORAL_STAGE_TIMERS==="1") {
@@ -1748,17 +1911,6 @@ function attentionLive() {
   }
   return { busy, dialogs };
 }
-// FEAT-20.4. gemini оставлен для внутренних тестов и фикстур; наружный список
-// провайдеров — только antigravity и copilot (Google отклонил OAuth-клиент gemini-cli).
-const acpLogins = {
-  "antigravity":new AgyLoginSessions((owner,extraEnv)=>launchAgyLogin(DATA_DIR,owner,extraEnv),(owner,status)=>markAcpProfile(DATA_DIR,owner,"antigravity",status),owner=>acpProfileReady(DATA_DIR,owner,"antigravity")),
-  gemini:new GeminiLoginSessions(owner=>launchGeminiLogin(DATA_DIR,owner),(owner,status)=>markAcpProfile(DATA_DIR,owner,"gemini",status)),
-  "github-copilot-cli":new CopilotLoginSessions(owner=>launchCopilotLogin(DATA_DIR,owner),(owner,status)=>markAcpProfile(DATA_DIR,owner,"github-copilot-cli",status),owner=>acpProfileReady(DATA_DIR,owner,"github-copilot-cli"))
-};
-const ACP_PUBLIC_IDS = ["antigravity","github-copilot-cli"];
-// FEAT-20.4. Статус попытки живёт в памяти процесса, креды — на диске: каталог
-// моделей должен переживать рестарт, поэтому ready ищем и в маркере профиля.
-const acpReady = user => engineAllowed(user,"acp") ? ACP_PUBLIC_IDS.filter(id=>acpLogins[id].get(user.id).status==="ready" || acpProfileReady(DATA_DIR,user.id,id)) : [];
 const API_ROUTES = validateTable([
   ...attentionRoutes({
     sendJson, readJsonBody, store: attention, chatsFor: attentionChats, live: attentionLive,
@@ -1779,8 +1931,27 @@ const API_ROUTES = validateTable([
   }),
   // FEAT-20.1: ревью и план (routes/review.js)
   ...reviewRoutes({ sendJson, readJsonBody, errLog, reviews, untrusted: reviewUntrusted, planRun }),
+  ...githubRoutes({ sendJson, readJsonBody, errLog, connections: github.connections, check: github.check, secrets: github.box, log: (m) => console.log(m) }),
   ...temporalRoutes(temporalDeps),
   ...scheduleRoutes(temporalDeps),
+  ...triggerRoutes({
+    sendJson, readJsonBody, errLog, store: github.store, connections: github.connections,
+    engineModels: () => temporalDeps.subscriptionModels ?? {},
+    pipelinesEnabled: () => Boolean(temporalDeps.startPipeline), pipeOf: async (user, definitionId) => {
+      try {
+        const rec = temporalDeps.store.get(user.id, definitionId);
+        const version = rec?.versions?.length ? rec.versions[rec.versions.length - 1].version : null;
+        if (!version || !dirAllowed(user, rec.versions[rec.versions.length - 1].definition?.directory ?? rec.directory)) return null;
+        return { version };
+      } catch { return null; }
+    },
+    launch: github.launch, cancelRun: github.cancelRun, publicUrl: config.TELEHARNESS_PUBLIC_URL, log: (m) => console.log(m),
+    connectionToken: (owner) => {
+      const c = github.connections.get(owner);
+      return c?.tokenEnc ? github.box.decrypt(c.tokenEnc) : null;
+    },
+    apiBase: config.TELEHARNESS_GITHUB_API || undefined,
+  }),
   ...fileRoutes({
     sendJson, homeDir: HOME_DIR, fileRoots, serveWorkspaceFile, workspaceFileExists, turnFiles, parseWindows, errLog,
     dirProblem, driveProblem, dirProblemText, dirAllowed, config, path, defaultDir, chatDir: CHAT_DIR, handleUpload,
@@ -1788,7 +1959,7 @@ const API_ROUTES = validateTable([
   }),
   ...catalogRoutes({
     sendJson, errLog, usageStats, subscriptionCards, hub, claude, claudeAgents, upstream: UPSTREAM, statusTtlMs: STATUS_TTL_MS,
-    fetchSessionIndex, dirAllowed, captureResponse, providerForUser, acpReady, acpProviderCatalog, discoverModels: (user,id) => discoverAcpModels(DATA_DIR,user.id,id), engineAllowed, proxyRequest, withQuery,
+    fetchSessionIndex, dirAllowed, captureResponse, providerForUser, acpReady, acpProviderCatalog, discoverModels: (user,id) => { const owner = acpAuthOwner(user); return owner ? discoverAcpModels(DATA_DIR,owner,id) : null; }, engineAllowed, proxyRequest, withQuery,
     defaultOpts: DEFAULT_OPTS, tenantAgents, agentList, publicAgent, upstreamError, hostStats, opencodeVersion, harnessVersions,
     version: VERSION, defaultDir, chatDir: CHAT_DIR, instanceHealth,
     // FEAT-16.3 (tasks 3.2): каталог идёт через клиент только в v2-режиме —
@@ -1832,6 +2003,9 @@ const API_ROUTES = validateTable([
     suggest: {
       claudeBin: process.env.TELEHARNESS_CLAUDE_BIN || CLAUDE_DEFAULT_BIN,
       codexShim: process.env.TELEHARNESS_CODEX_SHIM || path.join(ROOT, "lib", "codex-shim.mjs"),
+      acpShim: path.join(ROOT, "lib", "acp-shim.mjs"),
+      dataDir: DATA_DIR,
+      acpOwner: acpAuthOwner,
       token: process.env.CLAUDE_CODE_OAUTH_TOKEN || null,
       oc: OC,
     },
@@ -1957,7 +2131,8 @@ async function providerCatalogJson(user = null) {
   if (user && engineAllowed(user, "acp")) {
     const acpIds = acpReady(user);
     if (acpIds.length) {
-      const models = Object.fromEntries(await Promise.all(acpIds.map(async (id) => [id, await discoverAcpModels(DATA_DIR, user.id, id)])));
+      const owner = acpAuthOwner(user);
+      const models = Object.fromEntries(await Promise.all(acpIds.map(async (id) => [id, owner ? await discoverAcpModels(DATA_DIR, owner, id) : null])));
       catalog = acpProviderCatalog(catalog, acpIds, models);
     }
   }
@@ -2373,7 +2548,7 @@ async function sessionActionRoute({ req, res, url, user, admin, match }) {
     if (isRunnerEngine(binding?.engine))
       return claude.dispatch({
         res, sid: id, dir, body: Buffer.isBuffer(out) ? out : Buffer.from(String(out)),
-        access: admin ? "admin" : "tenant", acpOwner:admin ? user.id : null,
+        access: admin ? "admin" : "tenant", acpOwner: engineAllowed(user, "acp") ? acpAuthOwner(user) : null,
         agent: admin ? binding.agent ?? null : null,
         // FEAT-13.11: admin → TELEHARNESS_KB_ROOT; tenant → only its own zone.
         kbZone: kbZoneForUser(user, { admin, adminRoot: config.TELEHARNESS_KB_ROOT, tenantVault: config.TELEHARNESS_TENANT_VAULT, home: admin ? HOME_DIR : null }),
@@ -3497,6 +3672,8 @@ function route(req, res, url) {
   const p = url.pathname;
 
   if (p === "/teleharness/api/healthz" && req.method === "GET") return handleHealthz(req, res);
+
+  if (p.startsWith("/teleharness/hooks/github/") && req.method === "POST") return github.hook(req, res, url);
 
   if (p.startsWith("/teleharness/api/") && crossSite(req)) return sendJson(res, 403, { error: "cross-site request refused" });
 

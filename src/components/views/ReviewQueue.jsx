@@ -29,7 +29,7 @@ function waited(ms, now) {
   return h < 48 ? t("review.wait.h", { h }) : t("review.wait.d", { d: Math.round(h / 24) });
 }
 
-export default function ReviewQueue({ reviews, offline = false, at = null, now = Date.now() }) {
+export default function ReviewQueue({ reviews, offline = false, at = null, now = Date.now(), selectedId = null, onSelect = null }) {
   const [f, setF] = useState("all");
   const [shown, setShown] = useState(PAGE);
   const [accepted, setAccepted] = useState(null);
@@ -62,7 +62,7 @@ export default function ReviewQueue({ reviews, offline = false, at = null, now =
             const s = STATUS[r.status] ?? STATUS.waiting;
             return (
               <li key={r.id}>
-                <a class="rq-item" href={r.href ?? `#/review/${r.id}`} data-key={r.key} aria-label={t("review.queue.itemLabel", { status: s.word, title: r.title, files: filesWord(r.files), waited: waited(r.since, now) })}>
+                <a class={"rq-item" + (selectedId === r.id ? " is-selected" : "")} href={r.href ?? `#/review/${r.id}`} data-key={r.key} aria-current={selectedId === r.id ? "true" : undefined} aria-label={t("review.queue.itemLabel", { status: s.word, title: r.title, files: filesWord(r.files), waited: waited(r.since, now) })} onClick={onSelect ? (e) => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onSelect(r); } } : undefined}>
                   <span class={"rv-chip is-" + r.status}><span aria-hidden="true">{s.icon}</span> {s.word}{r.revision > 1 ? ` · ${t("review.rev", { n: r.revision })}` : ""}</span>
                   <b>{r.title}</b>
                   <span class="rq-meta">

@@ -23,6 +23,7 @@ before(async () => {
     attnStatus: "src/lib/attention.js#boardStatus",
     attnOffset: "src/lib/attention.js#boardOffset",
     refreshBoard: "src/lib/attention.js#refreshBoard",
+    stopBoard: "src/lib/attention.js#stopBoard",
     boardCounter: "src/lib/attention.js#boardCounter",
     titleWithCount: "src/lib/attention.js#titleWithCount",
     syncTitleBadge: "src/lib/attention.js#syncTitleBadge",
@@ -378,6 +379,7 @@ test("кр. 17, P-13: полоса на «Чатах» «Ждут вас 3 · У
 });
 
 test("кр. 5: отметка просмотра — открытие в видимом окне ≥ 2 с, только для «Готово»/«Упало»", async () => {
+  ui.stopBoard();
   ui.attn.value = answer(FULL);
   const seen = new Set();
   installFetch([
@@ -511,4 +513,52 @@ test("BUG-277: на ≤ 360 px кнопки ответа в столбце — �
   const narrowAfter = css.indexOf("@media (max-width: 360px)", phone);
   assert.ok(phone > 0 && narrowAfter > phone, "правило ≤ 360 стоит после правила телефона");
   assert.match(css.slice(narrowAfter), /\.bd-actions \.bd-btn \{ flex: none; \}/);
+});
+
+test("TASK-20.34 п.2 / FEAT-20.2: на ≥ 768 px клик по карточке открывает preview pane справа без авто-markSeen", async () => {
+  const { root } = await mountBoard(FULL);
+  installFetch([
+    { path: "/teleharness/api/attention", reply: () => answer(FULL) },
+    { method: "POST", path: "/teleharness/api/attention/seen", reply: () => ({ ok: true, marked: 1 }) },
+  ]);
+  assert.equal($(root, ".bd-preview"), null);
+  t$.click($(root, '[data-key="chat:d1"] a.bd-main'));
+  await t$.flush();
+  const pv = $(root, ".bd-preview");
+  assert.ok(pv, "панель предпросмотра открыта");
+  assert.match(pv.textContent, /Отчёт готов/);
+  assert.equal($(pv, "a.bd-primary").textContent, "Открыть чат");
+  assert.equal($(pv, "a.bd-primary").getAttribute("href"), "#/chat/d1");
+  assert.equal(fetchCalls.filter((c) => c.path === "/teleharness/api/attention/seen").length, 0, "предпросмотр не вызывает markSeen");
+  assert.ok($(root, '[data-key="chat:d1"]').classList.contains("is-selected"));
+  const seenBtn = $$(pv, "button").find((b) => b.textContent === "Отметить просмотренным");
+  t$.click(seenBtn);
+  await t$.flush();
+  assert.equal(fetchCalls.filter((c) => c.path === "/teleharness/api/attention/seen").length, 1);
+  t$.click($(pv, ".bd-preview-close"));
+  await t$.flush();
+  assert.equal($(root, ".bd-preview"), null);
+});
+
+test("TASK-20.34 п.2 / FEAT-20.2: на телефоне (< 768 px) preview pane не открывается; на вкладке «Ждёт ревью» на десктопе работает", async () => {
+  const prevMM = globalThis.matchMedia;
+  try {
+    globalThis.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+    const { root } = await mountBoard(FULL);
+    t$.click($(root, '[data-key="chat:d1"] a.bd-main'));
+    await t$.flush();
+    assert.equal($(root, ".bd-preview"), null, "на телефоне предпросмотр не открывается");
+  } finally {
+    globalThis.matchMedia = prevMM;
+    t$.cleanup();
+  }
+  const reviews = [{ id: "rv_1", key: "review:rv_1", status: "waiting", revision: 2, title: "Править парсер", source: "chat", project: { name: "app", dir: "/p/app" }, turns: 2, files: 3, additions: 14, deletions: 5, drafts: 1, model: "claude-sonnet-5", since: NOW - 10 * MIN, href: "#/review/rv_1" }];
+  const { root } = await mountBoard([], { sources: { opencode: "ok", claude: "ok", temporal: "ok", reviews: "ok" }, reviews, counts: { ...counts([]), review: 1 } }, { section: "review" });
+  t$.click($(root, ".rq-item"));
+  await t$.flush();
+  const pv = $(root, ".bd-preview");
+  assert.ok(pv, "предпросмотр ревью открыт");
+  assert.match(pv.textContent, /Править парсер/);
+  assert.equal($(pv, "a.bd-primary").textContent, "Открыть ревью");
+  assert.equal($(pv, "a.bd-primary").getAttribute("href"), "#/review/rv_1");
 });

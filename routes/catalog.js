@@ -169,7 +169,7 @@ export function catalogRoutes(deps) {
         // из server.js (deps.providerCatalog — клиент адаптера + модели);
         // без неё handleProvider читает ${upstream}/provider как в v1.
         const catalogSource = deps.oc ? deps.providerCatalog ?? null : null;
-        const acpIds = admin ? deps.acpReady?.(user) ?? [] : [];
+        const acpIds = deps.acpReady?.(user) ?? [];
         if (admin && !acpIds.length) return claude.handleProvider(req, res, upstream, { catalog: catalogSource });
         const captured = await deps.captureResponse((shim) => claude.handleProvider({ headers: {} }, shim, upstream, { catalog: catalogSource }));
         if (captured.status !== 200) return sendJson(res, captured.status === 304 ? 502 : captured.status, { error: "provider unavailable" });
@@ -183,7 +183,12 @@ export function catalogRoutes(deps) {
           const models = Object.fromEntries(await Promise.all(acpIds.map(async id => [id, await deps.discoverModels?.(user,id)])));
           return sendJson(res,200,deps.acpProviderCatalog(catalog,acpIds,models));
         }
-        return sendJson(res, 200, deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex") }));
+        let filtered = deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex"), acpAllowed: deps.engineAllowed(user, "acp") });
+        if (acpIds.length) {
+          const models = Object.fromEntries(await Promise.all(acpIds.map(async id => [id, await deps.discoverModels?.(user,id)])));
+          filtered = deps.acpProviderCatalog(filtered, acpIds, models);
+        }
+        return sendJson(res, 200, filtered);
       },
     },
     // FEAT-13.17: the Claude agents catalog — id/name/description only (no
@@ -319,7 +324,7 @@ export function catalogRoutes(deps) {
             catalog = captured.status === 200 ? JSON.parse(captured.body) : null;
           } catch {}
           if (!catalog) return sendJson(res, 503, { error: "subscriptions unavailable" });
-          const visible = admin ? catalog : deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex") });
+          const visible = admin ? catalog : deps.providerForUser(catalog, { claudeAllowed: deps.engineAllowed(user, "claude"), codexAllowed: deps.engineAllowed(user, "codex"), acpAllowed: deps.engineAllowed(user, "acp") });
           const connected = Array.isArray(visible?.connected) ? visible.connected : [];
           return sendJson(res, 200, { providers: await deps.subscriptionCards({ connected, zai: deps.usageStats }) });
         } catch (err) {

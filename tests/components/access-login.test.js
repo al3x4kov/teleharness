@@ -384,15 +384,40 @@ test("отказ сервера (403) → «Действие отклонено 
   assert.ok(byText(card(root, "alice"), "button", "Да, выключить"), "можно повторить или отменить");
 });
 
-// FEAT-18.7: «Разрешить Codex» — только когда Codex подключён на сервере; переключает
-// один движок, не трогая Claude; без Codex на сервере кнопки нет.
-test("FEAT-18.7: кнопки «Разрешить Codex» у пользователей нет, даже когда Codex подключён", async () => {
-  ui.store.providerCfg.value = { models: [], defaults: {}, connected: ["zai-coding-plan", "openai-codex"] };
+// FEAT-20.35: «Разрешить Codex» и «Разрешить Gemini (ACP)» — показываются у тенантов,
+// когда соответствующие провайдеры подключены на сервере; переключают свой движок отдельно.
+test("FEAT-20.35: кнопки «Разрешить Codex» и «Разрешить Gemini (ACP)» работают и скрыты, если провайдеры не подключены", async () => {
+  ui.store.providerCfg.value = { models: [], defaults: {}, connected: ["zai-coding-plan", "openai-codex", "acp-antigravity"] };
+  try {
+    const { root } = mountAccess([{ method: "PATCH", path: /\/admin\/users\//, reply: () => ({ ok: true }) }]);
+    await t$.waitFor(() => card(root, "alice"));
+    assert.ok(byText(card(root, "alice"), "button", "Разрешить Codex"));
+    assert.ok(byText(card(root, "alice"), "button", "Разрешить Gemini (ACP)"));
+    assert.ok(byText(card(root, "kostya"), "button", "Разрешить Codex"));
+
+    t$.click(byText(card(root, "alice"), "button", "Разрешить Codex"));
+    t$.click(byText(card(root, "alice"), "button", "Да, разрешить"));
+    await t$.waitFor(() => fetchCalls.filter((c) => c.method === "PATCH").length === 1);
+    assert.equal(fetchCalls.find((c) => c.method === "PATCH").path, "/teleharness/api/admin/users/u_j");
+    assert.deepEqual(fetchCalls.find((c) => c.method === "PATCH").body, { engines: ["opencode", "codex"] });
+    await t$.waitFor(() => !$(card(root, "alice"), ".acct-confirm"));
+
+    t$.click(byText(card(root, "kostya"), "button", "Разрешить Gemini (ACP)"));
+    t$.click(byText(card(root, "kostya"), "button", "Да, разрешить"));
+    await t$.waitFor(() => fetchCalls.filter((c) => c.method === "PATCH").length === 2);
+    const second = fetchCalls.filter((c) => c.method === "PATCH")[1];
+    assert.equal(second.path, "/teleharness/api/admin/users/u_k");
+    assert.deepEqual(second.body, { engines: ["opencode", "claude", "acp"] });
+  } finally {
+    ui.store.providerCfg.value = null;
+  }
+
+  ui.store.providerCfg.value = { models: [], defaults: {}, connected: ["zai-coding-plan"] };
   try {
     const { root } = mountAccess();
     await t$.waitFor(() => card(root, "alice"));
     assert.equal(byText(card(root, "alice"), "button", "Разрешить Codex"), null);
-    assert.equal(byText(card(root, "kostya"), "button", "Разрешить Codex"), null);
+    assert.equal(byText(card(root, "alice"), "button", "Разрешить Gemini (ACP)"), null);
   } finally {
     ui.store.providerCfg.value = null;
   }

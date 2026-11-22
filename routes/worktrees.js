@@ -304,6 +304,7 @@ export function worktreeRoutes(deps) {
       const op = await wt.merge(item, b, { tenantTestsOk: item.tenant ? deps.tenantTestsOk() : true });
       return sendJson(res, 202, publicOp(op));
     }),
+    simple("continue", (item) => wt.continueAfterMerge(item)),
     simple("undo-merge", (item) => wt.undoMerge(item)),
     simple("revert-merge", (item) => wt.revertMerge(item)),
     simple("reset-branch", (item, b) => wt.resetBranch(item, b.opId)),

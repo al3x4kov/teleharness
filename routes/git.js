@@ -134,7 +134,7 @@ export function gitRoutes(deps) {
       const agent = ACP_PROVIDERS[binding?.model?.providerID];
       if (!agent) throw new OneshotError("неизвестный провайдер ACP");
       const modelId = binding.model.modelID === binding.model.providerID ? null : binding.model.modelID;
-      return runAcpOneshot({ shimPath: s.acpShim, dataDir: s.dataDir, owner: user.id, agent, modelId, prompt, onResult, ...opts });
+      return runAcpOneshot({ shimPath: s.acpShim, dataDir: s.dataDir, owner: s.acpOwner ? s.acpOwner(user) : user.id, agent, modelId, prompt, onResult, ...opts });
     }
     const agent = binding?.agent ?? (admin ? null : await deps.tenantAgent());
     return runOpencodeOneshot({ oc: s.oc, model: binding?.model ?? null, agent, prompt, onAnswer: (info) => deps.recordService?.({ engine: "opencode", sid, user, info }), ...opts });

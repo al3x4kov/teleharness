@@ -161,6 +161,32 @@ export const api = {
   temporalValidate: (id) => json("POST", "/temporal/definitions/" + idPath(id) + "/validate", {}),
   temporalPublish: (id, revision) => json("POST", "/temporal/definitions/" + idPath(id) + "/publish", { revision }),
   temporalDelete: (id) => json("DELETE", "/temporal/definitions/" + idPath(id)), // BUG-264 п.6
+  // FEAT-20.3: фоновые агенты — подключение GitHub (токен не возвращается, только last4)
+  githubConnection: () => json("GET", "/github/connection"),
+  githubSaveConnection: (token) => json("PUT", "/github/connection", { token }),
+  githubCheckConnection: () => json("POST", "/github/connection/check", {}),
+  githubDeleteConnection: () => json("DELETE", "/github/connection"),
+  githubRepos: () => json("GET", "/github/repos"),
+  // FEAT-20.3: триггеры и шаблоны
+  temporalTriggers: () => json("GET", "/temporal/triggers"),
+  temporalTriggerCreate: (body) => json("POST", "/temporal/triggers", body),
+  temporalTrigger: (id) => json("GET", "/temporal/triggers/" + idPath(id)),
+  temporalTriggerJournal: (id, { filter, cursor } = {}) => {
+    const q = new URLSearchParams();
+    if (filter) q.set("filter", filter);
+    if (cursor) q.set("cursor", String(cursor));
+    const s = q.toString();
+    return json("GET", "/temporal/triggers/" + idPath(id) + "/journal" + (s ? "?" + s : ""));
+  },
+  temporalTriggerReplay: (id, entryId) => json("POST", "/temporal/triggers/" + idPath(id) + "/journal/" + idPath(entryId) + "/replay", {}),
+  temporalTriggerWebhook: (id, key) => json("POST", "/temporal/triggers/" + idPath(id) + "/webhook", { key }),
+  temporalTriggerRotate: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/webhook/rotate", {}),
+  temporalTriggerEnable: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/enable", {}),
+  temporalTriggerDisable: (id, running = "keep") => json("POST", "/temporal/triggers/" + idPath(id) + "/disable", { running }),
+  adminBackground: () => json("GET", "/admin/background"),
+  adminUpdateBackground: (body) => json("PUT", "/admin/background", body),
+  temporalTemplates: () => json("GET", "/temporal/templates"),
+  templateReadiness: (id, body) => json("POST", "/temporal/templates/" + idPath(id) + "/readiness", body),
   // ---- auth: the long token IS the credential; a match mints the year-long
   // HttpOnly cookie (the device-stays-logged-in part). All later calls ride
   // the cookie automatically (same-origin fetch + EventSource).

@@ -392,7 +392,10 @@ export function WorktreeSheet({ sessionId, onClose, initial = "main" }) {
       {it.port ? <p class="wt-muted">{t("worktree.sheet.devPorts", { from: it.port, to: it.port + 9 })}</p> : null}
       {it.carried ? <p class="wt-muted">{t("worktree.sheet.carried", { n: it.carried })}</p> : null}
       <div class="wt-actions is-grid">
-        <button type="button" class="btn-primary" disabled={busy || off || it.branchOk === false} title={busy ? t("worktree.sheet.waitTurn") : off ? t("worktree.sheet.offline") : ""} onClick={() => setMode("merge")}>
+        {it.state === "merged" ? (
+          <button type="button" class="btn-primary" disabled={busy || off} onClick={async () => { if (await act(it, "continue", sessionId)) onClose(); }}>{t("worktree.progress.continueHere")}</button>
+        ) : null}
+        <button type="button" class={it.state === "merged" ? "btn" : "btn-primary"} disabled={busy || off || it.branchOk === false} title={busy ? t("worktree.sheet.waitTurn") : off ? t("worktree.sheet.offline") : ""} onClick={() => setMode("merge")}>
           {busy ? t("worktree.sheet.waitTurn") : off ? t("worktree.sheet.offline") : t("worktree.sheet.mergeInto", { base: it.base })}
         </button>
         <button type="button" class="btn" disabled={busy || off} onClick={() => syncBase(it, sessionId)}>{t("worktree.overlapSheet.pullBase", { base: it.base })}</button>
@@ -576,7 +579,7 @@ function ProgressSheet({ item, opId, sessionId, onClose, onBack }) {
       {done && op.phase === "done" ? (
         <div class="wt-actions is-col">
           {item.canUndoMerge || item.state === "merged" ? <button type="button" class="btn" onClick={() => act(item, "undo-merge", sessionId)}>{t("worktree.sheet.undoMerge")}</button> : null}
-          <button type="button" class="btn-primary" onClick={onClose}>{t("worktree.progress.continueHere")}</button>
+          <button type="button" class="btn-primary" onClick={async () => { await act(item, "continue", sessionId); onClose(); }}>{t("worktree.progress.continueHere")}</button>
           <button type="button" class="btn is-danger-outline" onClick={async () => {
             try {
               await wtApi.remove(item.id, "auto");

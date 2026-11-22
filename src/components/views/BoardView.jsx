@@ -18,7 +18,8 @@ import { navigate } from "../../lib/router.js";
 import { t } from "../../lib/i18n.js";
 import { MenuButton, PinIcon } from "../Menu.jsx";
 import { useModalFocus } from "../Pickers.jsx";
-import ReviewQueue from "./ReviewQueue.jsx"; // FEAT-20.1: вкладка «Ждёт ревью»
+import ReviewQueue from "./ReviewQueue.jsx";
+import { STATUS as REVIEW_STATUS, commentsWord, filesWord, shortModel, turnsWord } from "../../lib/review-client.js";
 
 const MAIN = ["needs", "working", "done", "failed"];
 const PHONE_LIMIT = 5;
@@ -110,7 +111,7 @@ function ItemMenu({ it, offline, onClose, onStop }) {
   );
 }
 
-function Item({ it, now, offline, admin, busyKey, onAnswer, onStop }) {
+function Item({ it, now, offline, admin, busyKey, onAnswer, onStop, selected = false, onSelect = null }) {
   const [menu, setMenu] = useState(false);
   const meta = itemMeta(it); // BUG-277: человеческое имя модели, без домашней папки
   const label = `${SECTION[it.state]?.word ?? ""}, ${reasonText(it, now)}, ${it.kind === "run" ? t("board.kind.run") : it.kind === "review" ? t("board.kind.review") : t("board.kind.chat")} ${it.title}, ${timeText(it, now)}`;
@@ -118,8 +119,8 @@ function Item({ it, now, offline, admin, busyKey, onAnswer, onStop }) {
   const sending = busyKey === it.key;
   const sid = keySid(it.key);
   return (
-    <li class={"bd-item is-" + it.state + (it.reason === "quiet" ? " is-quiet" : "")} data-key={it.key}>
-      <a class="bd-main" href={it.href} aria-label={label}>
+    <li class={"bd-item is-" + it.state + (it.reason === "quiet" ? " is-quiet" : "") + (selected ? " is-selected" : "")} data-key={it.key}>
+      <a class="bd-main" href={it.href} aria-label={label} aria-current={selected ? "true" : undefined} onClick={onSelect ? (e) => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onSelect(it); } } : undefined}>
         <span class="bd-icon"><StateIcon state={it.reason === "quiet" ? "failed" : it.state} /></span>
         <span class="bd-body">
           <span class="bd-title">{it.pinned && <span class="bd-pin" role="img" aria-label={t("board.pinned")}><PinIcon size={14} /> </span>}{it.title}</span>
@@ -156,7 +157,7 @@ function Item({ it, now, offline, admin, busyKey, onAnswer, onStop }) {
   );
 }
 
-function Section({ id, items, total, now, offline, admin, phone, busyKey, onAnswer, onStop, onMarkAll, collapsed = false }) {
+function Section({ id, items, total, now, offline, admin, phone, busyKey, onAnswer, onStop, onMarkAll, selectedKey = null, onSelect = null, collapsed = false }) {
   const [open, setOpen] = useState(!collapsed);
   const [all, setAll] = useState(false);
   const shown = phone && !all ? items.slice(0, PHONE_LIMIT) : items;
@@ -180,7 +181,7 @@ function Section({ id, items, total, now, offline, admin, phone, busyKey, onAnsw
         <p class="bd-none">{id === "needs" ? t("board.empty.needs") : id === "working" ? t("board.empty.working") : id === "done" ? t("board.empty.done") : t("board.empty.failed")}</p>
       ) : (
         <ul class="bd-list">
-          {shown.map((it) => <Item key={it.key} it={it} now={now} offline={offline} admin={admin} busyKey={busyKey} onAnswer={onAnswer} onStop={onStop} />)}
+          {shown.map((it) => <Item key={it.key} it={it} now={now} offline={offline} admin={admin} busyKey={busyKey} onAnswer={onAnswer} onStop={onStop} selected={selectedKey === it.key} onSelect={onSelect} />)}
         </ul>
       ))}
       {open && shown.length < items.length && (
@@ -276,6 +277,102 @@ function useAnnounce(needsKeys) {
   return msg;
 }
 
+function BoardPreview({ it, now, offline, admin, busyKey, onAnswer, onStop, onClose }) {
+  const sid = keySid(it.key);
+  const meta = itemMeta(it);
+  const perm = it.state === "needs" && it.reason === "permission" && it.permission;
+  const sending = busyKey === it.key;
+  const canSeen = ["done", "failed", "older"].includes(it.state);
+  const openLabel = it.kind === "run" ? t("board.preview.openRun") : it.kind === "review" ? t("board.preview.openReview") : t("board.preview.openChat");
+  const kindWord = it.kind === "run" ? t("board.preview.kindRun") : it.kind === "review" ? t("board.preview.kindReview") : t("board.preview.kindChat");
+  const runAction = (fn) => async () => {
+    try {
+      await fn();
+    } catch (err) {
+      setNotice(explainApiError(err, t("board.err.network")), 8000);
+    }
+  };
+  return (
+    <aside class={"bd-preview is-" + it.state + (it.reason === "quiet" ? " is-quiet" : "")} aria-label={t("board.preview.aria")} data-req="FEAT-20.2">
+      <div class="bd-preview-head">
+        <span class="bd-icon"><StateIcon state={it.reason === "quiet" ? "failed" : it.state} /></span>
+        <div class="bd-preview-titles">
+          <div class="bd-preview-state"><b>{reasonText(it, now)}</b></div>
+          <h3>{it.title}</h3>
+        </div>
+        <button type="button" class="bd-preview-close" aria-label={t("board.preview.close")} onClick={onClose}>✕</button>
+      </div>
+      <dl class="bd-preview-meta">
+        <div><dt>{t("board.preview.type")}</dt><dd>{kindWord}</dd></div>
+        {meta && <div><dt>{t("board.preview.context")}</dt><dd>{meta}</dd></div>}
+        <div><dt>{t("board.preview.time")}</dt><dd>{timeText(it, now)}</dd></div>
+        {it.bgAgents > 0 && <div><dt>{t("board.preview.bg")}</dt><dd>{t("board.preview.bgCount", { count: it.bgAgents })}</dd></div>}
+      </dl>
+      {it.snippet && !perm && <div class="bd-preview-snippet">{it.snippet}</div>}
+      {it.returned && <p class="bd-note">{t("board.note.returned")}</p>}
+      {it.pipeDeleted && <p class="bd-note">{t("board.note.pipeDeleted")}</p>}
+      {perm && (
+        <div class="bd-preview-perm">
+          {it.permission.tool && <div class="bd-preview-perm-tool">{t("board.preview.permTool")} <b>{it.permission.tool}</b></div>}
+          {it.permission.summary && <code class="bd-cmd">{it.permission.summary}</code>}
+          <div class="bd-preview-actions">
+            <button type="button" class="bd-btn bd-primary" aria-disabled={offline || sending ? "true" : null} onClick={() => !offline && !sending && onAnswer(it, "once")}>
+              {sending ? t("board.perm.sending") : t("board.perm.allowOnce")}
+            </button>
+            <button type="button" class="bd-btn" aria-disabled={offline || sending ? "true" : null} onClick={() => !offline && !sending && onAnswer(it, "reject")}>{t("board.perm.reject")}</button>
+          </div>
+        </div>
+      )}
+      <div class="bd-preview-actions">
+        <a class="bd-btn bd-primary" href={it.href}>{openLabel}</a>
+        {it.state === "failed" && it.reason === "restart" && sid && (
+          <button type="button" class="bd-btn" onClick={() => { saveDraft(sid, t("board.continueDraft")); navigate("/chat/" + encodeURIComponent(sid)); }}>{t("board.continueBtn")}</button>
+        )}
+        {it.state === "failed" && it.reason === "auth" && admin && <a class="bd-btn" href="#/settings">{t("board.howToSignIn")}</a>}
+        {canSeen && (
+          <button type="button" class="bd-btn" disabled={offline} onClick={runAction(() => markSeen([it.key]))}>{t("board.menu.markSeen")}</button>
+        )}
+        {it.state === "snoozed" ? (
+          <button type="button" class="bd-btn" disabled={offline} onClick={runAction(() => snooze(it.key, null))}>{t("board.menu.unsnooze")}</button>
+        ) : it.state !== "unknown" && (
+          <button type="button" class="bd-btn" disabled={offline} onClick={runAction(() => snooze(it.key, serverNow() + 3600_000))}>{t("board.menu.snooze1h")}</button>
+        )}
+        {it.state === "working" && sid && (
+          <button type="button" class="bd-btn is-danger" disabled={offline} onClick={() => onStop(it)}>{t("board.menu.stopTurn")}</button>
+        )}
+      </div>
+      {it.state === "done" && <p class="bd-hint bd-preview-hint">{t("board.preview.notSeenHint")}</p>}
+    </aside>
+  );
+}
+
+function ReviewPreview({ review, now, onClose }) {
+  const s = REVIEW_STATUS[review.status] ?? REVIEW_STATUS.waiting;
+  const waitedMin = Math.max(0, Math.round((now - (review.since ?? now)) / 60_000));
+  const waitedText = waitedMin < 1 ? t("review.wait.justNow") : waitedMin < 60 ? t("review.wait.min", { m: waitedMin }) : t("review.wait.h", { h: Math.round(waitedMin / 60) });
+  return (
+    <aside class="bd-preview" aria-label={t("board.preview.reviewAria")} data-req="FEAT-20.2">
+      <div class="bd-preview-head">
+        <div class="bd-preview-titles">
+          <span class={"rv-chip is-" + review.status}><span aria-hidden="true">{s.icon}</span> {s.word}{review.revision > 1 ? ` · ${t("review.rev", { n: review.revision })}` : ""}</span>
+          <h3>{review.title}</h3>
+        </div>
+        <button type="button" class="bd-preview-close" aria-label={t("board.preview.close")} onClick={onClose}>✕</button>
+      </div>
+      <dl class="bd-preview-meta">
+        <div><dt>{t("board.preview.source")}</dt><dd>{review.source === "run" ? t("review.source.run") : t("review.source.chat")}{projectLabel(review.project) ? ` · ${projectLabel(review.project)}` : ""}</dd></div>
+        <div><dt>{t("board.preview.changes")}</dt><dd>{turnsWord(review.turns)} · {filesWord(review.files)} · <span class="rv-plus">+{review.additions}</span> <span class="rv-minus">−{review.deletions}</span></dd></div>
+        {review.drafts > 0 && <div><dt>{t("board.preview.draft")}</dt><dd>{commentsWord(review.drafts)}</dd></div>}
+        {review.model && <div><dt>{t("board.preview.model")}</dt><dd>{shortModel(review.model)}</dd></div>}
+        <div><dt>{t("board.preview.waits")}</dt><dd>{waitedText}</dd></div>
+      </dl>
+      <div class="bd-preview-actions">
+        <a class="bd-btn bd-primary" href={review.href ?? `#/review/${review.id}`}>{t("board.preview.openReview")}</a>
+      </div>
+    </aside>
+  );
+}
+
 export default function BoardView({ section = null }) {
   const b = board.value;
   const st = boardStatus.value;
@@ -285,6 +382,8 @@ export default function BoardView({ section = null }) {
   const [busyKey, setBusyKey] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(null);
+  const [selectedReviewId, setSelectedReviewId] = useState(null);
   const [, tick] = useState(0);
   const sending = useRef(new Set());
   useEffect(() => {
@@ -301,6 +400,23 @@ export default function BoardView({ section = null }) {
     document.title = t("board.docTitle");
     return () => { document.title = prev; };
   }, []);
+  useEffect(() => {
+    if (phone) {
+      setSelectedKey(null);
+      setSelectedReviewId(null);
+    }
+  }, [phone]);
+  useEffect(() => {
+    if (!selectedKey && !selectedReviewId) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape" && !confirm) {
+        setSelectedKey(null);
+        setSelectedReviewId(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedKey, selectedReviewId, confirm]);
 
   const item = typeof location !== "undefined" ? new URLSearchParams(location.hash.split("?")[1] ?? "").get("item") : null;
   const offline = connection.value.state === "offline" || st.error === "network";
@@ -402,9 +518,17 @@ export default function BoardView({ section = null }) {
   }
 
   if (section === "review") {
+    const selectedReview = !phone && selectedReviewId ? (b?.reviews ?? []).find((r) => r.id === selectedReviewId) ?? null : null;
     return (
       <div class="page board-view">{head}
-        {b?.sources?.reviews === "ok" ? <ReviewQueue reviews={b.reviews ?? []} offline={offline} at={st.at ?? b.now} now={now} /> : !b ? (
+        {b?.sources?.reviews === "ok" ? (
+          <div class={"bd-split" + (selectedReview ? " has-preview" : "")}>
+            <div class="bd-split-main">
+              <ReviewQueue reviews={b.reviews ?? []} offline={offline} at={st.at ?? b.now} now={now} selectedId={selectedReview?.id ?? null} onSelect={!phone ? (r) => setSelectedReviewId(r.id) : null} />
+            </div>
+            {selectedReview && <ReviewPreview review={selectedReview} now={now} onClose={() => setSelectedReviewId(null)} />}
+          </div>
+        ) : !b ? (
           <div class="bd-skeleton" role="status" aria-label={t("board.loading")}><div class="sk bd-sk-row" /><div class="sk bd-sk-row" /></div>
         ) : (
           <div class="bd-gone" role="status" data-req="FEAT-20.2 кр. 21">
@@ -465,27 +589,40 @@ export default function BoardView({ section = null }) {
         </div>
       )}
       {b.truncated && <p class="bd-hint" role="status">{t("board.truncated", { shown: b.truncated.shown, total: b.truncated.total })}</p>}
-      {empty && !filtered ? (
-        <div class="bd-empty">
-          <span class="bd-empty-icon"><StateIcon state="done" size={40} /></span>
-          <h2>{t("board.allCalm.title")}</h2>
-          <p>{t("board.allCalm.text")}</p>
-          <div class="bd-empty-actions">
-            <button type="button" class="bd-btn bd-primary" onClick={newChat} disabled={creating}>{creating ? t("board.allCalm.creating") : t("board.allCalm.newChat")}</button>
-            <a class="bd-btn" href="#/">{t("board.allCalm.allChats")}</a>
+      {(() => {
+        const selectedItem = !phone && selectedKey ? items.find((x) => x.key === selectedKey) ?? null : null;
+        const selectItem = !phone ? (x) => setSelectedKey(x.key) : null;
+        return (
+          <div class={"bd-split" + (selectedItem ? " has-preview" : "")}>
+            <div class="bd-split-main">
+              {empty && !filtered ? (
+                <div class="bd-empty">
+                  <span class="bd-empty-icon"><StateIcon state="done" size={40} /></span>
+                  <h2>{t("board.allCalm.title")}</h2>
+                  <p>{t("board.allCalm.text")}</p>
+                  <div class="bd-empty-actions">
+                    <button type="button" class="bd-btn bd-primary" onClick={newChat} disabled={creating}>{creating ? t("board.allCalm.creating") : t("board.allCalm.newChat")}</button>
+                    <a class="bd-btn" href="#/">{t("board.allCalm.allChats")}</a>
+                  </div>
+                </div>
+              ) : (
+                <div class="bd-columns">
+                  {MAIN.map((s) => (
+                    <Section key={s} id={s} items={by(s)} total={total(s)} now={now} offline={offline} admin={b.admin} phone={phone}
+                      busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} selectedKey={selectedItem?.key ?? null} onSelect={selectItem} />
+                  ))}
+                </div>
+              )}
+              {by("unknown").length > 0 && <Section id="unknown" items={by("unknown")} now={now} offline={offline} admin={b.admin} phone={phone} busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} selectedKey={selectedItem?.key ?? null} onSelect={selectItem} />}
+              {by("snoozed").length > 0 && <Section id="snoozed" collapsed items={by("snoozed")} now={now} offline={offline} admin={b.admin} phone={phone} busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} selectedKey={selectedItem?.key ?? null} onSelect={selectItem} />}
+              {by("older").length > 0 && <Section id="older" collapsed items={by("older")} now={now} offline={offline} admin={b.admin} phone={phone} busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} selectedKey={selectedItem?.key ?? null} onSelect={selectItem} />}
+            </div>
+            {selectedItem && (
+              <BoardPreview it={selectedItem} now={now} offline={offline} admin={b.admin} busyKey={busyKey} onAnswer={answer} onStop={stop} onClose={() => setSelectedKey(null)} />
+            )}
           </div>
-        </div>
-      ) : (
-        <div class="bd-columns">
-          {MAIN.map((s) => (
-            <Section key={s} id={s} items={by(s)} total={total(s)} now={now} offline={offline} admin={b.admin} phone={phone}
-              busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} />
-          ))}
-        </div>
-      )}
-      {by("unknown").length > 0 && <Section id="unknown" items={by("unknown")} now={now} offline={offline} admin={b.admin} phone={phone} busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} />}
-      {by("snoozed").length > 0 && <Section id="snoozed" collapsed items={by("snoozed")} now={now} offline={offline} admin={b.admin} phone={phone} busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} />}
-      {by("older").length > 0 && <Section id="older" collapsed items={by("older")} now={now} offline={offline} admin={b.admin} phone={phone} busyKey={busyKey} onAnswer={answer} onStop={stop} onMarkAll={markAll} />}
+        );
+      })()}
       {confirm && (
         <Confirm title={confirm.title} ok={confirm.ok} okClass={confirm.okClass} onCancel={() => setConfirm(null)}
           onOk={async () => {

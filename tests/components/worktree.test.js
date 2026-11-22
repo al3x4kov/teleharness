@@ -288,3 +288,20 @@ test("BUG-277: тап-цели листов копии и «Расходов» �
   assert.match(cost, /\.cost-more summary \{ min-height: 44px/);
   assert.match(wt, /\.wt-warn \{[^}]*display: block;/, "«!» и текст предупреждения — одной строкой");
 });
+
+test("TASK-20.34 п.4 / FEAT-20.7 кр. 12: слитая копия в WorktreeSheet показывает «Продолжить в этой копии» и вызывает POST /continue", async () => {
+  let continued = 0;
+  let closed = false;
+  installFetch([
+    { method: "GET", path: "/teleharness/api/worktrees", reply: () => ({ item: item({ state: "merged", canUndoMerge: true, mergedSha: "a".repeat(40) }), pending: null }) },
+    { method: "POST", path: `/teleharness/api/worktrees/${WT}/continue`, reply: () => { continued++; return { ok: true, state: "ready" }; } },
+  ]);
+  t$.mount(ui.WorktreeSheet, { sessionId: SID, onClose: () => { closed = true; } });
+  await t$.waitFor(() => [...document.querySelectorAll(".sheet button")].some((b) => b.textContent === "Продолжить в этой копии"));
+  const btn = [...document.querySelectorAll(".sheet button")].find((b) => b.textContent === "Продолжить в этой копии");
+  assert.ok(btn.className.includes("btn-primary"));
+  await t$.click(btn);
+  await t$.waitFor(() => continued === 1 && closed);
+  assert.equal(continued, 1);
+  assert.equal(closed, true);
+});

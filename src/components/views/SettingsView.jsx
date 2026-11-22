@@ -23,6 +23,9 @@ import NotificationsRow, { PushKindsRow } from "./NotificationsRow.jsx";
 import PhoneSection from "./PhoneSection.jsx";
 import AutoRelayRow from "./AutoRelayRow.jsx"; // FEAT-18.6
 import GitSection from "../git/GitSection.jsx"; // FEAT-18.8
+import GitHubSection from "../git/GitHubSection.jsx";
+import BackgroundAgentsSection from "./BackgroundAgentsSection.jsx";
+import { githubConn, refreshGithubConn } from "../../lib/github-conn.js";
 import CostsSection from "./CostsSection.jsx"; // FEAT-20.6
 import { promptHint, SystemPromptEditor, loadPrompt, promptState } from "./SystemPromptRow.jsx";
 import { disablePush, pushState } from "../../lib/push.js";
@@ -400,11 +403,13 @@ const ICONS = {
   phone: ["M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5Z", "M11 18.5h2"],
   mcp: ["M9 2v6", "M15 2v6", "M6 8h12v4a6 6 0 0 1-12 0Z", "M12 18v4"],
   git: ["M6 3v12", "M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M18 9a9 9 0 0 1-9 9"],
+  github: ["M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.91-1.3 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"],
   subscription: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 7v5l3 2"],
   costs: ["M12 2v20", "M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"],
   computer: ["M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z", "M8 20h8", "M12 16v4"],
   acp: ["M5 9h14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1Z", "M12 5v4", "M12 2.5h.01", "M9 13v2", "M15 13v2"],
   users: ["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z", "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"],
+  background: ["M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"],
   active: ["M22 12h-4l-3 9L9 3l-3 9H2"],
   about: ["M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z", "M12 16v-4", "M12 8h.01"],
 };
@@ -437,10 +442,12 @@ export const SECTIONS = [
   { id: "subscription", group: "features" },
   { id: "costs", group: "features" }, // FEAT-20.6
   { id: "git", group: "features" }, // every user, own defaults
+  { id: "github", group: "features" },
   { id: "computer", group: "features", admin: true },
   { id: "acp", group: "admin", admin: true }, // FEAT-20.4
   { id: "users", group: "admin", admin: true },
   { id: "active", group: "admin", admin: true },
+  { id: "background", group: "admin", admin: true },
   { id: "about", group: "bottom" },
 ].map((x) => withTitle(`settings.section.${x.id}`, x));
 export const ADMIN_SECTIONS = SECTIONS.filter((x) => x.admin).map((x) => x.id);
@@ -978,6 +985,10 @@ export default function SettingsView({ section = null, sub = null } = {}) {
     if (res === "unknown") navigate("/settings", { replace: true });
   }, [res === "unknown", section, sub]);
 
+  useEffect(() => {
+    refreshGithubConn();
+  }, []);
+
   // Root value of «Уведомления» (refreshed when a section is left).
   useEffect(() => {
     let live = true;
@@ -1070,6 +1081,7 @@ export default function SettingsView({ section = null, sub = null } = {}) {
     computer: host.value ? (host.value.cpu?.loadPct != null ? `CPU ${host.value.cpu.loadPct}${NB}%` : "") : hostError.value ? "—" : "",
     active: busyN ? String(busyN) : "",
     users: "",
+    github: githubConn.value == null ? "" : githubConn.value.connected ? (githubConn.value.status === "ok" ? githubConn.value.login : t("settings.github.disconnected")) : t("settings.github.notConnected"),
     about: appVersionLabel(VERSION, about.value?.version ?? null),
   };
 
@@ -1169,8 +1181,10 @@ export default function SettingsView({ section = null, sub = null } = {}) {
       : id === "subscription" ? <SubscriptionSection />
       : id === "costs" ? <CostsSection />
       : id === "git" ? <GitSection />
+      : id === "github" ? <GitHubSection />
       : id === "computer" ? <ComputerSection />
       : id === "active" ? <ul class="card-list"><BusySessions /></ul>
+      : id === "background" ? <BackgroundAgentsSection />
       : id === "users" ? <AccessSection />
       : id === "about" ? <AboutSection />
       : null;

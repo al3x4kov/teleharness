@@ -22,14 +22,17 @@ function chain(steps) { return steps.map((s, i) => ({ ...s, dependsOn: i ? [step
 function fromTemplate(id) {
   const tpl = TEMPLATES.find((x) => x.id === id);
   if (!tpl) return blank();
-  return { ...blank(), name: tpl.id === "blank" ? "" : tpl.name, steps: chain(tpl.steps.map((s) => ({ ...s }))) };
+  return { ...blank(), name: tpl.id === "blank" ? "" : tpl.name, inputs: (tpl.inputs ?? []).map((x) => ({ ...x })), steps: chain(tpl.steps.map((s) => ({ ...s }))) };
 }
 function unitOf(seconds) { return [...UNITS].reverse().find(([u]) => seconds >= u && seconds % u === 0)?.[0] ?? 1; }
-function stepSummary(step, steps) {
+const ENGINE_LABELS = { claude: "Claude", codex: "Codex", acp: "Gemini (ACP)", opencode: "OpenCode" };
+const engineLabel = (e) => ENGINE_LABELS[e] ?? e;
+
+function stepSummary(step, steps, modelLabels = {}) {
   const label = STEP_TYPES_UI[step.type]?.label ?? step.type;
   const after = step.dependsOn?.length ? t("temporal.ed.after", { list: step.dependsOn.map((d) => t("temporal.quote", { text: steps.find((x) => x.id === d)?.name || d })).join(", ") }) : t("temporal.ed.atStart");
   if (step.type === "timer") { const u = unitOf(step.seconds || 1); return `${label} · ${t("temporal.ed.waitFor", { count: (step.seconds || 0) / u, unit: unitLabel(u) })} · ${after}`; }
-  if (step.type === "model") return `${label} · ${step.engine} ${step.model} · ${after}`;
+  if (step.type === "model") return `${label} · ${engineLabel(step.engine)} · ${modelLabels[step.model] ?? step.model} · ${after}`;
   return `${label} · ${after}`;
 }
 
@@ -47,7 +50,7 @@ function useProjects(current, onDefault) {
   return { list: withCurrent, loading: state.list === null, error: state.error };
 }
 
-function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemove, errors, engines, subscriptionModels, inputs = [], codexTextOnly = false }) {
+function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemove, errors, engines, subscriptionModels, modelLabels = {}, inputs = [], codexTextOnly = false }) {
   const ty = STEP_TYPES_UI[step.type] ?? { icon: "?", label: step.type };
   const unsupported = unsupportedReasons({ inputs: [], steps: [step] }, subscriptionModels);
   const bad = errors.length > 0;
@@ -58,7 +61,7 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
       <div class="t-row t-nowrap">
         <span class="t-typeic" aria-hidden="true">{ty.icon}</span>
         <button type="button" class="t-stepc-head" aria-expanded={open} onClick={onToggle}>
-          <b>{step.name || t("temporal.untitled")}</b><span class="t-meta">{stepSummary(step, steps)}</span>
+          <b>{step.name || t("temporal.untitled")}</b><span class="t-meta">{stepSummary(step, steps, modelLabels)}</span>
         </button>
         <button type="button" class="t-iconbtn" aria-label={t("temporal.ed.up", { name: step.name || index + 1 })} disabled={index === 0} onClick={() => onMove(-1)}>↑</button>
         <button type="button" class="t-iconbtn" aria-label={t("temporal.ed.down", { name: step.name || index + 1 })} disabled={index === steps.length - 1} onClick={() => onMove(1)}>↓</button>
@@ -84,10 +87,10 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
               <div class="t-two">
                 <label class="t-field"><span>{t("temporal.ed.engine")}</span>
                   <select class="t-input" aria-label={t("temporal.ed.engine")} value={step.engine} onChange={(e) => onChange({ engine: e.currentTarget.value, model: subscriptionModels?.[e.currentTarget.value]?.[0] ?? step.model })}>
-                    {[...new Set([...engines, step.engine])].map((x) => <option key={x} value={x} disabled={!engines.includes(x)}>{x}{engines.includes(x) ? "" : t("temporal.ed.unavailable")}</option>)}</select></label>
+                    {[...new Set([...engines, step.engine])].map((x) => <option key={x} value={x} disabled={!engines.includes(x)}>{engineLabel(x)}{engines.includes(x) ? "" : t("temporal.ed.unavailable")}</option>)}</select></label>
                 <label class="t-field"><span>{t("temporal.ed.subModel")}</span>
                   <select class="t-input" aria-label={t("temporal.ed.subModel")} value={step.model} onChange={(e) => onChange({ model: e.currentTarget.value })}>
-                    {[...new Set([...(subscriptionModels?.[step.engine] ?? []), step.model])].map((m) => <option key={m} value={m} disabled={!subscriptionModels?.[step.engine]?.includes(m)}>{m}</option>)}</select></label>
+                    {[...new Set([...(subscriptionModels?.[step.engine] ?? []), step.model])].map((m) => <option key={m} value={m} disabled={!subscriptionModels?.[step.engine]?.includes(m)}>{modelLabels[m] ?? m}</option>)}</select></label>
               </div>
               <label class="t-field"><span>{t("temporal.ed.instrLabel")}</span>
                 <textarea class="t-input" rows="5" maxLength={16000} aria-label={t("temporal.ed.instrAria")} placeholder={t("temporal.ed.instrPh")} value={step.instruction} onInput={(e) => onChange({ instruction: e.currentTarget.value })} /></label>
@@ -97,7 +100,7 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
                     {inputs.map((x) => <button key={x.name} type="button" class="t-token" onClick={() => onChange({ instruction: (step.instruction || "") + inputToken(x.name) })}>{t("temporal.ed.tokInput", { name: x.name })}</button>)}
                     {earlier.filter((x) => x.type === "model").map((x) => <button key={x.id} type="button" class="t-token" onClick={() => onChange({ instruction: (step.instruction || "") + stepToken(x.id) })}>{t("temporal.ed.tokAnswer", { name: x.name || x.id })}</button>)}
                   </div></div>)}
-              <p class="t-help">{t("temporal.ed.modelHelp")}{step.engine === "codex" && codexTextOnly ? t("temporal.ed.codexText") : ""}</p>
+              <p class="t-help">{t("temporal.ed.modelHelp")}{step.engine === "codex" && codexTextOnly ? t("temporal.ed.codexText") : ""}{step.engine === "acp" && codexTextOnly ? t("temporal.ed.acpTenantText") : ""}</p>
               {/* FEAT-20.7 */}
               <label class="t-field wt-check" data-req="FEAT-20.7">
                 <input type="checkbox" aria-label={t("temporal.ed.worktree")} checked={Boolean(step.worktree)} disabled={step.engine === "codex" && codexTextOnly}
@@ -139,6 +142,23 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
               <label class="t-field"><span>{t("temporal.ed.fileName")}</span>
                 <input class="t-input" aria-label={t("temporal.ed.fileName")} maxLength={100} placeholder={t("temporal.ed.defaultFile")} value={step.filename ?? ""} onInput={(e) => onChange({ filename: e.currentTarget.value })} />
                 <span class="t-help">{t("temporal.ed.fileHelp")}</span></label>
+            </div>
+          )}
+          {step.type === "approval" && earlier.some((x) => x.type === "model") && (
+            <div class="t-two">
+              <label class="t-field"><span>{t("temporal.ed.reworkLabel")}</span>
+                <select class="t-input" aria-label={t("temporal.ed.reworkAria")} value={step.reworkTarget ?? ""} onChange={(e) => {
+                  const v = e.currentTarget.value;
+                  onChange(v ? { reworkTarget: v, maxReworks: step.maxReworks ?? 3 } : { reworkTarget: undefined, maxReworks: undefined });
+                }}>
+                  <option value="">{t("temporal.ed.reworkNone")}</option>
+                  {earlier.filter((x) => x.type === "model").map((x) => <option key={x.id} value={x.id}>{t("temporal.quote", { text: x.name || x.id })}</option>)}
+                </select></label>
+              {step.reworkTarget && (
+                <label class="t-field"><span>{t("temporal.ed.reworkMaxLabel")}</span>
+                  <input class="t-input" type="number" min="1" max="3" aria-label={t("temporal.ed.reworkMaxAria")} value={step.maxReworks ?? 3}
+                    onInput={(e) => onChange({ maxReworks: Number(e.currentTarget.value) })} /></label>
+              )}
             </div>
           )}
           {step.type === "parallel" && (
@@ -189,7 +209,7 @@ function AddMenu({ onAdd, onClose, engines, subscriptionModels }) {
   );
 }
 
-export default function DefinitionEditor({ record = null, engines = [], pipelineAvailable = false, schedulesAvailable = false, subscriptionModels, codexTextOnly = false }) {
+export default function DefinitionEditor({ record = null, engines = [], pipelineAvailable = false, schedulesAvailable = false, subscriptionModels, modelLabels = {}, codexTextOnly = false }) {
   const [saved, setSaved] = useState(record);
   const [draft, setDraft] = useState(() => structuredClone(record?.draft ?? fromTemplate(hashQuery().get("template"))));
   const [dirty, setDirty] = useState(!record && !!hashQuery().get("template"));
@@ -359,7 +379,7 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
                   {i > 0 && <div class="t-conn" aria-hidden="true" />}
                   <StepCard step={step} index={i} steps={draft.steps} open={open === step.id} onToggle={() => setOpen(open === step.id ? null : step.id)}
                     onChange={(p) => patch(step.id, p)} onMove={(d) => move(i, d)} onRemove={() => remove(i)}
-                    errors={showIssues ? stepErrors(step.id) : []} engines={engines} subscriptionModels={subscriptionModels} inputs={draft.inputs} codexTextOnly={codexTextOnly} />
+                    errors={showIssues ? stepErrors(step.id) : []} engines={engines} subscriptionModels={subscriptionModels} modelLabels={modelLabels} inputs={draft.inputs} codexTextOnly={codexTextOnly} />
                 </div>
               ))}
             </div>

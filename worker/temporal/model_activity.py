@@ -33,7 +33,16 @@ def portal(action, request, deadline_ms=None):
                      headers)
         response = conn.getresponse()
         if response.status != 200:
-            raise ApplicationError("Portal model dispatch unavailable",
+            # FEAT-20.3: текст ошибки портала («правила GitHub», «ветка обновлена
+            # человеком») доезжает до шага пайпа — неповторяемая ошибка с текстом.
+            detail = ""
+            try:
+                raw = response.read(2049)
+                if raw:
+                    detail = str(json.loads(raw).get("error") or "")[:300]
+            except Exception:
+                detail = ""
+            raise ApplicationError("Portal model dispatch unavailable" + (f": {detail}" if detail else ""),
                                    type="ModelUnavailable",
                                    non_retryable=(400 <= response.status < 500 and response.status != 408))
         limit = 256 * 1024 if action == 'prepare' else 2048
@@ -235,3 +244,30 @@ async def portal_step(step_id: str) -> dict:
     if not isinstance(reply, dict) or not isinstance(reply.get("value"), bool):
         raise ApplicationError("Invalid portal step reply", type="InvalidPortalStep", non_retryable=True)
     return {"value": reply["value"], "file": reply.get("file") if isinstance(reply.get("file"), str) else None}
+
+
+@activity.defn(name="TeleharnessPortalPrV1")
+async def portal_step_pr(arg: dict) -> dict:
+    """FEAT-20.3 (1.12/1.13). «Открыть PR»: git-flow and PR in the portal; no model, no token in the workflow history.
+
+    The reply is {state: done|no_changes|github_wait|needs_approval, url?, reason?};
+    403/422 arrive as ApplicationError from portal() (non-retryable)."""
+    info = activity.info()
+    if not isinstance(arg, dict) or not isinstance(arg.get("stepId"), str) or "approved" not in arg:
+        raise ApplicationError("Invalid portal pr request", type="InvalidPortalPr", non_retryable=True)
+    deadline_ms = int((info.started_time + info.start_to_close_timeout).timestamp() * 1000)
+    request = {"workflowId": info.workflow_id, "stepId": arg["stepId"], "approved": bool(arg["approved"])}
+    reply = await asyncio.to_thread(portal, "step", request, deadline_ms)
+    if not isinstance(reply, dict) or reply.get("state") not in ("done", "no_changes", "github_wait", "needs_approval"):
+        raise ApplicationError("Invalid portal pr reply", type="InvalidPortalPr", non_retryable=True)
+    out = {"state": reply["state"]}
+    if isinstance(reply.get("url"), str):
+        out["url"] = reply["url"]
+    if isinstance(reply.get("reason"), str):
+        out["reason"] = reply["reason"]
+    # FEAT-20.3 (2.5): how the step ended (created|updated|pushed), the branch and the
+    # commit — the run screen shows them (T-14, T-16, D-4). Strings only, nothing secret.
+    for key in ("outcome", "branch", "base", "sha"):
+        if isinstance(reply.get(key), str):
+            out[key] = reply[key][:200]
+    return out

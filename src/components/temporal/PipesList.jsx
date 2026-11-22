@@ -5,9 +5,15 @@ import { t } from "../../lib/i18n.js";
 import { navigate } from "../../lib/router.js";
 import { projectDisplayName } from "../../lib/normalize.js";
 import { Empty, Skeleton, StatusPill, errorText } from "./ui.jsx";
+import { PLAN_APPROVE_CODE_REVIEW_TEMPLATE } from "../../../shared/temporal-templates.js";
 
 // Templates use only steps the executor runs today (no inputs, no conditions).
 export const TEMPLATES = [
+  {
+    ...PLAN_APPROVE_CODE_REVIEW_TEMPLATE,
+    get name() { return t("temporal.tpl.planCode.name"); },
+    get text() { return t("temporal.tpl.planCode.text"); },
+  },
 // Names and texts are getters — they follow the UI language at the moment of use.
   { id: "review", icon: "◆", get name() { return t("temporal.tpl.review.name"); }, get text() { return t("temporal.tpl.review.text"); },
     get steps() { return [{ id: "prepare", type: "timer", name: t("temporal.tpl.review.prepare"), seconds: 60 }, { id: "approve", type: "approval", name: t("temporal.tpl.review.approve") }, { id: "finish", type: "timer", name: t("temporal.tpl.review.finish"), seconds: 10 }]; } },
