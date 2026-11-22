@@ -26,8 +26,9 @@ function setup({ connections }) {
 
 test("FEAT-20.3: истечение ≤ 7 дней — предупреждение один раз", async () => {
   const dir = tmp();
+  let store;
   try {
-    const store = connectionService(path.join(dir, "db.sqlite"));
+    store = connectionService(path.join(dir, "db.sqlite"));
     store.save("u1", { login: "octocat", tokenEnc: "enc", tokenLast4: "6789", expiresAt: 1_700_000_000_000 + 3 * DAY, permissions: {}, status: "ok", checkedAt: 0 });
     const { wd, notes } = setup({ connections: store });
     await wd.tick();
@@ -35,13 +36,14 @@ test("FEAT-20.3: истечение ≤ 7 дней — предупрежден�
     await wd.tick();
     assert.equal(notes.length, 1, "второй обход не повторяет предупреждение");
     assert.equal(store.get("u1").warnedAt, 1_700_000_000_000);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store?.close?.(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: часовой предел — свежую проверку не повторяем, дозревшую выполняем", async () => {
   const dir = tmp();
+  let store;
   try {
-    const store = connectionService(path.join(dir, "db.sqlite"));
+    store = connectionService(path.join(dir, "db.sqlite"));
     const t = 1_700_000_000_000;
     store.save("u1", { login: "octocat", tokenEnc: "enc", tokenLast4: "6789", expiresAt: null, permissions: {}, status: "ok", checkedAt: t });
     const { wd, calls } = setup({ connections: store });
@@ -54,13 +56,14 @@ test("FEAT-20.3: часовой предел — свежую проверку �
     assert.equal(row.status, "ok");
     assert.deepEqual(row.permissions.repos[0].fullName, "octocat/new");
     assert.equal(row.expiresAt, 1_999_999_999_999, "срок обновлён из ответа GitHub");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store?.close?.(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: отозванный токен — статус expired и push один раз; сеть — unreachable без push", async () => {
   const dir = tmp();
+  let store;
   try {
-    const store = connectionService(path.join(dir, "db.sqlite"));
+    store = connectionService(path.join(dir, "db.sqlite"));
     store.save("u1", { login: "octocat", tokenEnc: "enc", tokenLast4: "6789", expiresAt: null, permissions: {}, status: "ok", checkedAt: 0 });
     store.save("u2", { login: "hub", tokenEnc: "enc2", tokenLast4: "abcd", expiresAt: null, permissions: {}, status: "ok", checkedAt: 0 });
     const notes = [];
@@ -79,5 +82,5 @@ test("FEAT-20.3: отозванный токен — статус expired и pus
     assert.deepEqual(notes.map((n) => n.owner), ["u1"], "push только по истёкшему");
     await wd.tick();
     assert.equal(notes.length, 1, "push об истечении — один раз");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store?.close?.(); rmSync(dir, { recursive: true, force: true }); }
 });

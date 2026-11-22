@@ -17,9 +17,10 @@ const secrets = { encrypt: (s) => `enc:${s}`, decrypt: (s) => s.replace(/^enc:/,
 test("FEAT-20.3 3.4: рестарт после записи в inbox — resume() запускает ровно один workflow, повторная доставка не плодит второй", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "gh-restart-inbox-"));
   const dbPath = path.join(dir, "db.sqlite");
+  let store1, store2;
   try {
     // 1. Первый процесс принял webhook в inbox и «упал» до запуска диспетчера.
-    const store1 = triggerService(dbPath, { secrets, now: () => 1_700_000_000_000 });
+    store1 = triggerService(dbPath, { secrets, now: () => 1_700_000_000_000 });
     const trigger = store1.create("u1", {
       definitionId: "00000000-0000-4000-8000-000000000001",
       repo: "octo/hello", kinds: [], filters: {},
@@ -42,7 +43,7 @@ test("FEAT-20.3 3.4: рестарт после записи в inbox — resume(
       if (!startedByReq.has(requestId)) startedByReq.set(requestId, { workflowId: `wf-${startedByReq.size + 1}` });
       return startedByReq.get(requestId);
     };
-    const store2 = triggerService(dbPath, { secrets, now: () => 1_700_000_005_000 });
+    store2 = triggerService(dbPath, { secrets, now: () => 1_700_000_005_000 });
     const connections = { get: (owner) => ({ owner, login: "octo", status: "ok" }) };
     const d2 = createDispatcher({ store: store2, connections, launch, log: () => {} });
 
@@ -61,6 +62,7 @@ test("FEAT-20.3 3.4: рестарт после записи в inbox — resume(
     assert.equal(startedByReq.size, 1);
     
   } finally {
+    store2?.close?.(); store1?.close?.();
     rmSync(dir, { recursive: true, force: true });
   }
 });

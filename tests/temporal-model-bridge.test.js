@@ -1,3 +1,4 @@
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { modelBridge, listenModelBridge } from '../lib/temporal/model-bridge.js';
@@ -146,7 +147,7 @@ test('PR-шаг в мосту — поля из закреплённой вер�
     dirAllowed:()=>true,engineAllowed:()=>true,results:{read:async(_w,id)=>id==='m'?'описание PR':null},adapters:{},prStep});
   const bridge=mk(async(ctx)=>{seen.push(ctx);return {state:'done',url:'https://gh/pull/1'};});
   assert.deepEqual(await bridge('step',{workflowId,stepId:'pr'}),{state:'done',url:'https://gh/pull/1'});
-  assert.deepEqual(seen[0],{user:{id:'a',role:'admin'},workflowId,stepId:'pr',project:'/p',workspace:'/p/pipelines/zadacha',
+  assert.deepEqual(seen[0],{user:{id:'a',role:'admin'},workflowId,stepId:'pr',project:'/p',workspace:path.join('/p','pipelines','zadacha'),
     pipeName:'Задача',pipeSlug:'zadacha',inputs:{repo:'octo/hello'},description:'описание PR',
     branch:'teleharness/fix',base:'main',title:'Фикс',mode:'same-branch',approved:false,sourceEngine:'claude',signal:undefined});
   assert.deepEqual(await bridge('step',{workflowId,stepId:'pr',approved:true}),{state:'done',url:'https://gh/pull/1'});

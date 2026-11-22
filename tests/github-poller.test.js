@@ -53,7 +53,7 @@ function rig({ fetchImpl, delivery = "poll", pollSeconds = 120 } = {}) {
   });
   return { store, dispatcher, poller, trigger, launches, logs, dir };
 }
-const cleanup = async (dir) => rmSync(dir, { recursive: true, force: true });
+const cleanup = (store, dir) => { store?.close?.(); rmSync(dir, { recursive: true, force: true }); };
 
 // Стандартные ответы GitHub: одна задача с меткой agent, команда, красный CI.
 const issue = {
@@ -74,14 +74,14 @@ const standardTable = () => [
 
 test("FEAT-20.3: режимы опроса — poll/auto-без-хука/auto-с-хуком/webhook/выключен", () => {
   const mk = (over) => ({ pollSeconds: 120, enabled: true, hookId: null, delivery: "poll", ...over });
-  const { poller, dir } = rig();
+  const { store, poller, dir } = rig();
   try {
     assert.equal(poller.modeOf(mk({})), 120_000);
     assert.equal(poller.modeOf(mk({ delivery: "auto" })), 120_000, "auto без хука опрашивает как poll");
     assert.equal(poller.modeOf(mk({ delivery: "auto", hookId: 5 })), 900_000, "auto с хуком — сверка раз в 15 мин");
     assert.equal(poller.modeOf(mk({ delivery: "webhook" })), null);
     assert.equal(poller.modeOf(mk({ enabled: false })), null);
-  } finally { cleanup(dir); }
+  } finally { cleanup(store, dir); }
 });
 
 test("FEAT-20.3: цикл опроса — запуск по задаче и CI, псевдо-webhook с via=poll, курсоры сдвинуты", async () => {
@@ -101,7 +101,7 @@ test("FEAT-20.3: цикл опроса — запуск по задаче и CI,
     assert.equal(cur.etag, 'W/"i1"');
     assert.equal(cur.since, issue.updated_at);
     assert.ok(store.cursorGet(trigger.id, "runs").since, "курсор CI записан");
-  } finally { cleanup(dir); }
+  } finally { cleanup(store, dir); }
 });
 
 test("FEAT-20.3: второй цикл — 304 не приносит событий, повтор комментария — duplicate", async () => {
@@ -117,25 +117,25 @@ test("FEAT-20.3: второй цикл — 304 не приносит событ�
     assert.equal(store.journal("u1", trigger.id, { filter: "started", limit: 100 }).length, startedBefore);
     const issueCalls = f.calls.filter((c) => c.url.includes("/issues?"));
     assert.equal(issueCalls.at(-1).etag, 'W/"i1"', "второй запрос идёт с If-None-Match");
-  } finally { cleanup(dir); }
+  } finally { cleanup(store, dir); }
 });
 
 test("FEAT-20.3: rate_limited — пауза; бюджет 1000/ч — опрос не ходит в сеть", async () => {
   const limited = fakeFetch([["GET", /\/repos\/o\/r\/issues\?/, jsonResponse(403, { message: "API rate limit exceeded" }, { "x-ratelimit-limit": "5000", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1790000000" })]]);
-  const { poller, trigger, dir } = rig({ fetchImpl: limited });
+  const { store, poller, trigger, dir } = rig({ fetchImpl: limited });
   try {
     assert.equal(await poller.pollTrigger(trigger), 0);
     assert.equal(poller.budgetOk("u1"), false, "после rate_limited триггер на паузе");
-  } finally { cleanup(dir); }
+  } finally { cleanup(store, dir); }
 
   const f = fakeFetch(standardTable());
-  const { poller: p2, trigger: t2, dir: d2 } = rig({ fetchImpl: f });
+  const { store: s2, poller: p2, trigger: t2, dir: d2 } = rig({ fetchImpl: f });
   try {
     for (let i = 0; i < 1000; i++) p2.spend("u1");
     assert.equal(p2.budgetOk("u1"), false, "бюджет исчерпан");
     assert.equal(await p2.pollTrigger(t2), 0);
     assert.equal(f.calls.length, 0, "в сеть не ходим");
-  } finally { cleanup(d2); }
+  } finally { cleanup(s2, d2); }
 });
 
 test("FEAT-20.3: нет подключения — тихий пропуск, в сеть не ходим", async () => {
@@ -155,7 +155,7 @@ test("FEAT-20.3: нет подключения — тихий пропуск, в
   try {
     assert.equal(await poller.pollTrigger(trigger), 0);
     assert.equal(f.calls.length, 0);
-  } finally { cleanup(dir); }
+  } finally { cleanup(store, dir); }
 });
 
 test("FEAT-20.3: команда /agent при poll обогащается задачей и проходит с фильтром label (регресс стенда)", async () => {
@@ -200,5 +200,5 @@ test("FEAT-20.3: команда /agent при poll обогащается зад
     assert.equal(launches[0].ev.kind, "comment_command");
     assert.equal(launches[0].ev.title, "Кнопка не жмётся");
     assert.equal(launches[0].ev.url, "https://github.com/o/r/issues/9#issuecomment-88");
-  } finally { cleanup(dir); }
+  } finally { cleanup(store, dir); }
 });

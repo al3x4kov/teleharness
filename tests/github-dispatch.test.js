@@ -48,7 +48,7 @@ test("FEAT-20.3: доверенное событие — запуск с request
     assert.equal(entry.decision, "started");
     assert.equal(entry.workflowId, "wf-1");
     assert.equal(store.subjectOf(trigger.id, subjectKey(trigger.id, { kind: "issue_labeled", repo: "octo/hello", number: 7 })).activeWorkflowId, "wf-1");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: повтор доставки — duplicate со ссылкой на первый запуск, второй запуск не стартует", async () => {
@@ -61,20 +61,20 @@ test("FEAT-20.3: повтор доставки — duplicate со ссылкой
     const dup = store.journal("u1", trigger.id).find((r) => r.decision === "duplicate");
     assert.ok(dup, "дубликат в журнале");
     assert.equal(dup.workflowId, "wf-1", "ссылка на первый запуск");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: посторонний автор — untrusted_author, текст не уходит агенту", async () => {
-  const { launches, deliver, dir } = rig({ connectionLogin: "octo" });
+  const { store, launches, deliver, dir } = rig({ connectionLogin: "octo" });
   try {
     const verdict = await deliver({ issue: { number: 8, title: "T", body: "B", html_url: "u", user: { login: "mallory" }, labels: [{ name: "agent" }] }, label: { name: "agent" }, sender: { login: "mallory" } });
     assert.equal(verdict, "untrusted_author");
     assert.equal(launches.length, 0);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: явный доверенный список и владелец токена доверены", async () => {
-  const { launches, deliver, dir } = rig({ connectionLogin: "octo" });
+  const { store, launches, deliver, dir } = rig({ connectionLogin: "octo" });
   try {
     // carol — в trustedAuthors триггера
     const v1 = await deliver({ issue: { number: 9, title: "T", body: "B", html_url: "u", user: { login: "carol" }, labels: [{ name: "agent" }] }, label: { name: "agent" }, sender: { login: "octo" } });
@@ -82,7 +82,7 @@ test("FEAT-20.3: явный доверенный список и владеле�
     // инициатор (кто поставил метку) тоже должен быть доверен
     const v2 = await deliver({ issue: { number: 10, title: "T", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] }, label: { name: "agent" }, sender: { login: "mallory" } });
     assert.equal(v2, "untrusted_author");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: adminStopped / выключен / нет подключения — пропуск без запуска", async () => {
@@ -98,7 +98,7 @@ test("FEAT-20.3: adminStopped / выключен / нет подключения
     const verdict = await noConn.processDelivery({ deliveryId: "d-c", triggerId: trigger.id, event: "issues", body: JSON.stringify({ action: "labeled", repository: { full_name: "octo/hello" }, sender: { login: "octo" }, issue: { number: 11, title: "T", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] }, label: { name: "agent" } }) });
     assert.equal(verdict, "no_connection");
     assert.equal(launches.length, 0);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: уже идёт запуск — уже идёт запуск; команда с текстом — в очередь (одна)", async () => {
@@ -120,7 +120,7 @@ test("FEAT-20.3: уже идёт запуск — уже идёт запуск; 
     // вторая команда — слот занят (другой комментарий, другой event_key)
     const v4 = await dispatcher.processDelivery({ deliveryId: "d-4", triggerId: trigger.id, event: "issue_comment", body: cmdBody.replace("поправь ещё тесты", "другой текст").replace("5001", "5002") });
     assert.equal(v4, "already_running");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: человеческий push сбрасывает попытки CI; push агента — нет", async () => {
@@ -133,7 +133,7 @@ test("FEAT-20.3: человеческий push сбрасывает попытк
     assert.equal(verdict, "push_reset");
     assert.equal(store.subjectOf(trigger.id, subjectKey(trigger.id, { kind: "ci_failed", repo: "octo/hello", branch: "main" })).ciAttempts, 0);
     assert.equal(launches.length, 0);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: петля портала — комментарий с маркером не запускает работу и не пишется в журнал", async () => {
@@ -148,7 +148,7 @@ test("FEAT-20.3: петля портала — комментарий с мар�
     assert.equal(verdict, "agent_loop");
     assert.equal(launches.length, 0);
     assert.equal(store.journal("u1", trigger.id).length, 0, "петля не засоряет журнал");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: permissionCheck — человек вне списка доверен через API, иначе нет", async () => {
@@ -167,7 +167,7 @@ test("FEAT-20.3: permissionCheck — человек вне списка дове
     assert.equal(await dispatcher2.processDelivery({ deliveryId: "p-1", triggerId: t2.id, event: "issues", body: body("maintainer", 21) }), "started", "write+ через API — доверен");
     assert.equal(await dispatcher2.processDelivery({ deliveryId: "p-2", triggerId: t2.id, event: "issues", body: body("mallory", 22) }), "untrusted_author", "без права — не доверен");
     assert.deepEqual(checks, ["maintainer@octo/hello", "mallory@octo/hello"], "локально доверенные не ходят в API");
-  } finally { rmSync(dir2, { recursive: true, force: true }); }
+  } finally { store2.close(); rmSync(dir2, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3: ci_failed из форка — fork_pr; шторм >20 событий даёт флаг; resume доигрывает", async () => {
@@ -187,7 +187,7 @@ test("FEAT-20.3: ci_failed из форка — fork_pr; шторм >20 собы�
     const n = await dispatcher.resume();
     assert.equal(n, 1);
     assert.equal(store.pendingDeliveries().length, 0);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3 1.11: завершение запуска освобождает subject, событие из очереди стартует с requestId и записью «Из очереди»", async () => {
@@ -227,7 +227,7 @@ test("FEAT-20.3 1.11: завершение запуска освобождает
     assert.ok(fromQueue, "запись «Из очереди» в журнале");
     assert.equal(fromQueue.decision, "started");
     assert.equal(fromQueue.workflowId, "wf-2");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3 1.11: ошибка describeRun — subject не трогается; падение запуска освобождает очередь с записью error", async () => {
@@ -267,7 +267,7 @@ test("FEAT-20.3 1.11: ошибка describeRun — subject не трогаетс
     await dispatcher.sweep(); // повтор: освобождать больше нечего
     assert.equal(launches.length, 1, "событие после неудачного выпуска не переигрывается (только исходный запуск)");
     assert.equal(store.activeSubjects().length, 0, "subject без активного и очереди не обходится");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3 1.11: cleanInputs — в запуск попадают только входы, объявленные версией", () => {
@@ -294,7 +294,7 @@ test("FEAT-20.3 1.10/1.18: серверный лимит Claude в фоне — 
     assert.equal(await deliver("d-3", 3), "claude_limit");
     const entry = store.journal("u1", trigger.id)[0];
     assert.equal(entry.decision, "claude_limit");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3 1.14: Починить CI — логи во вход ci_log, попытки ≤2 с исчерпанием, человеческий push сбрасывает", async () => {
@@ -345,7 +345,7 @@ test("FEAT-20.3 1.14: Починить CI — логи во вход ci_log, п�
     });
     assert.equal(await failing.processDelivery({ deliveryId: "ci-5", triggerId: trigger.id, event: "workflow_run", body: wr(59, "s5") }), "ci_logs_unavailable");
     assert.ok(!launches.includes("nope"), "без логов CI агент не запускается");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("FEAT-20.3 2.5: eventFace — источник запуска словами и ссылка на событие (кр. 19)", () => {

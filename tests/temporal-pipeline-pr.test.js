@@ -9,6 +9,6 @@ const pythonBin = ["python3", "python"].find((b) => { try { execFileSync(b, ["--
 const hasPython = Boolean(pythonBin);
 
 test("FEAT-20.3 2.5: воркер — шаг «Открыть PR»: github_wait 5 мин × 288 → 24 ч, решение человека, поля итога", { skip: !hasPython && "нужен python3" }, () => {
-  const out = execFileSync(pythonBin, ["tests/temporal-worker/pipeline_pr_unit.py"], { encoding: "utf8", timeout: 60_000 });
+  const out = execFileSync(pythonBin, ["tests/temporal-worker/pipeline_pr_unit.py"], { encoding: "utf8", timeout: 60_000, env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } });
   assert.match(out, /ALL OK/, out);
 });

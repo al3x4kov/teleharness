@@ -9,6 +9,8 @@ import asyncio
 import importlib.util
 import pathlib
 import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 import types
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]

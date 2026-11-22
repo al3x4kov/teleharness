@@ -52,12 +52,13 @@ test("FEAT-20.3 3.7: канареечный токен не утекает в о
   const dir = mkdtempSync(path.join(tmpdir(), "gh-leak-"));
   const logs = [];
   const log = (m) => logs.push(String(m));
+  let connections, store;
   try {
     const key = loadKey(dir);
     const secrets = { encrypt: (s) => encrypt(key, s), decrypt: (b) => decrypt(key, b), last4, redact };
     const dbPath = path.join(dir, "gh.sqlite");
-    const connections = connectionService(dbPath);
-    const store = triggerService(dbPath, { secrets });
+    connections = connectionService(dbPath);
+    store = triggerService(dbPath, { secrets });
 
     const routes = [
       ...githubRoutes({
@@ -248,6 +249,7 @@ test("FEAT-20.3 3.7: канареечный токен не утекает в о
     // 6. Логи сервера не содержат канарейку.
     assert.ok(!logs.join("\n").includes(CANARY), "токен не попадает в логи");
   } finally {
+    store?.close?.(); connections?.close?.();
     rmSync(dir, { recursive: true, force: true });
   }
 });

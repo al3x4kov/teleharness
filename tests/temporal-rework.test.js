@@ -122,6 +122,6 @@ test("FEAT-20.1 кр. 14: POST /actions rework пишет rework-code.md и mode
 });
 
 test("FEAT-20.1 кр. 14: python-воркер — цикл rework до 3 раз, 4-я попытка отклоняется rework_limit_reached", { skip: !hasPython && "нужен python3" }, () => {
-  const out = execFileSync(pythonBin, ["tests/temporal-worker/pipeline_rework_unit.py"], { encoding: "utf8", timeout: 60_000 });
+  const out = execFileSync(pythonBin, ["tests/temporal-worker/pipeline_rework_unit.py"], { encoding: "utf8", timeout: 60_000, env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } });
   assert.match(out, /ALL OK/, out);
 });

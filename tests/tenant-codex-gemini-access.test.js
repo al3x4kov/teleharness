@@ -94,11 +94,12 @@ test("FEAT-20.35: /teleharness/api/provider отдаёт ACP-провайдер�
 
 test("FEAT-20.35: ClaudeRunner.dispatch разрешает ACP-ход тенанту с acpOwner и отклоняет 403 без acpOwner", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "acp-tenant-run-"));
+  let runner;
   try {
     const dst = agentEntry(dir, "gemini");
     mkdirSync(path.dirname(dst), { recursive: true });
     copyFileSync(path.resolve("tests/fixtures/acp-chat-agent.mjs"), dst);
-    const runner = new ClaudeRunner({
+    runner = new ClaudeRunner({
       hub: { emit: () => {}, markManaged: () => {} },
       storePath: path.join(dir, "store.json"),
       runsPath: path.join(dir, "runs.json"),
@@ -125,6 +126,7 @@ test("FEAT-20.35: ClaudeRunner.dispatch разрешает ACP-ход тенан
     assert.ok(ans, "ответ от ACP-фикстуры получен для тенанта");
     assert.equal(ans.info.providerID, "acp-gemini");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    runner?.shutdown?.();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

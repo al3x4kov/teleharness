@@ -4,7 +4,7 @@
 // журнал решений. Запуски в стенд уходит отдельно; здесь запуск подтверждается
 // решением журнала (у тестового пользователя нет подключения GitHub →
 // «Нет подключения», детерминированный путь без Temporal).
-import { test, before, after } from "node:test";
+import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import http from "node:http";
@@ -61,6 +61,7 @@ function hook(key, body, { secret, event = "issues", delivery = `d-${Math.random
 }
 const labeled = (n = 101) => JSON.stringify({ action: "labeled", repository: { full_name: "octo/hello" }, sender: { login: "octo" }, issue: { number: n, title: "T", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] }, label: { name: "agent" } });
 
+describe("FEAT-20.3: triggers server", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, () => {
 before(async () => {
   up = await startFakeOpencode();
   gh = await startFakeGithub();
@@ -290,4 +291,6 @@ test("FEAT-20.3 (2.6, кр. 20): GET/PUT /teleharness/api/admin/background — �
   const p2 = await api("/teleharness/api/admin/background", { token: ADMIN, method: "PUT", body: { adminStopped: false, claudePerDay: 10 } });
   assert.equal(p2.status, 200);
   assert.equal((await p2.json()).adminStopped, false);
+});
+
 });
