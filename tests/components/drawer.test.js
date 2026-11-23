@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // FEAT-09.20: боковое меню в стиле приложения Claude вместо таббара/рейла.
 // Открытие по ☰, закрытие затемнением / Esc / сменой экрана, «Недавние»
 // (фильтры как у «Чатов», порядок по активности, лимит), подсветка открытого
@@ -228,4 +229,15 @@ test("FEAT-09.31: Drawer на ПК (≥ 900px) показывает больше
     if (origOH) Object.defineProperty(HTMLElement.prototype, "offsetHeight", origOH);
     else delete HTMLElement.prototype.offsetHeight;
   }
+});
+
+test("BUG-299: .drawer-foot — обычный flex-элемент без position: absolute и не перекрывает .drawer-scroll на 1280x720", () => {
+  const css = readFileSync(new URL("../../src/claude-look.css", import.meta.url), "utf8");
+  const footBlock = css.match(/\.drawer-foot\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.ok(footBlock, ".drawer-foot rule must exist in claude-look.css");
+  assert.equal(/position\s*:\s*absolute/i.test(footBlock), false, ".drawer-foot must not use position: absolute (overlaps Recent rows at 720p)");
+  assert.match(footBlock, /flex-shrink\s*:\s*0/i, ".drawer-foot must stay pinned in flex column without shrinking");
+  const scrollBlock = css.match(/\.drawer-scroll\s*\{([^}]*)\}/)?.[1] ?? "";
+  assert.match(scrollBlock, /min-height\s*:\s*0/i, ".drawer-scroll must allow flex shrinking");
+  assert.equal(/padding-bottom\s*:\s*76px/i.test(scrollBlock), false, ".drawer-scroll no longer needs 76px overlay reserve");
 });

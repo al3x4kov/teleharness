@@ -22,7 +22,6 @@ All of it runs on the CLI subscriptions you already pay for, not a metered API.
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
 [What it does](#what-it-does) •
-[Search](#find-any-message-in-seconds) •
 [Board, Review & Worktrees](#board-mobile-review-worktrees-and-costs) •
 [Switch CLIs](#switch-cli-mid-conversation) •
 [Pipelines](#pipelines-that-survive-restarts-temporal) •
@@ -55,40 +54,6 @@ All of it runs on the CLI subscriptions you already pay for, not a metered API.
 <td valign="top"><b>Pipelines</b><br>Chain agents into multi-step runs on Temporal: Claude reviews, you approve from your phone, Codex writes — with timers, conditions, schedules and artifacts. Runs survive restarts.</td>
 </tr>
 </table>
-
-## Find any message in seconds
-
-The chat list has a search field that goes through **every question and answer you have ever exchanged** — not just
-chat titles. Matches come back live while you type, as highlighted snippets with «You:» / «Answer:» roles and a
-matches count; tapping one jumps straight to the message: the chat loads older history until the message is reachable,
-scrolls to it and highlights it for a few seconds — even inside compact merged turns. Under the hood is a local
-SQLite FTS5 (trigram) index, fully derived from your chats and kept fresh as you talk; while it is still building
-(or unavailable), the portal says so honestly and falls back to searching titles. Admins search every chat, users
-only their own folders.
-
-<p align="center">
-  <img src="docs/screenshots/phone-light-home-search.png" alt="Chat search on a phone: the query token returns two matching chats with highlighted Answer snippets and a matches count" width="180">
-  <img src="docs/screenshots/desktop-light-home-search.png" alt="Message search on desktop: highlighted snippets with roles and a matches count" width="600">
-</p>
-<p align="center"><sub>Live search with per-message snippets and a matches count; every hit deep-links to the exact message.</sub></p>
-
-<p align="center">
-  <img src="docs/screenshots/search.gif" alt="Typing a query, opening a hit, and the chat scrolling to and highlighting the message" width="200">
-  <img src="docs/screenshots/phone-light-home-search-off.png" alt="Search degraded to titles with an honest banner while the index is unavailable" width="180">
-</p>
-<p align="center"><sub>Jump to a message from a hit (older history auto-loads, then highlight) — and the honest fallback banner while the index is unavailable.</sub></p>
-
-<p align="center"><img src="docs/search-pipeline.png" alt="Search pipeline: messages are cleaned and fed into a derived SQLite FTS5 trigram index, queried through a tenant-isolated API, and rendered as snippets with deep links into the chat" width="820"></p>
-<p align="center"><sub>How it works: a derived index that can always rebuild itself, a tenant-isolated query API, snippet rendering and deep links. More in <a href="docs/architecture.md">docs/architecture.md</a>.</sub></p>
-
-On desktop (≥ 900 px) the sidebar's **Recent** list now fills the panel height instead of a fixed eight entries —
-more of your chats within reach, up to 100; on phones and narrow windows it stays 8.
-
-<p align="center">
-  <img src="docs/screenshots/desktop-light-drawer-1440.png" alt="Desktop sidebar at 2560 by 1440: the Recent list fills the panel with sixteen rows" width="410">
-  <img src="docs/screenshots/desktop-light-drawer-720.png" alt="Desktop sidebar at 1280 by 720: eight recent chats fill the smaller panel" width="410">
-</p>
-<p align="center"><sub>Adaptive «Recent» in the desktop sidebar: 16 rows at 2560×1440, 8 at 1280×720 (minimum 8, capped at 100).</sub></p>
 
 ## Board, mobile review, worktrees and costs
 
@@ -159,6 +124,18 @@ its conversation later. Runs keep going while the portal is closed or the server
 Why Temporal: every step is a durable activity, model calls are recorded exactly once in a ledger, a *Human decision*
 step can wait for days without holding a process, and concurrency slots per engine and per user keep your
 subscriptions within their limits.
+
+A run that failed or was stopped doesn't start from zero: **Resume from step** continues it from the last successful
+step — or any step you pick — on the same or the latest published version of the pipe. Completed steps are carried
+over as-is (with their results and step chats), only the rest re-runs, the run folder and its files are inherited, and
+the run screen shows a badge with a link back to the original run.
+
+<p align="center">
+  <img src="docs/screenshots/phone-light-temporal-resume.png" alt="A finished run with the Resume from step button" width="200">
+  <img src="docs/screenshots/phone-light-temporal-resume-sheet.png" alt="Resume sheet: version and start-step pickers with a preview of the steps that carry over" width="200">
+  <img src="docs/screenshots/phone-light-temporal-resumed.png" alt="The continued run with a carried-over steps badge and a link to the original run" width="200">
+</p>
+<p align="center"><sub>Resume from step: pick the version and the start step, see what carries over, and continue — the badge links back to the original run.</sub></p>
 
 <p align="center">
   <img src="docs/screenshots/temporal.gif" alt="A waiting run: Claude's review next to Approve; after approval Codex writes release notes and notes.md opens" width="300">
@@ -285,6 +262,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Four engine families, one UI** | opencode (any provider), Claude Code, Codex CLI and ACP agents (Google Antigravity / Gemini and GitHub Copilot CLI) side by side; a chat stays bound to its engine, model and agent. The picker groups models per connected OpenCode provider (subscription plan, free models, API) with a *Refresh* button; pay-per-token OpenCode models are hidden from tenants. Admins can grant Claude, Codex, and Gemini (ACP) per tenant in Settings → Users (scoped to the user's folders, no shell).<br><img src="docs/screenshots/phone-light-picker-codex-detail.png" alt="Chat model picker on a Codex chat: locked engine, model list and Refresh list button" width="180"> <img src="docs/screenshots/phone-light-settings-model.png" alt="Model catalog in Settings: Z.AI Coding Plan (opencode), Claude and Codex groups with GLM-5.3 models and Refresh list" width="180"> <img src="docs/screenshots/phone-light-picker-refresh-error.png" alt="Refresh failed: the picker keeps the saved models and shows the error" width="180"> <img src="docs/screenshots/phone-light-acp.png" alt="Settings: ACP agents with Google Antigravity and GitHub Copilot CLI signed in" width="180"> |
 | **Attention Board** | One screen for every chat and Temporal run grouped into *Waiting for you*, *Working*, *Done* and *Failed*, with a *While you were away* recap, quick actions and per-category Web Push notifications with quiet hours.<br><img src="docs/screenshots/phone-light-board.png" alt="Attention Board on a phone" width="180"> |
 | **Message search** | Full-text search across every question and answer in every chat: highlighted snippets with «You:» / «Answer:» roles and a matches count, a deep link to the exact message (older history auto-loads, then highlight), a derived local SQLite FTS5 (trigram) index, tenant isolation and an honest fallback to title search while the index builds.<br><img src="docs/screenshots/phone-light-home-search.png" alt="Chat search: highlighted snippets with roles and a matches count" width="180"> |
+| **Adaptive «Recent» sidebar** | On desktop (≥ 900 px) the sidebar's **Recent** list fills the panel height instead of a fixed eight entries — more of your chats within reach, up to 100 (8 minimum; phones and narrow windows keep 8) — and the panel footer stays below the list on short windows.<br><img src="docs/screenshots/desktop-light-drawer-1440.png" alt="Desktop sidebar at 2560 by 1440: the Recent list fills the panel with sixteen rows" width="240"> <img src="docs/screenshots/desktop-light-drawer-720.png" alt="Desktop sidebar at 1280 by 720: recent chats fill the smaller panel with the footer below the list" width="240"> |
 | **Mobile Review & Plan-First** | Review queue across chats and runs, touch-friendly diff with line selection and persistent inline draft comments, return-to-agent and accept/commit. *Plan first* makes the agent propose a read-only plan and wait for approval before editing files.<br><img src="docs/screenshots/phone-light-review.png" alt="Mobile diff viewer" width="180"> <img src="docs/screenshots/phone-light-plan.png" alt="Gemini Plan 1 approval card" width="180"> |
 | **Isolated Git Worktrees** | Give each chat or pipeline run its own git worktree and branch, detect cross-chat file overlaps and dry-run merge conflicts, merge with squash/merge/ff after running tests, and prune orphaned branches.<br><img src="docs/screenshots/phone-light-worktree.png" alt="Chat with active worktree pill, review plaque and conflict warning" width="180"> <img src="docs/screenshots/phone-light-worktrees.png" alt="Project worktrees list and merge settings" width="180"> |
 | **API-equivalent costs** | SQLite turn cost log priced against an editable table, real subscriptions (Claude Max, ChatGPT Plus, Google Antigravity, Copilot CLI) with savings and payback multiplier, soft monthly budgets, per-chat / per-project / per-run totals and CSV export.<br><img src="docs/screenshots/phone-light-costs.png" alt="Costs overview on a phone" width="180"> |
@@ -294,7 +272,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Agent steps** | Live turn progress: reasoning, tool calls with output, background tasks. Each subagent run is a card with its duration, step count and tokens; open it to see every step — runs of the same tool fold into one line that expands on tap, and *Show all steps (N)* lists them one by one. Undo a turn and its file edits.<br><img src="docs/screenshots/phone-light-agent-steps.png" alt="A subagent card with 14 steps: a folded line of commands opened step by step" width="180"> |
 | **Turn changes and Git** | An answer that edited files gets a *Changes · N files* row: open it for a per-file diff — what this turn changed, or the file now against the last commit (one column on a phone, two panes on a desktop). The Git screen of the chat folder shows the branch, ahead/behind and changed files: tick the files to commit, let the chat's own model suggest the message in a separate short request (it never lands in the chat history), commit, and push — push is for the admin only. Other users work with git in their own folders, without push or branch switching. Settings → Git holds the commit author, the message language and the default selection. |
 | **Background subagents keep working** | Claude Code answers right away while subagents it started in the background keep running after the answer. A band above the composer shows who is still working; a new message waits in the queue, and Claude picks up their results and answers again when they finish. |
-| **Temporal pipelines & GitHub Background Agents** *(optional)* | Multi-step scenarios that survive restarts: Claude, Codex, Gemini (ACP) or OpenCode (GLM) steps, human approvals with rework loops (up to 3 cycles), *Open PR* steps in isolated worktrees, timers, conditions and saved artifacts. Connect a fine-grained GitHub PAT in Settings → GitHub to trigger pipes automatically via webhook or polling (*Issue → PR*, *Fix CI*, *Nightly dependency update*) with trusted authors, event journal and an admin kill-switch. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision and GitHub PR run" width="180"> <img src="docs/screenshots/phone-light-temporal-triggers.png" alt="Temporal Triggers list on a phone" width="180"> <img src="docs/screenshots/phone-light-github.png" alt="Settings: GitHub fine-grained token and repository readiness" width="180"> |
+| **Temporal pipelines & GitHub Background Agents** *(optional)* | Multi-step scenarios that survive restarts: Claude, Codex, Gemini (ACP) or OpenCode (GLM) steps, human approvals with rework loops (up to 3 cycles), *Open PR* steps in isolated worktrees, timers, conditions and saved artifacts. A finished or failed run resumes from its last successful step — or any step you choose — carrying over the completed steps, the run folder and step chats. Connect a fine-grained GitHub PAT in Settings → GitHub to trigger pipes automatically via webhook or polling (*Issue → PR*, *Fix CI*, *Nightly dependency update*) with trusted authors, event journal and an admin kill-switch. Runs on your CLI subscriptions, never a paid API. Linux and macOS; off by default — see [docs/temporal.md](docs/temporal.md).<br><img src="docs/screenshots/phone-light-temporal-runs.png" alt="Temporal runs with a waiting decision and GitHub PR run" width="180"> <img src="docs/screenshots/phone-light-temporal-triggers.png" alt="Temporal Triggers list on a phone" width="180"> <img src="docs/screenshots/phone-light-github.png" alt="Settings: GitHub fine-grained token and repository readiness" width="180"> |
 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. Optionally automatic, with your own order of backup models. |
 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
 | **Reliable streaming** | One SSE hub for every engine with replay, stall detection and loop protection — survives flaky mobile networks. |
@@ -304,7 +282,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Push notifications** | Get notified when a long turn is done or an agent needs your decision (Web Push, VAPID). |
 | **Phone pairing by QR** | Settings → Connect a phone shows a one-time QR code (valid 10 minutes); scan it and the phone is signed in to your account — no token typing. Needs `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/phone-light-pair.png" alt="Connect a phone: QR code, expiry, one-time link and Copy" width="180"> |
 | **Multi-user** | Admin and users with own folders, system prompts, MCP sets, upload and voice quotas, rate limits. |
-| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.5.4, opencode 2.2.6, Claude Code" width="180"> |
+| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.6.0, opencode 2.2.6, Claude Code" width="180"> |
 | **Mobile-first** | Built for iOS Safari: keyboard-aware layout, safe areas, light and dark themes, English and Russian UI. |
 | **Zero runtime dependencies** | The backend is plain Node.js stdlib. |
 
@@ -317,7 +295,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | [Node.js](https://nodejs.org) | ≥ 22 | the portal |
 | [opencode](https://opencode.ai) | 2.x (tested with 2.2.6) | the opencode engine |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x | the Claude engine |
-| [Codex CLI](https://github.com/openai/codex) | 0.169+ | optional, the Codex engine (admin only) |
+| [Codex CLI](https://github.com/openai/codex) | 0.169+ | optional, the Codex engine (admin by default; grantable per user) |
 | Python | 3.11+ | optional, voice |
 
 You need at least one engine.
@@ -338,7 +316,7 @@ found (and how to install the missing ones) and prints the admin token. Options:
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.5.4 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.6.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -357,7 +335,7 @@ claude setup-token                 # Claude engine: put the token into .env as C
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.5.4 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.6.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
@@ -392,7 +370,7 @@ On first start the portal creates an admin and writes the login token to `data/a
 | | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
 | Portal, opencode and Claude engines, files, push | yes | yes | yes |
-| Codex & ACP engines (chats) | admin only | admin only | admin only |
+| Codex & ACP engines (chats) | yes (admin; grantable per user) | yes (admin; grantable per user) | yes (admin; grantable per user) |
 | Temporal pipelines (optional) | yes | yes | — |
 | Codex in Temporal pipelines | yes (text-only for regular users) | yes (text-only for regular users) | — |
 | Obsidian cache, voice | yes | yes | yes |
@@ -424,6 +402,15 @@ so the Windows sandbox is intentionally not ported to other systems.
   (history, exactly-once ledger, concurrency slots). A model step is a turn of a portal chat in the pipe's
   folder, reached through a private socket. See [`docs/temporal.md`](docs/temporal.md).
 
+The layer-by-layer picture and the path of a request:
+
+<p align="center"><img src="docs/architecture-layers.png" alt="Architecture layers: the client app, the portal server, the agent CLIs and their processes, storage and providers" width="820"></p>
+
+Chat search runs on a derived index that can always rebuild itself:
+
+<p align="center"><img src="docs/search-pipeline.png" alt="Search pipeline: messages are cleaned and fed into a derived SQLite FTS5 trigram index, queried through a tenant-isolated API, and rendered as snippets with deep links into the chat" width="820"></p>
+<p align="center"><sub>Messages are cleaned and fed into a local SQLite FTS5 (trigram) index, queried through a tenant-isolated API, and rendered as snippets with deep links into the chat.</sub></p>
+
 More: [`docs/architecture.md`](docs/architecture.md) (in Russian), requirements in [`openspec/specs/`](openspec/specs/).
 
 ## Configuration
@@ -447,6 +434,14 @@ Everything is configured with environment variables; the schema with types, defa
 | `TELEHARNESS_KB_ROOT` | `off` | Obsidian vault folder for agents, e.g. `~/Obsidian/agents` |
 | `TELEHARNESS_TENANT_HOME` | `~/.teleharness-tenants` | users' folders |
 | `TELEHARNESS_VOICE_PYTHON`, `TELEHARNESS_VOICE_MODELS` | `~/.teleharness/voice/…` | local voice worker |
+
+Feature groups and tuning knobs are in the same schema: `TELEHARNESS_LISTEN_HOST` / `TELEHARNESS_ENV`
+(bind address, stand guard), `TELEHARNESS_PUSH…` (Web Push: on/off, VAPID keys, quiet-hour batching),
+`TELEHARNESS_VOICE…` (speech-to-text / text-to-speech limits per user), `TELEHARNESS_TENANT…` (per-user
+rate, upload and vision limits), and the Temporal set — `TELEHARNESS_TEMPORAL_PIPELINES`,
+`TELEHARNESS_TEMPORAL_MODELS`, `TELEHARNESS_TEMPORAL_DRAIN` and friends — documented in
+[`docs/temporal.md`](docs/temporal.md). The complete list with types, defaults and validation lives in
+[`lib/config.js`](lib/config.js); unknown variables fail the start.
 
 ### Agent configs
 

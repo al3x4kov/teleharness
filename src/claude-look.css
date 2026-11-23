@@ -266,7 +266,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-bottom: 76px; /* пилюля «Новый чат» не закрывает последний чат */
+  padding-bottom: 8px; /* BUG-299: .drawer-foot — обычный flex-элемент снизу, запас 76px больше не нужен */
 }
 
 .drawer-item {
@@ -333,10 +333,8 @@ body {
 }
 
 .drawer-foot {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
+  flex-shrink: 0;
+  padding-top: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;

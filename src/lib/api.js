@@ -131,6 +131,7 @@ export const api = {
   // FEAT-19.4: definitions use CAS revisions; execution is separately negotiated.
   temporalStart: body => json("POST", "/temporal/runs", body),
   temporalRunAction: (id,body) => json("POST", "/temporal/runs/" + workflowPath(id) + "/actions", body),
+  temporalResume: (id,body) => json("POST", "/temporal/runs/" + workflowPath(id) + "/resume", body),
   temporalSchedules: () => json("GET","/temporal/schedules"),
   temporalCreateSchedule: body => json("POST","/temporal/schedules",body),
   temporalScheduleAction: (id,action) => json("POST","/temporal/schedules/"+idPath(id)+"/"+idPath(action),{}),

@@ -38,3 +38,29 @@ test("demo: Approve moves the waiting run on; reset replays it; unrelated paths 
   assert.equal(await call("GET", "/teleharness/api/sessions"), null);
   assert.equal(await call("GET", "/teleharness/api/file?directory=/home/dev&path=a.txt"), null);
 });
+test("demo: finished runs offer resume options; resume seeds reused steps and links back (FEAT-19.32)", async () => {
+  // The failed dependency run carries one completed step — resume from the approval step by default.
+  const failed = await json("GET", "/teleharness/api/temporal/runs/demo-run-fail");
+  assert.equal(failed.status, "FAILED");
+  const opts = failed.resumeOptions?.versions ?? [];
+  assert.equal(opts.length, 1); assert.equal(opts[0].isOriginal, true); assert(opts[0].available);
+  assert.deepEqual(opts[0].reusableSteps, ["bump"]); assert.equal(opts[0].defaultFromStepId, "ok");
+
+  const resumed = await json("POST", "/teleharness/api/temporal/runs/demo-run-fail/resume", { requestId: "99999999-9999-4999-8999-999999999999" });
+  assert.equal(resumed.resumedFrom, "demo-run-fail");
+  assert.equal(resumed.fromStepId, "ok"); assert.deepEqual(resumed.reusedSteps, ["bump"]);
+
+  const detail = await json("GET", "/teleharness/api/temporal/runs/" + resumed.workflowId);
+  assert.equal(detail.status, "RUNNING"); assert.equal(detail.state.steps.bump, "completed");
+  assert.equal(detail.state.steps.ok, "running");
+  assert.equal(detail.resumedFrom, "demo-run-fail"); assert.equal(detail.resumeFromStep, "ok");
+  assert.deepEqual(detail.resumedSteps, ["bump"]);
+  assert.equal(detail.resumeOptions, undefined);
+  // The run list includes the resumed run.
+  const runs = await json("GET", "/teleharness/api/temporal/runs");
+  assert(runs.some((r) => r.workflowId === resumed.workflowId));
+  // RUNNING runs and resumed runs do not offer resume; the completed run does.
+  const done = await json("GET", "/teleharness/api/temporal/runs/demo-run-done");
+  assert.equal(done.resumeOptions.versions.length, 1);
+  assert.equal((await json("GET", "/teleharness/api/temporal/runs/demo-run-deps")).resumeOptions, undefined);
+});

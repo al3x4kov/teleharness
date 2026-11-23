@@ -516,3 +516,79 @@ test("FEAT-19.31: DefinitionEditor и RunDetail показывают OpenCode и
  await h.waitFor(()=>run.root.textContent.includes("Шаг GLM"));
  assert(run.root.textContent.includes("OpenCode · GLM-5.3-Flash"));
 });
+
+test("FEAT-19.32: RunDetail открывает шторку «Продолжить с шага…», обновляет превью, вызывает /resume и показывает перенесённые шаги",async()=>{
+ const sent=[];
+ const failedRun=detail({
+  status:"FAILED",
+  version:1,
+  latestVersion:2,
+  runFolder:"runs/20261123-0700-src1",
+  steps:[
+   {id:"s1",name:"Сбор diff",type:"model",engine:"claude",model:"claude-opus-5-5"},
+   {id:"s2",name:"Сборка релиза",type:"model",engine:"claude",model:"claude-opus-5-5"},
+  ],
+  state:{steps:{s1:"completed",s2:"running"}},
+  summary:{kind:"err",waiting:false},
+  closeTime:new Date().toISOString(),
+  resumeOptions:{versions:[
+   {version:2,isLatest:true,isOriginal:false,available:true,reusableSteps:["s1"],defaultFromStepId:"s2",steps:[
+    {id:"s1",name:"Сбор diff",type:"model",dependsOn:[]},
+    {id:"s2",name:"Сборка релиза v2",type:"model",dependsOn:["s1"]},
+    {id:"s3",name:"Публикация",type:"timer",dependsOn:["s2"]},
+   ]},
+   {version:1,isLatest:false,isOriginal:true,available:true,reusableSteps:["s1"],defaultFromStepId:"s2",steps:[
+    {id:"s1",name:"Сбор diff",type:"model",dependsOn:[]},
+    {id:"s2",name:"Сборка релиза",type:"model",dependsOn:["s1"]},
+   ]},
+  ]},
+ });
+ installFetch([
+  {path:"/teleharness/api/temporal/runs/w-fail",reply:()=>failedRun},
+  {method:"POST",path:"/teleharness/api/temporal/runs/w-fail/resume",reply:(c)=>{sent.push(c.body);return {workflowId:"w-resumed-new",version:c.body.version,resumedFrom:"w-fail",fromStepId:c.body.fromStepId,reusedSteps:["s1"]};}},
+ ]);
+ const {root}=h.mount(ui.RunDetail,{workflowId:"w-fail"});
+ await h.waitFor(()=>root.textContent.includes("Продолжить с шага"));
+ const openBtn=$(root,'[data-action="open-resume"]');
+ assert.ok(openBtn && !openBtn.disabled);
+ h.click(openBtn);await h.flush();
+ const verSel=$(document.body,'select[aria-label="Версия пайпа"]')??$(root,'select[aria-label="Версия пайпа"]');
+ assert.equal(verSel.value,"2","по умолчанию выбрана последняя опубликованная версия");
+ const stepSel=$(document.body,'select[aria-label="Начать с шага"]')??$(root,'select[aria-label="Начать с шага"]');
+ assert.equal(stepSel.value,"s2","по умолчанию выбран первый невыполненный шаг");
+ assert.ok(document.body.textContent.includes("Перенесутся без повтора (1): Сбор diff"));
+ assert.ok(document.body.textContent.includes("Выполнятся заново (2): Сборка релиза v2, Публикация"));
+ // Выбор более раннего шага s1 очищает список переносимых
+ h.act(()=>{stepSel.value="s1";stepSel.dispatchEvent(new Event("change",{bubbles:true}));});await h.flush();
+ assert.ok(document.body.textContent.includes("Перенесутся без повтора (0)"));
+ // Возвращаем s2 и отправляем
+ h.act(()=>{stepSel.value="s2";stepSel.dispatchEvent(new Event("change",{bubbles:true}));});await h.flush();
+ const confirm=$(document.body,'[data-action="confirm-resume"]')??$(root,'[data-action="confirm-resume"]');
+ h.click(confirm);await h.waitFor(()=>sent.length===1);
+ assert.equal(sent[0].version,2);
+ assert.equal(sent[0].fromStepId,"s2");
+ assert.match(sent[0].requestId,/^[a-f0-9-]{36}$/);
+ await h.waitFor(()=>location.hash==="#/temporal/run/w-resumed-new");
+ h.cleanup();
+
+ // На экране нового запуска видны ссылка на исходный запуск и пометка «перенесён из прошлого запуска»
+ installFetch([
+  {path:"/teleharness/api/temporal/runs/w-resumed-new",reply:()=>detail({
+   status:"RUNNING",
+   version:2,
+   resumedFrom:"w-fail-1234",
+   resumeFromStep:"s2",
+   resumedSteps:["s1"],
+   steps:[
+    {id:"s1",name:"Сбор diff",type:"model",engine:"claude",model:"claude-opus-5-5"},
+    {id:"s2",name:"Сборка релиза v2",type:"model",engine:"claude",model:"claude-opus-5-5"},
+   ],
+   state:{steps:{s1:"completed",s2:"running"}},
+   summary:{kind:"run",waiting:false},
+  })},
+ ]);
+ const r2=h.mount(ui.RunDetail,{workflowId:"w-resumed-new"});
+ await h.waitFor(()=>r2.root.textContent.includes("перенесён из прошлого запуска"));
+ assert.ok(r2.root.textContent.includes("w-fail-1"));
+ assert.equal($(r2.root,'[data-action="open-resume"]'),null,"на активном запуске кнопки продолжения нет");
+});

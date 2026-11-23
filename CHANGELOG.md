@@ -6,6 +6,30 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.6.0] — 2026-11-23
+
+### Added
+- **Temporal: resume a run from a step.** A finished, failed or canceled run can continue from its last
+  successful step — or any selected step — on the original or the latest published version of the pipe
+  (`POST /teleharness/api/temporal/runs/:id/resume`). The planner (`lib/temporal/resume-plan.js`,
+  `shared/temporal-resume.js`) builds a topologically closed seed under the worker's
+  `resume-from-checkpoint-v1` gate: completed steps (with their results, step chats and condition outcomes) carry
+  over unchanged, the run folder and its files are inherited, and only the remaining steps re-run. The run screen
+  gets a *Resume from step* button with a sheet (version and start-step pickers, a preview of which steps carry
+  over), a *resumed · N steps carried over* badge in the run facts and a continuation link back to the original run.
+  Demo mode (`npm run demo`) shows the whole flow on finished and failed runs.
+
+### Fixed
+- **Desktop Drawer footer no longer overlaps Recent rows at 1280×720.** `.drawer-foot` is a regular
+  flex item (`flex-shrink: 0`) inside the flex-column `.drawer` instead of `position: absolute`, so the footer
+  never covers the bottom «Recent» chats on short desktop windows.
+
+### Changed
+- **README quality & selling hierarchy (v9).** The bulky search hero between «What it does» and «Board, mobile
+  review, worktrees and costs» is gone: chat search stays concise in Features and the tour, the search-pipeline
+  diagram moved to Architecture, drawer-height screenshots left the hero area, and the Temporal section explains
+  resume-from-step. EN/RU kept symmetric; Configuration now points to every `TELEHARNESS_*` variable group.
+
 ## [2.5.4] — 2026-11-23
 
 This release combines the 2.5.3 and 2.5.4 changes (everything since v2.5.2).

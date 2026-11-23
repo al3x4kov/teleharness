@@ -218,6 +218,49 @@ class Pipeline:
                         type(max_reworks) is not int or not 1 <= max_reworks <= 3):
                     raise invalid("invalid_plan")
         self.step_defs = dict(remaining)
+        seed = projection.get("seed")
+        if seed is not None and workflow.patched("resume-from-checkpoint-v1"):
+            if not isinstance(seed, dict):
+                raise invalid("invalid_seed")
+            seeded_steps = seed.get("steps")
+            if not isinstance(seeded_steps, dict):
+                raise invalid("invalid_seed")
+            for key, status in seeded_steps.items():
+                if key not in remaining or status not in ("completed", "skipped"):
+                    raise invalid("invalid_seed")
+            for key in seeded_steps:
+                if any(dep not in seeded_steps for dep in remaining[key]["dependsOn"]):
+                    raise invalid("invalid_seed")
+            raw_conds = seed.get("conditions", {})
+            raw_files = seed.get("files", {})
+            raw_pr = seed.get("pr", {})
+            raw_reworks = seed.get("reworks", {})
+            if not all(isinstance(x, dict) for x in (raw_conds, raw_files, raw_pr, raw_reworks)):
+                raise invalid("invalid_seed")
+            for key, value in raw_conds.items():
+                if key not in seeded_steps or remaining[key]["type"] != "condition" or not isinstance(value, bool):
+                    raise invalid("invalid_seed")
+                self.conditions[key] = value
+            for key, status in seeded_steps.items():
+                if status == "completed" and remaining[key]["type"] == "condition" and key not in self.conditions:
+                    raise invalid("invalid_seed")
+            for key, value in raw_files.items():
+                if key not in seeded_steps or remaining[key]["type"] != "artifact" or not isinstance(value, str):
+                    raise invalid("invalid_seed")
+                self.files[key] = value
+            for key, value in raw_pr.items():
+                if key not in seeded_steps or remaining[key]["type"] != "pull_request" or not isinstance(value, dict):
+                    raise invalid("invalid_seed")
+                if value.get("state") not in ("done", "no_changes"):
+                    raise invalid("invalid_seed")
+                self.pr[key] = dict(value)
+            for key, value in raw_reworks.items():
+                if key not in seeded_steps or remaining[key]["type"] != "approval" or type(value) is not int or not 0 <= value <= 10:
+                    raise invalid("invalid_seed")
+                self.reworks[key] = value
+            for key, status in seeded_steps.items():
+                self.steps[key] = status
+                del remaining[key]
         running = {}
         try:
             while remaining or running:

@@ -7,6 +7,7 @@ import { cleanInputs } from "../lib/temporal/inputs.js";
 import { listRunFiles } from "../lib/temporal/run-files.js";
 import { validateDefinition, validDraftShape } from "../shared/temporal-definition.js";
 import { summarizeRun, runSummaryCache } from "../lib/temporal/run-summary.js";
+import { buildResumePlan } from "../lib/temporal/resume-plan.js";
 
 export function temporalRoutes(deps) {
   const base="/teleharness/api/temporal";
@@ -27,7 +28,7 @@ export function temporalRoutes(deps) {
         const version=record.versions.find(v=>v.version===entry.version);
         if (!version) continue;
         access(user,version.definition,{engines:true});
-        const {inputs,stepError,...rest}=entry;
+        const {inputs,stepError,resumeSeed,...rest}=entry;
         visible.push({...rest,stepError:parseJson(stepError),accepted:Boolean(entry.accepted),name:version.definition.name,source:source(entry.workflowId,entry.source),steps:stepShape(version.definition),...(record.deletedAt?{pipeDeleted:true}:{})});
       } catch (error) {
         if (!(error instanceof DefinitionError && [403,404].includes(error.status))) throw error;
@@ -90,7 +91,43 @@ export function temporalRoutes(deps) {
       const workspace=workspaceOf(version.definition.directory,slugOf(record));
       const folder=deps.results?.runFolder?.(match[1]);
       let inputs={};try{inputs=JSON.parse(row.inputs||"{}")??{};}catch{}
+      const latestPublished=!record.deletedAt && record.versions.length ? record.versions[record.versions.length-1] : null;
+      const resumedSteps=Object.keys(parseJson(row.resumeSeed)?.steps??{});
+      let resumeOptions=null;
+      if (!record.deletedAt && detail.status!=="RUNNING" && deps.resumePipeline) {
+        const candidates=[];
+        if (latestPublished && latestPublished.version!==row.version) candidates.push(latestPublished);
+        candidates.push(version);
+        resumeOptions={versions:candidates.map(cand=>{
+          const candSteps=(cand.definition.steps??[]).map(s=>({id:s.id,name:s.name,type:s.type,dependsOn:s.dependsOn??[]}));
+          let available=true, unavailableReason=null, plan=null;
+          try {
+            access(user,cand.definition,{engines:true});
+            deps.validatePipeline?.(cand.definition);
+            const declaredNames=new Set((cand.definition.inputs??[]).map(i=>i.name));
+            const carried=Object.fromEntries(Object.entries(inputs).filter(([k])=>declaredNames.has(k)));
+            cleanInputs(cand.definition.inputs,carried);
+            plan=buildResumePlan({sourceDefinition:version.definition,targetDefinition:cand.definition,sourceState:detail.state});
+          } catch(e) {
+            available=false;
+            unavailableReason=e instanceof DefinitionError ? e.message : "Версия недоступна для продолжения";
+          }
+          return {
+            version:cand.version,
+            isLatest:Boolean(latestPublished && cand.version===latestPublished.version),
+            isOriginal:cand.version===row.version,
+            available,
+            ...(unavailableReason?{unavailableReason}:{}),
+            steps:candSteps,
+            reusableSteps:plan?.reusableSteps??[],
+            defaultFromStepId:plan?.defaultFromStepId??(candSteps[0]?.id??null),
+          };
+        })};
+      }
       deps.sendJson(res,200,{...detail,resultSteps:deps.results?.steps(match[1])??[],name:version.definition.name,version:row.version,
+        latestVersion:latestPublished?.version??row.version,
+        resumedFrom:row.resumedFrom??null,resumeFromStep:row.resumeFromStep??null,resumedSteps,
+        ...(resumeOptions?{resumeOptions}:{}),
         definitionId:row.definitionId,directory:version.definition.directory,source:source(match[1],row.source),triggerId:row.triggerId??null,eventRef:row.eventRef??null,
         eventUrl:row.eventUrl??null,attempt:Number.isSafeInteger(row.attempt)&&row.attempt>0?row.attempt:null,stepError:parseJson(row.stepError),steps,summary:summarizeRun(detail,steps),
         workspace,runFolder:folder?"runs/"+folder:null,files:folder?listRunFiles(workspace,"runs/"+folder):[],
@@ -128,6 +165,57 @@ export function temporalRoutes(deps) {
         await writeFile(path.join(dir,`rework-${step.reworkTarget}.md`),note,"utf8");
       }
       deps.sendJson(res,200,await deps.applyAction(user.id,match[1],command));
+    }),
+    // FEAT-19.32: продолжение завершённого/упавшего запуска с последнего успешного (или выбранного) шага.
+    route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/resume$/, async ({req,res,user,match}) => {
+      const b = await body(req, ["requestId","version","fromStepId"]);
+      if (typeof b.requestId !== "string" || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(b.requestId))
+        throw new DefinitionError(400, "Некорректный ключ запроса");
+      if (b.version !== undefined && b.version !== null && (!Number.isSafeInteger(b.version) || b.version < 1))
+        throw new DefinitionError(400, "Некорректный номер версии");
+      if (b.fromStepId !== undefined && b.fromStepId !== null && typeof b.fromStepId !== "string")
+        throw new DefinitionError(400, "Некорректный идентификатор шага");
+      if (!deps.resumePipeline || !deps.lookupRun || !deps.describeRun)
+        throw new DefinitionError(503, "Исполнение Temporal ещё не подключено");
+      const row = await deps.lookupRun(user.id, match[1]);
+      if (!row) throw new DefinitionError(404, "Запуск не найден");
+      const record = deps.store.get(user.id, row.definitionId);
+      const sourceVersion = record.versions.find(v => v.version === row.version);
+      if (!sourceVersion) throw new DefinitionError(404, "Опубликованная версия не найдена");
+      access(user, sourceVersion.definition, {engines:true});
+      const latestVersion = record.versions[record.versions.length - 1]?.version ?? row.version;
+      const targetVersion = b.version ?? latestVersion;
+      if (targetVersion !== row.version && targetVersion !== latestVersion)
+        throw new DefinitionError(400, "Можно продолжить на прежней или последней опубликованной версии");
+      const published = record.versions.find(v => v.version === targetVersion);
+      if (!published) throw new DefinitionError(404, "Опубликованная версия не найдена");
+      access(user, published.definition, {engines:true});
+      deps.validatePipeline(published.definition);
+      const detail = await deps.describeRun(match[1]);
+      if (detail.status === "RUNNING")
+        throw new DefinitionError(409, "Активный запуск нельзя продолжить — сначала дождитесь завершения или отмените его");
+      const sourceInputs = parseJson(row.inputs) ?? {};
+      const declaredNames = new Set((published.definition.inputs ?? []).map(i => i.name));
+      const carriedInputs = Object.fromEntries(Object.entries(sourceInputs).filter(([k]) => declaredNames.has(k)));
+      const inputs = cleanInputs(published.definition.inputs, carriedInputs);
+      const plan = buildResumePlan({
+        sourceDefinition: sourceVersion.definition,
+        targetDefinition: published.definition,
+        sourceState: detail.state,
+        fromStepId: b.fromStepId ?? null,
+      });
+      const result = await deps.resumePipeline({
+        owner: user.id,
+        definitionId: row.definitionId,
+        version: published.version,
+        requestId: b.requestId,
+        inputs,
+        resumedFrom: match[1],
+        resumeFromStep: plan.fromStepId,
+        seed: plan.seed,
+        reusedSteps: plan.reusedSteps,
+      });
+      deps.sendJson(res, 202, result);
     }),
     route("POST", base+"/runs", async ({req,res,user}) => {
       const b = await body(req, ["definitionId","version","requestId","inputs"]);

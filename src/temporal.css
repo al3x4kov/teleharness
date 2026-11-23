@@ -126,6 +126,8 @@ textarea.t-input { min-height: 96px; resize: vertical; }
 .t-actcol { display: grid; gap: 8px; }
 .t-actbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; gap: 8px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-top: 1px solid var(--border); }
 .t-actbar > * { flex: 1 1 0; min-width: 0; }
+.t-actbar .t-btn { overflow: hidden; white-space: normal; line-height: 1.25; }
+.t-actbar .t-primary { flex-grow: 1.7; }
 .t-actbar .t-ghost { flex: 0 1 auto; }
 .t-actbar .t-more { flex: 0 0 52px; padding: 0; }
 .t-tl-stop .t-node { color: var(--text-2); }
@@ -266,3 +268,6 @@ textarea.t-input { min-height: 96px; resize: vertical; }
 .t-more > summary::before { content: "▸"; margin-right: 4px; }
 .t-more[open] > summary::before { content: "▾"; }
 .t-prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* FEAT-19.32: превью переносимых шагов в шторке «Продолжить запуск». */
+.t-resume-preview { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--input); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }

@@ -5,10 +5,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
 import { t } from "../../lib/i18n.js";
+import { navigate } from "../../lib/router.js";
 import { me } from "../../lib/store.js";
 import { useSeenOnOpen } from "../../lib/attention.js"; // FEAT-20.2
 import { Banner, Empty, RunStatus, Sheet, Skeleton, STEP_TYPES_UI, errorText, ghWait, prOutcome, sourceText, stepErrorTitle, usePoll, useNow, when, duration } from "./ui.jsx";
 import { CI_ATTEMPTS_MAX } from "../../../shared/temporal-templates.js";
+import { previewResumeSelection } from "../../../shared/temporal-resume.js";
 import Markdown from "../chat/Markdown.jsx";
 import FileCard from "../chat/FileCard.jsx";
 import FileViewer from "../chat/FileViewer.jsx";
@@ -40,7 +42,8 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
   const [run, setRun] = useState(null), [error, setError] = useState(null), [gone, setGone] = useState(false);
   const [busy, setBusy] = useState(false), [toast, setToast] = useState(""), [sheet, setSheet] = useState(null);
   const [reason, setReason] = useState(""), [comment, setComment] = useState(""), [viewer, setViewer] = useState(null);
-  const retry = useRef(null);
+  const [resumeVersion, setResumeVersion] = useState(null), [resumeFromStep, setResumeFromStep] = useState(""), [resumeError, setResumeError] = useState("");
+  const retry = useRef(null), resumeRetry = useRef(null);
   const now = useNow(15000);
   useSeenOnOpen(workflowId ? "run:" + workflowId : null); // FEAT-20.2 (кр. 5): запуск открыт ≥ 2 с — просмотрен
   async function load() {
@@ -87,6 +90,40 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
   const pending = running && !state.paused ? (state.pending ?? []) : [];
   const allowed = (a) => !run.allowedActions || run.allowedActions.includes(a);
   const results = new Set(run.resultSteps ?? []);
+  const resumedSet = new Set(run.resumedSteps ?? []);
+  const resumeVersions = run.resumeOptions?.versions ?? [];
+  const canResume = !running && !run.pipeDeleted && resumeVersions.length > 0;
+  const chosenResumeVer = resumeVersions.find((v) => v.version === resumeVersion) ?? resumeVersions.find((v) => v.available) ?? resumeVersions[0] ?? null;
+  const resumePreview = chosenResumeVer ? previewResumeSelection({ steps: chosenResumeVer.steps, reusableSteps: chosenResumeVer.reusableSteps, fromStepId: resumeFromStep || chosenResumeVer.defaultFromStepId }) : null;
+  const openResume = () => {
+    const defVer = resumeVersions.find((v) => v.available) ?? resumeVersions[0];
+    if (!defVer) return;
+    setResumeVersion(defVer.version);
+    setResumeFromStep(defVer.defaultFromStepId ?? defVer.steps[0]?.id ?? "");
+    setResumeError("");
+    resumeRetry.current = null;
+    setSheet("resume");
+  };
+  const submitResume = async () => {
+    if (!chosenResumeVer || !chosenResumeVer.available) return;
+    const fromStep = resumeFromStep || chosenResumeVer.defaultFromStepId;
+    const payload = { version: chosenResumeVer.version, fromStepId: fromStep };
+    const sig = JSON.stringify(payload);
+    if (resumeRetry.current?.sig !== sig) resumeRetry.current = { sig, id: crypto.randomUUID() };
+    setBusy(true);
+    setResumeError("");
+    try {
+      const created = await api.temporalResume(workflowId, { ...payload, requestId: resumeRetry.current.id });
+      resumeRetry.current = null;
+      setSheet(null);
+      navigate("/temporal/run/" + encodeURIComponent(created.workflowId));
+    } catch (e) {
+      resumeRetry.current = null;
+      if (e.status === 409) { setResumeError(errorText(e)); await load(); }
+      else if (e.status === 403 || e.status === 404) { setSheet(null); setGone(true); }
+      else setResumeError(errorText(e));
+    } finally { setBusy(false); }
+  };
   const steps = run.steps ?? [];
   const files = run.files ?? [];
   // FEAT-19.16: «Итог» — the answer of the last completed model step (or the source of the last artifact).
@@ -122,7 +159,8 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
     <a class="t-btn" href="#/temporal">{t("temporal.rd.toRuns")}</a>
   ) : (
     <>
-      <a class="t-btn t-primary" href={"#/temporal/start/" + encodeURIComponent(run.definitionId) + "?v=" + run.version}>{t("temporal.rd.rerun")}</a>
+      {canResume && <button class="t-btn t-primary" type="button" data-action="open-resume" disabled={busy} onClick={openResume}>{t("temporal.rd.rs.button")}</button>}
+      <a class={canResume ? "t-btn" : "t-btn t-primary"} href={"#/temporal/start/" + encodeURIComponent(run.definitionId) + "?v=" + run.version}>{t("temporal.rd.rerun")}</a>
       <a class="t-btn" href={"#/temporal/pipe/" + encodeURIComponent(run.definitionId)}>{t("temporal.rd.openPipe")}</a>
     </>
   );
@@ -134,7 +172,7 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
           <p class="t-facts"><span>{t("temporal.runs.version", { n: run.version })}</span><span>{run.eventUrl ? <a href={run.eventUrl} target="_blank" rel="noreferrer">{sourceText(run)} ↗</a> : sourceText(run)}</span>
             {run.startTime && <span>{t("temporal.rd.started", { when: when(run.startTime, now) })}</span>}
             {run.startTime && <span>{running ? t("temporal.rd.running") : t("temporal.rd.took")}{duration(run.startTime, run.closeTime, now)}</span>}
-            {ACTIVE.has(kind) && <span>{t("temporal.rd.autoRefresh")}</span>}{run.pipeDeleted && <span>{t("temporal.rd.pipeDeleted")}</span>}</p></div>
+            {run.resumedFrom && <span>{resumedSet.size ? t("temporal.rd.rs.fromTagN", { n: resumedSet.size }) : t("temporal.rd.rs.fromTag")}</span>}{ACTIVE.has(kind) && <span>{t("temporal.rd.autoRefresh")}</span>}{run.pipeDeleted && <span>{t("temporal.rd.pipeDeleted")}</span>}</p></div>
         <RunStatus kind={kind} stepError={run.stepError} />
       </div>
       {state.paused && running && <Banner icon="❚❚" title={t("temporal.rd.paused")}>{t("temporal.rd.pausedText")}</Banner>}
@@ -208,7 +246,7 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
                     <span class="t-node" aria-hidden="true">{quota ? "⧗" : icon}</span>
                     <div class="t-tlbody">
                       <b>{step.name}</b>
-                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : note}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
+                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : note}{resumedSet.has(step.id) ? t("temporal.rd.rs.carriedTag") : ""}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
                       {result && (
                         <div class={"t-prbox" + (result.tone === "off" ? " t-prbox-off" : "")}>
                           <b>{result.title}</b>
@@ -249,6 +287,7 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
               <dt>{t("temporal.rd.kv.pipe")}</dt><dd>{run.pipeDeleted ? <>{run.name} <span class="t-muted">{t("temporal.rd.kv.deleted")}</span></> : <a href={"#/temporal/pipe/" + encodeURIComponent(run.definitionId)}>{run.name}</a>}</dd>
               <dt>{t("temporal.rd.kv.version")}</dt><dd>{t("temporal.rd.kv.versionFixed", { n: run.version })}</dd>
               <dt>{t("temporal.rd.kv.run")}</dt><dd>{run.eventUrl ? <a href={run.eventUrl} target="_blank" rel="noreferrer">{sourceText(run)} ↗</a> : sourceText(run)}</dd>
+              {run.resumedFrom && <><dt>{t("temporal.rd.kv.resumed")}</dt><dd><a href={"#/temporal/run/" + encodeURIComponent(run.resumedFrom)}>{run.resumedFrom.slice(0, 8)}…</a>{run.resumeFromStep ? t("temporal.rd.kv.resumedFromStep", { name: steps.find((x) => x.id === run.resumeFromStep)?.name ?? run.resumeFromStep }) : ""}</dd></>}
               {run.triggerId && <><dt>{t("temporal.rd.kv.trigger")}</dt><dd><a href={"#/temporal/triggers/" + encodeURIComponent(run.triggerId)}>{t("temporal.rd.kv.triggerLink")}</a></dd></>}
               {run.startTime && <><dt>{t("temporal.rd.kv.started")}</dt><dd>{when(run.startTime, now)}</dd></>}
               {run.closeTime && <><dt>{t("temporal.rd.kv.finished")}</dt><dd>{when(run.closeTime, now)}</dd></>}
@@ -309,6 +348,50 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
           <div class="t-row t-stretch"><button class="t-btn" type="button" onClick={() => setSheet(null)}>{t("temporal.back")}</button>
             <button class="t-btn t-danger-fill" type="button" data-action="confirm-reject" disabled={busy}
               onClick={() => act("reject", { stepId: sheet.reject.id, generation: state.generation, ...(comment.trim() ? { reason: comment.trim() } : {}) })}>{t("temporal.rd.rejectBtn")}</button></div>
+        </Sheet>
+      )}
+      {sheet === "resume" && chosenResumeVer && (
+        <Sheet title={t("temporal.rd.rs.title")} onClose={() => setSheet(null)}>
+          {resumeError && <Banner tone="err" icon="✕" title={t("temporal.rd.rs.failed")}>{resumeError}</Banner>}
+          {resumeVersions.length > 1 && (
+            <label class="t-field"><span>{t("temporal.rd.rs.pipeVersion")}</span>
+              <select class="t-input" aria-label={t("temporal.rd.rs.pipeVersion")} value={String(chosenResumeVer.version)} onChange={(e) => {
+                const v = Number(e.currentTarget.value);
+                const nextVer = resumeVersions.find((x) => x.version === v);
+                setResumeVersion(v);
+                setResumeFromStep(nextVer?.defaultFromStepId ?? nextVer?.steps[0]?.id ?? "");
+                setResumeError("");
+                resumeRetry.current = null;
+              }}>
+                {resumeVersions.map((v) => (
+                  <option key={v.version} value={String(v.version)}>
+                    {t("temporal.runs.version", { n: v.version })}{v.isLatest ? t("temporal.rd.rs.verLatest") : v.isOriginal ? t("temporal.rd.rs.verOriginal") : ""}{!v.available ? t("temporal.rd.rs.verUnavailable") : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {!chosenResumeVer.available && (
+            <Banner tone="err" icon="✕" title={t("temporal.rd.rs.unavailTitle")}>{t("temporal.rd.rs.unavailText")}</Banner>
+          )}
+          <label class="t-field"><span>{t("temporal.rd.rs.startFrom")}</span>
+            <select class="t-input" aria-label={t("temporal.rd.rs.startFrom")} value={resumeFromStep || chosenResumeVer.defaultFromStepId || ""} onChange={(e) => { setResumeFromStep(e.currentTarget.value); setResumeError(""); resumeRetry.current = null; }}>
+              {chosenResumeVer.steps.map((st, idx) => (
+                <option key={st.id} value={st.id}>
+                  {/^\d+[.)]\s/.test(st.name) ? st.name : `${idx + 1}. ${st.name}`}{st.id === chosenResumeVer.defaultFromStepId ? t("temporal.rd.rs.defaultTag") : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {resumePreview && (
+            <div class="t-resume-preview">
+              <div><b>{t("temporal.rd.rs.carriedTitle", { n: resumePreview.reusedSteps.length })}</b> {resumePreview.reusedSteps.length ? resumePreview.reusedSteps.map((id) => chosenResumeVer.steps.find((st) => st.id === id)?.name ?? id).join(", ") : t("temporal.rd.rs.carriedNone")}</div>
+              <div class="t-muted"><b>{t("temporal.rd.rs.rerunTitle", { n: resumePreview.rerunSteps.length })}</b> {resumePreview.rerunSteps.map((id) => chosenResumeVer.steps.find((st) => st.id === id)?.name ?? id).join(", ")}</div>
+              {run.runFolder && <div class="t-muted">{t("temporal.rd.rs.folderA")} <span class="t-mono">{run.runFolder}</span> {t("temporal.rd.rs.folderB")}</div>}
+            </div>
+          )}
+          <div class="t-row t-stretch"><button class="t-btn" type="button" onClick={() => setSheet(null)}>{t("temporal.back")}</button>
+            <button class="t-btn t-primary" type="button" data-action="confirm-resume" disabled={busy || !chosenResumeVer.available} onClick={submitResume}>{t("temporal.rd.rs.confirm")}</button></div>
         </Sheet>
       )}
       {sheet?.rework && (
