@@ -170,7 +170,8 @@ test("FEAT-20.38 тенант: teleharness-* отдаёт content без path и
   mode = "wrapped";
   calls = 0;
   seen.length = 0;
-  const rOk = await api("/teleharness/api/skills/teleharness-xlsx?directory=/etc", tenant.token);
+  const foreignDir = path.join(os.tmpdir(), "foreign-dir");
+  const rOk = await api(`/teleharness/api/skills/teleharness-xlsx?directory=${encodeURIComponent(foreignDir)}`, tenant.token);
   assert.equal(rOk.status, 200, await rOk.clone().text());
   const ok = await rOk.json();
   assert.equal(ok.id, "teleharness-xlsx");
