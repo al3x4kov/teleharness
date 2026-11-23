@@ -109,6 +109,28 @@ export {
 } from "./store/childfeeds.js";
 export { chatGone, isPinned, pinBusy, PINNED_FOLD, refreshPins, splitPinned, togglePin } from "./store/pins.js";
 export { replyDialog, seedDialogs } from "./store/dialogs.js";
+export {
+  panelDirOf,
+  panelMcp,
+  panelMcpError,
+  panelSkills,
+  panelSkillsError,
+  refreshPanelEnvironment,
+  retryPanelMcp,
+  retryPanelSkills,
+  stopPanelEnvironment,
+} from "./store/panel.js";
+export {
+  applyPlan,
+  clearPlan,
+  clearPlanOnUserMessage,
+  forgetPlan,
+  hydratePlanFromHistory,
+  loadPlan,
+  planOf,
+  plansBySession,
+  resetPlans,
+} from "./store/plan.js";
 export { closeEventStream, installEventStream, noteEpoch, onStreamStatus, resync } from "./store/stream.js";
 export {
   admin,

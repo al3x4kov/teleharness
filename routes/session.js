@@ -14,6 +14,8 @@ export function sessionRoutes(h) {
     { method: "*", path: /^\/teleharness\/api\/session\/([^/]+)\/binding$/, scope: "user", handler: h.binding },
     // GET message / POST prompt / POST abort — path first, 405 inside.
     { method: "*", path: /^\/teleharness\/api\/session\/([^/]+)\/(message|prompt|abort)$/, scope: "user", handler: h.action },
+    // Current turn plan from hub memory (desktop right panel) — before catch-all PATCH/DELETE /session/:id.
+    { method: "GET", path: /^\/teleharness\/api\/session\/([^/]+)\/plan$/, scope: "user", handler: h.plan },
     // FEAT-01.57/01.58: GET revert?messageID= (what rolls back), POST revert
     // {messageID}, POST unrevert — the prompt's scope and engine rules inside.
     { method: ["GET", "POST"], path: /^\/teleharness\/api\/session\/([^/]+)\/(revert|unrevert)$/, scope: "user", handler: h.revert },

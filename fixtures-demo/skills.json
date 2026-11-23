@@ -1,0 +1,44 @@
+[
+  {
+    "id": "code-review-and-quality",
+    "name": "code-review-and-quality",
+    "description": "Multi-axis code review checklist before merging changes",
+    "path": "/home/dev/.config/opencode/skills/code-review-and-quality/SKILL.md",
+    "content": "---\nname: code-review-and-quality\ndescription: Multi-axis code review checklist before merging changes\n---\n\n# Code Review & Quality\n\nRun a structured review across correctness, security, tests, and maintainability before merging.\n\n## Checklist\n\n- **Correctness**: verify edge cases, error paths, and concurrency boundaries.\n- **Security**: check input validation, auth boundaries, and secret handling.\n- **Tests**: ensure new behavior and regressions are covered by automated assertions.\n- **Clarity**: keep public interfaces small and naming consistent.\n\n## Output format\n\nGroup findings by severity (`P0` blocker, `P1` high, `P2` suggestion) with exact file and line references.\n"
+  },
+  {
+    "id": "test-driven-development",
+    "name": "test-driven-development",
+    "description": "Red-green-refactor workflow for features and bug fixes",
+    "path": "/home/dev/.config/opencode/skills/test-driven-development/SKILL.md",
+    "content": "---\nname: test-driven-development\ndescription: Red-green-refactor workflow for features and bug fixes\n---\n\n# Test-Driven Development\n\n1. Write a minimal failing test reproducing the requirement or bug.\n2. Implement the smallest change that makes the suite green.\n3. Refactor for clarity while keeping all assertions passing.\n"
+  },
+  {
+    "id": "teleharness-pdf",
+    "name": "teleharness-pdf",
+    "description": "Generate, merge, split, and inspect PDF documents",
+    "path": "/home/dev/.config/opencode/skills/teleharness-pdf/SKILL.md",
+    "content": "---\nname: teleharness-pdf\ndescription: Generate, merge, split, and inspect PDF documents\n---\n\n# PDF Toolkit\n\nSupports extracting text and tables, rendering pages for visual QA, and generating clean multi-page reports.\n"
+  },
+  {
+    "id": "teleharness-xlsx",
+    "name": "teleharness-xlsx",
+    "description": "Create and audit Excel workbooks with formulas and charts",
+    "path": "/home/dev/.config/opencode/skills/teleharness-xlsx/SKILL.md",
+    "content": "---\nname: teleharness-xlsx\ndescription: Create and audit Excel workbooks with formulas and charts\n---\n\n# Excel Workbooks\n\nBuild structured spreadsheets with dynamic formulas, formatting, and formula recalculation checks.\n"
+  },
+  {
+    "id": "debugging-and-error-recovery",
+    "name": "debugging-and-error-recovery",
+    "description": "Systematic root-cause debugging for failing builds and tests",
+    "path": "/home/dev/.config/opencode/skills/debugging-and-error-recovery/SKILL.md",
+    "content": "---\nname: debugging-and-error-recovery\ndescription: Systematic root-cause debugging for failing builds and tests\n---\n\n# Root-Cause Debugging\n\nIsolate the minimal reproduction, inspect runtime evidence before patching, and add a regression test once fixed.\n"
+  },
+  {
+    "id": "security-and-hardening",
+    "name": "security-and-hardening",
+    "description": "Audit authentication, untrusted inputs, and dependency risk",
+    "path": "/home/dev/.config/opencode/skills/security-and-hardening/SKILL.md",
+    "content": "---\nname: security-and-hardening\ndescription: Audit authentication, untrusted inputs, and dependency risk\n---\n\n# Security & Hardening\n\nReview OWASP Top 10 vectors, session cookie flags, path traversal guards, and secret hygiene.\n"
+  }
+]

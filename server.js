@@ -2180,6 +2180,7 @@ const API_ROUTES = validateTable([
     search: (c) => sessionSearchRoute(c),
     binding: (c) => sessionBindingRoute(c),
     action: (c) => sessionActionRoute(c),
+    plan: (c) => sessionPlanRoute(c),
     revert: async (c) => {
       await sessionRevertRoute(c);
       // FEAT-01.60: откат/возврат хода меняет историю — обновляем поисковый индекс.
@@ -2450,6 +2451,16 @@ async function sessionBindingRoute({ req, res, url, user, admin, match }) {
     bindings.set(id, r.binding);
     return sendJson(res, 200, { id, teleharness: { ...r.binding, source: "stored" } });
   });
+}
+
+async function sessionPlanRoute({ res, user, admin, match }) {
+  const id = match[1];
+  if (!admin) {
+    const dir = claude.dirOf(id) ?? (await resolveSessionDir(id));
+    if (dir == null) return sendJson(res, 404, { error: "session not found" });
+    if (!dirAllowed(user, dir)) return sendJson(res, 403, { error: "outside your scope" });
+  }
+  return sendJson(res, 200, { sessionID: id, todos: hub.planOf(id) ?? [] });
 }
 
 async function sessionActionRoute({ req, res, url, user, admin, match }) {

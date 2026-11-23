@@ -15,6 +15,7 @@ import {
 } from "./state.js";
 import { dropDialog, pushDialog } from "./dialogs.js";
 import { isChildOfActive, patchChildFeed } from "./childfeeds.js";
+import { applyPlan, clearPlanOnUserMessage, forgetPlan } from "./plan.js";
 import { chatGone } from "./pins.js";
 import { fillUserParts, finalizeTurn, refreshMessages, refreshStall, releaseHeld, touchActive } from "./session.js";
 import { t } from "../i18n.js";
@@ -238,6 +239,7 @@ function reduce(evt) {
     }
     case "session.deleted": {
       const id = p.sessionID ?? p.info?.id;
+      if (id) forgetPlan(id);
       // FEAT-01.69 П31.Н2: the OPEN chat deleted elsewhere (its row is still
       // listed — our own delete drops the row before the request) → words +
       // «Чаты», not an endless loading skeleton.
@@ -341,6 +343,9 @@ function reduce(evt) {
         ...(typeof p.queued === "number" ? { queuedCount: p.queued } : {}),
       }));
       return;
+    case "teleharness.plan":
+      if (!isChildOfActive(p.sessionID)) applyPlan(p.sessionID, p.todos);
+      return;
     case "message.updated": {
       // opencode 1.19.5 nests the message under properties.info (live-captured
       // 2026-10-31: {sessionID, info:{id, role, ...}}). Passing the raw
@@ -351,6 +356,7 @@ function reduce(evt) {
       // the chat. Tolerate the older flat shape via ?? p.
       const info = p.info ?? p;
       const sid = p.sessionID ?? info.sessionID;
+      if (info.role === "user" && !isChildOfActive(sid)) clearPlanOnUserMessage(sid, info.id);
       patchActive(sid, (act) => {
         const next = { ...act, messages: upsertIncoming(act.messages, info) };
         if (info.role === "assistant" && info.error) {

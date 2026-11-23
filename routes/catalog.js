@@ -66,6 +66,64 @@ export async function fetchMcpStatus(deps, dir) {
   return null;
 }
 
+const SKILLS_TIMEOUT_MS = 15_000;
+const SKILLS_RETRY_DELAY_MS = 800;
+const TENANT_SKILL_RE = /^teleharness-/;
+
+const toSkillList = (raw, { includeContent = false } = {}) => {
+  const list = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : null;
+  if (!list) return null;
+  const out = [];
+  for (const s of list) {
+    if (!s || typeof s !== "object") continue;
+    const id = typeof s.id === "string" ? s.id : "";
+    const name = typeof s.name === "string" ? s.name : "";
+    if (!id && !name) continue;
+    out.push({
+      id: id || name,
+      name: name || id,
+      description: typeof s.description === "string" ? s.description : "",
+      ...(typeof s.path === "string" ? { path: s.path } : {}),
+      ...(includeContent ? { content: typeof s.content === "string" ? s.content : "" } : {}),
+    });
+  }
+  return out;
+};
+
+export async function fetchSkills(deps, dir, { includeContent = false } = {}) {
+  const oc = deps.oc;
+  let lastValidEmpty = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, deps.skillsRetryDelayMs ?? SKILLS_RETRY_DELAY_MS));
+    lastValidEmpty = false;
+    try {
+      let raw = null;
+      if (oc) {
+        raw = await oc.skills({ directory: dir, includeContent, timeoutMs: SKILLS_TIMEOUT_MS });
+      } else {
+        const r = await fetch(`${deps.upstream}/skill?location[directory]=${encodeURIComponent(dir)}`, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.timeout(SKILLS_TIMEOUT_MS),
+        });
+        const text = r.ok ? await r.text() : "";
+        if (text.trim()) {
+          try { raw = JSON.parse(text); } catch { raw = null; }
+        }
+      }
+      const list = toSkillList(raw, { includeContent });
+      if (list) {
+        if (list.length) return list;
+        lastValidEmpty = true;
+        continue;
+      }
+      deps.errLog?.("skills", new Error(`upstream /skill invalid response (attempt ${attempt + 1}/2) for ${dir}`));
+    } catch (err) {
+      deps.errLog?.("skills", err);
+    }
+  }
+  return lastValidEmpty ? [] : null;
+}
+
 export function catalogRoutes(deps) {
   const { sendJson } = deps;
   const fetchMcp = (dir) => fetchMcpStatus(deps, dir);
@@ -280,6 +338,56 @@ export function catalogRoutes(deps) {
         const data = await fetchMcp(dir);
         if (!data) return sendJson(res, 503, { error: "MCP-серверы временно недоступны: opencode не ответил. Повторите через минуту.", code: "mcp_unavailable" });
         return sendJson(res, 200, admin ? data : tenantMcpView(data));
+      },
+    },
+    {
+      method: "GET",
+      path: "/teleharness/api/skills",
+      scope: "user",
+      handler: async ({ res, url, admin, user }) => {
+        const dir = (admin && url.searchParams.get("directory")) || deps.defaultDir(user, deps.chatDir);
+        const data = await fetchSkills(deps, dir);
+        if (!data) return sendJson(res, 503, { error: "Skills are temporarily unavailable: opencode did not respond.", code: "skills_unavailable" });
+        if (admin) return sendJson(res, 200, data);
+        return sendJson(res, 200, data
+          .filter((s) => TENANT_SKILL_RE.test(s.id ?? "") || TENANT_SKILL_RE.test(s.name ?? ""))
+          .map(({ id, name, description }) => ({ id, name, description })));
+      },
+    },
+    {
+      method: "GET",
+      path: /^\/teleharness\/api\/skills\/([^/]+)$/,
+      scope: "user",
+      handler: async ({ res, url, admin, user, match }) => {
+        let skillId;
+        try {
+          skillId = decodeURIComponent(match[1]);
+        } catch {
+          return sendJson(res, 400, { error: "Invalid skill identifier", code: "invalid_skill_id" });
+        }
+        if (!skillId) return sendJson(res, 400, { error: "Invalid skill identifier", code: "invalid_skill_id" });
+        if (!admin && !TENANT_SKILL_RE.test(skillId)) {
+          return sendJson(res, 403, { error: "Access to this skill is denied", code: "skill_forbidden" });
+        }
+        const dir = (admin && url.searchParams.get("directory")) || deps.defaultDir(user, deps.chatDir);
+        const data = await fetchSkills(deps, dir, { includeContent: true });
+        if (!data) {
+          return sendJson(res, 503, { error: "Skills are temporarily unavailable: opencode did not respond.", code: "skills_unavailable" });
+        }
+        const found = data.find((s) => s.id === skillId) ?? data.find((s) => s.name === skillId);
+        if (!found) {
+          return sendJson(res, 404, { error: "Skill not found", code: "skill_not_found" });
+        }
+        if (!admin && !(TENANT_SKILL_RE.test(found.id ?? "") || TENANT_SKILL_RE.test(found.name ?? ""))) {
+          return sendJson(res, 403, { error: "Access to this skill is denied", code: "skill_forbidden" });
+        }
+        return sendJson(res, 200, {
+          id: found.id,
+          name: found.name,
+          description: found.description,
+          content: typeof found.content === "string" ? found.content : "",
+          ...(admin && found.path ? { path: found.path } : {}),
+        });
       },
     },
     // Host stats describe the OWNER's machine: admin only (BUG-12.10).

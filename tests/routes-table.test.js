@@ -130,7 +130,7 @@ test("admin group: tenants get 403 on every method, before any handler; /auth/to
 test("session group: every path reaches its own handler with the regex match; unknown method on /session/:id falls through (404 at the end)", async () => {
   const { sessionRoutes } = await import("../routes/session.js");
   const hit = [];
-  const h = Object.fromEntries(["search", "binding", "action", "revert", "patchDelete", "list", "create", "reply", "event"].map((k) => [k, (c) => hit.push([k, c.match ? [...c.match].slice(1) : null])]));
+  const h = Object.fromEntries(["search", "binding", "action", "plan", "revert", "patchDelete", "list", "create", "reply", "event"].map((k) => [k, (c) => hit.push([k, c.match ? [...c.match].slice(1) : null])]));
   const t = validateTable(sessionRoutes(h));
   const go = (method, p) => dispatchRoute(t, { req: { method }, res: {}, url: new URL(p, "http://x"), user: ALICE, admin: false }, { sendJson, dirAllowed });
   assert.equal(await go("GET", "/teleharness/api/session/ses_a/binding"), true, "binding: any method (405 inside)");
@@ -147,10 +147,13 @@ test("session group: every path reaches its own handler with the regex match; un
   assert.equal(await go("POST", "/teleharness/api/question/q1/reply"), true);
   assert.equal(await go("GET", "/teleharness/api/permission/p1/reply"), false);
   assert.equal(await go("GET", "/teleharness/api/event"), true);
-  assert.deepEqual(hit.map((x) => x[0]), ["binding", "action", "revert", "revert", "patchDelete", "search", "list", "create", "reply", "event"]);
+  assert.equal(await go("GET", "/teleharness/api/session/ses_a/plan"), true);
+  assert.equal(await go("POST", "/teleharness/api/session/ses_a/plan"), false, "GET only");
+  assert.deepEqual(hit.map((x) => x[0]), ["binding", "action", "revert", "revert", "patchDelete", "search", "list", "create", "reply", "event", "plan"]);
   assert.deepEqual(hit[1][1], ["ses_a", "prompt"]);
   assert.deepEqual(hit[3][1], ["ses_a", "unrevert"]);
   assert.deepEqual(hit[8][1], ["question", "q1"]);
+  assert.deepEqual(hit.at(-1)[1], ["ses_a"]);
 });
 
 test("unmatched method or path falls through to the legacy chain", async () => {

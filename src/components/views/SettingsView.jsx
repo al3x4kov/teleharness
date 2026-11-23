@@ -1,3 +1,4 @@
+import { mcpView } from "../../lib/mcp-status.js";
 // Settings (FEAT-03.23): a root with groups and nested sections at
 // #/settings/<section>[/<sub>] — default model/agent, system prompt, voice,
 // theme (localStorage 'teleharness.theme' — lib/theme.js), notifications, MCP and the
@@ -42,32 +43,7 @@ const THEMES = ["system", "dark", "light"].map((id) => ({
 // Raw upstream statuses (needs_auth, needs_client_registration…) are engine
 // strings; the UI says them in words (C2). tone drives the dot colour: a
 // disabled server is not a broken one (S-6).
-const MCP_STATUS = {
-  connected: { key: "settings.mcp.connected", tone: "on" },
-  pending: { key: "settings.mcp.pending", tone: "idle" }, // BUG-192: opencode 2.x — the server is still starting
-  disabled: { key: "settings.mcp.disabled", tone: "idle" },
-  failed: { key: "settings.mcp.failed", tone: "bad" },
-  needs_auth: { key: "settings.mcp.needsAuth", tone: "warn" },
-  needs_client_registration: { key: "settings.mcp.needsRegistration", tone: "warn" },
-};
-
-// BUG-03.13: status in Russian words; the raw upstream error never takes the
-// status column — it becomes a short second line («why», ellipsized, the full
-// text in title) and failed servers get the actionable hint.
-export function mcpView(s) {
-  const known = MCP_STATUS[s?.status];
-  const text = t(known?.key ?? "settings.mcp.unknown");
-  const tone = known?.tone ?? "idle";
-  let why = null;
-  if (typeof s?.error === "string" && s.error.trim()) {
-    // «MCP error -32000: Connection closed» → «Connection closed»: the code
-    // prefix is noise for a person.
-    why = s.error.trim().replace(/^MCP error\s*-?\d+:\s*/i, "").split("\n")[0];
-  } else if (s?.status === "failed") {
-    why = t("settings.mcp.failedWhy");
-  }
-  return { text, tone, why, full: s?.error ?? null };
-}
+export { mcpView };
 
 // Quota windows: the provider returns epoch-ms instants — shown in the viewer's own time zone
 // and locale, like every other time in the app.

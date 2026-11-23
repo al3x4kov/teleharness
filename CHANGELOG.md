@@ -6,6 +6,28 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.7.1] — 2026-11-23
+
+This release combines the 2.7.0 and 2.7.1 changes (everything since v2.6.0).
+
+### Added
+- **Desktop right panel for open chats (≥ 1024 px).** A fixed 300 px right-hand column displays the current chat's
+  **MCP** servers (status dots, localized status labels, error tooltip), available **Skills** (monospaced name +
+  ellipsized description, 5 visible rows with *Show all (N)* / *Collapse*), and a live **Plan** section whenever
+  the active turn emits steps from ACP (`sessionUpdate: "plan"`), Claude Code (`TodoWrite`), or opencode
+  (`todo.updated` / `todowrite`). Each section loads and retries independently; narrow viewports (< 1024 px)
+  keep the chat clean with no panel or toggle button.
+- **Live search filter & Skill viewer modal.** A search bar at the top of the right panel filters both MCP
+  servers (by name or localized status) and Skills (by name, ID, or description), showing match counts (`N/M`)
+  and lifting the 5-row cap while keeping the current-turn Plan untouched. Clicking any skill opens a centered
+  modal (`GET /teleharness/api/skills/:id`) that strips YAML frontmatter and renders the full `SKILL.md`
+  Markdown (admin sees the file path and can pass `?directory=`; tenants are restricted to `teleharness-*`
+  skills without path disclosure and receive `403` for other IDs).
+- **Turn plan API and hub tracking.** Added `GET /teleharness/api/session/:id/plan`, `teleharness.plan` SSE
+  events across ACP, Claude Code, and opencode, automatic plan reset on the next user prompt, and an admin
+  reload fallback from loaded message history. Demo mode (`npm run demo`) includes sample skills and multi-step
+  plans in both English and Russian.
+
 ## [2.6.0] — 2026-11-23
 
 ### Added

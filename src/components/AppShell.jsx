@@ -27,6 +27,7 @@ import ReviewView from "./views/ReviewView.jsx"; // FEAT-20.1
 import WorktreesView from "./views/WorktreesView.jsx"; // FEAT-20.7
 import { startBoard, stopBoard, syncTitleBadge } from "../lib/attention.js";
 import Drawer from "./Drawer.jsx";
+import RightPanel from "./chat/RightPanel.jsx";
 import { t } from "../lib/i18n.js";
 
 const VIEWS = { worktrees: WorktreesView, reviewItem: ReviewView, board: BoardView, home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView, temporal: TemporalView };
@@ -234,8 +235,9 @@ export default function AppShell() {
 
   const View = VIEWS[view] ?? HomeView;
   const conn = connection.value; // R-20: offline / «Связь восстановлена»
+  const hasRightPanel = view === "chat" && Boolean(params?.id);
   return (
-    <div class="shell">
+    <div class={"shell" + (hasRightPanel ? " has-right-panel" : "")}>
       <Drawer view={view} chatId={view === "chat" ? params.id : null} />
       {/* FEAT-03.23: the settings sections share one mount — a section change
           keeps the layout (and unsaved input across a resize, П32.Н8). */}
@@ -260,6 +262,7 @@ export default function AppShell() {
         )}
         <View {...params} />
       </main>
+      {hasRightPanel ? <RightPanel id={params.id} /> : null}
     </div>
   );
 }

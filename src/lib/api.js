@@ -338,7 +338,10 @@ export const api = {
   getProvider: ({ force = false } = {}) => json("GET", force ? "/provider?refresh=1" : "/provider"),
   getAgents: () => json("GET", "/agent"),
   getProjects: () => json("GET", "/project"),
-  getMcp: () => json("GET", "/mcp"),
+  getMcp: (directory) => json("GET", "/mcp" + withDir(directory)),
+  getSkills: (directory) => json("GET", "/skills" + withDir(directory)),
+  getSkill: (id, directory) => json("GET", `/skills/${idPath(id)}` + withDir(directory)),
+  getSessionPlan: (id) => json("GET", `/session/${idPath(id)}/plan`),
   // FEAT-03.22: the caller's own system prompt {text, max}.
   acpCatalog: (refresh=false) => json(refresh ? "POST" : "GET", "/acp/registry"),
   installAcpAgent: agent => json("POST", "/acp/agents/install", {id:agent.id, version:agent.version, confirmed:true}),

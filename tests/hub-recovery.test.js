@@ -428,7 +428,7 @@ test("BUG-07.8: a turn that ends with open todos emits teleharness.turn.incomple
   const inc = c.events().filter((e) => e.type === "teleharness.turn.incomplete");
   assert.equal(inc.length, 1, "once per turn, not per idle frame");
   assert.deepEqual(inc[0].properties, { sessionID: S, reason: "open-todos", todosOpen: 2, todosTotal: 3 });
-  assert.deepEqual(types, ["session.status", "todo.updated", "session.status", "teleharness.turn.incomplete", "session.idle"], "emitted right after the idle that triggered it");
+  assert.deepEqual(types, ["session.status", "todo.updated", "teleharness.plan", "session.status", "teleharness.turn.incomplete", "session.idle"], "emitted right after the idle that triggered it");
 
   // errored turn / all done / queued prompt → no mark
   hub.emit(status(S, "busy"));
