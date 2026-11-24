@@ -11,7 +11,7 @@
 // the content. Path-based pdf/html/media are HEAD-checked first.
 // z-index 45: topmost overlay. Focus is trapped inside and returns to the
 // chip that opened it (FV-18/BUG-01.38).
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
 import { activeSessionDir, fileUrl } from "../../lib/store.js";
 import {
@@ -242,7 +242,7 @@ function PptxView({ data }) {
     return map;
   }, [data]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     return () => {
       for (const list of imgUrls.values()) {
         for (const item of list) {

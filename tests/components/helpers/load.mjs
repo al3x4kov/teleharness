@@ -14,6 +14,7 @@ import path from "node:path";
 import { after } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setupDom } from "./dom.mjs";
+const realSetTimeout = globalThis.setTimeout;
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -128,7 +129,7 @@ export function createHarness(ui) {
       } catch (e) {
         last = e;
       }
-      await new Promise((r) => (i < 20 ? setImmediate(r) : setTimeout(r, 5)));
+      await new Promise((r) => (i < 60 ? setImmediate(r) : realSetTimeout(r, 5)));
     }
     throw new Error(`waitFor: условие не выполнено (${last instanceof Error ? last.message : String(last)})`);
   }
