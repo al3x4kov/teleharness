@@ -58,7 +58,7 @@ function harness() {
     await handle(fakeReq(bodyStr, headers), {}, new URL(`http://127.0.0.1${pathname}`));
     return last;
   }
-  return { dir, dbPath, store, trigger, processed, invoke, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return { dir, dbPath, store, trigger, processed, invoke, cleanup: () => { store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
 
 test("BUG-303: некорректное %-кодирование (%zz) в URL хука даёт 404 без исключения 500", async () => {

@@ -305,9 +305,14 @@ test("BUG-302 POSIX: dirProblem без явного portalRoot запрещае�
   const { fileURLToPath } = await import("node:url");
   const nodePath = (await import("node:path")).default;
   const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "..");
-  assert.equal(paths.dirProblem(repoRoot, { platform: "linux", tenant: true }), "portal");
-  assert.equal(paths.dirProblem(nodePath.posix.join(repoRoot, "data"), { platform: "linux", tenant: true }), "portal");
-  assert.equal(paths.dirProblem(repoRoot + "x", { platform: "linux", tenant: true }), null, "граница сегмента");
-  assert.equal(paths.dirProblem(repoRoot, { platform: "linux", tenant: false }), null, "владелец может");
-  assert.equal(paths.dirProblem(repoRoot, { platform: "linux", tenant: true, portalRoot: null }), null, "явный null отключает");
+  // На текущей ОС проверяем дефолтный portalRoot (вычисляется из import.meta.url без явной передачи)
+  assert.equal(paths.dirProblem(repoRoot, { tenant: true }), "portal");
+  assert.equal(paths.dirProblem(nodePath.join(repoRoot, "data"), { tenant: true }), "portal");
+  assert.equal(paths.dirProblem(repoRoot + "x", { tenant: true }), null, "граница сегмента");
+  assert.equal(paths.dirProblem(repoRoot, { tenant: false }), null, "владелец может");
+  assert.equal(paths.dirProblem(repoRoot, { tenant: true, portalRoot: null }), null, "явный null отключает");
+  // Явная проверка POSIX-логики (platform: linux) — работает одинаково на Windows/macOS/Linux
+  assert.equal(paths.dirProblem("/opt/teleharness", { platform: "linux", tenant: true, portalRoot: "/opt/teleharness" }), "portal");
+  assert.equal(paths.dirProblem("/opt/teleharness/data", { platform: "linux", tenant: true, portalRoot: "/opt/teleharness" }), "portal");
+  assert.equal(paths.dirProblem("/opt/teleharness2", { platform: "linux", tenant: true, portalRoot: "/opt/teleharness" }), null, "POSIX граница сегмента");
 });

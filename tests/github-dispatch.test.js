@@ -395,7 +395,7 @@ test("BUG-303: sweep() проверяет adminStopped, enabled, connectionOk и
       mutate({ store, trigger, setConn: (s) => { connStatus = s; } });
       await dispatcher.sweep();
       return { launches: launches.length, journal: store.journal("u1", trigger.id) };
-    } finally { rmSync(dir, { recursive: true, force: true }); }
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
   };
 
   const cAdmin = await mkCase(({ store }) => store.setSetting("adminStopped", true));
@@ -446,7 +446,7 @@ test("BUG-303: claude_background_per_day считает только пайпы 
     assert.equal(await deliver(trClaude, "c-2", 21), "claude_limit");
     // После исчерпания лимита Claude не-Claude пайп по-прежнему запускается
     assert.equal(await deliver(trGlm, "g-3", 12), "started");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("BUG-303: routes/temporal-triggers — GhError → 4xx/502, PATCH null/[] → 400, replay guards и claudeUsedToday", async () => {
@@ -536,6 +536,6 @@ test("BUG-303: routes/temporal-triggers — GhError → 4xx/502, PATCH null/[] �
     const ok = await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {});
     assert.equal(ok.status, 200);
     assert.equal(ok.body.ok, true);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -128,7 +128,7 @@ export function createHarness(ui) {
       } catch (e) {
         last = e;
       }
-      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => (i < 20 ? setImmediate(r) : setTimeout(r, 5)));
     }
     throw new Error(`waitFor: условие не выполнено (${last instanceof Error ? last.message : String(last)})`);
   }
