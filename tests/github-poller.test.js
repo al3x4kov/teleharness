@@ -202,3 +202,35 @@ test("FEAT-20.3: команда /agent при poll обогащается зад
     assert.equal(launches[0].ev.url, "https://github.com/o/r/issues/9#issuecomment-88");
   } finally { cleanup(store, dir); }
 });
+
+test("BUG-321: modeOf при delivery=webhook с hookId даёт сверку 15 мин (900_000), без hookId — null", () => {
+  const mk = (over) => ({ pollSeconds: 120, enabled: true, hookId: null, delivery: "webhook", ...over });
+  const { store, poller, dir } = rig();
+  try {
+    assert.equal(poller.modeOf(mk({ hookId: 77 })), 900_000, "webhook с настроенным хуком сверяется раз в 15 мин");
+    assert.equal(poller.modeOf(mk({ hookId: null })), null, "webhook без хука не опрашивается");
+  } finally { cleanup(store, dir); }
+});
+
+test("BUG-313: опрос workflow_run из форка передаёт head_repository → fork_pr без запуска", async () => {
+  const f = fakeFetch([
+    ["GET", /\/repos\/o\/r\/issues\?/, jsonResponse(200, [], { etag: 'W/"i0"' })],
+    ["GET", /\/repos\/o\/r\/issues\/comments/, jsonResponse(200, [], { etag: 'W/"c0"' })],
+    ["GET", /\/repos\/o\/r\/actions\/runs/, jsonResponse(200, {
+      total_count: 1,
+      workflow_runs: [{
+        id: 19, name: "CI", conclusion: "failure", head_sha: "s19", head_branch: "patch-1",
+        head_repository: { full_name: "stranger/r", fork: true },
+        pull_requests: [], html_url: "ru", actor: { login: "octo" }, created_at: iso(NOW - 5_000),
+      }],
+    })],
+  ]);
+  const { store, poller, trigger, launches, dir } = rig({ fetchImpl: f });
+  try {
+    const processed = await poller.pollTrigger(trigger);
+    assert.equal(processed, 0);
+    assert.equal(launches.length, 0, "CI из форка не должен запускать агента");
+    assert.ok(store.journal("u1", trigger.id, { limit: 50 }).some((e) => e.decision === "fork_pr"));
+  } finally { cleanup(store, dir); }
+});
+

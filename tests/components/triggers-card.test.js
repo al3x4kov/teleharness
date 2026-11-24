@@ -245,3 +245,35 @@ test("FEAT-20.3 (2.6, T-18): выключение триггера с идущи
   await t$.waitFor(() => byText(el, "button", "Выключить триггер"));
   assert.deepEqual(actions[1], { op: "enable" });
 });
+
+test("BUG-316 + BUG-319: TriggerCard показывает «Очистить очередь» при queuedCount>0 и плашки queue_cleared / agent_loop", async () => {
+  let state = { ...TRIG, enabled: true, activeCount: 1, queuedCount: 2, stormAt: Date.now() - 1000 };
+  let rows = [
+    { id: 91, at: Date.now() - 2000, kind: "push", repo: "octo/hello", decision: "agent_loop", reason: "Коммит агента — счётчик попыток не сброшен", via: "webhook" },
+  ];
+  let clearCalls = 0;
+  installFetch([
+    { method: "GET", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}$`), reply: () => state },
+    { method: "GET", path: "/teleharness/api/temporal/definitions/pipe-1", reply: () => ({ id: "pipe-1", name: "Задача → PR", versions: [{ version: 3 }] }) },
+    { method: "GET", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}/journal`), reply: () => rows },
+    { method: "GET", path: "/teleharness/api/temporal/triggers", reply: () => [state] },
+    {
+      method: "POST", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}/queue/clear$`),
+      reply: () => {
+        clearCalls += 1;
+        state = { ...state, queuedCount: 0, stormAt: null };
+        rows = [{ id: 92, at: Date.now(), kind: "system", repo: "octo/hello", decision: "queue_cleared", reason: "Очередь очищена вручную (удалено: 2)", via: "manual" }, ...rows];
+        return { ok: true, cleared: 2 };
+      },
+    },
+  ]);
+
+  const h = t$.mount(ui.TriggerCard, { id: TID, capabilities: CAPS });
+  const el = h.root;
+  const btn = await t$.waitFor(() => byText(el, "button", "Очистить очередь (2)"));
+  assert.ok(el.textContent.includes("Коммит агента"), "плашка agent_loop отображается");
+  await t$.click(btn);
+  await t$.waitFor(() => clearCalls === 1 && el.textContent.includes("Очередь очищена"));
+  assert.equal(byText(el, "button", "Очистить очередь (2)"), null, "кнопка исчезает после очистки очереди");
+});
+

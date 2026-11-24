@@ -126,3 +126,37 @@ test("FEAT-20.3: repoPermissions — права по репозиторию, 404
   assert.equal(none.kind, "not_found");
   assert.equal(none.permissions, null);
 });
+
+test("BUG-323 п.5: checkConnection — reposTruncated на 10-страничном пределе и при общем дедлайне totalTimeoutMs", async () => {
+  // 10 полных страниц по 100 репозиториев → reposTruncated: true
+  const full10 = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === "/user") return jsonResponse(200, { login: "octocat" });
+    if (u.pathname === "/user/repos") {
+      const p = Number(u.searchParams.get("page"));
+      return jsonResponse(200, Array.from({ length: 100 }, (_, i) => repo(`p${p}r${i}`)));
+    }
+    return jsonResponse(404, {});
+  };
+  const capped = await checkConnection(TOKEN, { fetchImpl: full10 });
+  assert.equal(capped.repos.length, 1000);
+  assert.equal(capped.reposTruncated, true);
+
+  // Медленная вторая страница упирается в общий дедлайн totalTimeoutMs → возвращает первую страницу с reposTruncated: true
+  let pages = 0;
+  const slowPage2 = async (url, opts) => {
+    const u = new URL(url);
+    if (u.pathname === "/user") return jsonResponse(200, { login: "octocat" });
+    if (u.pathname === "/user/repos") {
+      pages += 1;
+      if (pages === 1) return jsonResponse(200, Array.from({ length: 100 }, (_, i) => repo(`r${i}`)));
+      return new Promise((_, rej) => opts.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" }))));
+    }
+    return jsonResponse(404, {});
+  };
+  const timed = await checkConnection(TOKEN, { fetchImpl: slowPage2, totalTimeoutMs: 60 });
+  assert.equal(timed.login, "octocat");
+  assert.equal(timed.repos.length, 100);
+  assert.equal(timed.reposTruncated, true);
+});
+

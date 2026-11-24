@@ -134,3 +134,34 @@ test("POST /teleharness/api/session creates a chat in memory: listed first, empt
   const msgs = await (await fetch(`${base}/teleharness/api/session/${s.id}/message`)).json();
   assert.deepEqual(msgs, []);
 });
+
+// 2.8.1: the demo shows the background-agent fixes of BUG-319 and BUG-323 p.5.
+test("demo 2.8.1 (BUG-319): GET/PUT /teleharness/api/admin/background carry the general limits", async () => {
+  const put = (body) => fetch(`${base}/teleharness/api/admin/background`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const g = await (await fetch(`${base}/teleharness/api/admin/background`)).json();
+  assert.equal(g.userPerDay, 30);
+  assert.equal(g.defaultPerHour, 6);
+  assert.equal(g.defaultQueue, 12);
+  assert.equal(g.claudePerDay, 20);
+  const saved = await put({ userPerDay: 45, defaultPerHour: 9, defaultQueue: 20 });
+  assert.equal(saved.status, 200);
+  const after = await saved.json();
+  assert.equal(after.userPerDay, 45);
+  assert.equal(after.defaultPerHour, 9);
+  assert.equal(after.defaultQueue, 20);
+  try {
+    assert.deepEqual(await (await fetch(`${base}/teleharness/api/admin/background`)).json().then((x) => [x.userPerDay, x.defaultPerHour, x.defaultQueue]), [45, 9, 20]);
+  } finally {
+    const restored = await put({ userPerDay: 30, defaultPerHour: 6, defaultQueue: 12 });
+    assert.equal(restored.status, 200);
+  }
+});
+
+test("demo 2.8.1 (BUG-323 p.5): the GitHub connection and /github/repos report reposTruncated", async () => {
+  const conn = await (await fetch(`${base}/teleharness/api/github/connection`)).json();
+  assert.equal(conn.reposTruncated, true);
+  assert.equal(conn.repos.length, 6);
+  const repos = await (await fetch(`${base}/teleharness/api/github/repos`)).json();
+  assert.equal(repos.reposTruncated, true);
+  assert.deepEqual(repos.repos.map((r) => r.fullName), conn.repos.map((r) => r.fullName));
+});

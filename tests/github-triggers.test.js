@@ -141,3 +141,32 @@ test("FEAT-20.3: decideEvent — порядок решений по design §4/�
   assert.equal(decideEvent({ ...base, activeWorkflowId: "wf-1", queueable: true, queueLen: 20 }).decision, "queue_full");
   assert.equal(decideEvent({ ...base, activeWorkflowId: "wf-1", queueable: true, queuedEventKey: "e" }).decision, "already_running");
 });
+
+test("BUG-316 + BUG-319 + BUG-323 п.2: DEFAULT_LIMITS без maxActive, clearQueue без остановки активных, last_agent_sha, verifyKey", () => {
+  const { store, created } = open();
+  // BUG-319: мёртвого maxActive нет ни в DEFAULT_LIMITS, ни в созданном триггере
+  assert.equal("maxActive" in DEFAULT_LIMITS, false);
+  assert.equal("maxActive" in created.limits, false);
+  // BUG-323 п.2: timingSafeEqual verifyKey
+  assert.equal(store.verifyKey("u1", created.id, created.key), true);
+  assert.equal(store.verifyKey("u1", created.id, "x".repeat(43)), false);
+  assert.equal(store.verifyKey("u1", created.id, ""), false);
+  // BUG-319: clearQueue удаляет только queued, не трогая activeWorkflowId, и сбрасывает шторм
+  store.setActive(created.id, "s1", "wf-live");
+  store.setQueued(created.id, "s1", "ek1");
+  store.setQueued(created.id, "s2", "ek2");
+  store.setSetting(`storm:${created.id}`, { at: 1_700_000_000_000, count: 25 });
+  assert.equal(store.queuedCount(created.id), 2);
+  assert.equal(store.summaries("u1").get(created.id).queuedCount, 2);
+  const cleared = store.clearQueue(created.id);
+  assert.equal(cleared, 2);
+  assert.equal(store.queuedCount(created.id), 0);
+  assert.equal(store.subjectOf(created.id, "s1").activeWorkflowId, "wf-live", "активный запуск не тронут");
+  assert.equal(store.setting(`storm:${created.id}`, null), null, "флаг шторма снят после очистки очереди");
+  // BUG-316: recordAgentBranchPush сохраняет last_agent_sha по repo+branch
+  const sha40 = "a".repeat(40);
+  store.recordAgentBranchPush("octo/hello", "feature/fix", sha40);
+  const sKey = `${created.id}:octo/hello:branch:feature/fix`;
+  assert.equal(store.subjectOf(created.id, sKey).lastAgentSha, sha40);
+});
+

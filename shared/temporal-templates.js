@@ -5,7 +5,7 @@
 // не фигурируют никогда.
 import { DEFAULT_CLAUDE_MODEL } from "./engine.js";
 
-const LIMITS = { maxActive: 1, perHour: 6, queue: 20, userPerDay: 30 };
+const LIMITS = { perHour: 6, queue: 20, userPerDay: 30 };
 const input = (name, type = "string", required = false) => ({ name, type, required });
 // «Починить CI»: коммит агента = попытка; после стольких запусков по одному красному
 // subject — нужен человек (design §4). Одно число для сервера (лимит) и экрана

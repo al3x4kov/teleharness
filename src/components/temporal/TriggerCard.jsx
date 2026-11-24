@@ -13,6 +13,7 @@ const DECISION_META = {
   already_running: { cls: "t-off", icon: "↻" },
   queued: { cls: "t-wait", icon: "…" },
   queue_full: { cls: "t-quota", icon: "⏱" },
+  queue_cleared: { cls: "t-off", icon: "⌫" },
   rate_limited: { cls: "t-quota", icon: "⏱" },
   claude_limit: { cls: "t-quota", icon: "⧗" },
   untrusted_author: { cls: "t-err", icon: "⛔" },
@@ -26,6 +27,7 @@ const DECISION_META = {
   ci_not_failed: { cls: "t-off", icon: "×" },
   ci_logs_unavailable: { cls: "t-err", icon: "✕" },
   ci_attempts_exhausted: { cls: "t-err", icon: "!" },
+  agent_loop: { cls: "t-off", icon: "↺" },
   trigger_disabled: { cls: "t-off", icon: "❚❚" },
   admin_stopped: { cls: "t-err", icon: "⊘" },
   no_connection: { cls: "t-err", icon: "✕" },
@@ -167,6 +169,19 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
               } catch (e) { setNote(errorText(e)); }
               finally { setBusy(false); }
             }}>{t("temporal.tr.enableBtn")}</button>
+          )}
+          {((trig.queuedCount ?? 0) > 0 || trig.stormAt) && (
+            <button class="t-btn" type="button" disabled={busy} onClick={async () => {
+              setBusy(true); setNote("");
+              try {
+                const res = await api.temporalTriggerClearQueue(id);
+                setNote(res?.cleared ? t("temporal.tr.noteQueueClearedCount", { count: res.cleared }) : t("temporal.tr.noteQueueCleared"));
+                await load();
+                await loadJournal();
+                refreshGithubTriggers().catch(() => {});
+              } catch (e) { setNote(errorText(e)); }
+              finally { setBusy(false); }
+            }}>{(trig.queuedCount ?? 0) > 0 ? t("temporal.tr.clearQueueBtnCount", { count: trig.queuedCount }) : t("temporal.tr.clearQueueBtn")}</button>
           )}
         </div>
         {note && <p class="t-lead" role="status">{note}</p>}

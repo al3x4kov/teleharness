@@ -539,3 +539,70 @@ test("BUG-303: routes/temporal-triggers — GhError → 4xx/502, PATCH null/[] �
   } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("BUG-316: 3 подряд ci_failed с промежуточными same-branch push агента (трейлер и lastAgentSha) → agent_loop + ci_attempts_exhausted; push человека → push_reset", async () => {
+  const { store, dispatcher, trigger, launches, dir } = rig();
+  try {
+    const ci = (id, shaVal) => JSON.stringify({
+      action: "completed", repository: { full_name: "octo/hello" }, sender: { login: "octo" },
+      workflow_run: { id, name: "CI", conclusion: "failure", head_branch: "feature/fix", head_sha: shaVal, html_url: "u", pull_requests: [] },
+    });
+    const push = (after, message) => JSON.stringify({
+      ref: "refs/heads/feature/fix", after, repository: { full_name: "octo/hello" },
+      pusher: { name: "octo" }, head_commit: { id: after, message }, commits: [{ id: after, message }],
+    });
+    const sKey = subjectKey(trigger.id, { kind: "ci_failed", repo: "octo/hello", branch: "feature/fix" });
+
+    // Попытка 1
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "ci-1", triggerId: trigger.id, event: "workflow_run", body: ci(1, "s1") }), "started");
+    store.clearActive(trigger.id, sKey);
+    // Агентский push по трейлеру Co-Authored-By <agents@teleharness.local> — НЕ сбрасывает счётчик
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "p-ag-1", triggerId: trigger.id, event: "push", body: push("1".repeat(40), "fix\n\nCo-Authored-By: Claude <agents@teleharness.local>") }), "agent_loop");
+    assert.equal(store.subjectOf(trigger.id, sKey).ciAttempts, 1);
+
+    // Попытка 2
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "ci-2", triggerId: trigger.id, event: "workflow_run", body: ci(2, "s2") }), "started");
+    store.clearActive(trigger.id, sKey);
+    // Агентский push распознаётся и по lastAgentSha без трейлера
+    const sha2 = "2".repeat(40);
+    store.recordAgentBranchPush("octo/hello", "feature/fix", sha2);
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "p-ag-2", triggerId: trigger.id, event: "push", body: push(sha2, "no trailer commit") }), "agent_loop");
+    assert.equal(store.subjectOf(trigger.id, sKey).ciAttempts, 2);
+
+    // Попытка 3 → ci_attempts_exhausted
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "ci-3", triggerId: trigger.id, event: "workflow_run", body: ci(3, "s3") }), "ci_attempts_exhausted");
+    assert.equal(launches.length, 2);
+
+    // Человеческий push сбрасывает счётчик → push_reset, следующий ci_failed снова запускается
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "p-hum", triggerId: trigger.id, event: "push", body: push("3".repeat(40), "real human fix") }), "push_reset");
+    assert.equal(store.subjectOf(trigger.id, sKey).ciAttempts, 0);
+    assert.equal(await dispatcher.processDelivery({ deliveryId: "ci-4", triggerId: trigger.id, event: "workflow_run", body: ci(4, "s4") }), "started");
+    assert.equal(launches.length, 3);
+
+    const j = store.journal("u1", trigger.id, { limit: 50 });
+    assert.ok(j.some((r) => r.decision === "agent_loop"), "agent_loop записан в журнал");
+    assert.ok(j.some((r) => r.decision === "push_reset"), "push_reset записан в журнал");
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("BUG-319 + BUG-320: default_user_per_day из настроек ограничивает запуски; событие и push чужого репозитория → filtered_repo", async () => {
+  const { store, dispatcher, trigger, launches, deliver, dir } = rig();
+  try {
+    // BUG-320: событие чужого репозитория → filtered_repo (без запуска)
+    const foreignIssue = await deliver({ repository: { full_name: "evil/other" } }, "d-foreign-1");
+    assert.equal(foreignIssue, "filtered_repo");
+    const foreignPush = await dispatcher.processDelivery({
+      deliveryId: "d-foreign-push", triggerId: trigger.id, event: "push",
+      body: JSON.stringify({ ref: "refs/heads/main", after: "9".repeat(40), repository: { full_name: "evil/other" }, pusher: { name: "octo" }, head_commit: { id: "9".repeat(40), message: "hi" } }),
+    });
+    assert.equal(foreignPush, "filtered_repo");
+    assert.equal(launches.length, 0);
+
+    // BUG-319: настройка default_user_per_day = 1 ограничивает второй запуск за сутки
+    store.setSetting("default_user_per_day", 1);
+    assert.equal(await deliver({ issue: { number: 10, title: "A", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] } }, "d-lim-1"), "started");
+    assert.equal(await deliver({ issue: { number: 11, title: "B", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] } }, "d-lim-2"), "rate_limited");
+    assert.equal(launches.length, 1);
+  } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+

@@ -184,6 +184,7 @@ export const api = {
   temporalTriggerRotate: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/webhook/rotate", {}),
   temporalTriggerEnable: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/enable", {}),
   temporalTriggerDisable: (id, running = "keep") => json("POST", "/temporal/triggers/" + idPath(id) + "/disable", { running }),
+  temporalTriggerClearQueue: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/queue/clear", {}),
   adminBackground: () => json("GET", "/admin/background"),
   adminUpdateBackground: (body) => json("PUT", "/admin/background", body),
   temporalTemplates: () => json("GET", "/temporal/templates"),

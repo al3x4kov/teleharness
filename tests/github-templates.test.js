@@ -112,3 +112,53 @@ test("FEAT-20.3 2.5: предел попыток «Починить CI» — о�
   assert.equal(shared, CI_ATTEMPTS_MAX, "сервер берёт предел из shared");
   assert.equal(shared, 2, "кр. 15: не более 2 попыток");
 });
+
+test("BUG-317 + BUG-322: parseGithubOrigin/checkGitOrigin и политика Q1-а (Claude только admin, Codex → opencode)", async () => {
+  const { parseGithubOrigin, checkGitOrigin } = await import("../routes/temporal-triggers.js");
+  assert.equal(parseGithubOrigin("https://github.com/octo/hello.git"), "octo/hello");
+  assert.equal(parseGithubOrigin("https://github.com/octo/hello/"), "octo/hello");
+  assert.equal(parseGithubOrigin("git@github.com:octo/hello.git"), "octo/hello");
+  assert.equal(parseGithubOrigin("ssh://git@github.com/octo/hello.git"), "octo/hello");
+  assert.equal(parseGithubOrigin("https://gitlab.com/octo/hello.git"), null);
+
+  const okOrigin = await checkGitOrigin("/proj", "octo/hello", { runGitImpl: async () => ({ code: 0, stdout: "git@github.com:Octo/Hello.git\n" }) });
+  assert.equal(okOrigin.ok, true);
+  const badOrigin = await checkGitOrigin("/proj", "octo/hello", { runGitImpl: async () => ({ code: 0, stdout: "https://github.com/other/shop.git\n" }) });
+  assert.equal(badOrigin.ok, false);
+  assert.equal(badOrigin.reason, "origin_mismatch");
+  assert.ok(badOrigin.message.includes("other/shop") && badOrigin.message.includes("octo/hello"));
+  const noGit = await checkGitOrigin("/proj", "octo/hello", { runGitImpl: async () => ({ code: 128, stdout: "" }) });
+  assert.equal(noGit.ok, false);
+  assert.equal(noGit.reason, "no_origin");
+
+  // Readiness: tenant + claude → блокировка; tenant + codex → рекомендация opencode; tenant + opencode → ready
+  const out = {};
+  const routes = triggerRoutes({
+    sendJson: (_res, status, body) => { out.body = { status, body }; },
+    readJsonBody: async () => out.requested ?? {},
+    store: { list: () => [] },
+    connections: { get: () => ({ login: "octo", status: "ok" }) },
+    engineModels: () => ({ claude: ["claude-haiku-4-5"], codex: ["gpt-5"], opencode: ["zai/glm-5"] }),
+    dirAllowed: () => true,
+    checkOrigin: async (dir, repo) => (repo === "octo/hello" ? { ok: true } : { ok: false, message: `Папка указывает на octo/hello, а выбран репозиторий ${repo}` }),
+    pipelinesEnabled: () => true,
+  });
+  const callReadiness = async (user, body) => {
+    out.requested = body;
+    const r = routes.find((x) => x.method === "POST" && typeof x.path.test === "function" && x.path.test("/teleharness/api/temporal/templates/task-to-pr/readiness"));
+    await r.handler({ res: {}, user, url: new URL("http://x/teleharness/api/temporal/templates/task-to-pr/readiness"), match: ["task-to-pr", "task-to-pr"] });
+    return out.body.body;
+  };
+  const rClaude = await callReadiness({ id: "t1", role: "tenant" }, { directory: "/p", repo: "octo/hello", engine: "claude", model: "claude-haiku-4-5" });
+  assert.equal(rClaude.ready, false);
+  assert.ok(rClaude.problems.some((p) => p.field === "model" && p.message.includes("только администратору")));
+  const rCodex = await callReadiness({ id: "t1", role: "tenant" }, { directory: "/p", repo: "octo/hello", engine: "codex", model: "gpt-5" });
+  assert.equal(rCodex.ready, false);
+  assert.ok(rCodex.problems.some((p) => p.field === "model" && p.message.includes("выберите opencode")));
+  const rOc = await callReadiness({ id: "t1", role: "tenant" }, { directory: "/p", repo: "octo/hello", engine: "opencode", model: "zai/glm-5" });
+  assert.equal(rOc.ready, true);
+  const rMismatch = await callReadiness({ id: "a1", role: "admin" }, { directory: "/p", repo: "other/shop", engine: "claude", model: "claude-haiku-4-5" });
+  assert.equal(rMismatch.ready, false);
+  assert.ok(rMismatch.problems.some((p) => p.field === "directory" && p.message.includes("other/shop")));
+});
+

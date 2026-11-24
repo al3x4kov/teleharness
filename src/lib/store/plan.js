@@ -74,10 +74,26 @@ export function clearPlanOnUserMessage(sessionID, messageID) {
   clearPlan(sessionID);
 }
 
+// BUG-308: in-flight GET /plan requests and the one-shot retry timers of a
+// network failure (no HTTP status) or a 5xx answer.
+const planInFlight = new Set();
+const planRetryTimers = new Map();
+const PLAN_RETRY_DELAY_MS = 5000;
+
+function cancelPlanRetry(sessionID) {
+  const t = planRetryTimers.get(sessionID);
+  if (t != null) {
+    clearTimeout(t);
+    planRetryTimers.delete(sessionID);
+  }
+}
+
 export function forgetPlan(sessionID) {
   if (typeof sessionID !== "string" || !sessionID) return;
+  cancelPlanRetry(sessionID);
   clearPlan(sessionID);
   planLoaded.delete(sessionID);
+  planInFlight.delete(sessionID);
   planSeq.delete(sessionID);
   seenUserMessages.delete(sessionID);
 }
@@ -104,18 +120,50 @@ function planFromHistory(sessionID) {
   return found;
 }
 
-export async function loadPlan(sessionID, { isAdmin } = {}) {
-  if (typeof sessionID !== "string" || !sessionID || planLoaded.has(sessionID)) return;
-  planLoaded.add(sessionID);
+// Reads the plan back from the server (chat open / F5): one request per session
+// per page life once a request succeeds or ends with a final HTTP answer
+// (403/404). BUG-308: a network failure (no err.status) or a 5xx answer does
+// not mark the session loaded — a single deferred retry is scheduled and the
+// live teleharness.plan state is never overwritten with an empty plan.
+export async function loadPlan(sessionID, { isAdmin, retryDelayMs = PLAN_RETRY_DELAY_MS } = {}) {
+  if (typeof sessionID !== "string" || !sessionID || planLoaded.has(sessionID) || planInFlight.has(sessionID)) return;
+  cancelPlanRetry(sessionID);
+  planInFlight.add(sessionID);
   const seq = planSeq.get(sessionID) ?? 0;
   let todos = [];
+  let transientError = false;
   try {
     const r = await api.getSessionPlan(sessionID);
     todos = Array.isArray(r?.todos) ? r.todos : [];
-  } catch {
-    todos = [];
+  } catch (err) {
+    const status = typeof err?.status === "number" ? err.status : null;
+    if (status == null || status >= 500) {
+      transientError = true;
+    } else {
+      todos = []; // 403/404 and other 4xx — a final "no plan" answer
+    }
+  } finally {
+    planInFlight.delete(sessionID);
   }
-  if ((planSeq.get(sessionID) ?? 0) !== seq) return;
+  // A live teleharness.plan or the clearPlan of a new turn arrived while the
+  // HTTP request was in flight — a stale /plan answer must not win.
+  if ((planSeq.get(sessionID) ?? 0) !== seq) {
+    if (!transientError) planLoaded.add(sessionID);
+    return;
+  }
+  if (transientError) {
+    if (retryDelayMs >= 0 && !planRetryTimers.has(sessionID)) {
+      const timer = setTimeout(() => {
+        planRetryTimers.delete(sessionID);
+        if ((planSeq.get(sessionID) ?? 0) !== seq || planLoaded.has(sessionID)) return;
+        loadPlan(sessionID, { isAdmin, retryDelayMs: -1 });
+      }, retryDelayMs);
+      timer.unref?.();
+      planRetryTimers.set(sessionID, timer);
+    }
+    return;
+  }
+  planLoaded.add(sessionID);
   applyPlan(sessionID, todos);
   if (todos.length === 0) {
     planEmptyFromServer.add(sessionID);
@@ -135,6 +183,9 @@ export function hydratePlanFromHistory(sessionID) {
 }
 
 export function resetPlans() {
+  for (const timer of planRetryTimers.values()) clearTimeout(timer);
+  planRetryTimers.clear();
+  planInFlight.clear();
   planLoaded.clear();
   planSeq.clear();
   planEmptyFromServer.clear();

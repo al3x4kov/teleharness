@@ -15,10 +15,10 @@ import { createGithubHookHandler, BODY_LIMIT } from "../lib/github/hook.js";
 const tmp = () => mkdtempSync(path.join(tmpdir(), "gh-hook-"));
 const sign = (secret, body) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
 
-function fakeReq(bodyStr, headers = {}) {
+function fakeReq(bodyStr, headers = {}, ip = "127.0.0.1") {
   const req = new EventEmitter();
   req.headers = headers;
-  req.socket = { remoteAddress: "127.0.0.1" };
+  req.socket = { remoteAddress: ip };
   req.resume = () => {};
   setImmediate(() => {
     const buf = Buffer.from(bodyStr, "utf8");
@@ -53,9 +53,9 @@ function harness() {
     repo: "octo/hello",
     kinds: ["issue_labeled"],
   });
-  async function invoke(pathname, bodyStr, headers = {}) {
+  async function invoke(pathname, bodyStr, headers = {}, ip = "127.0.0.1") {
     last = null;
-    await handle(fakeReq(bodyStr, headers), {}, new URL(`http://127.0.0.1${pathname}`));
+    await handle(fakeReq(bodyStr, headers, ip), {}, new URL(`http://127.0.0.1${pathname}`));
     return last;
   }
   return { dir, dbPath, store, trigger, processed, invoke, cleanup: () => { store.close(); rmSync(dir, { recursive: true, force: true }); } };
@@ -146,3 +146,28 @@ test("ping → 200, неверная подпись HMAC → 401 + bad_signature
     h.cleanup();
   }
 });
+
+test("BUG-323 п.1: флуд с неверной подписью HMAC не расходует perKey лимит валидных доставок", async () => {
+  const h = harness();
+  try {
+    const payload = JSON.stringify({ action: "labeled", issue: { number: 7 } });
+    // 130 запросов с битым HMAC с разных IP (свыше perKey=120/мин) не должны блокировать валидный запрос
+    for (let i = 0; i < 130; i++) {
+      const bad = await h.invoke(`/teleharness/hooks/github/${h.trigger.key}`, payload, {
+        "x-github-event": "issues",
+        "x-github-delivery": `bad-${i}`,
+        "x-hub-signature-256": "sha256=" + "0".repeat(64),
+      }, `10.0.0.${(i % 200) + 1}`);
+      assert.equal(bad.status, 401);
+    }
+    const valid = await h.invoke(`/teleharness/hooks/github/${h.trigger.key}`, payload, {
+      "x-github-event": "issues",
+      "x-github-delivery": "valid-after-flood",
+      "x-hub-signature-256": sign(h.trigger.secret, payload),
+    }, "192.168.10.1");
+    assert.equal(valid.status, 202, "валидная доставка после флуда битых подписей должна приниматься (202)");
+  } finally {
+    h.cleanup();
+  }
+});
+

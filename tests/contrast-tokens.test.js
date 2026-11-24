@@ -87,10 +87,23 @@ const noteColor = (() => {
   return own[1];
 })();
 
+// BUG-310: контраст подписей правой панели и модалки скилла (src/components/right-panel.css)
+const rpCss = read("src/components/right-panel.css");
+const rpColor = (selector) => {
+  const own = blockAfter(rpCss, `\n${selector} {`).match(/color:\s*([^;]+);/);
+  assert.ok(own, `нет color у ${selector} в right-panel.css`);
+  return own[1];
+};
+const RP_PAIRS = [
+  ["правая панель: пустое состояние (.rp-empty на --bg)", rpColor(".rp-empty"), ["var(--bg)"]],
+  ["правая панель: подсказка плана (.rp-plan-hint на --bg)", rpColor(".rp-plan-hint"), ["var(--bg)"]],
+  ["правая панель: путь скилла в модалке (.rp-modal-path на --bg)", rpColor(".rp-modal-path"), ["var(--bg)"]],
+];
+
 for (const [theme, t] of Object.entries(THEMES)) {
-  test(`BUG-264 п.4: контраст обычного текста ≥ 4.5:1 — тема ${theme}`, () => {
+  test(`BUG-264 п.4 + BUG-310: контраст обычного текста ≥ 4.5:1 — тема ${theme}`, () => {
     const bad = [];
-    for (const [where, fg, bg] of PAIRS) {
+    for (const [where, fg, bg] of [...PAIRS, ...RP_PAIRS]) {
       const cr = contrast(fg === "NOTE" ? noteColor : fg, bg, t);
       if (cr < 4.5) bad.push(`${where}: ${cr.toFixed(2)}`);
     }
@@ -101,3 +114,4 @@ for (const [theme, t] of Object.entries(THEMES)) {
 test("BUG-264 п.4: светлые токены одинаковы для data-theme=light и системной светлой темы", () => {
   for (const k of ["text-2", "warning", "error", "bg", "surface", "input", "drawer-bg"]) assert.equal(THEMES["light (системная)"][k], THEMES.light[k], k);
 });
+

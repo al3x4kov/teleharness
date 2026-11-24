@@ -20,16 +20,27 @@ function expiryText(ts) {
 export default function BackgroundAgentsSection() {
   const [data, setData] = useState(null);
   const [limitInput, setLimitInput] = useState("10");
+  const [userPerDayInput, setUserPerDayInput] = useState("30");
+  const [perHourInput, setPerHourInput] = useState("6");
+  const [queueInput, setQueueInput] = useState("20");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+
+  // BUG-319: one server response feeds every input of the admin card.
+  function syncInputs(res) {
+    setLimitInput(String(res?.claudePerDay ?? 10));
+    setUserPerDayInput(String(res?.userPerDay ?? 30));
+    setPerHourInput(String(res?.defaultPerHour ?? 6));
+    setQueueInput(String(res?.defaultQueue ?? 20));
+  }
 
   async function load() {
     setError("");
     try {
       const res = await api.adminBackground();
       setData(res);
-      setLimitInput(String(res?.claudePerDay ?? 10));
+      syncInputs(res);
     } catch (e) {
       setError(e?.message || t("bgAdmin.errLoad"));
     }
@@ -46,6 +57,7 @@ export default function BackgroundAgentsSection() {
       const next = !data.adminStopped;
       const res = await api.adminUpdateBackground({ adminStopped: next });
       setData(res);
+      syncInputs(res);
       setNote(next ? t("bgAdmin.noteStopped") : t("bgAdmin.noteResumed"));
     } catch (e) {
       setError(e?.message || t("bgAdmin.errToggle"));
@@ -67,10 +79,43 @@ export default function BackgroundAgentsSection() {
     try {
       const res = await api.adminUpdateBackground({ claudePerDay: n });
       setData(res);
-      setLimitInput(String(res.claudePerDay));
+      syncInputs(res);
       setNote(t("bgAdmin.noteLimitSaved", { limit: res.claudePerDay }));
     } catch (e) {
       setError(e?.message || t("bgAdmin.errSaveLimit"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // BUG-319: per-user daily limit + rate/queue defaults for new triggers.
+  async function saveGeneralLimits(ev) {
+    ev.preventDefault();
+    const userPerDay = Number(userPerDayInput);
+    const defaultPerHour = Number(perHourInput);
+    const defaultQueue = Number(queueInput);
+    if (!Number.isInteger(userPerDay) || userPerDay < 1 || userPerDay > 500) {
+      setError(t("bgAdmin.errUserPerDayRange"));
+      return;
+    }
+    if (!Number.isInteger(defaultPerHour) || defaultPerHour < 1 || defaultPerHour > 60) {
+      setError(t("bgAdmin.errPerHourRange"));
+      return;
+    }
+    if (!Number.isInteger(defaultQueue) || defaultQueue < 1 || defaultQueue > 100) {
+      setError(t("bgAdmin.errQueueRange"));
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNote("");
+    try {
+      const res = await api.adminUpdateBackground({ userPerDay, defaultPerHour, defaultQueue });
+      setData(res);
+      syncInputs(res);
+      setNote(t("bgAdmin.noteLimitsSaved"));
+    } catch (e) {
+      setError(e?.message || t("bgAdmin.errSaveLimits"));
     } finally {
       setBusy(false);
     }
@@ -129,6 +174,54 @@ export default function BackgroundAgentsSection() {
             style="width:110px"
           />
           <button class="t-btn t-primary" type="submit" disabled={busy}>{t("common.save")}</button>
+        </div>
+      </form>
+
+      <form class="t-card" onSubmit={saveGeneralLimits}>
+        <b>{t("bgAdmin.generalTitle")}</b>
+        <p class="t-muted t-small">{t("bgAdmin.generalDesc")}</p>
+        <div class="t-row">
+          <label class="t-small" for="bg-user-per-day">{t("bgAdmin.userPerDayLabel")}</label>
+          <input
+            id="bg-user-per-day"
+            class="t-in"
+            type="number"
+            min="1"
+            max="500"
+            step="1"
+            value={userPerDayInput}
+            onInput={(e) => setUserPerDayInput(e.currentTarget.value)}
+            style="width:96px"
+          />
+        </div>
+        <div class="t-row" style="margin-top:8px">
+          <label class="t-small" for="bg-default-per-hour">{t("bgAdmin.perHourLabel")}</label>
+          <input
+            id="bg-default-per-hour"
+            class="t-in"
+            type="number"
+            min="1"
+            max="60"
+            step="1"
+            value={perHourInput}
+            onInput={(e) => setPerHourInput(e.currentTarget.value)}
+            style="width:96px"
+          />
+        </div>
+        <div class="t-row" style="margin-top:8px">
+          <label class="t-small" for="bg-default-queue">{t("bgAdmin.queueLabel")}</label>
+          <input
+            id="bg-default-queue"
+            class="t-in"
+            type="number"
+            min="1"
+            max="100"
+            step="1"
+            value={queueInput}
+            onInput={(e) => setQueueInput(e.currentTarget.value)}
+            style="width:96px"
+          />
+          <button class="t-btn t-primary" type="submit" disabled={busy}>{t("bgAdmin.saveLimitsBtn")}</button>
         </div>
       </form>
 

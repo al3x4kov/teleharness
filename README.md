@@ -288,7 +288,7 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Push notifications** | Get notified when a long turn is done or an agent needs your decision (Web Push, VAPID). |
 | **Phone pairing by QR** | Settings → Connect a phone shows a one-time QR code (valid 10 minutes); scan it and the phone is signed in to your account — no token typing. Needs `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/phone-light-pair.png" alt="Connect a phone: QR code, expiry, one-time link and Copy" width="180"> |
 | **Multi-user** | Admin and users with own folders, system prompts, MCP sets, upload and voice quotas, rate limits. |
-| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.8.0, opencode 2.2.6, Claude Code" width="180"> |
+| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.8.1, opencode 2.2.6, Claude Code" width="180"> |
 | **Mobile-first** | Built for iOS Safari and Android Chrome (standalone PWA): native touch text selection without virtual-keyboard jumps, one-tap Copy on both user and assistant messages, keyboard-aware layout, safe areas, light and dark themes, English and Russian UI. |
 | **Zero runtime dependencies** | The backend is plain Node.js stdlib. |
 
@@ -327,7 +327,7 @@ found (and how to install the missing ones) and prints the admin token. Options:
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.1 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -346,7 +346,7 @@ claude setup-token                 # Claude engine: put the token into .env as C
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.1 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 

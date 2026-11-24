@@ -7,14 +7,23 @@
 import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import http from "node:http";
 import { spawnPortal } from "./helpers/spawn-server.mjs";
 import { startFakeOpencode } from "./helpers/fake-opencode.mjs";
 
 const ADMIN = "github-trg-admin-" + "a".repeat(40);
 const GH_TOKEN = "ghtest_alice_token_0123456789abcdefghijklmnop";
+function initGitOrigin(dir, remoteUrl) {
+  mkdirSync(dir, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: dir });
+  execFileSync("git", ["remote", "add", "origin", remoteUrl], { cwd: dir });
+}
 // Локальный GitHub: /user и хуки octo/hello; octo/locked — нет права Webhooks.
 function startFakeGithub() {
+  const deletedHooks = [];
   const srv = http.createServer((req, res) => {
     const ok = (req.headers.authorization ?? "") === `Bearer ${GH_TOKEN}`;
     const p = (req.url ?? "").split("?")[0]; // pathname без query
@@ -30,14 +39,14 @@ function startFakeGithub() {
     if (p === "/repos/octo/hello/hooks/77/pings") return res.writeHead(204), res.end();
     if (p === "/repos/octo/hello/hooks/77" && req.method === "GET") return json(200, { id: 77, active: true, config: { url: "u" } });
     if (p === "/repos/octo/hello/hooks/77" && req.method === "PATCH") { let b = ""; req.on("data", (c) => { b += c; }); req.on("end", () => json(200, { id: 77, active: true, config: JSON.parse(b || "{}").config ?? {} })); return; }
-    if (p === "/repos/octo/hello/hooks/77" && req.method === "DELETE") return res.writeHead(204), res.end();
+    if (p === "/repos/octo/hello/hooks/77" && req.method === "DELETE") { deletedHooks.push(77); return res.writeHead(204), res.end(); }
     if (p.startsWith("/repos/octo/hello/issues") || p.includes("actions/runs") || p.includes("issues/comments")) return json(200, p.includes("actions/runs") ? { total_count: 0, workflow_runs: [] } : [], { etag: 'W/"empty"' });
     json(404, { message: "Not Found" });
   });
-  return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ srv, url: `http://127.0.0.1:${srv.address().port}` })));
+  return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ srv, url: `http://127.0.0.1:${srv.address().port}`, deletedHooks })));
 }
 
-let up, srv, gh, alice, bob, pipeId;
+let up, srv, gh, alice, bob, pipeId, lockedPipeId, helloDir, nonGitDir;
 const base = "/teleharness/api/temporal/triggers";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, ms = 10000) {
@@ -68,11 +77,27 @@ before(async () => {
   srv = await spawnPortal({ upstream: up.url, env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_TEMPORAL_PIPELINES: "1", TELEHARNESS_PUBLIC_URL: "http://127.0.0.1:1/teleharness", TELEHARNESS_GITHUB_API: gh.url } });
   alice = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "github-alice" } })).json();
   bob = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "github-bob" } })).json();
+  helloDir = path.join(alice.user.directories[0], "hello-repo");
+  initGitOrigin(helloDir, "https://github.com/octo/hello.git");
+  const lockedDir = path.join(alice.user.directories[0], "locked-repo");
+  initGitOrigin(lockedDir, "https://github.com/octo/locked.git");
+  nonGitDir = path.join(alice.user.directories[0], "plain-dir");
+  mkdirSync(nonGitDir, { recursive: true });
+  const patchRes = await api(`/teleharness/api/admin/users/${alice.user.id}`, { method: "PATCH", body: { directories: [helloDir, lockedDir, nonGitDir] } });
+  assert.equal(patchRes.status, 200, await patchRes.clone().text());
   // Опубликованный пайп — цель триггера (черновик с шагом согласования + publish).
-  const draft = { name: "Реагер", directory: alice.user.directories[0], inputs: [], steps: [{ id: "wait", name: "Решение", type: "approval", dependsOn: [] }] };
-  const created = await (await api("/teleharness/api/temporal/definitions", { token: alice.token, method: "POST", body: { draft } })).json();
+  const draft = { name: "Реагер", directory: helloDir, inputs: [], steps: [{ id: "wait", name: "Решение", type: "approval", dependsOn: [] }] };
+  const createdRes = await api("/teleharness/api/temporal/definitions", { token: alice.token, method: "POST", body: { draft } });
+  assert.equal(createdRes.status, 201, await createdRes.clone().text());
+  const created = await createdRes.json();
   await api(`/teleharness/api/temporal/definitions/${created.id}/publish`, { token: alice.token, method: "POST", body: { revision: 1 } });
   pipeId = created.id;
+  const lockedDraft = { name: "Locked", directory: lockedDir, inputs: [], steps: [{ id: "wait", name: "Решение", type: "approval", dependsOn: [] }] };
+  const lockedRes = await api("/teleharness/api/temporal/definitions", { token: alice.token, method: "POST", body: { draft: lockedDraft } });
+  assert.equal(lockedRes.status, 201, await lockedRes.clone().text());
+  const lockedCreated = await lockedRes.json();
+  await api(`/teleharness/api/temporal/definitions/${lockedCreated.id}/publish`, { token: alice.token, method: "POST", body: { revision: 1 } });
+  lockedPipeId = lockedCreated.id;
 });
 after(async () => { await srv?.stop(); await up?.close(); gh?.srv.close(); });
 
@@ -193,7 +218,7 @@ test("webhook: setup/ping/recheck/delete на стороне GitHub; право 
   assert.equal(put.status, 200, await put.clone().text());
 
   // нет права Webhooks (fake отдаёт 403 на hooks) → 403
-  const locked = await (await api(base, { token: alice.token, method: "POST", body: { definitionId: pipeId, repo: "octo/locked", kinds: ["issue_labeled"] } })).json();
+  const locked = await (await api(base, { token: alice.token, method: "POST", body: { definitionId: lockedPipeId, repo: "octo/locked", kinds: ["issue_labeled"] } })).json();
   assert.equal((await api(`${base}/${locked.id}/webhook`, { token: alice.token, method: "POST", body: { key: locked.key } })).status, 403);
 
   // bob без подключения и не владелец → 404 (чужой не отличим от несуществующего)
@@ -292,5 +317,106 @@ test("FEAT-20.3 (2.6, кр. 20): GET/PUT /teleharness/api/admin/background — �
   assert.equal(p2.status, 200);
   assert.equal((await p2.json()).adminStopped, false);
 });
+
+test("BUG-312 + BUG-317: readiness проверяет dirAllowed и git origin (N-29); POST /triggers блокирует несовпадение origin (422)", async () => {
+  // Чужая папка для alice → блокирующая причина dirAllowed (BUG-312)
+  const foreign = await (await api("/teleharness/api/temporal/templates/task-to-pr/readiness", {
+    token: alice.token, method: "POST", body: { directory: bob.user.directories[0], repo: "octo/hello", engine: "opencode" },
+  })).json();
+  assert.equal(foreign.ready, false);
+  assert.ok(foreign.problems.some((p) => p.field === "directory" && p.message.includes("недоступна")));
+
+  // Не-git папка → отдельная причина (BUG-317)
+  const noGit = await (await api("/teleharness/api/temporal/templates/task-to-pr/readiness", {
+    token: alice.token, method: "POST", body: { directory: nonGitDir, repo: "octo/hello", engine: "opencode" },
+  })).json();
+  assert.equal(noGit.ready, false);
+  assert.ok(noGit.problems.some((p) => p.field === "directory" && p.message.includes("нет git-репозитория")));
+
+  // origin ≠ repo → блокирующая причина N-29 с обоими именами (BUG-317)
+  const mismatch = await (await api("/teleharness/api/temporal/templates/task-to-pr/readiness", {
+    token: alice.token, method: "POST", body: { directory: helloDir, repo: "other/shop", engine: "opencode" },
+  })).json();
+  assert.equal(mismatch.ready, false);
+  assert.ok(mismatch.problems.some((p) => p.field === "directory" && p.message.includes("octo/hello") && p.message.includes("other/shop")));
+
+  // Совпадающий origin — проблем по directory/repo нет
+  const okReadiness = await (await api("/teleharness/api/temporal/templates/task-to-pr/readiness", {
+    token: alice.token, method: "POST", body: { directory: helloDir, repo: "octo/hello", engine: "opencode" },
+  })).json();
+  assert.ok(!okReadiness.problems.some((p) => p.field === "directory" || p.field === "repo"));
+
+  // POST /triggers на комбинации «репо B, папка origin A» — 422
+  const badTrig = await api(base, { token: alice.token, method: "POST", body: { definitionId: pipeId, repo: "other/shop", kinds: ["issue_labeled"] } });
+  assert.equal(badTrig.status, 422);
+});
+
+test("BUG-322: Q1-а — Claude в фоновых запусках доступен только admin (readiness + POST /triggers 403)", async () => {
+  // Readiness для тенанта с engine=claude — блокировка
+  const rTenant = await (await api("/teleharness/api/temporal/templates/task-to-pr/readiness", {
+    token: alice.token, method: "POST", body: { directory: helloDir, repo: "octo/hello", engine: "claude" },
+  })).json();
+  assert.equal(rTenant.ready, false);
+  assert.ok(rTenant.problems.some((p) => p.field === "model" && p.message.includes("только администратору")));
+
+  // Пайп с шагом Claude у тенанта (даже если движок claude выдан пользователю) → POST /triggers даёт 403
+  await api(`/teleharness/api/admin/users/${alice.user.id}`, { method: "PATCH", body: { engines: ["opencode", "claude"] } });
+  const claudeDraft = {
+    name: "ClaudePipe", directory: helloDir, inputs: [],
+    steps: [{ id: "m", name: "M", type: "model", engine: "claude", model: "claude-sonnet-4-6", instruction: "ok", dependsOn: [], timeoutSeconds: 60, maxAttempts: 1 }],
+  };
+  const cDefRes = await api("/teleharness/api/temporal/definitions", { token: alice.token, method: "POST", body: { draft: claudeDraft } });
+  assert.equal(cDefRes.status, 201, await cDefRes.clone().text());
+  const cDef = await cDefRes.json();
+  await api(`/teleharness/api/temporal/definitions/${cDef.id}/publish`, { token: alice.token, method: "POST", body: { revision: 1 } });
+  const denied = await api(base, { token: alice.token, method: "POST", body: { definitionId: cDef.id, repo: "octo/hello", kinds: ["issue_labeled"] } });
+  assert.equal(denied.status, 403);
+
+  // Admin на своём пайпе с Claude — 201
+  const aDef = await (await api("/teleharness/api/temporal/definitions", { token: ADMIN, method: "POST", body: { draft: claudeDraft } })).json();
+  await api(`/teleharness/api/temporal/definitions/${aDef.id}/publish`, { token: ADMIN, method: "POST", body: { revision: 1 } });
+  const allowed = await api(base, { token: ADMIN, method: "POST", body: { definitionId: aDef.id, repo: "octo/hello", kinds: ["issue_labeled"] } });
+  assert.equal(allowed.status, 201, await allowed.clone().text());
+});
+
+test("BUG-319 + BUG-323 п.4: admin userPerDay/defaultPerHour/defaultQueue; POST /:id/queue/clear; DELETE чистит webhook в GitHub", async () => {
+  // Admin настраивает userPerDay, defaultPerHour, defaultQueue
+  const p = await api("/teleharness/api/admin/background", { token: ADMIN, method: "PUT", body: { userPerDay: 45, defaultPerHour: 9, defaultQueue: 12 } });
+  assert.equal(p.status, 200);
+  const bg = await p.json();
+  assert.equal(bg.userPerDay, 45);
+  assert.equal(bg.defaultPerHour, 9);
+  assert.equal(bg.defaultQueue, 12);
+
+  // Новый триггер без явных limits наследует дефолты и НЕ содержит мёртвого maxActive
+  const created = await (await api(base, { token: alice.token, method: "POST", body: { definitionId: pipeId, repo: "octo/hello", kinds: ["issue_labeled"] } })).json();
+  assert.equal(created.limits.perHour, 9);
+  assert.equal(created.limits.queue, 12);
+  assert.equal("maxActive" in created.limits, false);
+
+  // Очистка очереди (даже пустой) возвращает 200 и пишет queue_cleared в журнал
+  const clr = await api(`${base}/${created.id}/queue/clear`, { token: alice.token, method: "POST", body: {} });
+  assert.equal(clr.status, 200);
+  const clrBody = await clr.json();
+  assert.equal(clrBody.ok, true);
+  assert.equal(clrBody.cleared, 0);
+  const j = await (await api(`${base}/${created.id}/journal`, { token: alice.token })).json();
+  assert.ok(j.some((r) => r.decision === "queue_cleared"));
+
+  // Чужой пользователь не может очистить очередь → 404
+  assert.equal((await api(`${base}/${created.id}/queue/clear`, { token: bob.token, method: "POST", body: {} })).status, 404);
+
+  // BUG-323 п.4: ставим webhook (id=77) и удаляем триггер — DELETE дёргает GitHub DELETE /hooks/77
+  const setup = await api(`${base}/${created.id}/webhook`, { token: alice.token, method: "POST", body: { key: created.key } });
+  assert.equal(setup.status, 200);
+  const beforeDelCount = gh.deletedHooks.length;
+  const del = await api(`${base}/${created.id}`, { token: alice.token, method: "DELETE" });
+  assert.equal(del.status, 200);
+  assert.equal(gh.deletedHooks.length, beforeDelCount + 1, "удаление триггера должно best-effort удалить webhook на GitHub");
+
+  // Восстановим дефолты admin
+  await api("/teleharness/api/admin/background", { token: ADMIN, method: "PUT", body: { userPerDay: 30, defaultPerHour: 6, defaultQueue: 20 } });
+});
+
 
 });

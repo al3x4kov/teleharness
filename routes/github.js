@@ -16,6 +16,7 @@ export function face(row, { now = () => Date.now() } = {}) {
     checkedAt: row.checkedAt,
     expiringSoon: !!(row.expiresAt && row.expiresAt - now() <= WARN_MS),
     repos: row.permissions?.repos ?? [],
+    reposTruncated: Boolean(row.permissions?.reposTruncated),
   };
 }
 
@@ -78,7 +79,7 @@ export function githubRoutes(deps) {
         tokenEnc: secrets.encrypt(token),
         tokenLast4: secrets.last4(token),
         expiresAt: verified.expiresAt,
-        permissions: { repos: verified.repos },
+        permissions: { repos: verified.repos, reposTruncated: Boolean(verified.reposTruncated) },
         status: "ok",
         checkedAt: Date.now(),
       });
@@ -102,7 +103,10 @@ export function githubRoutes(deps) {
         throw error;
       }
       const updated = connections.update(user.id, {
-        status: "ok", expiresAt: verified.expiresAt, permissions: { repos: verified.repos }, checkedAt: Date.now(),
+        status: "ok",
+        expiresAt: verified.expiresAt,
+        permissions: { repos: verified.repos, reposTruncated: Boolean(verified.reposTruncated) },
+        checkedAt: Date.now(),
       });
       sendJson(res, 200, face(updated));
     }),
@@ -116,7 +120,12 @@ export function githubRoutes(deps) {
     route("GET", `${base}/repos`, async ({ res, user }) => {
       const row = connections.get(user.id);
       if (!row) throw fail(404, "Подключение GitHub не настроено");
-      sendJson(res, 200, { login: row.login, repos: row.permissions?.repos ?? [], checkedAt: row.checkedAt });
+      sendJson(res, 200, {
+        login: row.login,
+        repos: row.permissions?.repos ?? [],
+        reposTruncated: Boolean(row.permissions?.reposTruncated),
+        checkedAt: row.checkedAt,
+      });
     }),
   ];
 }

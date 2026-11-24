@@ -7,7 +7,7 @@
 // false = anonymous (LoginView instead of the shell), user = normal shell.
 // Tenant management lives in Настройки (admin-only AccessSection, 2026-11-01):
 // the «Доступ» tab is gone; /access deep links redirect there.
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { accessTarget, useRoute, navigate } from "../lib/router.js";
 import { startKbTrace } from "../lib/kb-trace.js";
 import { installAppUpdate } from "../lib/app-update.js";
@@ -31,9 +31,39 @@ import RightPanel from "./chat/RightPanel.jsx";
 import { t } from "../lib/i18n.js";
 
 const VIEWS = { worktrees: WorktreesView, reviewItem: ReviewView, board: BoardView, home: HomeView, projects: ProjectsView, project: ProjectView, settings: SettingsView, chat: ChatView, git: GitView, temporal: TemporalView };
+const RIGHT_PANEL_MQ = "(min-width: 1024px)";
+
+// BUG-307: правая панель видна только на ПК (>= 1024 px); на телефоне компонент
+// не монтируется, чтобы не гонять холостые /mcp, /skills (с ретраями) и /plan.
+export function useRightPanelViewport() {
+  const read = () => {
+    if (typeof window === "undefined") return false;
+    if (typeof window.matchMedia === "function") return Boolean(window.matchMedia(RIGHT_PANEL_MQ)?.matches);
+    return (window.innerWidth ?? 0) >= 1024;
+  };
+  const [wide, setWide] = useState(read);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const mq = window.matchMedia(RIGHT_PANEL_MQ);
+    if (!mq) return undefined;
+    setWide(Boolean(mq.matches));
+    const onChange = (e) => setWide(Boolean(e?.matches ?? mq.matches));
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    }
+    if (typeof mq.addListener === "function") {
+      mq.addListener(onChange);
+      return () => mq.removeListener(onChange);
+    }
+    return undefined;
+  }, []);
+  return wide;
+}
 
 export default function AppShell() {
   const { view, path, params } = useRoute();
+  const isWideViewport = useRightPanelViewport();
 
   // Navigation wiring lives here, not in HomeView: createAndOpen() is also
   // called from ProjectView (and any future screen) — AppShell is the only
@@ -258,7 +288,7 @@ export default function AppShell() {
 
   const View = VIEWS[view] ?? HomeView;
   const conn = connection.value; // R-20: offline / «Связь восстановлена»
-  const hasRightPanel = view === "chat" && Boolean(params?.id);
+  const hasRightPanel = view === "chat" && Boolean(params?.id) && isWideViewport;
   return (
     <div class={"shell" + (hasRightPanel ? " has-right-panel" : "")}>
       <Drawer view={view} chatId={view === "chat" ? params.id : null} />

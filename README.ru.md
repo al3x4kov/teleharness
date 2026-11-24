@@ -290,7 +290,7 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 | **Push-уведомления** | Уведомление, когда долгий ход завершился или агенту нужно ваше решение (Web Push, VAPID). |
 | **Телефон по QR-коду** | Настройки → Подключить телефон показывают одноразовый QR-код (действует 10 минут): навели камеру — телефон вошёл под вашей учётной записью без ввода токена. Нужен `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/ru/phone-light-pair.png" alt="Подключение телефона: QR-код, срок действия, одноразовая ссылка и копирование" width="180"> |
 | **Несколько пользователей** | Админ и пользователи: свои папки, системный промпт, набор MCP, квоты, rate-limit. |
-| **Настройки → О приложении** | Точная версия портала и каждого движка в одном месте — удобно, когда создаёте issue.<br><img src="docs/screenshots/ru/phone-light-settings-about.png" alt="Настройки, страница «О приложении»: Teleharness 2.8.0, opencode 2.2.6, Claude Code" width="180"> |
+| **Настройки → О приложении** | Точная версия портала и каждого движка в одном месте — удобно, когда создаёте issue.<br><img src="docs/screenshots/ru/phone-light-settings-about.png" alt="Настройки, страница «О приложении»: Teleharness 2.8.1, opencode 2.2.6, Claude Code" width="180"> |
 | **Mobile-first** | Сделано под iOS Safari и Android Chrome (standalone PWA): нативное выделение текста касанием без прыжка экранной клавиатуры, кнопка «Копировать» у сообщений пользователя и ассистента, учёт клавиатуры, safe-area, светлая и тёмная темы, русский и английский интерфейс. |
 | **Без runtime-зависимостей** | Бэкенд — чистый stdlib Node.js. |
 
@@ -329,7 +329,7 @@ npx github:al3x4kov/teleharness            # → http://127.0.0.1:4180/teleharne
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.1 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -348,7 +348,7 @@ claude setup-token                 # движок Claude: токен — в .env
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.1 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 

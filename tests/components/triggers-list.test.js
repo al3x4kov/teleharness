@@ -116,3 +116,22 @@ test("TemporalView: #/temporal/triggers (без id) рендерит списо�
   await t$.waitFor(() => byText(h.root, ".t-trig", "Задача → PR"));
   assert.equal(byText(h.root, ".t-empty", "Триггер не найден"), null);
 });
+
+test("BUG-319: при шторме баннер показывает кнопку «Очистить очередь» и вызывает POST /:id/queue/clear", async () => {
+  const cleared = [];
+  let row = trig({ stormAt: Date.now() - 1000, queuedCount: 3 });
+  installFetch([
+    { method: "GET", path: "/teleharness/api/github/connection", reply: () => CONN_OK },
+    { method: "GET", path: "/teleharness/api/temporal/triggers", reply: () => [row] },
+    { method: "GET", path: "/teleharness/api/temporal/definitions", reply: () => DEF },
+    { method: "GET", path: "/teleharness/api/temporal/templates", reply: () => ({ templates: [], readiness: {} }) },
+    { method: "POST", path: `/teleharness/api/temporal/triggers/${row.id}/queue/clear`, reply: () => { cleared.push(row.id); row = { ...row, stormAt: null, queuedCount: 0 }; return { ok: true, cleared: 3 }; } },
+  ]);
+  const h = t$.mount(ui.TriggersList, { capabilities: CAPS });
+  const btn = await t$.waitFor(() => byText(h.root, "button", "Очистить очередь"));
+  assert.ok(btn, "кнопка очистки очереди есть в баннере шторма");
+  await t$.click(btn);
+  await t$.waitFor(() => cleared.length === 1);
+  assert.equal(cleared[0], row.id);
+});
+

@@ -423,3 +423,52 @@ test("RightPanel & SkillModal localize into English when lang is en", async () =
     ui.setLang("ru");
   }
 });
+
+test("BUG-310: SkillModal обрабатывает 403, 404 и сетевой сбой с понятной ошибкой и кнопкой «Повторить»", async () => {
+  const skills = [{ id: "teleharness-xlsx", name: "teleharness-xlsx", description: "Excel-таблицы" }];
+  let mode = "403";
+  installFetch([
+    ...envRoutes({ mcpBody: SEVEN, skillsBody: skills }),
+    {
+      method: "GET",
+      path: /^\/teleharness\/api\/skills\/(.+)$/,
+      reply: () => {
+        if (mode === "403") return { status: 403, body: { error: "Access to this skill is denied", code: "skill_forbidden" } };
+        if (mode === "404") return { status: 404, body: { error: "Skill not found", code: "skill_not_found" } };
+        if (mode === "net") throw new TypeError("Failed to fetch");
+        return { id: "teleharness-xlsx", name: "teleharness-xlsx", description: "Excel-таблицы", content: "# Готово" };
+      },
+    },
+  ]);
+
+  const { root } = t$.mount(ui.RightPanel, { id: SID });
+  await t$.waitFor(() => $$(root, ".rp-skill").length === 1);
+
+  // 403
+  t$.click($$(root, ".rp-skill")[0]);
+  await t$.waitFor(() => $(document.body, ".rp-modal .rp-error") != null);
+  assert.match($(document.body, ".rp-modal .rp-error").textContent, /запрещён|нет доступа/i);
+
+  // 404 через «Повторить»
+  mode = "404";
+  t$.click($(document.body, ".rp-modal .rp-retry"));
+  await t$.waitFor(() => /не найден/i.test($(document.body, ".rp-modal .rp-error")?.textContent ?? ""));
+
+  // Сетевой сбой (TypeError) через «Повторить»
+  mode = "net";
+  t$.click($(document.body, ".rp-modal .rp-retry"));
+  await t$.waitFor(() => {
+    const err = $(document.body, ".rp-modal .rp-error")?.textContent ?? "";
+    return err.length > 0 && !/не найден/i.test(err);
+  });
+
+  // Восстановление после сетевого сбоя
+  mode = "ok";
+  t$.click($(document.body, ".rp-modal .rp-retry"));
+  await t$.waitFor(() => $(document.body, ".rp-modal .rp-modal-md") != null);
+  assert.match($(document.body, ".rp-modal .rp-modal-md").textContent, /Готово/);
+
+  t$.click($(document.body, ".rp-modal-close"));
+  await t$.flush();
+});
+

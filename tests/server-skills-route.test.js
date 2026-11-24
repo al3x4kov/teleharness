@@ -30,7 +30,7 @@ before(async () => {
   up = await startFakeOpencode();
   up.route("GET", "/skill", (req, body, url) => {
     calls++;
-    seen.push(url.searchParams.get("location[directory]")); // FEAT-20.37: только deepObject
+    seen.push(url.searchParams.get("directory")); // BUG-305: v1-путь /skill использует ?directory=
     if (mode === "broken") return { status: 500, text: "boom" };
     if (mode === "html") return { status: 200, text: "<!doctype html><html><body>SPA</body></html>" };
     if (mode === "empty") return { json: { location: { directory: seen.at(-1) }, data: [] } };
@@ -48,7 +48,7 @@ after(async () => {
   await up?.close?.();
 });
 
-test("admin без ?directory=: upstream получил location[directory] папки по умолчанию, 200 и нормализованный список", async () => {
+test("admin без ?directory=: upstream получил directory папки по умолчанию, 200 и нормализованный список", async () => {
   mode = "wrapped";
   calls = 0;
   seen.length = 0;
@@ -60,7 +60,7 @@ test("admin без ?directory=: upstream получил location[directory] па
     { id: "teleharness-docs", name: "teleharness-docs", description: "Документы", path: "/skills/teleharness-docs/SKILL.md" },
     { id: "opencode", name: "OpenCode", description: "встроенный", path: "skill://opencode/SKILL.md" },
   ]);
-  assert.ok(seen.length > 0 && seen.every((d) => d), `каждый запрос зовёт location[directory]: ${JSON.stringify(seen)}`);
+  assert.ok(seen.length > 0 && seen.every((d) => d), `каждый запрос зовёт ?directory=: ${JSON.stringify(seen)}`);
   assert.equal(seen[0], srv.env.TELEHARNESS_CHAT_DIR, "по умолчанию спрашивается папка чатов, не cwd serve");
   assert.ok(body.every((s) => !("content" in s)), "content (тела SKILL.md) не едет клиенту");
 });
@@ -206,3 +206,49 @@ test("FEAT-20.38: 404 на отсутствующий, 400 на битый URI, 
   assert.equal(r503.status, 503);
   assert.equal((await r503.json()).code, "skills_unavailable");
 });
+
+test("BUG-305: v1 fallback fetchSkills без oc-клиента шлёт /skill?directory= (не location[directory])", async () => {
+  const { fetchSkills } = await import("../routes/catalog.js");
+  const urls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u) => {
+    urls.push(String(u));
+    return { ok: true, text: async () => JSON.stringify([{ id: "teleharness-xlsx", name: "teleharness-xlsx", description: "ok" }]) };
+  };
+  try {
+    const dir = "/projects/demo";
+    const list = await fetchSkills({ oc: null, upstream: "http://127.0.0.1:4096", skillsRetryDelayMs: 1 }, dir);
+    assert.equal(list.length, 1);
+    assert.equal(urls.length, 1);
+    assert.equal(urls[0], `http://127.0.0.1:4096/skill?directory=${encodeURIComponent(dir)}`);
+    assert.ok(!urls[0].includes("location["), "v1-путь не смешивается с v2-параметром location[directory]");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("BUG-306: GET /teleharness/api/skills/:id кэширует полный каталог (TTL) и дедуплицирует in-flight, 404 сбрасывает кэш", async () => {
+  mode = "wrapped";
+  const dir = path.join(os.tmpdir(), "teleharness-skill-cache-" + Date.now());
+  calls = 0;
+
+  // Два параллельных запроса по одной папке дедуплицируются в один вызов upstream
+  const [p1, p2] = await Promise.all([
+    api(`/teleharness/api/skills/teleharness-xlsx?directory=${encodeURIComponent(dir)}`),
+    api(`/teleharness/api/skills/OpenCode?directory=${encodeURIComponent(dir)}`),
+  ]);
+  assert.equal(p1.status, 200);
+  assert.equal(p2.status, 200);
+  assert.equal(calls, 1, "параллельные запросы дедуплицируются в 1 поход в upstream");
+
+  // Повторный запрос другого скилла той же папки берётся из TTL-кэша (0 походов в upstream)
+  const r3 = await api(`/teleharness/api/skills/teleharness-docs?directory=${encodeURIComponent(dir)}`);
+  assert.equal(r3.status, 200);
+  assert.equal(calls, 1, "последовательный запрос в пределах TTL обслуживается из кэша");
+
+  // 404 на отсутствующий скилл перепроверяет upstream один раз и сбрасывает кэш
+  const rMiss = await api(`/teleharness/api/skills/no-such-skill?directory=${encodeURIComponent(dir)}`);
+  assert.equal(rMiss.status, 404);
+  assert.equal(calls, 2, "при 404 из кэша выполняется однократная перепроверка upstream");
+});
+

@@ -284,3 +284,46 @@ test("FEAT-20.37: после F5 повторный message.updated для user-i
   handleEvent({ type: "session.deleted", properties: { sessionID: MAIN } });
   assert.equal(planOf(MAIN), null, "удаление сессии очищает план");
 });
+
+test("BUG-308: сетевой сбой loadPlan не фиксирует planLoaded и позволяет отложенный повтор; 403/404 не повторяются", async () => {
+  reset();
+  setActive();
+  let attempt = 0;
+  const f = stubFetch(async (c) => {
+    if (c.path !== PLAN_PATH) return ok({});
+    attempt += 1;
+    if (attempt === 1) throw new TypeError("Failed to fetch");
+    return ok({ sessionID: MAIN, todos: [{ id: "r1", content: "После восстановления сети", status: "in_progress" }] });
+  });
+  try {
+    await loadPlan(MAIN, { isAdmin: false, retryDelayMs: 25 });
+    assert.equal(planOf(MAIN), null, "при сетевой ошибке план не подменяется пустым []");
+    assert.equal(attempt, 1);
+    // Ждём отложенный авто-повтор
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(attempt, 2, "после сетевого сбоя выполнился отложенный повтор");
+    assert.deepEqual(planOf(MAIN), [{ id: "r1", content: "После восстановления сети", status: "in_progress" }]);
+  } finally {
+    f.restore();
+    reset();
+  }
+
+  // 404 — окончательный ответ, повторов не делает
+  let calls404 = 0;
+  const f2 = stubFetch(async (c) => {
+    if (c.path !== PLAN_PATH) return ok({});
+    calls404 += 1;
+    return fail(404);
+  });
+  try {
+    await loadPlan(MAIN, { isAdmin: false, retryDelayMs: 15 });
+    assert.deepEqual(planOf(MAIN), []);
+    await new Promise((r) => setTimeout(r, 50));
+    await loadPlan(MAIN, { isAdmin: false, retryDelayMs: 15 });
+    assert.equal(calls404, 1, "HTTP 404 фиксирует planLoaded и не шлёт повторные запросы");
+  } finally {
+    f2.restore();
+    reset();
+  }
+});
+

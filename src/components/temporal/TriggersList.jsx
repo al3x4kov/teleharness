@@ -56,6 +56,8 @@ export default function TriggersList({ capabilities = null } = {}) {
   const conn = githubConn.value;
   const [state, setState] = useState({ list: null, error: null, names: {} });
   const [templates, setTemplates] = useState(null);
+  const [clearingStorm, setClearingStorm] = useState(false);
+  const [stormNote, setStormNote] = useState("");
 
   const load = async () => {
     refreshGithubConn();
@@ -125,10 +127,35 @@ export default function TriggersList({ capabilities = null } = {}) {
       </Banner>,
     );
   }
-  if (list?.some((tr) => tr.stormAt)) {
+  // BUG-319: every stormy trigger gets a "Clear queue" action (running pipes are kept).
+  const stormy = (list ?? []).filter((tr) => tr.stormAt);
+  const clearStormQueues = async () => {
+    setClearingStorm(true);
+    setStormNote("");
+    try {
+      let total = 0;
+      for (const tr of stormy) {
+        const res = await api.temporalTriggerClearQueue(tr.id);
+        total += res?.cleared ?? 0;
+      }
+      setStormNote(total > 0 ? t("temporal.tl.stormClearedCount", { count: total }) : t("temporal.tr.noteQueueCleared"));
+      await load();
+    } catch (e) {
+      setStormNote(explainApiError(e, t("temporal.tl.errClearQueue")));
+    } finally {
+      setClearingStorm(false);
+    }
+  };
+  if (stormy.length > 0) {
     banners.push(
       <Banner tone="warn" icon="≋" title={t("temporal.tl.bannerStormTitle")} key="storm">
         {t("temporal.tl.bannerStormText")}
+        <div class="t-row">
+          <button class="t-btn" type="button" disabled={clearingStorm} onClick={clearStormQueues}>
+            {clearingStorm ? t("temporal.tl.clearingQueue") : t("temporal.tr.clearQueueBtn")}
+          </button>
+        </div>
+        {stormNote && <p class="t-small" role="status">{stormNote}</p>}
       </Banner>,
     );
   }

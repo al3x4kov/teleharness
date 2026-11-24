@@ -29,6 +29,8 @@ const API = "http://gh.local";
 test("FEAT-20.3: githubEvents — виды триггера в события GitHub без повторов", () => {
   assert.deepEqual(githubEvents(["issue_labeled", "issue_opened", "comment_command"]), ["issues", "issue_comment"]);
   assert.deepEqual(githubEvents(["ci_failed", "pr_opened", "push"]), ["workflow_run", "pull_request", "push"]);
+  // BUG-316: для ci_failed автоматически добавляем push, чтобы сбрасывать/отслеживать коммиты в ветке
+  assert.deepEqual(githubEvents(["ci_failed"]), ["workflow_run", "push"]);
   assert.deepEqual(githubEvents([]), []);
   assert.deepEqual(githubEvents(["чепуха"]), []);
 });

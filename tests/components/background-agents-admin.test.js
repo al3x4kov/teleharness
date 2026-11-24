@@ -78,3 +78,29 @@ test("D-6: ошибка загрузки показывает сообщение
   await t$.waitFor(() => byText(el, "button", "Повторить"));
   assert.ok($(el, "[role=alert]")?.textContent?.trim().length > 0);
 });
+
+test("BUG-319: администратор настраивает общие лимиты userPerDay, defaultPerHour и defaultQueue", async () => {
+  let state = { ...INITIAL, userPerDay: 30, defaultPerHour: 6, defaultQueue: 20 };
+  const puts = [];
+  installFetch([
+    { method: "GET", path: "/teleharness/api/admin/background", reply: () => state },
+    {
+      method: "PUT", path: "/teleharness/api/admin/background",
+      reply: ({ body }) => {
+        puts.push(body);
+        state = { ...state, ...body };
+        return state;
+      },
+    },
+  ]);
+  const h = t$.mount(ui.BackgroundAgentsSection, {});
+  const el = h.root;
+  await t$.waitFor(() => $(el, "#bg-user-per-day"));
+  await t$.typeInto($(el, "#bg-user-per-day"), "45");
+  await t$.typeInto($(el, "#bg-default-per-hour"), "10");
+  await t$.typeInto($(el, "#bg-default-queue"), "15");
+  await t$.click(byText(el, "button", "Сохранить лимиты"));
+  await t$.waitFor(() => el.textContent.includes("Общие лимиты фоновых агентов сохранены"));
+  assert.deepEqual(puts[0], { userPerDay: 45, defaultPerHour: 10, defaultQueue: 15 });
+});
+

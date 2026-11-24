@@ -6,6 +6,34 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.8.1] — 2026-11-24
+
+### Added
+- **Background Agents queue clearing & admin limit controls.** Added `POST /api/temporal/triggers/:id/queue/clear`
+  with a **Clear queue** action on trigger cards (drains pending items without stopping active runs) and
+  configurable admin defaults (`userPerDay`, `defaultPerHour`, `defaultQueue`) in Settings → Background Agents.
+- **Skills detail TTL cache & request deduplication.** `GET /api/skills/:id` now caches skill payloads for 30 s
+  with in-flight deduplication and automatic cache invalidation on 404, eliminating repeated full-catalog fetches
+  when opening the Skill modal.
+
+### Fixed
+- **Right panel on mobile & narrow viewports.** `AppShell` now gates mounting `RightPanel` behind
+  `matchMedia("(min-width: 1024px)")`, preventing idle `/api/mcp`, `/api/skills`, and `/api/session/:id/plan`
+  requests on phones.
+- **Plan loading retry & right-panel contrast.** `loadPlan` now distinguishes transient network/5xx errors
+  (scheduling a retry instead of permanently caching an empty plan) from 4xx responses; muted right-panel labels
+  (`.rp-empty`, `.rp-plan-hint`, `.rp-modal-path`) were raised to `--text-2` for WCAG AA contrast; aligned
+  the v1 `fetchSkills` fallback query to `?directory=`.
+- **Background Agents security & server wiring.** Wired `usesClaude`, `permissionCheck`, `dirAllowed`, and
+  `claudeLeftToday` in `server.js` so the daily Claude background cap only counts Claude pipelines; enforced
+  admin-only Claude background policy in readiness and `POST /triggers`; validated folder `git remote origin`
+  against the selected repository; prevented tenants from pushing outside `teleharness/*` and blocked pushing
+  to the base/default branch in `mode: "new"`; added `ls-remote` 409 guard for deleted `same-branch` targets;
+  fixed poll-path fork filtering (`head_repository` / `pull_requests`), CI anti-loop detection
+  (`last_agent_sha` / `Co-Authored-By`), `Refs #N` in PR bodies, `filtered_repo` matching in `passesFilters`,
+  15-minute poll reconciliation for webhook triggers, and 5 hardening nits (post-signature rate limiting,
+  constant-time `verifyKey`, untrusted title framing, webhook cleanup on trigger delete, and connection timeout).
+
 ## [2.8.0] — 2026-11-24
 
 ### Added

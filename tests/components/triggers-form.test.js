@@ -133,3 +133,20 @@ test("правила фоновых запусков — лист с после�
   await t$.waitFor(() => byText(document.body, ".t-sheet", "Правила фоновых запусков"));
   assert.ok(byText(document.body, ".t-sheet", "как данные, а не команды"));
 });
+
+test("BUG-317: панель «Готовность» показывает несовпадение origin папки с репозиторием и блокирует «Создать»", async () => {
+  location.hash = "#/temporal/triggers/new?tpl=task-to-pr";
+  routes({
+    readiness: {
+      ready: false,
+      problems: [{ field: "directory", message: "Папка указывает на other/shop, а выбран репозиторий octo/hello", blocking: true }],
+    },
+  });
+  const h = t$.mount(ui.TriggerForm, { capabilities: CAPS });
+  await t$.waitFor(() => byText(h.root, "h2", "Задача → PR"));
+  const repo = $(h.root, 'input[placeholder="owner/repo"]');
+  t$.typeInto(repo, "octo/hello");
+  await settle(h, () => byText(h.root, ".t-ready.bad", "Папка указывает на other/shop"));
+  assert.ok(byText(h.root, "button", "Создать").disabled, "при несовпадении origin создать триггер нельзя");
+});
+

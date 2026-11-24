@@ -87,7 +87,7 @@ import { frameAgentText, fetchCiLog } from "./lib/github/ci-logs.js";
 import { createPermissionCache } from "./lib/github/permissions.js";
 import { createGithubHookHandler } from "./lib/github/hook.js";
 import { createGithubPoller } from "./lib/github/poller.js";
-import { triggerRoutes } from "./routes/temporal-triggers.js";
+import { triggerRoutes, checkGitOrigin } from "./routes/temporal-triggers.js";
 import { randomUUID } from "node:crypto";
 import { attentionRoutes } from "./routes/attention.js"; // FEAT-20.2
 import { reviewRoutes } from "./routes/review.js"; // FEAT-20.1
@@ -984,6 +984,20 @@ const github = (() => {
       return versions.length ? Math.max(...versions.map((v) => v.version)) : null;
     } catch { return null; }
   };
+  // BUG-312: does the pipe version behind a trigger use Claude in a model step?
+  // Used by the daily background Claude limit (only Claude pipes are counted).
+  const pipeUsesClaude = (owner, definitionId, version = null) => {
+    try {
+      const rec = temporalDeps.store.get(owner, definitionId, { deleted: true });
+      const ver = version != null
+        ? rec?.versions?.find((v) => v.version === version)?.definition
+        : rec?.versions?.at(-1)?.definition ?? rec?.draft;
+      return Array.isArray(ver?.steps) && ver.steps.some((s) => s?.type === "model" && (s.engine ?? "claude") === "claude");
+    } catch {
+      return true;
+    }
+  };
+  const triggerUsesClaude = (trigger) => pipeUsesClaude(trigger.owner, trigger.definitionId, trigger.version ?? null);
   const frame = (s) => frameAgentText(s, 20_000);
   const launch = async (trigger, ev, requestId, extra = {}) => {
     if (!temporalDeps.startPipeline) throw new Error("Temporal-пайпы не подключены");
@@ -991,15 +1005,20 @@ const github = (() => {
     if (!version) throw new Error("У пайпа нет опубликованной версии");
     const record = temporalDeps.store.get(trigger.owner, trigger.definitionId);
     const versionDef = record?.versions?.find((v) => v.version === version)?.definition ?? null;
-    const framed = { ...ev, body: frame(ev.body), comment: ev.kind === "comment_command" ? frame(ev.body) : "" };
+    // Human text always rides inside the "data, not instructions" frame (BUG-323 p.3: title included).
+    const framed = { ...ev, title: frame(ev.title), body: frame(ev.body), comment: ev.kind === "comment_command" ? frame(ev.body) : "" };
     const inputs = cleanInputs(framed, Array.isArray(versionDef?.inputs) ? versionDef.inputs : []);
     const face = eventFace(ev);
     const eventRef = face.ref;
     return temporalDeps.startPipeline({ owner: trigger.owner, definitionId: trigger.definitionId, version, requestId, inputs, source: "github", triggerId: trigger.id, eventRef, eventUrl: face.url, attempt: extra?.attempt ?? null });
   };
   const permissions = createPermissionCache({ apiBase: config.TELEHARNESS_GITHUB_API || undefined, log: (m) => console.log(m) });
+  const githubPermissionCheck = async (login, repo, trigger) => {
+    const token = connections.get(trigger.owner);
+    return permissions.has(login, repo, token?.tokenEnc ? box.decrypt(token.tokenEnc) : null);
+  };
   const dispatcher = createDispatcher({
-    store: gstore, connections, launch, log: (m) => console.log(m),
+    store: gstore, connections, launch, usesClaude: triggerUsesClaude, log: (m) => console.log(m),
     describeRun: (id) => temporalDeps.describeRun(id),
     ciLogFetch: async (userId, repo, runId) => {
       const c = connections.get(userId);
@@ -1009,10 +1028,7 @@ const github = (() => {
         userId,
       }, repo, runId);
     },
-    permissionCheck: async (login, repo, trigger) => {
-      const token = connections.get(trigger.owner);
-      return permissions.has(login, repo, token?.tokenEnc ? box.decrypt(token.tokenEnc) : null);
-    },
+    permissionCheck: githubPermissionCheck,
   });
   const githubHook = createGithubHookHandler({ store: gstore, dispatcher, sendJson, log: (m) => console.log(m) });
   setImmediate(() => { dispatcher.resume().then((n) => { if (n) console.log(`github: доиграно доставок после рестарта: ${n}`); }).catch(() => {}); });
@@ -1034,7 +1050,7 @@ const github = (() => {
     await temporalDeps.applyAction(trigger.owner, workflowId, { action: "cancel", runId: described.runId, actionId: randomUUID() });
     return true;
   };
-  return { connections, check, box, store: gstore, dispatcher, launch, cancelRun, hook: githubHook, poller };
+  return { connections, check, box, store: gstore, dispatcher, launch, cancelRun, hook: githubHook, poller, usesClaude: triggerUsesClaude, pipeUsesClaude, permissionCheck: githubPermissionCheck };
 })();
 // FEAT-20.2: исходы opencode-чатов (busy → idle/error) и «ждёт вас» для сводки.
 const attentionObserver = new OutcomeObserver({
@@ -1890,7 +1906,12 @@ const temporalDeps={sendJson,readJsonBody,dirAllowed,engineAllowed,getUser,errLo
   adminStopped: () => github.store.setting("adminStopped", false) === true,
   claudeLeftToday: () => {
     const limit = github.store.setting("claude_background_per_day", 10) ?? 10;
-    return Math.max(0, limit - github.store.startedPerDayAll());
+    let used = 0;
+    for (const row of github.store.startedPerDayByTrigger()) {
+      const tr = github.store.getById(row.triggerId);
+      if (tr && github.usesClaude(tr)) used += row.n;
+    }
+    return Math.max(0, limit - used);
   },
 };
 if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
@@ -2013,6 +2034,7 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
       const c=github?.connections?.get(userId);
       return c?.tokenEnc?github.box.decrypt(c.tokenEnc):null;
     },
+    onPushed:({repo,branch,sha})=>github?.store?.recordAgentBranchPush?.(repo,branch,sha),
     log:(m)=>console.log(m),
   });
   Object.assign(temporalDeps,await connectPipeline(temporalDeps,options));
@@ -2086,13 +2108,19 @@ const API_ROUTES = validateTable([
   ...scheduleRoutes(temporalDeps),
   ...triggerRoutes({
     sendJson, readJsonBody, errLog, store: github.store, connections: github.connections,
+    usesClaude: github.usesClaude,
+    permissionCheck: github.permissionCheck,
+    dirAllowed,
+    checkOrigin: (dir, repo, user) => checkGitOrigin(dir, repo, { untrusted: !isAdmin(user) }),
     engineModels: () => temporalDeps.subscriptionModels ?? {},
     pipelinesEnabled: () => Boolean(temporalDeps.startPipeline), pipeOf: async (user, definitionId) => {
       try {
         const rec = temporalDeps.store.get(user.id, definitionId);
-        const version = rec?.versions?.length ? rec.versions[rec.versions.length - 1].version : null;
-        if (!version || !dirAllowed(user, rec.versions[rec.versions.length - 1].definition?.directory ?? rec.directory)) return null;
-        return { version };
+        const latest = rec?.versions?.length ? rec.versions[rec.versions.length - 1] : null;
+        const version = latest?.version ?? null;
+        const dir = latest?.definition?.directory ?? rec.draft?.directory ?? rec.directory;
+        if (!version || !dirAllowed(user, dir)) return null;
+        return { version, directory: dir, usesClaude: github.pipeUsesClaude(user.id, definitionId, version) };
       } catch { return null; }
     },
     launch: github.launch, cancelRun: github.cancelRun, publicUrl: config.TELEHARNESS_PUBLIC_URL, log: (m) => console.log(m),

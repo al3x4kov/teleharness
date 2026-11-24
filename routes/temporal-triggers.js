@@ -7,9 +7,49 @@ import { KINDS, subjectKey, eventKey } from "../lib/github/events.js";
 import { EVENT_NAMESPACE, uuidv5, ciFace, countClaudeUsedToday } from "../lib/github/dispatch.js";
 import { githubEvents, canManageHooks, createRepoWebhook, pingRepoWebhook, getRepoWebhook, updateRepoWebhookSecret, deleteRepoWebhook } from "../lib/github/webhooks.js";
 import { GhError } from "../lib/github/client.js";
+import { runGit } from "../lib/git.js";
 import { TEMPLATES, templateFace, templateById } from "../shared/temporal-templates.js";
 
 const REPO_RE = /^[^/\s\\]+\/[^/\s\\]+$/;
+
+// BUG-317: разбор URL git remote origin (HTTPS/SSH) в вид owner/repo.
+export function parseGithubOrigin(rawUrl) {
+  const s = String(rawUrl ?? "").trim();
+  if (!s) return null;
+  // git@github.com:owner/repo(.git)?
+  const scp = /^(?:[^@\s]+@)?github\.com:([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/i.exec(s);
+  if (scp) return scp[1];
+  try {
+    const u = new URL(s);
+    if (!/^github\.com$/i.test(u.hostname)) return null;
+    const p = u.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+    const parts = p.split("/").filter(Boolean);
+    if (parts.length !== 2) return null;
+    return `${parts[0]}/${parts[1]}`;
+  } catch {
+    return null;
+  }
+}
+
+// BUG-317: сверка git remote origin выбранной папки с репозиторием триггера.
+export async function checkGitOrigin(dir, expectedRepo, { untrusted = false, runGitImpl = runGit } = {}) {
+  try {
+    const res = await runGitImpl(["remote", "get-url", "origin"], { cwd: dir, untrusted: Boolean(untrusted), timeoutMs: 5000 });
+    if (!res || res.code !== 0 || !String(res.stdout ?? "").trim()) {
+      return { ok: false, reason: "no_origin", message: "В выбранной папке нет git-репозитория с remote origin" };
+    }
+    const actual = parseGithubOrigin(res.stdout);
+    if (!actual) {
+      return { ok: false, reason: "not_github", message: "Remote origin выбранной папки не указывает на GitHub" };
+    }
+    if (actual.toLowerCase() !== String(expectedRepo ?? "").trim().toLowerCase()) {
+      return { ok: false, reason: "origin_mismatch", actual, message: `Папка указывает на ${actual}, а выбран репозиторий ${expectedRepo}` };
+    }
+    return { ok: true, actual };
+  } catch {
+    return { ok: false, reason: "no_origin", message: "Не удалось проверить remote origin выбранной папки" };
+  }
+}
 
 export function face(row) {
   return {
@@ -129,19 +169,31 @@ export function triggerRoutes(deps) {
       const c = deps.connections?.get?.(user.id) ?? null;
       if (t.needs.includes("github") && (!c || c.status !== "ok"))
         problems.push({ field: "github", message: "Подключите GitHub в Настройках — токен с правами на репозиторий и webhooks", blocking: true });
-      const engine = body.engine ?? "claude";
+      const engine = body.engine ?? t.pipe.steps.find((s) => s.type === "model")?.engine ?? "claude";
       const model = body.model ?? t.pipe.steps.find((s) => s.type === "model")?.model ?? null;
       const models = deps.engineModels?.() ?? {};
       if (!Array.isArray(models[engine]) || (model && !models[engine].includes(model)))
         problems.push({ field: "model", message: `Модель «${model ?? engine}» недоступна на подписке — выберите другую в мастере`, blocking: true });
+      // BUG-322: решение владельца Q1-а — Claude в фоне только для администратора; Codex у тенанта текстовый.
+      if (user.role !== "admin" && engine === "claude")
+        problems.push({ field: "model", message: "Claude в фоновых запусках доступен только администратору — выберите opencode", blocking: true });
       if (user.role !== "admin" && engine === "codex")
-        problems.push({ field: "model", message: "Тенанту доступен только текстовый Codex, а PR-шаг правит файлы — выберите Claude", blocking: true });
+        problems.push({ field: "model", message: "Тенанту доступен только текстовый Codex, а PR-шаг правит файлы — выберите opencode", blocking: true });
+      const dirOk = typeof body.directory === "string" && Boolean(body.directory) && (!deps.dirAllowed || deps.dirAllowed(user, body.directory));
       if (typeof body.directory !== "string" || !body.directory)
         problems.push({ field: "directory", message: "Выберите папку проекта", blocking: true });
       else if (deps.dirAllowed && !deps.dirAllowed(user, body.directory))
         problems.push({ field: "directory", message: "Папка недоступна этому пользователю", blocking: true });
-      if (!REPO_RE.test(String(body.repo ?? "")))
+      const repoOk = REPO_RE.test(String(body.repo ?? ""));
+      if (!repoOk)
         problems.push({ field: "repo", message: "Укажите репозиторий в виде owner/name", blocking: true });
+      // BUG-317: сверка git remote origin выбранной папки с репозиторием.
+      if (dirOk && repoOk && deps.checkOrigin) {
+        const originRes = await deps.checkOrigin(body.directory, body.repo, user);
+        if (originRes && !originRes.ok) {
+          problems.push({ field: "directory", message: originRes.message || "Папка не совпадает с выбранным репозиторием", blocking: true });
+        }
+      }
       sendJson(res, 200, { ready: problems.length === 0, problems });
     }),
     // Создание: пайп владельца, версия закреплена или «последняя опубликованная».
@@ -152,6 +204,22 @@ export function triggerRoutes(deps) {
       validateSpec(spec);
       const pipe = await pipeOf(user, spec.definitionId);
       if (!pipe) throw fail(404, "Пайп не найден");
+      // BUG-322: решение владельца Q1-а — фоновый триггер на пайп с Claude только для администратора.
+      const pipeUsesClaude = pipe.usesClaude !== undefined
+        ? Boolean(pipe.usesClaude)
+        : (deps.usesClaude ? Boolean(await deps.usesClaude({ owner: user.id, definitionId: spec.definitionId, version: spec.version ?? null })) : false);
+      if (user.role !== "admin" && pipeUsesClaude) {
+        throw fail(403, "Claude в фоновых запусках доступен только администратору — выберите opencode");
+      }
+      // BUG-317: сверка git remote origin папки пайпа с выбранным репозиторием.
+      if (pipe.directory && deps.checkOrigin) {
+        const originRes = await deps.checkOrigin(pipe.directory, spec.repo, user);
+        if (originRes && !originRes.ok) {
+          throw fail(422, originRes.message || "Папка пайпа не совпадает с выбранным репозиторием");
+        }
+      }
+      const defaultPerHour = store.setting?.("default_per_hour", DEFAULT_LIMITS.perHour) ?? DEFAULT_LIMITS.perHour;
+      const defaultQueue = store.setting?.("default_queue", DEFAULT_LIMITS.queue) ?? DEFAULT_LIMITS.queue;
       // version NULL = всегда последняя опубликованная (design); число — закрепить.
       const created = store.create(user.id, {
         definitionId: spec.definitionId,
@@ -161,20 +229,27 @@ export function triggerRoutes(deps) {
         filters: spec.filters ?? {},
         delivery: spec.delivery ?? "auto",
         pollSeconds: spec.pollSeconds ?? 120,
-        limits: { perHour: spec.limits?.perHour ?? DEFAULT_LIMITS.perHour, queue: spec.limits?.queue ?? DEFAULT_LIMITS.queue },
+        limits: { perHour: spec.limits?.perHour ?? defaultPerHour, queue: spec.limits?.queue ?? defaultQueue },
       });
       log?.(`github: триггер ${created.id} создан (${user.id} → ${created.repo})`);
       sendJson(res, 201, { ...face(created), key: created.key, secret: created.secret, hookUrl: hookUrl(created.key) });
     }),
 
     route("GET", base, async ({ res, user }) => {
-      // Сводка для списка UI (2.2): последнее срабатывание, ошибки, шторм.
+      // Сводка для списка UI (2.2): последнее срабатывание, ошибки, шторм, очередь.
       const summary = store.summaries(user.id);
       sendJson(res, 200, store.list(user.id).map((row) => ({ ...face(row), ...(summary.get(row.id) ?? {}) })));
     }),
 
     route("GET", new RegExp(`^${base}/([a-f0-9-]{36})$`), async ({ res, user, match }) => {
-      const row = own(user, match[1]); sendJson(res, 200, { ...face(row), activeCount: activeWorkflows(store, row.id).length });
+      const row = own(user, match[1]);
+      const storm = store.setting?.(`storm:${row.id}`, null);
+      sendJson(res, 200, {
+        ...face(row),
+        activeCount: activeWorkflows(store, row.id).length,
+        queuedCount: store.queuedCount?.(row.id) ?? 0,
+        stormAt: Number.isFinite(storm?.at) ? storm.at : null,
+      });
     }),
 
     route("PATCH", new RegExp(`^${base}/([a-f0-9-]{36})$`), async ({ req, res, user, match }) => {
@@ -202,9 +277,36 @@ export function triggerRoutes(deps) {
         revision = body?.revision;
       } catch { /* тела может не быть */ }
       if (revision == null) revision = Number(url.searchParams.get("revision")) || null;
-      own(user, match[1]);
+      const row = own(user, match[1]);
       store.remove(user.id, match[1], revision);
-      sendJson(res, 200, { ok: true });
+      // BUG-323 п.4: best-effort удаление webhook на стороне GitHub, чтобы не копить осиротевшие хуки.
+      let hookDeleted = null;
+      if (row.hookId) {
+        const token = connectionToken?.(user.id);
+        if (token) {
+          try {
+            await deleteRepoWebhook(token, row.repo, row.hookId, { apiBase });
+            hookDeleted = true;
+          } catch (e) {
+            if (e instanceof GhError && e.kind === "not_found") hookDeleted = true;
+            else { hookDeleted = false; errLog?.("github", e); }
+          }
+        }
+      }
+      sendJson(res, 200, { ok: true, ...(hookDeleted !== null ? { hookDeleted } : {}) });
+    }),
+
+    // BUG-319: очистка очереди триггера при шторме без отмены идущих запусков.
+    route("POST", new RegExp(`^${base}/([a-f0-9-]{36})/queue/clear$`), async ({ res, user, match }) => {
+      const row = own(user, match[1]);
+      const cleared = store.clearQueue(row.id);
+      store.record({
+        triggerId: row.id, eventKey: null, kind: "queue", repo: row.repo, number: null,
+        actor: user.id, decision: "queue_cleared", reason: cleared ? `Очередь очищена (${cleared})` : "Очередь очищена",
+        workflowId: null, via: "manual", eventJson: null,
+      });
+      log?.(`github: очередь триггера ${row.id} очищена (${cleared})`);
+      sendJson(res, 200, { ok: true, cleared });
     }),
 
     // Выключение ≤ 1 с: новые события пишутся «Триггер выключен»; идущие —
@@ -336,7 +438,7 @@ export function triggerRoutes(deps) {
       }
       sendJson(res, 200, { ...face(store.get(user.id, match[1])), secret, githubUpdated, note: "Секрет заменён" + (githubUpdated === false ? " локально — обновите его в настройках webhook GitHub" : "") });
     }),
-    // FEAT-20.3 (2.6, D-6, кр. 20): общий выключатель, суточный лимит Claude и подключения пользователей без токенов.
+    // FEAT-20.3 (2.6, D-6, кр. 20; BUG-319): общий выключатель, лимиты и подключения пользователей без токенов.
     route("GET", "/teleharness/api/admin/background", async ({ res }) => {
       sendJson(res, 200, await adminBackgroundFace(store, deps.connections, deps.usesClaude));
     }, "admin"),
@@ -356,6 +458,27 @@ export function triggerRoutes(deps) {
         store.setSetting("claude_background_per_day", body.claudePerDay);
         log?.(`github: admin ${user.id} задал суточный лимит Claude в фоне = ${body.claudePerDay}`);
       }
+      if (body.userPerDay !== undefined) {
+        if (!Number.isInteger(body.userPerDay) || body.userPerDay < 1 || body.userPerDay > 500) {
+          throw fail(422, "Лимит запусков пользователя в сутки — целое число от 1 до 500");
+        }
+        store.setSetting("default_user_per_day", body.userPerDay);
+        log?.(`github: admin ${user.id} задал суточный лимит пользователя = ${body.userPerDay}`);
+      }
+      if (body.defaultPerHour !== undefined) {
+        if (!Number.isInteger(body.defaultPerHour) || body.defaultPerHour < 1 || body.defaultPerHour > 60) {
+          throw fail(422, "Дефолтный лимит запусков в час — целое число от 1 до 60");
+        }
+        store.setSetting("default_per_hour", body.defaultPerHour);
+        log?.(`github: admin ${user.id} задал дефолтный лимит в час = ${body.defaultPerHour}`);
+      }
+      if (body.defaultQueue !== undefined) {
+        if (!Number.isInteger(body.defaultQueue) || body.defaultQueue < 1 || body.defaultQueue > 100) {
+          throw fail(422, "Дефолтная длина очереди — целое число от 1 до 100");
+        }
+        store.setSetting("default_queue", body.defaultQueue);
+        log?.(`github: admin ${user.id} задал дефолтную очередь = ${body.defaultQueue}`);
+      }
       sendJson(res, 200, await adminBackgroundFace(store, deps.connections, deps.usesClaude));
     }, "admin"),
   ];
@@ -373,6 +496,9 @@ function clearActiveAll(store, triggerId) {
 async function adminBackgroundFace(store, connections, usesClaude = null) {
   const adminStopped = store.setting("adminStopped", false) === true;
   const claudePerDay = store.setting("claude_background_per_day", 10) ?? 10;
+  const userPerDay = store.setting("default_user_per_day", DEFAULT_LIMITS.userPerDay) ?? DEFAULT_LIMITS.userPerDay;
+  const defaultPerHour = store.setting("default_per_hour", DEFAULT_LIMITS.perHour) ?? DEFAULT_LIMITS.perHour;
+  const defaultQueue = store.setting("default_queue", DEFAULT_LIMITS.queue) ?? DEFAULT_LIMITS.queue;
   const claudeUsedToday = await countClaudeUsedToday(store, usesClaude);
   const all = store.listAll?.() ?? [];
   const activeRuns = (store.activeSubjects?.() ?? []).filter((s) => s.activeWorkflowId).length;
@@ -389,6 +515,9 @@ async function adminBackgroundFace(store, connections, usesClaude = null) {
     claudePerDay,
     claudeUsedToday,
     claudeLeftToday: Math.max(0, claudePerDay - claudeUsedToday),
+    userPerDay,
+    defaultPerHour,
+    defaultQueue,
     triggersTotal: all.length,
     triggersEnabled: all.filter((r) => r.enabled).length,
     activeRuns,

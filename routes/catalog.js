@@ -101,7 +101,10 @@ export async function fetchSkills(deps, dir, { includeContent = false } = {}) {
       if (oc) {
         raw = await oc.skills({ directory: dir, includeContent, timeoutMs: SKILLS_TIMEOUT_MS });
       } else {
-        const r = await fetch(`${deps.upstream}/skill?location[directory]=${encodeURIComponent(dir)}`, {
+        // BUG-305: the v1 branch without an oc client calls /skill?directory= (the v1
+        // query parameter; the v2 deepObject location[directory] lives in lib/oc-client.js);
+        // tolerant JSON parse.
+        const r = await fetch(`${deps.upstream}/skill?directory=${encodeURIComponent(dir)}`, {
           headers: { accept: "application/json" },
           signal: AbortSignal.timeout(SKILLS_TIMEOUT_MS),
         });
@@ -124,9 +127,44 @@ export async function fetchSkills(deps, dir, { includeContent = false } = {}) {
   return lastValidEmpty ? [] : null;
 }
 
+const SKILLS_DETAIL_TTL_MS = 30_000;
+const SKILLS_DETAIL_MAX_DIRS = 32;
+
 export function catalogRoutes(deps) {
   const { sendJson } = deps;
   const fetchMcp = (dir) => fetchMcpStatus(deps, dir);
+  // BUG-306: short TTL cache + in-flight de-duplication of the full skills catalog
+  // (with SKILL.md bodies) for GET /teleharness/api/skills/:id, so clicking through
+  // skills in the modal does not refetch the whole registry on every open. Errors (null) are not cached.
+  const skillsDetailCache = new Map(); // dir -> { at, data }
+  const skillsDetailPending = new Map(); // dir -> Promise<Array|null>
+  const skillsCacheTtlMs = () => deps.skillsCacheTtlMs ?? SKILLS_DETAIL_TTL_MS;
+  async function getSkillsWithContent(dir, { bypassCache = false } = {}) {
+    const ttl = skillsCacheTtlMs();
+    const now = Date.now();
+    if (!bypassCache && ttl > 0) {
+      const hit = skillsDetailCache.get(dir);
+      if (hit && now - hit.at < ttl) return { data: hit.data, fromCache: true };
+    }
+    let pending = skillsDetailPending.get(dir);
+    if (!pending) {
+      pending = fetchSkills(deps, dir, { includeContent: true })
+        .then((data) => {
+          if (data && ttl > 0) {
+            if (skillsDetailCache.size >= SKILLS_DETAIL_MAX_DIRS && !skillsDetailCache.has(dir)) {
+              skillsDetailCache.delete(skillsDetailCache.keys().next().value);
+            }
+            skillsDetailCache.set(dir, { at: Date.now(), data });
+          }
+          return data;
+        })
+        .finally(() => {
+          if (skillsDetailPending.get(dir) === pending) skillsDetailPending.delete(dir);
+        });
+      skillsDetailPending.set(dir, pending);
+    }
+    return { data: await pending, fromCache: false };
+  }
   // RAW merged run status, cached STATUS_TTL_MS (was module state in server.js).
   let statusCache = { at: 0, data: {} };
   let statusPending = null; // SRV-30: один пересчёт на всех, кто пришёл с истёкшим кэшем
@@ -370,12 +408,21 @@ export function catalogRoutes(deps) {
           return sendJson(res, 403, { error: "Access to this skill is denied", code: "skill_forbidden" });
         }
         const dir = (admin && url.searchParams.get("directory")) || deps.defaultDir(user, deps.chatDir);
-        const data = await fetchSkills(deps, dir, { includeContent: true });
+        let { data, fromCache } = await getSkillsWithContent(dir);
         if (!data) {
           return sendJson(res, 503, { error: "Skills are temporarily unavailable: opencode did not respond.", code: "skills_unavailable" });
         }
-        const found = data.find((s) => s.id === skillId) ?? data.find((s) => s.name === skillId);
+        let found = data.find((s) => s.id === skillId) ?? data.find((s) => s.name === skillId);
+        if (!found && fromCache) {
+          skillsDetailCache.delete(dir);
+          ({ data } = await getSkillsWithContent(dir, { bypassCache: true }));
+          if (!data) {
+            return sendJson(res, 503, { error: "Skills are temporarily unavailable: opencode did not respond.", code: "skills_unavailable" });
+          }
+          found = data.find((s) => s.id === skillId) ?? data.find((s) => s.name === skillId);
+        }
         if (!found) {
+          skillsDetailCache.delete(dir);
           return sendJson(res, 404, { error: "Skill not found", code: "skill_not_found" });
         }
         if (!admin && !(TENANT_SKILL_RE.test(found.id ?? "") || TENANT_SKILL_RE.test(found.name ?? ""))) {

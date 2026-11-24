@@ -10,6 +10,7 @@ import http from "node:http";
 import { gitEnv, withGitVars } from "../lib/git.js";
 import { prStepRunner } from "../lib/temporal/pr-step.js";
 import { GhError } from "../lib/github/client.js";
+import { frameAgentText } from "../lib/github/ci-logs.js";
 import { validateDefinition } from "../shared/temporal-definition.js";
 import { projectPlan } from "../lib/temporal/prepare-bridge.js";
 
@@ -32,7 +33,7 @@ function mkRepo() {
   return { dir, origin, seed, work };
 }
 
-function fakeGithub({ pulls = [], failOn = null } = {}) {
+function fakeGithub({ pulls = [], failOn = null, defaultBranch = "main" } = {}) {
   const calls = [];
   const comments = [];
   let created = null;
@@ -40,7 +41,7 @@ function fakeGithub({ pulls = [], failOn = null } = {}) {
     calls.push({ method, pathname, body });
     const p = pathname.split("?")[0];
     if (failOn?.test(`${method} ${p}`)) throw new GhError(403, "forbidden", "GitHub 403: merged by rule");
-    if (p === "/repos/octo/hello") return { status: 200, data: { default_branch: "main" } };
+    if (p === "/repos/octo/hello") return { status: 200, data: { default_branch: defaultBranch } };
     if (p === "/repos/octo/hello/pulls" && method === "GET") return { status: 200, data: pulls };
     if (p === "/repos/octo/hello/pulls" && method === "POST") { created = { ...body, number: 9 }; return { status: 201, data: { number: 9, html_url: "https://github.com/octo/hello/pull/9" } }; }
     if (/\/issues\/\d+\/comments$/.test(p)) { comments.push(body); return { status: 201, data: {} }; }
@@ -199,10 +200,11 @@ test("FEAT-20.3 2.5 (T-16): правило репозитория отклони
 });
 
 test("FEAT-20.3 2.5 (D-4): same-branch с открытым PR — outcome pushed: коммит в ветку PR, ссылка на PR", { skip: process.platform === "win32" && "git fixture" }, async () => {
-  const { dir, origin, work } = mkRepo();
+  const { dir, origin, seed, work } = mkRepo();
   const github = fakeGithub({ pulls: [{ number: 320, html_url: "https://github.com/octo/hello/pull/320" }] });
   const run = runner({ origin, work, github });
   try {
+    git(["push", "origin", "HEAD:refs/heads/feature/upload"], seed);
     writeFileSync(path.join(work, "fix.txt"), "исправление\n");
     const out = await call(run, { mode: "same-branch", inputs: { repo: "octo/hello", branch: "feature/upload" } });
     assert.equal(out.state, "done");
@@ -220,6 +222,7 @@ test("FEAT-20.3 1.12: same-branch — push в ветку события; отк�
   const github = fakeGithub();
   const run = runner({ origin, work, github });
   try {
+    git(["push", "origin", "HEAD:refs/heads/feature-x"], seed);
     writeFileSync(path.join(work, "d.txt"), "4\n");
     const ok = await call(run, { mode: "same-branch", inputs: { repo: "octo/hello", branch: "feature-x" } });
     assert.equal(ok.state, "done");
@@ -320,3 +323,106 @@ test("FEAT-20.3: GIT_ASKPASS передаётся в git через gitVars пр
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("BUG-313: same-branch при отсутствующей ветке на origin — 409 branch_missing, ветка не создаётся на origin", { skip: process.platform === "win32" && "git fixture" }, async () => {
+  const { dir, origin, work } = mkRepo();
+  const github = fakeGithub();
+  const run = runner({ origin, work, github });
+  try {
+    writeFileSync(path.join(work, "ghost.txt"), "x\n");
+    await assert.rejects(
+      call(run, { mode: "same-branch", inputs: { repo: "octo/hello", branch: "deleted-pr-branch" } }),
+      (e) => e.status === 409 && e.code === "branch_missing" && /^[0-9a-f]{7}$/.test(e.sha ?? ""),
+    );
+    const refs = git(["ls-remote", "--heads", origin]).toString();
+    assert.ok(!refs.includes("deleted-pr-branch"), "удалённая ветка не должна пересоздаваться на origin");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("BUG-314: тенант в mode=new с веткой без префикса teleharness/ — 403 forbidden до коммита и push", { skip: process.platform === "win32" && "git fixture" }, async () => {
+  const { dir, origin, work } = mkRepo();
+  const github = fakeGithub();
+  const run = prStepRunner({
+    prepareWorktree: async () => ({ path: work, branch: "teleharness/run-test", base: "main", untrusted: false, tenant: true }),
+    gitAuthor: () => ({ name: "t", email: "t@x" }), githubApi: github.api, githubToken: () => "t",
+  });
+  try {
+    const headBefore = git(["rev-parse", "HEAD"], work).toString().trim();
+    writeFileSync(path.join(work, "tenant.txt"), "change\n");
+    await assert.rejects(
+      call(run, { mode: "new", branch: "feature/evil", inputs: { repo: "octo/hello", number: 7 } }),
+      (e) => e.status === 403 && e.code === "forbidden" && e.message.includes("teleharness/"),
+    );
+    assert.equal(git(["rev-parse", "HEAD"], work).toString().trim(), headBefore, "коммит не должен создаваться при отказе 403");
+    assert.ok(!git(["ls-remote", "--heads", origin]).toString().includes("feature/evil"), "push не выполнялся");
+    const ok = await call(run, { mode: "new", branch: "teleharness/fix-7", inputs: { repo: "octo/hello", number: 7 } });
+    assert.equal(ok.state, "done");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("BUG-315: mode=new в базовую/default ветку — 403 base_branch до коммита и push (в т.ч. при default_branch != main)", { skip: process.platform === "win32" && "git fixture" }, async () => {
+  const { dir, origin, work } = mkRepo();
+  const github = fakeGithub({ defaultBranch: "develop" });
+  const run = runner({ origin, work, github });
+  try {
+    const headBefore = git(["rev-parse", "HEAD"], work).toString().trim();
+    writeFileSync(path.join(work, "base-guard.txt"), "x\n");
+    await assert.rejects(
+      call(run, { mode: "new", branch: "develop", inputs: { repo: "octo/hello" } }),
+      (e) => e.status === 403 && e.code === "base_branch",
+    );
+    await assert.rejects(
+      call(run, { mode: "new", branch: "{{input.branch}}", base: "release", inputs: { repo: "octo/hello", branch: "release" } }),
+      (e) => e.status === 403 && e.code === "base_branch",
+    );
+    assert.equal(git(["rev-parse", "HEAD"], work).toString().trim(), headBefore, "коммит не создан при отказе base_branch");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("BUG-316 + BUG-318 + BUG-323 п.3: onPushed получает 40-char SHA; PR-тело содержит Refs #N без дубля; заголовок развёрнут из рамки", { skip: process.platform === "win32" && "git fixture" }, async () => {
+  const { dir, origin, work } = mkRepo();
+  const github = fakeGithub();
+  const pushed = [];
+  const run = prStepRunner({
+    prepareWorktree: async () => ({ path: work, branch: "teleharness/run-test", base: "main", untrusted: false }),
+    gitAuthor: () => ({ name: "v", email: "v@x" }),
+    githubApi: github.api,
+    githubToken: () => "t",
+    onPushed: (info) => pushed.push(info),
+  });
+  try {
+    writeFileSync(path.join(work, "refs.txt"), "1\n");
+    const framedTitle = frameAgentText("Починить пагинацию");
+    const out = await call(run, {
+      mode: "new",
+      branch: "teleharness/fix-{{input.number}}",
+      title: "Фикс #{{input.number}}: {{input.title}}",
+      inputs: { repo: "octo/hello", number: 42, title: framedTitle },
+    });
+    assert.equal(out.state, "done");
+    assert.equal(pushed.length, 1);
+    assert.match(pushed[0].sha, /^[0-9a-f]{40}$/);
+    assert.equal(pushed[0].branch, "teleharness/fix-42");
+    assert.equal(pushed[0].repo, "octo/hello");
+    assert.match(github.created.body, /\n\nRefs #42$/);
+    assert.equal(github.created.title, "Фикс #42: Починить пагинацию");
+    assert.ok(!github.created.title.includes("ДАННЫЕ ИЗ GITHUB"), "рамка данных не попадает в заголовок PR");
+
+    // Не дублируем Refs #42, если модель уже написала его в summary
+    const github2 = fakeGithub();
+    const run2 = prStepRunner({
+      prepareWorktree: async () => ({ path: work, branch: "teleharness/run-test", base: "main", untrusted: false }),
+      gitAuthor: () => ({ name: "v", email: "v@x" }), githubApi: github2.api, githubToken: () => "t",
+    });
+    writeFileSync(path.join(work, "refs2.txt"), "2\n");
+    await call(run2, {
+      mode: "new",
+      branch: "teleharness/fix-42-b",
+      title: "T",
+      inputs: { repo: "octo/hello", number: 42 },
+      description: "Исправлено\n\nRefs #42",
+    });
+    assert.equal((github2.created.body.match(/Refs #42/g) ?? []).length, 1, "Refs #42 не дублируется");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+

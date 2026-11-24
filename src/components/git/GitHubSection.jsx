@@ -199,6 +199,9 @@ export default function GitHubSection({ client = api }) {
       {repos.length > 0 && (
         <>
           <h5 class="gh-sub">{t("gh.reposHeading", { count: repos.length })}</h5>
+          {conn.reposTruncated && (
+            <p class="gh-help" role="note">{t("gh.reposTruncated", { count: repos.length })}</p>
+          )}
           <div class="gh-card">
             <ul class="gh-repos">
               {repos.map((r) => {

@@ -114,3 +114,10 @@ test("отключение: лист с последствиями (число �
   await t$.waitFor(() => $(h.root, ".gh-token input"));
   assert.equal(deleted.length, 1, "DELETE вызван");
 });
+
+test("BUG-323 п.5: при reposTruncated=true показывает подсказку о неполном списке репозиториев", async () => {
+  const h = await mount({ ...FACE, reposTruncated: true });
+  await t$.waitFor(() => byText(h.root, ".gh-owner", "owner-gh"));
+  assert.ok(h.root.textContent.includes("полный список ограничен лимитом загрузки"), "подсказка о reposTruncated отображается");
+});
+

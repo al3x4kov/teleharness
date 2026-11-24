@@ -132,3 +132,43 @@ test("FEAT-20.3: маркер портала в комментарии — ра�
   assert.ok(AGENT_MARKER.test("Готово\n<!-- teleharness:agent -->"));
   assert.ok(!AGENT_MARKER.test("обычный текст"));
 });
+
+test("BUG-313 + BUG-316 + BUG-320: форк по head_repository.full_name, agentPush по Co-Authored-By, фильтр repo → filtered_repo", () => {
+  // BUG-313: head_repository.full_name ≠ repository.full_name → fork: true даже если flag fork не выставлен
+  const wfFork = normalizeEvent(
+    headers("workflow_run", "d-wf-fork"),
+    {
+      action: "completed",
+      repository: { full_name: "octo/hello" },
+      sender: { login: "stranger" },
+      workflow_run: {
+        id: 55, name: "CI", conclusion: "failure", head_branch: "fix", head_sha: "abc",
+        head_repository: { full_name: "stranger/hello", fork: false },
+        pull_requests: [], html_url: "u",
+      },
+    },
+  );
+  assert.equal(wfFork.kind, "ci_failed");
+  assert.equal(wfFork.fork, true);
+
+  // BUG-316: push в чужую ветку (same-branch) с трейлером Co-Authored-By <agents@teleharness.local> → agentPush: true
+  const agentSameBranch = normalizeEvent(
+    headers("push", "d-push-agent"),
+    {
+      ref: "refs/heads/feature/fix-1",
+      after: "1".repeat(40),
+      repository: { full_name: "octo/hello" },
+      pusher: { name: "owner" },
+      head_commit: { id: "1".repeat(40), message: "Починил CI\n\nCo-Authored-By: Claude <agents@teleharness.local>" },
+      commits: [{ id: "1".repeat(40), message: "Починил CI\n\nCo-Authored-By: Claude <agents@teleharness.local>" }],
+    },
+  );
+  assert.equal(agentSameBranch.kind, "push");
+  assert.equal(agentSameBranch.agentPush, true);
+
+  // BUG-320: чужой репозиторий отсеивается как filtered_repo (без учёта регистра)
+  const trigger = { repo: "octo/hello", kinds: ["issue_labeled"], filters: { label: "agent" } };
+  assert.equal(passesFilters({ kind: "issue_labeled", repo: "other/repo", labels: ["agent"] }, trigger).reason, "filtered_repo");
+  assert.equal(passesFilters({ kind: "issue_labeled", repo: "Octo/Hello", labels: ["agent"] }, trigger).ok, true);
+});
+
