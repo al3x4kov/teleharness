@@ -23,6 +23,7 @@ before(async () => {
     attnStatus: "src/lib/attention.js#boardStatus",
     attnOffset: "src/lib/attention.js#boardOffset",
     refreshBoard: "src/lib/attention.js#refreshBoard",
+    startBoard: "src/lib/attention.js#startBoard",
     stopBoard: "src/lib/attention.js#stopBoard",
     boardCounter: "src/lib/attention.js#boardCounter",
     titleWithCount: "src/lib/attention.js#titleWithCount",
@@ -405,11 +406,33 @@ test("кр. 5: отметка просмотра — открытие в вид�
 });
 
 test("кр. 10: доска перечитывается по событиям SSE (антидребезг), посторонние события — нет", async () => {
-  // onBoardEvent работает только после startBoard (AppShell); без него — молчит
+  ui.stopBoard();
   installFetch([{ path: "/teleharness/api/attention", reply: () => answer(FULL) }]);
+  // До startBoard — молчит
   ui.onBoardEvent({ type: "session.idle", properties: { sessionID: "x" } });
-  await new Promise((r) => setTimeout(r, 20));
-  assert.equal(fetchCalls.length, 0);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(fetchCalls.length, 0, "до startBoard события игнорируются");
+
+  try {
+    ui.startBoard(60_000);
+    await t$.waitFor(() => fetchCalls.some((c) => c.path === "/teleharness/api/attention"));
+    fetchCalls.length = 0;
+
+    // Постороннее событие SSE не запускает перечитку
+    ui.onBoardEvent({ type: "message.part.updated", properties: { sessionID: "x" } });
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(fetchCalls.length, 0, "посторонние события не триггерят /teleharness/api/attention");
+
+    // Серия событий teleharness.attention схлопывается антидребезгом (200 мс) в один запрос
+    ui.onBoardEvent({ type: "teleharness.attention", properties: { reason: "seen" } });
+    ui.onBoardEvent({ type: "teleharness.attention", properties: { reason: "snooze" } });
+    ui.onBoardEvent({ type: "teleharness.attention", properties: { reason: "done" } });
+    await new Promise((r) => setTimeout(r, 280));
+    const hits = fetchCalls.filter((c) => c.path === "/teleharness/api/attention");
+    assert.equal(hits.length, 1, "три события подряд должны схлопнуться в один запрос");
+  } finally {
+    ui.stopBoard();
+  }
 });
 
 test("кр. 15, P-11: «О чём сообщать» — три вида и тихие часы, сохранение для всех устройств", async () => {

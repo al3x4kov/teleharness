@@ -70,51 +70,25 @@ function replay(fx) {
     now: () => 0,
     engine: "opencode",
   };
+  const feedTo = async (k) => {
+    for (; n < k; n += 1) {
+      // переписыватель часть событий эмитит сам, часть возвращает вызывающему
+      const ev = rewrite(fx.events[n]);
+      if (ev) emit(ev);
+    }
+    await tick(20); // троттлинг переписывателя (0 мс → микротаски/таймеры)
+  };
   return {
     feeds,
     ctx,
-    feedTo: async (k) => {
-      for (; n < k; n += 1) {
-        // переписыватель часть событий эмитит сам, часть возвращает вызывающему
-        const ev = rewrite(fx.events[n]);
-        if (ev) emit(ev);
-      }
-      await tick(20); // троттлинг переписывателя (0 мс → микротаски/таймеры)
-    },
+    feedTo,
     all: async () => {
-      await replay_feedTo();
+      await feedTo(fx.events.length);
       return { feeds, ctx };
     },
   };
-  async function replay_feedTo() {
-    await feedTo(fx.events.length);
-  }
 }
 
-// Метаданные из session.tool.progress переписыватель сейчас отбрасывает (чинит
-// параллельный серверный исполнитель) — для промежуточных снимков ставим childId руками.
-function patchPartMeta(messages, callID, patch) {
-  for (const m of messages ?? []) {
-    for (const p of m.parts ?? []) {
-      if (p?.type === "tool" && (p.callID ?? p.id) === callID) {
-        p.state = { ...p.state, metadata: { ...(p.state?.metadata ?? {}), ...patch } };
-      }
-    }
-  }
-}
-
-// Ввод на queued-снимке переписыватель пока не кладёт в часть (в живом потоке
-// он приходит JSON-строкой в session.tool.input.ended как d.text — положит в
-// state.input серверный исполнитель); для контракта клиента ставим руками.
-function patchPartInput(messages, callID, input) {
-  for (const m of messages ?? []) {
-    for (const p of m.parts ?? []) {
-      if (p?.type === "tool" && (p.callID ?? p.id) === callID) {
-        p.state = { ...p.state, input };
-      }
-    }
-  }
-}
 const evIdx = (fx, pred) => fx.events.findIndex(pred);
 const evIdxLast = (fx, pred) => fx.events.map((e, i) => (pred(e) ? i : -1)).reduce((a, b) => Math.max(a, b), -1);
 
@@ -128,8 +102,6 @@ test("FEAT-01.77 (а): запуск в очереди → работает → �
 
   // в очереди: ввод инструмента известен, вызов ещё не начат (часть pending)
   await r.feedTo(evIdx(SYNC, (e) => e.type === "session.tool.input.ended" && e.data?.id === CALL) + 1);
-  const calledInput = SYNC.events.find((e) => e.type === "session.tool.called" && e.data?.id === CALL).data.input;
-  patchPartInput(r.feeds.get(MAIN), CALL, calledInput);
   let runs = runsOfMessages(r.feeds.get(MAIN) ?? [], r.ctx);
   assert.equal(runs.length, 1, "одна карточка агента");
   let run = runs[0];
@@ -141,10 +113,9 @@ test("FEAT-01.77 (а): запуск в очереди → работает → �
   assert.equal(run.id, CALL);
   assert.equal(run.now, null, "у очереди нет строки «сейчас»");
 
-  // работает: childId известен (в живом прогоне — руками, см. patchPartMeta),
+  // работает: childId приходит из session.tool.progress через createV2Rewriter,
   // дочерняя сессия занята, шагов ещё нет → «Думает»
   await r.feedTo(evIdx(SYNC, (e) => e.type === "session.tool.progress" && e.data?.id === CALL) + 1);
-  patchPartMeta(r.feeds.get(MAIN), CALL, { sessionID: CHILD, status: "running" });
   run = runsOfMessages(r.feeds.get(MAIN) ?? [], r.ctx)[0];
   assert.equal(run.state, "running");
   assert.equal(run.childId, CHILD);
@@ -152,9 +123,6 @@ test("FEAT-01.77 (а): запуск в очереди → работает → �
 
   // работает: в дочерней ленте видны glob и read — «Читает <путь>»
   await r.feedTo(evIdx(SYNC, (e) => e.type === "session.tool.called" && e.data?.id === "call_34feeceb0c8346298c7300ca") + 1);
-  // работающий шаг несёт ввод (state.input) в реальном opencode; переписыватель
-  // кладёт его только на success — ставим руками, чинит серверный исполнитель
-  patchPartInput(r.feeds.get(CHILD), "call_34feeceb0c8346298c7300ca", SYNC.events.find((e) => e.type === "session.tool.called" && e.data?.id === "call_34feeceb0c8346298c7300ca").data.input);
   run = runsOfMessages(r.feeds.get(MAIN) ?? [], r.ctx)[0];
   assert.equal(run.state, "running");
   assert.equal(run.steps.length, 2, "glob и read — два шага");
@@ -162,8 +130,8 @@ test("FEAT-01.77 (а): запуск в очереди → работает → �
   assert.equal(run.steps[0].status, "running");
   assert.deepEqual(run.now, { verb: "Читает", object: "…\\tmp\\w2-fixture-mwbohnze" }); // у пути — хвост (pathTail)
 
-  // готов: полный прогон
-  await r.feedTo(SYNC.events.length);
+  // готов: полный прогон через all()
+  await r.all();
   run = runsOfMessages(r.feeds.get(MAIN) ?? [], r.ctx)[0];
   assert.equal(run.state, "done");
   assert.equal(run.now, null);

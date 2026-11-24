@@ -752,7 +752,7 @@ test("BUG-155: paths with * or ? are not artifacts", () => {
   assert.deepEqual(collectArtifactEntries([], [text], dir).map((e) => e.path), want);
 });
 
-import { isPipelineStepSession } from "../src/lib/normalize.js";
+import { isPipelineStepSession, fileKindOf, fileTypeLabel, parseCsv, commandImagePaths } from "../src/lib/normalize.js";
 test("BUG-256: разговоры шагов пайпа (папка <проект>/pipelines/<имя>) не попадают в списки чатов", () => {
   assert.equal(isPipelineStepSession({ directory: "/home/u/pipelines/ревью" }), true);
   assert.equal(isPipelineStepSession({ directory: "C:\\Users\\U\\pipelines\\x" }), true);
@@ -765,3 +765,25 @@ test("BUG-257: чат шага тенанта (папка проекта) узн
   assert.equal(isPipelineStepSession({ directory: "/home/t", title: "⇄ Ревью · Проверка" }), true);
   assert.equal(isPipelineStepSession({ directory: "/home/t", title: "Обычный чат" }), false);
 });
+
+test("BUG-301: fileKindOf/fileTypeLabel поддерживают pptx; legacy ppt остаётся binary", () => {
+  assert.equal(fileKindOf("deck.pptx"), "pptx");
+  assert.equal(fileKindOf("DECK.PPTX"), "pptx");
+  assert.equal(fileTypeLabel("deck.pptx"), "Презентация PowerPoint");
+  assert.equal(fileKindOf("old.ppt"), "binary");
+  assert.equal(fileKindOf("macro.xlsm"), "xlsx");
+});
+
+test("BUG-301: parseCsv корректно сохраняет кавычку внутри незакавыченного поля", () => {
+  assert.deepEqual(parseCsv('foo"bar,baz\n"a""b",c', ","), [
+    ['foo"bar', "baz"],
+    ['a"b', "c"],
+  ]);
+});
+
+test("BUG-301: commandImagePaths сохраняет POSIX-разделители для Linux sessionDir", () => {
+  const part = { type: "tool", tool: "bash", state: { status: "completed", input: { command: "python plot.py -o charts/out.png" }, output: "" } };
+  assert.deepEqual(commandImagePaths(part, "/home/user/proj"), ["/home/user/proj/charts/out.png"]);
+  assert.deepEqual(commandImagePaths(part, "D:\\Proj"), ["D:\\Proj\\charts\\out.png"]);
+});
+

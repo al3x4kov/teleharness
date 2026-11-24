@@ -33,7 +33,7 @@ const msg = (i) => {
 };
 const HISTORY = Array.from({ length: 250 }, (_, i) => msg(i));
 const asks = () => fetchCalls.filter((c) => c.path === `/teleharness/api/session/${SID}/message`);
-const texts = (root) => $$(root, ".msg").map((el) => el.textContent);
+const texts = (root) => $$(root, ".msg").map((el) => (el.querySelector(".bubble-text, .md") ?? el).textContent.trim());
 
 // gate(query) → promise to hold a page; fail(query) → true to answer 502.
 function routes({ gate = null, fail = null } = {}) {

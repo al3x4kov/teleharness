@@ -262,7 +262,7 @@ export function gitRoutes(deps) {
         if (req.method === "GET") return sendJson(res, 200, deps.getGitSettings(user.id));
         if (req.method !== "PUT") return sendJson(res, 405, { error: "method not allowed" });
         const body = await deps.readJsonBody(req, 16 * 1024);
-        if (body === null || typeof body !== "object") return sendJson(res, 400, { error: "bad json body" });
+        if (body === null || typeof body !== "object" || Array.isArray(body)) return sendJson(res, 400, { error: "bad json body" });
         let patch;
         try {
           patch = deps.cleanGitSettings(body);

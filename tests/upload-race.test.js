@@ -49,9 +49,8 @@ test("20 параллельных загрузок одного имени — 2
   const onDisk = readdirSync(uploadDir).filter((f) => f.startsWith("report"));
   assert.equal(onDisk.length, 20, `в каталоге 20 файлов: ${onDisk.join(", ")}`);
 
-  const contents = PAYLOADS.map((b) => b.toString("utf8")).sort();
-  for (const [i, name] of names.entries()) {
-    const got = readFileSync(path.join(uploadDir, name), "utf8");
-    assert.ok(contents.includes(got), `содержимое ${name} целое и совпадает с одним из отправленных`);
-  }
+  const expected = PAYLOADS.map((b) => b.toString("utf8"));
+  const gotByIndex = names.map((name) => readFileSync(path.join(uploadDir, name), "utf8"));
+  assert.deepEqual(gotByIndex, expected, "каждый ответ соответствует ровно своему отправленному файлу (биекция 1-к-1)");
+  assert.deepEqual([...gotByIndex].sort(), [...expected].sort(), "на диске сохранены все 20 уникальных payload без дублей");
 });

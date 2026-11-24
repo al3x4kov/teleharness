@@ -282,16 +282,25 @@ test("chat.css: composer textarea is 16px (iOS zoom guard)", () => {
 });
 
 test("all text inputs across stylesheets are ≥16px", () => {
-  const files = ["src/app.css", "src/components/views.css", "src/components/dialogs.css", "src/components/chat.css"];
-  const selectors = [".composer-ta", ".dlg-custom-input", ".modal-input", ".login-input", ".access-input", ".search"];
+  const files = [
+    "src/app.css",
+    "src/claude-look.css",
+    "src/components/views.css",
+    "src/components/dialogs.css",
+    "src/components/chat.css",
+    "src/components/right-panel.css",
+  ];
+  const selectors = [".composer-ta", ".dlg-custom-input", ".modal-input", ".login-input", ".access-input", ".search", ".rp-search-input"];
   for (const f of files) {
     const css = readFileSync(path.join(ROOT, f), "utf8");
     for (const sel of selectors) {
-      const re = new RegExp(`(?:^|\\n)${sel.replace(".", "\\.")}\\s*\\{([^}]*)\\}`);
-      const block = re.exec(css)?.[1];
-      if (!block || !/font-size/.test(block)) continue;
-      const size = Number(/font-size:\s*(\d+(?:\.\d+)?)px/.exec(block)?.[1]);
-      assert.ok(size >= 16, `${f} ${sel}: ${size}px`);
+      const re = new RegExp(`(?:^|\\n)${sel.replace(".", "\\.")}\\s*\\{([^}]*)\\}`, "g");
+      for (const m of css.matchAll(re)) {
+        const block = m[1];
+        if (!block || !/font-size/.test(block)) continue;
+        const size = Number(/font-size:\s*(\d+(?:\.\d+)?)px/.exec(block)?.[1]);
+        assert.ok(size >= 16, `${f} ${sel}: ${size}px`);
+      }
     }
   }
 });

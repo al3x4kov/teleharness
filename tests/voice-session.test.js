@@ -499,11 +499,8 @@ test("browser-STT: partial → heard; пауза pauseMs → utterance → promp
   const { session, snapshots, calls } = browserEnv();
   return (async () => {
     await drain();
-    session.toggleMute(); // обход дефекта старта: смена фазы будит syncBrowserStt
-    session.toggleMute();
-    await drain();
     const rec = FakeRecognition.last;
-    assert.ok(rec?.started >= 1, "распознаватель запущен");
+    assert.ok(rec?.started >= 1, "распознаватель запущен сразу при открытии");
     sayPartial(rec, "привет", " как дела");
     assert.equal(snapshots.at(-1).heard, "Привет как дела");
     assert.equal(snapshots.at(-1).phase, "listening");
@@ -519,16 +516,12 @@ test("browser-STT: mute глушит распознаватель, unmute зап
   const { session } = browserEnv();
   return (async () => {
     await drain();
-    session.toggleMute(); // старт дефектен (rec не создан),mute ничего не прерывает
-    await drain();
-    session.toggleMute(); // unmute → syncBrowserStt запускает rec
-    await drain();
-    assert.ok(FakeRecognition.last?.started >= 1, "распознаватель запущен");
+    assert.ok(FakeRecognition.last?.started >= 1, "распознаватель запущен при открытии");
     session.toggleMute(); // mute при живом rec → abort
     await drain();
     assert.ok(FakeRecognition.last?.abortedCount >= 1, "при mute recognizer прерван");
     const before = FakeRecognition.last;
-    session.toggleMute(); // снова listening
+    session.toggleMute(); // unmute → снова listening
     await drain();
     assert.ok(FakeRecognition.last !== before, "unmute создаёт новый распознаватель");
     assert.ok(FakeRecognition.last?.started >= 1, "unmute запускает распознаватель заново");
@@ -707,9 +700,6 @@ test("close из listening (browser-STT с pending-паузой): rec прерв
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { session, snapshots, calls, ctx, stream } = browserEnv();
   return (async () => {
-    await drain();
-    session.toggleMute();
-    session.toggleMute();
     await drain();
     const rec = FakeRecognition.last;
     sayPartial(rec, "не", " отправлено");

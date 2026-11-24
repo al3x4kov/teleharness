@@ -41,7 +41,7 @@ afterEach(() => {
 const ADMIN = { id: "admin", name: "admin", role: "admin" };
 const USER = { id: "u_n", name: "Carol", role: "user" };
 // FEAT-11.18: «Подписки» видны всем пользователям (владелец 2026-11-12) — из admin-списка убраны
-const ADMIN_TITLES = ["Компьютер", "Пользователи", "Активные ходы", "Администрирование"];
+const ADMIN_TITLES = ["Компьютер", "Агенты ACP", "Пользователи", "Активные ходы", "Фоновые агенты", "Администрирование"];
 
 test("router: #/settings/<раздел> и #/settings/<раздел>/<глубже> — экран настроек", () => {
   assert.deepEqual(ui.match("/settings/models").params, { section: "models" });
@@ -60,7 +60,7 @@ test("resolveSettings: известный раздел, неизвестный, 
   assert.equal(ui.resolveSettings("models", "nope", { admin: true }), "unknown");
   assert.equal(ui.resolveSettings("voice", null, { voice: false }), "unknown");
   assert.equal(ui.resolveSettings(null, null), null);
-  assert.deepEqual(ui.ADMIN_SECTIONS.sort(), ["acp", "active", "background", "computer", "users"]);
+  assert.deepEqual([...ui.ADMIN_SECTIONS].sort(), ["acp", "active", "background", "computer", "users"]);
 });
 
 test("П32.У1 корень admin: группы «Чаты · Приложение · Возможности · Администрирование», строки ведут в разделы, детализация — переключатель в строке", async () => {
@@ -70,7 +70,7 @@ test("П32.У1 корень admin: группы «Чаты · Приложени
   await t$.waitFor(() => $(root, 'a[href="#/settings/voice"]'));
   assert.deepEqual($$(root, ".set-group-title").map((e) => e.textContent), ["Чаты", "Приложение", "Возможности", "Администрирование"]);
   const hrefs = $$(root, "a.set-link").map((a) => a.getAttribute("href"));
-  for (const id of ["models", "prompt", "voice", "appearance", "notifications", "mcp", "subscription", "computer", "users", "active", "acp", "about"]) {
+  for (const id of ["models", "prompt", "voice", "appearance", "notifications", "mcp", "subscription", "computer", "users", "active", "acp", "background", "about"]) {
     assert.ok(hrefs.includes("#/settings/" + id), id);
   }
   assert.match($(root, ".set-account").textContent, /admin.*администратор · Teleharness \d+\.\d+\.\d+/);
@@ -89,11 +89,15 @@ test("П32.Н2 пользователь: в корне нет admin-строк �
   const top = t$.mount(ui.SettingsView);
   await t$.flush(5);
   for (const t of ADMIN_TITLES) assert.equal(top.root.textContent.includes(t), false, `нет «${t}»`);
+  const topHrefs = $$(top.root, "a.set-link").map((a) => a.getAttribute("href"));
+  for (const id of ui.ADMIN_SECTIONS) assert.equal(topHrefs.includes("#/settings/" + id), false, `нет ссылки на ${id}`);
   assert.equal(/администратор/i.test(top.root.textContent), false);
   const top0 = top.root.textContent;
   top.unmount();
   assert.ok(top0.includes("Подписки"), "FEAT-11.18: строка «Подписки» у обычного пользователя есть");
-  for (const id of ["users", "computer", "active"]) {
+  const allAdminIds = [...ui.ADMIN_SECTIONS].sort();
+  assert.deepEqual(allAdminIds, ["acp", "active", "background", "computer", "users"], "проверяем все 5 ADMIN_SECTIONS");
+  for (const id of allAdminIds) {
     location.hash = "#/settings/" + id;
     const h = t$.mount(ui.SettingsView, { section: id });
     assert.equal(h.root.querySelector(".settings-section"), null, `${id}: содержимое не рендерится ни на миг`);
@@ -104,7 +108,9 @@ test("П32.Н2 пользователь: в корне нет admin-строк �
     h.unmount();
   }
   const paths = fetchCalls.map((c) => c.path);
-  for (const p of ["/teleharness/api/host", "/teleharness/api/usage", "/teleharness/api/admin/users", "/teleharness/api/status"]) assert.equal(paths.includes(p), false, `тенант не спрашивает ${p}`);
+  for (const p of ["/teleharness/api/host", "/teleharness/api/usage", "/teleharness/api/admin/users", "/teleharness/api/status", "/teleharness/api/acp/catalog", "/teleharness/api/temporal/triggers"]) {
+    assert.equal(paths.includes(p), false, `тенант не спрашивает ${p}`);
+  }
 });
 
 test("П32.Н1: неизвестный раздел → корень, адрес #/settings, без белого экрана", async () => {

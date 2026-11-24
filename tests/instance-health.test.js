@@ -164,3 +164,143 @@ test("BUG-218 reaper: занятость, появившаяся во время
   assert.equal(out.disposed, 1, "dispose выполнен");
   assert.ok(logs.some((l) => l.includes("dispose raced a starting turn") && l.includes("C:\\y")), logs.join("\n"));
 });
+
+// ---- TASK-14.21: ветка v2-адаптера createInstanceHealth({ oc }) ----------------
+
+function fakeOcV2(overrides = {}) {
+  const calls = [];
+  const oc = {
+    api: "v2",
+    async warmup(scope, opts) {
+      calls.push(["warmup", scope, opts]);
+      if (overrides.warmup) return overrides.warmup(scope, opts);
+      return { status: 200 };
+    },
+    async listProviders(opts) {
+      calls.push(["listProviders", opts]);
+      if (overrides.listProviders) return overrides.listProviders(opts);
+      return { connected: [], all: [] };
+    },
+    async mcpStatus(opts) {
+      calls.push(["mcpStatus", opts]);
+      if (overrides.mcpStatus) return overrides.mcpStatus(opts);
+      return {};
+    },
+    async busyMap(opts) {
+      calls.push(["busyMap", opts]);
+      if (overrides.busyMap) return overrides.busyMap(opts);
+      return {};
+    },
+    async listSessions(opts) {
+      calls.push(["listSessions", opts]);
+      if (overrides.listSessions) return overrides.listSessions(opts);
+      return [];
+    },
+    async disposeInstance(opts) {
+      calls.push(["disposeInstance", opts]);
+      if (overrides.disposeInstance) return overrides.disposeInstance(opts);
+      return true;
+    },
+  };
+  return { oc, calls };
+}
+
+test("v2-адаптер warm: warmup (3 попытки) + listProviders, дедупликация параллельных вызовов", async () => {
+  const { oc, calls } = fakeOcV2();
+  const h = createInstanceHealth({ oc, log: () => {} });
+  await Promise.all([h.warm(DIR), h.warm(DIR)]);
+  await h.warm(DIR);
+  assert.deepEqual(calls.map((c) => c[0]), ["warmup", "listProviders"]);
+  assert.equal(calls[0][1].directory, DIR);
+  assert.equal(calls[0][2].attempts, 3);
+  assert.equal(calls[1][1].directory, DIR);
+});
+
+test("v2-адаптер busy: пересекает глобальную busyMap с индексом сессий по нужной папке; ошибка → fail-closed true", async () => {
+  const OTHER_DIR = "/srv/other/folder";
+  const { oc } = fakeOcV2({
+    busyMap: async () => ({ ses_other: { type: "busy" }, ses_idle: { type: "idle" } }),
+    listSessions: async () => [
+      { id: "ses_other", directory: OTHER_DIR },
+      { id: "ses_idle", directory: DIR },
+    ],
+  });
+  const h = createInstanceHealth({ oc, log: () => {} });
+  assert.equal(await h.busy(DIR), false, "занятая сессия в чужой папке не блокирует DIR");
+  assert.equal(await h.busy(OTHER_DIR), true, "занятая сессия в OTHER_DIR обнаруживается");
+
+  const fail = fakeOcV2({ busyMap: async () => { throw new Error("net"); } });
+  const hf = createInstanceHealth({ oc: fail.oc, log: () => {} });
+  assert.equal(await hf.busy(DIR), true, "ошибка busyMap → fail-closed true");
+});
+
+test("v2-адаптер heal (позитивный): здоровая папка не трогается; отравленная MCP 499 / warmup 503 → dispose и сброс кэша warm", async () => {
+  // Здоровая папка
+  const ok = fakeOcV2();
+  const hOk = createInstanceHealth({ oc: ok.oc, log: () => {} });
+  assert.equal(await hOk.heal(DIR), false);
+  assert.equal(ok.calls.some((c) => c[0] === "disposeInstance"), false);
+
+  // Отравленная MCP (499) и отравленный warmup (503)
+  for (const mode of ["mcp499", "warmup503"]) {
+    const logs = [];
+    const { oc, calls } = fakeOcV2({
+      warmup: async () => ({ status: mode === "warmup503" ? 503 : 200 }),
+      mcpStatus: async () => {
+        if (mode === "mcp499") {
+          const e = new Error("aborted");
+          e.status = 499;
+          throw e;
+        }
+        return {};
+      },
+    });
+    const h = createInstanceHealth({ oc, log: (m) => logs.push(m) });
+    await h.warm(DIR);
+    calls.length = 0;
+    assert.equal(await h.heal(DIR), true, mode);
+    const disp = calls.find((c) => c[0] === "disposeInstance");
+    assert.equal(disp?.[1]?.directory, DIR, mode);
+    assert.ok(logs.some((l) => /poisoned/.test(l) && l.includes(DIR)), logs.join("\n"));
+    calls.length = 0;
+    await h.warm(DIR);
+    assert.ok(calls.some((c) => c[0] === "warmup"), "после dispose warm запускается заново");
+  }
+});
+
+test("v2-адаптер heal (негативный): не диспозит занятую папку; сетевая ошибка без статуса — не poisoned; фиксирует гонку dispose", async () => {
+  // Занятая папка
+  const logsBusy = [];
+  const busyCase = fakeOcV2({
+    warmup: async () => ({ status: 503 }),
+    busyMap: async () => ({ ses_1: { type: "busy" } }),
+    listSessions: async () => [{ id: "ses_1", directory: DIR }],
+  });
+  const hBusy = createInstanceHealth({ oc: busyCase.oc, log: (m) => logsBusy.push(m) });
+  assert.equal(await hBusy.heal(DIR), false);
+  assert.equal(busyCase.calls.some((c) => c[0] === "disposeInstance"), false);
+  assert.ok(logsBusy.some((l) => /busy/.test(l)));
+
+  // Сетевая ошибка без HTTP-статуса — не считается poisoned
+  const netCase = fakeOcV2({
+    warmup: async () => { throw new TypeError("fetch failed"); },
+    mcpStatus: async () => { throw new TypeError("fetch failed"); },
+  });
+  const hNet = createInstanceHealth({ oc: netCase.oc, log: () => {} });
+  assert.equal(await hNet.heal(DIR), false);
+  assert.equal(netCase.calls.some((c) => c[0] === "disposeInstance"), false);
+  await hNet.warm(DIR); // ошибки в warm гасятся
+
+  // Гонка: занятость появилась во время dispose
+  let disposed = false;
+  const raceLogs = [];
+  const raceCase = fakeOcV2({
+    warmup: async () => ({ status: 503 }),
+    disposeInstance: async () => { disposed = true; },
+    busyMap: async () => (disposed ? { ses_race: { type: "busy" } } : {}),
+    listSessions: async () => [{ id: "ses_race", directory: DIR }],
+  });
+  const hRace = createInstanceHealth({ oc: raceCase.oc, log: (m) => raceLogs.push(m) });
+  assert.equal(await hRace.heal(DIR), true);
+  assert.ok(raceLogs.some((l) => l.includes("dispose raced a starting turn") && l.includes(DIR)), raceLogs.join("\n"));
+});

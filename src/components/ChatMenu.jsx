@@ -111,7 +111,9 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
     const r = btnRef.current?.getBoundingClientRect?.();
     if (!r) return;
     const h = menuRef.current?.offsetHeight || 168;
-    setPos(menuPlacement(r, { vw: window.innerWidth || 402, vh: window.innerHeight || 874, height: h }));
+    const vw = window.visualViewport?.width || window.innerWidth || 402;
+    const vh = window.visualViewport?.height || window.innerHeight || 874;
+    setPos(menuPlacement(r, { vw, vh, height: h }));
   };
 
   useLayoutEffect(() => {
@@ -270,8 +272,10 @@ export default function ChatMenu({ sessionId, busy = null, empty = false, varian
             sessionId={sessionId}
             item={deleting.wt}
             title={session.title || t("chat.defaultTitle")}
-            onClose={() => setDeleting(null)}
+            onClose={() => !deleting.pending && setDeleting(null)}
             onDelete={async () => {
+              if (deleting.pending) return;
+              setDeleting((d) => (d && typeof d === "object" ? { ...d, pending: true } : d));
               const ok = await deleteChat(sessionId, { stopFirst: running });
               setDeleting(null);
               if (ok) onDeleted?.(sessionId);

@@ -47,7 +47,9 @@ function sseFrame(res, obj) {
 
 const samePath = (a, b) => {
   try {
-    return path.resolve(String(a)).toLowerCase() === path.resolve(String(b)).toLowerCase();
+    const ra = path.resolve(String(a));
+    const rb = path.resolve(String(b));
+    return WIN ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
   } catch {
     return false;
   }
@@ -177,6 +179,19 @@ const upstream = http.createServer((req, res) => {
         { id: "p_foreign", worktree: DIR_FOREIGN },
         { id: "p_own", worktree: ALICE_DIR },
       ]),
+    );
+    return;
+  }
+  if (req.method === "GET" && url.pathname === "/mcp") {
+    note(req);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        context7: { status: "connected" },
+        marketplace: { status: "connected" },
+        playwright: { status: "connected" },
+        "admin-only-mcp": { status: "connected", error: "/secret/path" },
+      }),
     );
     return;
   }
@@ -570,13 +585,13 @@ test("BUG-12.10 / FEAT-03.21: /host is admin-only, /mcp is filtered for tenants;
   // FEAT-03.21 (owner 2026-11-05): a tenant sees its own MCP servers again —
   // never 403, never a server outside TENANT_MCP (tests/system-prompt-server.test.js).
   const tm = await tenant("/teleharness/api/mcp");
-  assert.notEqual(tm.status, 403);
-  if (tm.status === 200) {
-    const names = Object.keys(await tm.json());
-    assert.ok(names.every((n) => ["websearch", "context7", "grep_app", "marketplace"].includes(n)), names.join(","));
-  }
+  assert.equal(tm.status, 200, "tenant /mcp must succeed");
+  const tNames = Object.keys(await tm.json()).sort();
+  assert.deepEqual(tNames, ["context7", "marketplace"], "tenant sees only allowlisted MCP servers");
   assert.equal((await tenant("/teleharness/api/host")).status, 403);
-  assert.notEqual((await admin("/teleharness/api/mcp")).status, 403);
+  const am = await admin("/teleharness/api/mcp");
+  assert.equal(am.status, 200);
+  assert.ok("admin-only-mcp" in (await am.json()), "admin keeps full MCP catalog");
 
   const agents = await (await tenant("/teleharness/api/agent")).json();
   assert.deepEqual(agents.map((a) => a.name), ["safe"], "shell-capable and delegating agents are hidden from tenants");
@@ -690,6 +705,60 @@ test("BUG-12.9: login is JSON-only; cross-site mutations are refused", async () 
   assert.equal(sfs.status, 403);
   const same = await tenant("/teleharness/api/session", { method: "POST", headers: { "content-type": "application/json", origin: base }, body: "{}" });
   assert.equal(same.status, 200, "same-origin requests pass");
+
+  // BUG-302: crossSite проверяет схему (x-forwarded-proto) и нормализует дефолтный порт (:443/:80)
+  const crossScheme = await tenant("/teleharness/api/session", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "http://example.com",
+      "x-forwarded-host": "example.com",
+      "x-forwarded-proto": "https",
+      "sec-fetch-site": "same-site",
+    },
+    body: "{}",
+  });
+  assert.equal(crossScheme.status, 403, "http Origin на https Host отклоняется даже с Sec-Fetch-Site: same-site");
+
+  const defPort443 = await tenant("/teleharness/api/session", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://example.com",
+      "x-forwarded-host": "example.com:443",
+      "x-forwarded-proto": "https",
+    },
+    body: "{}",
+  });
+  assert.equal(defPort443.status, 200, "https Origin без порта с Host :443 не даёт ложный 403");
+
+  const defPort80 = await tenant("/teleharness/api/session", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "http://example.com",
+      "x-forwarded-host": "example.com:80",
+      "x-forwarded-proto": "http",
+    },
+    body: "{}",
+  });
+  assert.equal(defPort80.status, 200, "http Origin без порта с Host :80 не даёт ложный 403");
+
+  // SRV-21 / TASK-14.21: 10 неудач логина с одного IP → 11-я попытка 429
+  for (let i = 0; i < 10; i++) {
+    const fail = await fetch(`${base}/teleharness/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.77" },
+      body: JSON.stringify({ token: "wrong-token-value" }),
+    });
+    assert.equal(fail.status, 401, `bad login ${i + 1}`);
+  }
+  const blocked = await fetch(`${base}/teleharness/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-forwarded-for": "198.51.100.77" },
+    body: JSON.stringify({ token: T.token }),
+  });
+  assert.equal(blocked.status, 429, "11th attempt from same IP is throttled with 429");
 });
 
 test("ADR-009: a legacy raw-token cookie still works once and is migrated to a session cookie", async () => {
@@ -758,10 +827,34 @@ test("TASK-12.20: /healthz is loopback-direct only; access log has no query stri
 });
 
 test("BUG-12.12: an internal error answers a generic 500 with rid; the process keeps serving", async () => {
-  const r = await admin("/teleharness/api/admin/users/%E0%A4%A/token", { method: "POST" });
-  assert.ok(r.status === 500 || r.status === 400 || r.status === 404);
-  const txt = await r.text();
-  assert.ok(!/URIError|at .*\.js/.test(txt), "no internal error text leaks");
+  // Битый %-код даёт 400 (SRV-28), не 500 — проверяем отдельно, что URIError не утекает
+  const bad = await admin("/teleharness/api/admin/users/%E0%A4%A/token", { method: "POST" });
+  assert.equal(bad.status, 400);
+  assert.ok(!/URIError|at .*\.js/.test(await bad.text()), "no internal error text leaks on 400");
+
+  // Настоящий 500 через apiError → internalError: временная папка на пути users.json.<pid>.tmp вызывает EISDIR
+  const blocker = path.join(TMP, "data", `users.json.${srv.child.pid}.tmp`);
+  mkdirSync(blocker, { recursive: true });
+  try {
+    const r = await admin("/teleharness/api/me/system-prompt", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "trigger-internal-error" }),
+    });
+    assert.equal(r.status, 500, "internal fs error must produce real 500");
+    const txt = await r.text();
+    const parsed = JSON.parse(txt);
+    assert.equal(parsed.error, "Внутренняя ошибка сервера");
+    assert.ok(typeof parsed.rid === "string" && parsed.rid.length > 0, "500 body must carry rid");
+    assert.ok(!/EISDIR|users\.json|at .*\.js/i.test(txt), `no stack or fs path leaks: ${txt}`);
+  } finally {
+    rmSync(blocker, { recursive: true, force: true });
+    await admin("/teleharness/api/me/system-prompt", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: "" }),
+    });
+  }
   assert.equal((await admin("/teleharness/api/auth/me")).status, 200, "the server is still alive");
 });
 

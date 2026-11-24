@@ -112,28 +112,32 @@ test("действия строки — кнопки с понятными aria-
 test("rename: «New session - ISO» не подставляется в поле (BUG-015); обычный заголовок — подставляется", () => {
   const saved = [];
   const a = t$.mount(ui.RenameModal, { session: ses("s1", "New session - 2026-11-02T10:00:00.000Z"), onSave: (x) => saved.push(x), onClose() {} });
-  assert.equal($(a.root, ".modal-input").value, "");
-  assert.equal($(a.root, ".btn-primary").disabled, true, "пустое имя не сохранить");
+  assert.equal($(document.body, ".modal-input").value, "");
+  assert.equal($(document.body, ".modal .btn-primary").disabled, true, "пустое имя не сохранить");
   a.unmount();
   const b = t$.mount(ui.RenameModal, { session: ses("s2", "Отчёт за квартал"), onSave: (x) => saved.push(x), onClose() {} });
-  assert.equal($(b.root, ".modal-input").value, "Отчёт за квартал");
-  t$.typeInto($(b.root, ".modal-input"), "  Новый  ");
-  t$.click($(b.root, ".btn-primary"));
+  assert.equal($(document.body, ".modal-input").value, "Отчёт за квартал");
+  t$.typeInto($(document.body, ".modal-input"), "  Новый  ");
+  t$.click($(document.body, ".modal .btn-primary"));
   assert.deepEqual(saved, ["Новый"]);
 });
 
 test("delete-модалка: нет сырого «New session - ISO», текст про историю", () => {
   const d = t$.mount(ui.DeleteModal, { session: ses("s1", "New session - 2026-11-02T10:00:00.000Z"), onConfirm() {}, onClose() {} });
-  const text = $(d.root, ".modal-text").textContent;
+  const text = $(document.body, ".modal-text").textContent;
   assert.equal(text.includes("New session"), false, text);
   assert.match(text, /будет удалён вместе с историей/);
 });
 
-test("HomeView: поиск без совпадений → «Ничего не найдено по «…»»", async () => {
-  installFetch([{ method: "GET", path: "/teleharness/api/session", reply: () => [ses("ses_a", "Отчёт"), ses("ses_b", "Задача")] }]);
-  ui.store.sessions.value = [ses("ses_a", "Отчёт"), ses("ses_b", "Задача")];
+test("HomeView: поиск без совпадений → «Ничего не найдено по «…»»; сырой плейсхолдер «New session - ISO» не матчится (BUG-304)", async () => {
+  installFetch([{ method: "GET", path: "/teleharness/api/session", reply: () => [ses("ses_a", "Отчёт"), ses("ses_b", "New session - 2026-11-02T10:00:00.000Z")] }]);
+  ui.store.sessions.value = [ses("ses_a", "Отчёт"), ses("ses_b", "New session - 2026-11-02T10:00:00.000Z")];
   const { root } = t$.mount(ui.HomeView);
   await t$.waitFor(() => $$(root, ".swipe").length >= 2);
+  t$.typeInto($(root, ".home-search"), "new session");
+  const emptyNs = await t$.waitFor(() => [...root.querySelectorAll("*")].find((el) => /^Ничего не найдено по «new session»/.test(el.textContent.trim()) && el.children.length <= 2));
+  assert.equal(!!emptyNs, true, "поиск по сырому 'new session' не находит чаты без названия");
+  assert.equal($$(root, ".swipe").length, 0);
   t$.typeInto($(root, ".home-search"), "zzz-нет-такого");
   const empty = await t$.waitFor(() => [...root.querySelectorAll("*")].find((el) => /^Ничего не найдено по «zzz-нет-такого»/.test(el.textContent.trim()) && el.children.length <= 2));
   assert.equal(!!empty, true);
@@ -143,7 +147,7 @@ test("HomeView: поиск без совпадений → «Ничего не �
 test("rename: сбой сохранения — модалка остаётся открытой, введённое имя и ошибка внутри (ISSUE-007)", async () => {
   let closed = 0;
   const calls = [];
-  const m = t$.mount(ui.RenameModal, {
+  t$.mount(ui.RenameModal, {
     session: ses("s3", "Старое"),
     onSave: async (x) => {
       calls.push(x);
@@ -151,16 +155,16 @@ test("rename: сбой сохранения — модалка остаётся 
     },
     onClose: () => closed++,
   });
-  t$.typeInto($(m.root, ".modal-input"), "Новое имя");
-  t$.click($(m.root, ".btn-primary"));
-  const err = await t$.waitFor(() => $(m.root, ".modal-error"));
+  t$.typeInto($(document.body, ".modal-input"), "Новое имя");
+  t$.click($(document.body, ".modal .btn-primary"));
+  const err = await t$.waitFor(() => $(document.body, ".modal-error"));
   assert.match(err.textContent, /Не удалось переименовать чат/);
   assert.equal(err.getAttribute("role"), "alert");
-  assert.equal($(m.root, ".modal-input").value, "Новое имя", "введённое имя не потеряно");
-  assert.equal($(m.root, ".modal-input").getAttribute("aria-invalid"), "true");
+  assert.equal($(document.body, ".modal-input").value, "Новое имя", "введённое имя не потеряно");
+  assert.equal($(document.body, ".modal-input").getAttribute("aria-invalid"), "true");
   assert.equal(closed, 0, "модалка не закрылась");
-  t$.click($(m.root, ".btn-primary"));
-  await t$.waitFor(() => !$(m.root, ".modal-error"));
+  t$.click($(document.body, ".modal .btn-primary"));
+  await t$.waitFor(() => !$(document.body, ".modal-error"));
   assert.deepEqual(calls, ["Новое имя", "Новое имя"]);
 });
 
@@ -175,12 +179,12 @@ test("HomeView: сбой переименования — ошибка в мод
   await t$.waitFor(() => $$(root, ".swipe").length >= 1);
   const renameBtn = await t$.waitFor(() => $$(root, "button").find((b) => /^Переименовать чат/.test(b.getAttribute("aria-label") ?? "")));
   t$.click(renameBtn);
-  const input = await t$.waitFor(() => $(root, ".modal-input"));
+  const input = await t$.waitFor(() => $(document.body, ".modal-input"));
   t$.typeInto(input, "Квартальный отчёт");
-  t$.click($(root, ".modal .btn-primary") ?? $$(root, ".btn-primary").find((b) => /Сохранить/.test(b.textContent)));
-  const err = await t$.waitFor(() => $(root, ".modal-error"));
+  t$.click($(document.body, ".modal .btn-primary"));
+  const err = await t$.waitFor(() => $(document.body, ".modal-error"));
   assert.match(err.textContent, /переименовать/i);
-  assert.equal($(root, ".modal-input").value, "Квартальный отчёт");
+  assert.equal($(document.body, ".modal-input").value, "Квартальный отчёт");
   assert.equal(ui.store.notice.value, null, "notice не дублирует ошибку поверх «Чаты»");
   assert.equal(ui.store.sessions.value.find((s) => s.id === "ses_a").title, "Отчёт", "откат имени в списке");
 });

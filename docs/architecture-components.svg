@@ -20,15 +20,15 @@
 </defs>
 <rect width="1400" height="2140" fill="url(#bg)"/>
 <text x="60" y="62" class="t h" font-size="30" font-weight="700" text-anchor="start">Teleharness — components and data flow</text>
-<text x="60" y="94" class="m" font-size="15" font-weight="400" text-anchor="start">You talk to agent CLIs with their full harness, not to a bare model. One portal, three CLIs, durable pipelines, any provider.</text>
+<text x="60" y="94" class="m" font-size="15" font-weight="400" text-anchor="start">You talk to agent CLIs with their full harness, not to a bare model. One portal, four engine families (OpenCode, Claude, Codex, ACP), durable pipelines, any provider.</text>
 <g filter="url(#shadow)"><rect x="100" y="130" width="1200" height="112" rx="14" fill="#161a24" stroke="#2b3242" stroke-opacity="1" stroke-width="1.4"/></g>
 <text x="124" y="158" class="m h" font-size="13" font-weight="700" text-anchor="start">0 · CLIENT — any browser, phone first</text>
 <rect x="124" y="172" width="276" height="54" rx="9" class="chip"/>
 <text x="262" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">SPA · Preact + signals</text>
 <text x="262" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">installable, light / dark, en / ru</text>
 <rect x="416" y="172" width="276" height="54" rx="9" class="chip"/>
-<text x="554" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Chats · files · Git</text>
-<text x="554" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">agent steps, changes, commits</text>
+<text x="554" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle">Chats · board · review · Git</text>
+<text x="554" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">right panel (MCP/Skills), PPTX/Office, FTS5</text>
 <rect x="708" y="172" width="276" height="54" rx="9" class="chip" stroke="#f472b6" stroke-opacity="0.75"/>
 <text x="846" y="194" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#f472b6">Temporal</text>
 <text x="846" y="212" class="m" font-size="11.5" font-weight="400" text-anchor="middle">runs · pipes · schedules</text>
@@ -43,7 +43,7 @@
 <g filter="url(#shadow)"><rect x="100" y="330" width="1200" height="62" rx="14" fill="#161a24" stroke="#2b3242" stroke-opacity="1" stroke-width="1.4"/></g>
 <text x="124" y="368" class="t" font-size="17" font-weight="700" text-anchor="start">Edge</text>
 <text x="180" y="368" class="m mono" font-size="13.5" font-weight="400" text-anchor="start">ops/portal-server.js · :80 / :443</text>
-<text x="1276" y="368" class="m" font-size="13" font-weight="400" text-anchor="end">TLS · http → https · static allow-list · X-Forwarded-*</text>
+<text x="1276" y="368" class="m" font-size="13" font-weight="400" text-anchor="end">TLS · host allow-list · SSE · static allow-list · X-Forwarded-*</text>
 <path d="M700,392 L700,426" fill="none" stroke="#c9ced8" stroke-width="2.2" marker-end="url(#a_white)"/>
 <g filter="url(#shadow)"><rect x="100" y="430" width="1200" height="328" rx="14" fill="#161a24" stroke="#3a4356" stroke-opacity="1" stroke-width="1.4"/></g>
 <text x="124" y="462" class="m h" font-size="13" font-weight="700" text-anchor="start">1 · PORTAL</text>
@@ -63,7 +63,7 @@
 <text x="1138" y="522" class="m" font-size="11.5" font-weight="400" text-anchor="middle">chat → engine + model + agent</text>
 <rect x="124" y="548" width="276" height="54" rx="9" class="chip"/>
 <text x="262" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Files · Git</text>
-<text x="262" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">folder per chat, diffs, commits</text>
+<text x="262" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">files, Git, worktrees, mobile review</text>
 <rect x="416" y="548" width="276" height="54" rx="9" class="chip"/>
 <text x="554" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Turn undo</text>
 <text x="554" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">backups before edits</text>
@@ -72,7 +72,7 @@
 <text x="846" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">engine handoff, chat journal</text>
 <rect x="1000" y="548" width="276" height="54" rx="9" class="chip"/>
 <text x="1138" y="570" class="t" font-size="14" font-weight="600" text-anchor="middle">Stores</text>
-<text x="1138" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">data/*.json, atomic writes</text>
+<text x="1138" y="588" class="m" font-size="11.5" font-weight="400" text-anchor="middle">JSON + SQLite FTS5 (search, board, costs)</text>
 <rect x="124" y="614" width="276" height="54" rx="9" class="chip" stroke="#f472b6" stroke-opacity="0.75"/>
 <text x="262" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#f472b6">Temporal API</text>
 <text x="262" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">runs, pipes, versions, schedules</text>
@@ -81,19 +81,19 @@
 <text x="554" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">VAPID, RFC 8291</text>
 <rect x="708" y="614" width="276" height="54" rx="9" class="chip"/>
 <text x="846" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle">Subscriptions</text>
-<text x="846" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">usage and limits per provider</text>
+<text x="846" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">usage, costs, GitHub background triggers</text>
 <rect x="1000" y="614" width="276" height="54" rx="9" class="chip" stroke="#f472b6" stroke-opacity="0.75"/>
 <text x="1138" y="636" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#f472b6">Model bridge</text>
 <text x="1138" y="654" class="m" font-size="11.5" font-weight="400" text-anchor="middle">private socket · step = chat turn</text>
 <rect x="124" y="680" width="276" height="54" rx="9" class="chip" stroke="#4f8cff" stroke-opacity="0.75"/>
 <text x="262" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#4f8cff">opencode adapter</text>
-<text x="262" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/proxy.js · REST + events</text>
+<text x="262" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/oc-client.js · REST + SSE (v2)</text>
 <rect x="416" y="680" width="276" height="54" rx="9" class="chip" stroke="#a78bfa" stroke-opacity="0.75"/>
 <text x="554" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#a78bfa">KB cache</text>
 <text x="554" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/kb-cache.js · vault snapshot</text>
 <rect x="708" y="680" width="276" height="54" rx="9" class="chip" stroke="#e07a52" stroke-opacity="0.75"/>
 <text x="846" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#e07a52">CLI runner</text>
-<text x="846" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">Claude + Codex shim · per turn</text>
+<text x="846" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">Claude + Codex + ACP (JSON-RPC)</text>
 <rect x="1000" y="680" width="276" height="54" rx="9" class="chip" stroke="#2dd4bf" stroke-opacity="0.75"/>
 <text x="1138" y="702" class="t" font-size="14" font-weight="600" text-anchor="middle" fill="#2dd4bf">Voice service</text>
 <text x="1138" y="720" class="m" font-size="11.5" font-weight="400" text-anchor="middle">lib/voice.js · queue, quotas</text>
@@ -125,21 +125,21 @@
 <g filter="url(#shadow)"><rect x="920" y="846" width="380" height="290" rx="14" fill="#161a24" stroke="#10b981" stroke-opacity="0.75" stroke-width="1.4"/></g>
 <rect x="920" y="846" width="380" height="44" rx="14" fill="#10b981" fill-opacity="0.16"/>
 <rect x="920" y="876" width="380" height="14" fill="#10b981" fill-opacity="0.16"/>
-<text x="942" y="875" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#10b981">codex CLI</text>
-<text x="1278" y="875" class="t mono" font-size="13" font-weight="400" text-anchor="end">app-server</text>
-<text x="944" y="916" class="m" font-size="13">• codex app-server through a shim</text>
-<text x="944" y="944" class="m" font-size="13">• Ask mode, agent roles (Workflow…)</text>
-<text x="944" y="972" class="m" font-size="13">• Codex sandbox for tool calls</text>
-<text x="944" y="1000" class="m" font-size="13">• <tspan class="t" font-weight="600">chats:</tspan> admin only</text>
-<text x="944" y="1028" class="m" font-size="13">• <tspan class="t" font-weight="600">pipelines:</tspan> everyone,</text>
-<text x="956" y="1056" class="m" font-size="13">text-only for regular users</text>
-<text x="944" y="1084" class="m" font-size="13">• ChatGPT subscription login</text>
+<text x="942" y="875" class="h" font-size="17" font-weight="700" text-anchor="start" fill="#10b981">codex &amp; ACP CLIs</text>
+<text x="1278" y="875" class="t mono" font-size="13" font-weight="400" text-anchor="end">app-server · ACP</text>
+<text x="944" y="916" class="m" font-size="13">• codex app-server shim (ChatGPT sub)</text>
+<text x="944" y="944" class="m" font-size="13">• ACP JSON-RPC: Gemini, Antigravity, Copilot</text>
+<text x="944" y="972" class="m" font-size="13">• Web install &amp; sign-in wizard (Settings)</text>
+<text x="944" y="1000" class="m" font-size="13">• Ask mode, roles, per-turn sandbox</text>
+<text x="944" y="1028" class="m" font-size="13">• <tspan class="t" font-weight="600">pipelines:</tspan> Claude, Codex, ACP, OpenCode</text>
+<text x="956" y="1056" class="m" font-size="13">non-admin Codex runs text-only</text>
+<text x="944" y="1084" class="m" font-size="13">• GitHub &amp; Google &amp; OpenAI logins</text>
 <path d="M262,734 L262,842" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
 <text x="272" y="790" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#4f8cff">HTTP + SSE</text>
 <path d="M846,734 L846,770 L700,770 L700,842" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#a_orange)"/>
 <text x="710" y="800" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#e07a52">spawn · stream-json</text>
 <path d="M846,734 L846,770 L1000,770 L1000,842" fill="none" stroke="#10b981" stroke-width="2.2" marker-end="url(#a_codex)"/>
-<text x="1010" y="795" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#10b981">app-server</text>
+<text x="1010" y="795" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#10b981">app-server · ACP</text>
 <text x="1300" y="1202" class="m h" font-size="13" font-weight="700" text-anchor="end">3 · LOCAL SERVICES</text>
 <g filter="url(#shadow)"><rect x="100" y="1216" width="380" height="236" rx="14" fill="#161a24" stroke="#f5b942" stroke-opacity="0.7" stroke-width="1.4"/></g>
 <rect x="100" y="1216" width="380" height="44" rx="14" fill="#f5b942" fill-opacity="0.16"/>
@@ -149,8 +149,8 @@
 <text x="124" y="1314" class="m" font-size="13">• <tspan class="t" font-weight="600">Windows:</tspan> AppContainer (teleharness-jail)</text>
 <text x="124" y="1342" class="m" font-size="13">• <tspan class="t" font-weight="600">macOS:</tspan> user shell refused</text>
 <text x="124" y="1370" class="m" font-size="13">• access to own folder only</text>
-<text x="124" y="1398" class="m" font-size="13">• document rendering (LibreOffice,</text>
-<text x="136" y="1426" class="m" font-size="13">html2pdf)</text>
+<text x="124" y="1398" class="m" font-size="13">• client PPTX/DOCX/XLSX/PDF preview;</text>
+<text x="136" y="1426" class="m" font-size="13">optional LibreOffice / html2pdf</text>
 <g filter="url(#shadow)"><rect x="510" y="1216" width="400" height="236" rx="14" fill="#161a24" stroke="#a78bfa" stroke-opacity="0.8" stroke-width="1.4"/></g>
 <rect x="510" y="1216" width="400" height="44" rx="14" fill="#a78bfa" fill-opacity="0.16"/>
 <rect x="510" y="1246" width="400" height="14" fill="#a78bfa" fill-opacity="0.16"/>
@@ -189,7 +189,7 @@
 <text x="124" y="1590" class="m" font-size="13">• workflow history, timers, retries</text>
 <text x="124" y="1618" class="m" font-size="13">• schedules with catch-up</text>
 <text x="124" y="1646" class="m" font-size="13">• survives portal and server restarts</text>
-<text x="124" y="1674" class="m" font-size="13">• pause, cancel, terminate, signals</text>
+<text x="124" y="1674" class="m" font-size="13">• pause, cancel, resume from checkpoint</text>
 <g filter="url(#shadow)"><rect x="510" y="1520" width="400" height="180" rx="14" fill="#161a24" stroke="#f472b6" stroke-opacity="0.8" stroke-width="1.4"/></g>
 <rect x="510" y="1520" width="400" height="44" rx="14" fill="#f472b6" fill-opacity="0.16"/>
 <rect x="510" y="1550" width="400" height="14" fill="#f472b6" fill-opacity="0.16"/>
@@ -223,14 +223,14 @@
 <text x="532" y="2036" class="m" font-size="12.5" font-weight="400" text-anchor="start">Opus · Sonnet · Haiku through Claude Code</text>
 <text x="532" y="2060" class="d" font-size="12.5" font-weight="400" text-anchor="start">subscription login, no paid API in pipelines</text>
 <g filter="url(#shadow)"><rect x="920" y="1976" width="380" height="104" rx="14" fill="#161a24" stroke="#10b981" stroke-opacity="1" stroke-width="1.4"/></g>
-<text x="942" y="2010" class="t" font-size="16.5" font-weight="700" text-anchor="start">OpenAI · ChatGPT subscription</text>
-<text x="942" y="2036" class="m" font-size="12.5" font-weight="400" text-anchor="start">Codex models through codex CLI</text>
-<text x="942" y="2060" class="d" font-size="12.5" font-weight="400" text-anchor="start">subscription login</text>
+<text x="942" y="2010" class="t" font-size="16.5" font-weight="700" text-anchor="start">OpenAI · Google · GitHub</text>
+<text x="942" y="2036" class="m" font-size="12.5" font-weight="400" text-anchor="start">Codex, Gemini, Antigravity, Copilot CLI</text>
+<text x="942" y="2060" class="d" font-size="12.5" font-weight="400" text-anchor="start">subscription &amp; OAuth logins</text>
 <path d="M100,996 L56,996 L56,2028 L96,2028" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#a_blue)"/>
 <path d="M530,1136 L530,1148 L487,1148 L487,1922 L700,1922 L700,1972" fill="none" stroke="#e07a52" stroke-width="2.2" stroke-dasharray="6 5" marker-end="url(#a_orange)"/>
 <path d="M1300,996 L1356,996 L1356,2028 L1304,2028" fill="none" stroke="#10b981" stroke-width="2.2" marker-end="url(#a_codex)"/>
 <text x="50" y="1760" font-size="12.5" font-weight="600" fill="#4f8cff" text-anchor="middle" transform="rotate(-90 50 1760)">HTTPS to provider APIs</text>
-<text x="1350" y="1760" font-size="12.5" font-weight="600" fill="#10b981" text-anchor="middle" transform="rotate(-90 1350 1760)">HTTPS to OpenAI</text>
+<text x="1350" y="1760" font-size="12.5" font-weight="600" fill="#10b981" text-anchor="middle" transform="rotate(-90 1350 1760)">HTTPS to OpenAI / ACP</text>
 <text x="710" y="1916" class="t" font-size="12.5" font-weight="600" text-anchor="start" fill="#e07a52">HTTPS to Anthropic</text>
 <rect x="469" y="1615" width="48" height="18" rx="4" fill="#111520"/>
 <text x="493" y="1628" class="t" font-size="12.5" font-weight="600" text-anchor="middle" fill="#f472b6">tasks</text>
@@ -241,7 +241,7 @@
 <line x1="260" y1="2117" x2="294" y2="2117" stroke="#e07a52" stroke-width="3"/>
 <text x="304" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">Claude Code path</text>
 <line x1="450" y1="2117" x2="484" y2="2117" stroke="#10b981" stroke-width="3"/>
-<text x="494" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">Codex path</text>
+<text x="494" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">Codex &amp; ACP path</text>
 <line x1="640" y1="2117" x2="674" y2="2117" stroke="#a78bfa" stroke-width="3"/>
 <text x="684" y="2122" class="t" font-size="13" font-weight="400" text-anchor="start">knowledge base</text>
 <line x1="830" y1="2117" x2="864" y2="2117" stroke="#2dd4bf" stroke-width="3"/>

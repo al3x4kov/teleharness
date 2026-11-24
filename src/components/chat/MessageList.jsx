@@ -47,10 +47,19 @@ function useTicker(on) {
 // the pinned feed follows the growing text only until the START of that answer
 // reaches the top of the view (under the header); then it stops, the text keeps
 // growing below and the user reads from the beginning. Otherwise — the bottom.
+const findByMid = (el, id) => {
+  if (!el || id == null) return null;
+  const s = String(id);
+  for (const n of el.querySelectorAll("[data-mid]")) {
+    if (n.getAttribute("data-mid") === s) return n;
+  }
+  return null;
+};
+
 export function followTop(el, revealId) {
   const bottom = el.scrollHeight;
   if (!revealId) return bottom;
-  const ans = el.querySelector(`[data-mid="${String(revealId).replace(/"/g, "")}"]`);
+  const ans = findByMid(el, revealId);
   if (!ans) return bottom;
   const head = parseFloat(getComputedStyle(el).getPropertyValue("--chat-head-h")) || 57;
   const start = el.scrollTop + (ans.getBoundingClientRect().top - el.getBoundingClientRect().top) - head - 8;
@@ -297,7 +306,7 @@ export default function MessageList({ sessionId, messages, streamingId, busy = f
     }
     const matchedId = all[idx]?.info?.id ?? targetMid;
     const el = scrollRef.current;
-    const targetEl = el?.querySelector?.(`[data-mid="${String(matchedId).replace(/"/g, "")}"]`);
+    const targetEl = findByMid(el, matchedId);
     if (!el || !targetEl) return undefined;
     jumpDoneRef.current = key;
     pinnedRef.current = false;

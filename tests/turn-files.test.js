@@ -1,14 +1,15 @@
 // BUG-092 (BUG-05.18): lib/turn-files.js — files changed in the chat folder
 // per turn window (cards for script-made files, both engines).
-import { test, beforeEach } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, utimesSync, writeFileSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { LIMITS, _clearCache, parseWindows, turnFiles } from "../lib/turn-files.js";
 
 const T0 = Date.UTC(2026, 10, 3, 16, 34, 0);
 let dir;
+const extraDirs = [];
 const put = (rel, atMs) => {
   const p = path.join(dir, rel);
   mkdirSync(path.dirname(p), { recursive: true });
@@ -20,6 +21,10 @@ const put = (rel, atMs) => {
 beforeEach(() => {
   _clearCache();
   dir = mkdtempSync(path.join(tmpdir(), "teleharness-turnfiles-"));
+});
+afterEach(() => {
+  if (dir) rmSync(dir, { recursive: true, force: true });
+  while (extraDirs.length) rmSync(extraDirs.pop(), { recursive: true, force: true });
 });
 
 test("parseWindows: пары start-end, мусор → null, лимит окон", () => {
@@ -70,6 +75,7 @@ test("глубина и лимит списка ограничены; ссылк
   put("1/2/3/4/5/deep.md", at); // глубже лимита
   for (let i = 0; i < LIMITS.perWindow + 5; i += 1) put(`many/f${String(i).padStart(2, "0")}.txt`, at + i);
   const outside = mkdtempSync(path.join(tmpdir(), "teleharness-turnfiles-out-"));
+  extraDirs.push(outside);
   writeFileSync(path.join(outside, "leak.md"), "x");
   utimesSync(path.join(outside, "leak.md"), new Date(at), new Date(at));
   let linked = true;
@@ -116,7 +122,9 @@ test("BUG-181: при лимите приоритет — документы в 
   assert.ok(files.includes(top), "документ в корне");
   assert.ok(!files.some((f) => scripts.includes(f)), "скрипты вытеснены документами и медиа");
   assert.ok(files.includes(deep[deep.length - 1]), "из подпапки берутся поздние");
-  // порядок ответа — по времени изменения
-  const order = [...files].sort((a, b) => files.indexOf(a) - files.indexOf(b));
-  assert.deepEqual(files, order);
+  // порядок ответа — строго по возрастанию времени изменения (mtime)
+  const mtimes = files.map((f) => statSync(f).mtimeMs);
+  for (let i = 1; i < mtimes.length; i += 1) {
+    assert.ok(mtimes[i] >= mtimes[i - 1], `нарушен порядок по mtime: ${mtimes[i - 1]} > ${mtimes[i]}`);
+  }
 });

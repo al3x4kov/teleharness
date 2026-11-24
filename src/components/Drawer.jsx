@@ -168,6 +168,9 @@ export default function Drawer({ view, chatId }) {
         setRecentLimit(RECENT_LIMIT);
         return;
       }
+      // BUG-304: resizing mobile → desktop (>= 900px) must clear mobile modal
+      // drawerOpen so the pinned desktop sidebar does not keep role=dialog / Tab trap.
+      if (drawerOpen.value) closeDrawer();
       const ch = scrollEl.clientHeight || 0;
       if (ch <= 0) {
         setRecentLimit(RECENT_LIMIT);
@@ -175,8 +178,9 @@ export default function Drawer({ view, chatId }) {
       }
       let footReserve = DEFAULT_FOOT_H;
       try {
-        const pb = parseFloat(getComputedStyle(scrollEl).paddingBottom);
-        if (Number.isFinite(pb) && pb > 0) footReserve = pb;
+        const rawPb = getComputedStyle(scrollEl).paddingBottom;
+        const pb = parseFloat(rawPb);
+        if (rawPb && Number.isFinite(pb) && pb >= 0) footReserve = pb;
       } catch {}
       const navHeight = navRef.current?.offsetHeight || 0;
       const pinnedHeight = pinnedRef.current?.offsetHeight || 0;

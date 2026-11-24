@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import http from "node:http";
-import { statSync, existsSync } from "node:fs";
+import { statSync, existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawnPortal } from "./helpers/spawn-server.mjs";
 import { startFakeOpencode } from "./helpers/fake-opencode.mjs";
@@ -95,8 +95,14 @@ test("FEAT-20.3: подключение сохраняется, токен не 
     // Файлы: ключ 0600, шифротокен не содержит открытый текст.
     assert.ok(existsSync(path.join(srv.tmp.data, "secrets.key")));
     if (process.platform !== "win32") assert.equal(statSync(path.join(srv.tmp.data, "secrets.key")).mode & 0o777, 0o600);
-    const dbRaw = await (await fetch(`${srv.base}/teleharness/api/github/connection`)).text(); // лицо — без токена
-    assert.ok(!dbRaw.includes(TOKEN));
+    const connRes = await fetch(`${srv.base}/teleharness/api/github/connection`, { headers });
+    assert.equal(connRes.status, 200);
+    const connText = await connRes.text();
+    assert.ok(!connText.includes(TOKEN), "GET /connection must not expose token");
+    assert.ok(connText.includes("octocat"), "GET /connection returns real connection face");
+    const dbPath = path.join(srv.tmp.data, "github-triggers.sqlite");
+    assert.ok(existsSync(dbPath), "github-triggers.sqlite created");
+    assert.ok(!readFileSync(dbPath).includes(Buffer.from(TOKEN, "utf8")), "no plaintext token in SQLite file");
     // Логи сервера за всё время теста не содержат токен.
     assert.ok(!srv.log.includes(TOKEN), "токен не должен попадать в журнал сервера");
 

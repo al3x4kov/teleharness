@@ -4,7 +4,7 @@
 // (как расписания). Ключ и секрет webhook-адреса показываются один раз (кр. 21).
 import { TriggerError, REPLAYABLE, DEFAULT_LIMITS } from "../lib/github/triggers.js";
 import { KINDS, subjectKey, eventKey } from "../lib/github/events.js";
-import { EVENT_NAMESPACE, uuidv5, ciFace } from "../lib/github/dispatch.js";
+import { EVENT_NAMESPACE, uuidv5, ciFace, countClaudeUsedToday } from "../lib/github/dispatch.js";
 import { githubEvents, canManageHooks, createRepoWebhook, pingRepoWebhook, getRepoWebhook, updateRepoWebhookSecret, deleteRepoWebhook } from "../lib/github/webhooks.js";
 import { GhError } from "../lib/github/client.js";
 import { TEMPLATES, templateFace, templateById } from "../shared/temporal-templates.js";
@@ -62,6 +62,15 @@ export function triggerRoutes(deps) {
     const e = new TriggerError(status, message, extra);
     return e;
   }
+  function mapGhError(error) {
+    const status = error.kind === "auth" ? 401
+      : error.kind === "forbidden" ? 403
+        : error.kind === "not_found" ? 404
+          : error.kind === "validation" ? 422
+            : error.kind === "rate_limited" ? 429
+              : 502;
+    return { status, message: error.message || "Ошибка обращения к GitHub" };
+  }
   function route(method, path, handler, scope = "user") {
     return {
       method, path, scope,
@@ -71,8 +80,16 @@ export function triggerRoutes(deps) {
           if (scope === "admin" && ctx.user.role !== "admin") throw fail(403, "Доступно только администратору");
           await handler(ctx);
         } catch (error) {
-          if (!(error instanceof TriggerError)) throw error;
-          sendJson(ctx.res, error.status, { error: error.message, ...error.extra });
+          if (error instanceof TriggerError) {
+            sendJson(ctx.res, error.status, { error: error.message, ...error.extra });
+            return;
+          }
+          if (error instanceof GhError) {
+            const m = mapGhError(error);
+            sendJson(ctx.res, m.status, { error: m.message });
+            return;
+          }
+          throw error;
         }
       },
     };
@@ -131,6 +148,7 @@ export function triggerRoutes(deps) {
     route("POST", base, async ({ req, res, user }) => {
       if (!pipelinesEnabled()) throw fail(503, "Temporal-пайпы не подключены — триггеры недоступны");
       const spec = await readJsonBody(req, 16384);
+      if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw fail(400, "Ожидается JSON-объект");
       validateSpec(spec);
       const pipe = await pipeOf(user, spec.definitionId);
       if (!pipe) throw fail(404, "Пайп не найден");
@@ -161,6 +179,7 @@ export function triggerRoutes(deps) {
 
     route("PATCH", new RegExp(`^${base}/([a-f0-9-]{36})$`), async ({ req, res, user, match }) => {
       const body = await readJsonBody(req, 16384);
+      if (!body || typeof body !== "object" || Array.isArray(body)) throw fail(400, "Ожидается JSON-объект");
       const row = own(user, match[1]);
       const patch = {};
       for (const k of ["kinds", "filters", "delivery", "pollSeconds", "limits", "enabled"]) {
@@ -225,10 +244,24 @@ export function triggerRoutes(deps) {
       if (!REPLAYABLE.has(entry.decision)) throw fail(422, "Повтор доступен только для пропущенных по лимиту или выключению");
       if (!entry.eventJson) throw fail(422, "У записи нет тела события");
       const row = own(user, match[1]);
+      if (store.setting("adminStopped", false) === true) throw fail(409, "Все триггеры остановлены администратором");
       const ev = entry.eventJson;
       const connection = deps.connections?.get?.(user.id) ?? null;
-      const trusted = [connection?.login, ...(row.filters?.trustedAuthors ?? [])].filter(Boolean);
-      if (!trusted.includes(ev.author) || !trusted.includes(ev.actor)) throw fail(422, "Автор события не доверен — повтор отклонён");
+      if (!connection || connection.status !== "ok") throw fail(422, "Нет подключения GitHub");
+      const trusted = [connection.login, ...(row.filters?.trustedAuthors ?? [])].filter(Boolean);
+      const people = [...new Set([ev.author, ev.actor].filter(Boolean))];
+      if (!people.length) throw fail(422, "Автор события не доверен — повтор отклонён");
+      for (const person of people) {
+        if (trusted.includes(person)) continue;
+        if (deps.permissionCheck && await deps.permissionCheck(person, ev.repo, row)) continue;
+        throw fail(422, "Автор события не доверен — повтор отклонён");
+      }
+      const isClaude = deps.usesClaude ? Boolean(await deps.usesClaude(row)) : true;
+      if (isClaude) {
+        const claudeLimit = store.setting("claude_background_per_day", 10) ?? 10;
+        const claudeUsed = await countClaudeUsedToday(store, deps.usesClaude);
+        if (claudeUsed >= claudeLimit) throw fail(429, "Лимит Claude в фоне исчерпан на сегодня");
+      }
       if (store.subjectOf(row.id, subjectKey(row.id, ev))?.activeWorkflowId) throw fail(409, "Уже идёт запуск по этому предмету");
       const eKey = `${eventKey(row.id, ev)}:replay:${entry.id}`;
       const run = await launch(row, ev, uuidv5(EVENT_NAMESPACE, eKey));
@@ -305,7 +338,7 @@ export function triggerRoutes(deps) {
     }),
     // FEAT-20.3 (2.6, D-6, кр. 20): общий выключатель, суточный лимит Claude и подключения пользователей без токенов.
     route("GET", "/teleharness/api/admin/background", async ({ res }) => {
-      sendJson(res, 200, adminBackgroundFace(store, deps.connections));
+      sendJson(res, 200, await adminBackgroundFace(store, deps.connections, deps.usesClaude));
     }, "admin"),
 
     route("PUT", "/teleharness/api/admin/background", async ({ req, res, user }) => {
@@ -323,7 +356,7 @@ export function triggerRoutes(deps) {
         store.setSetting("claude_background_per_day", body.claudePerDay);
         log?.(`github: admin ${user.id} задал суточный лимит Claude в фоне = ${body.claudePerDay}`);
       }
-      sendJson(res, 200, adminBackgroundFace(store, deps.connections));
+      sendJson(res, 200, await adminBackgroundFace(store, deps.connections, deps.usesClaude));
     }, "admin"),
   ];
 }
@@ -337,10 +370,10 @@ function clearActiveAll(store, triggerId) {
   for (const s of store.listWithSubjects?.(triggerId) ?? []) if (s.activeWorkflowId) store.clearActive(triggerId, s.subjectKey);
 }
 
-function adminBackgroundFace(store, connections) {
+async function adminBackgroundFace(store, connections, usesClaude = null) {
   const adminStopped = store.setting("adminStopped", false) === true;
   const claudePerDay = store.setting("claude_background_per_day", 10) ?? 10;
-  const claudeUsedToday = store.startedPerDayAll?.() ?? 0;
+  const claudeUsedToday = await countClaudeUsedToday(store, usesClaude);
   const all = store.listAll?.() ?? [];
   const activeRuns = (store.activeSubjects?.() ?? []).filter((s) => s.activeWorkflowId).length;
   const conns = (connections?.list?.() ?? []).map((c) => ({

@@ -46,11 +46,24 @@ export function attentionRoutes(deps) {
     return { board, chats, runs: runs ?? [], prefs };
   }
 
-  // Ключ, который пользователь вправе отмечать: свой чат или свой запуск.
+  // Ключ, который пользователь вправе отмечать: свой чат, свой запуск или своё ревью.
   async function ownKeys(user, admin, keys) {
-    const chats = new Set((await deps.chatsFor(user, admin)).map((c) => `chat:${c.id}`));
-    const runs = keys.some((k) => k.startsWith("run:")) ? new Set(((await runsOf(user)).runs ?? []).map((r) => `run:${r.workflowId}`)) : new Set();
-    return keys.every((k) => chats.has(k) || runs.has(k));
+    const chats = keys.some((k) => k.startsWith("chat:"))
+      ? new Set((await deps.chatsFor(user, admin)).map((c) => `chat:${c.id}`))
+      : new Set();
+    const runs = keys.some((k) => k.startsWith("run:"))
+      ? new Set(((await runsOf(user)).runs ?? []).map((r) => `run:${r.workflowId}`))
+      : new Set();
+    let reviews = new Set();
+    if (keys.some((k) => k.startsWith("review:"))) {
+      try {
+        const list = (await deps.reviews?.(user)) ?? [];
+        reviews = new Set(list.map((r) => r.key || `review:${r.id}`));
+      } catch {
+        reviews = new Set();
+      }
+    }
+    return keys.every((k) => chats.has(k) || runs.has(k) || reviews.has(k));
   }
 
   async function body(req) {

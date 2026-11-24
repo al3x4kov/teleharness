@@ -39,29 +39,6 @@ function acpDefinition(dir, overrides = {}) {
   };
 }
 
-function makeRouteCaller(routes, user) {
-  return async (method, urlPath, bodyObj) => {
-    const full = "/teleharness/api/temporal" + urlPath;
-    for (const r of routes) {
-      if (r.method !== method) continue;
-      const m = typeof r.path === "string" ? (r.path === full ? [full] : null) : full.match(r.path);
-      if (!m) continue;
-      let status = 0;
-      let payload = null;
-      const res = {};
-      await r.handler({
-        req: { _body: bodyObj },
-        res,
-        user,
-        match: m,
-        send: (s, b) => { status = s; payload = b; },
-      });
-      return { status, body: payload };
-    }
-    throw new Error(`No route for ${method} ${full}`);
-  };
-}
-
 test("FEAT-19.30: validateDefinition принимает engine='acp' и отклоняет неизвестный движок", () => {
   const ok = validateDefinition(acpDefinition("/proj"));
   assert.equal(ok.valid, true, JSON.stringify(ok.errors));

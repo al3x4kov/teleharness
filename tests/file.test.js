@@ -243,3 +243,56 @@ test("resolveInside + legacy root: переведённый путь всё ра
     rmSync(L, { recursive: true, force: true });
   }
 });
+
+test("BUG-301 / BUG-302: HTTP symlink escape returns 403; .xlsm/.pptx MIME; RFC 5987 quotes/semicolons; strict XML CSP without allow-scripts", async () => {
+  assert.equal(mimeFor("book.xlsm"), "application/vnd.ms-excel.sheet.macroEnabled.12");
+  assert.equal(mimeFor("deck.pptx"), "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+
+  // RFC 5987 filename with apostrophe and semicolon
+  const tricky = "отчёт '2026'; тест.xlsx";
+  writeFileSync(path.join(ROOT, tricky), "PK");
+  const r1 = await fetch(`${base}/?path=${encodeURIComponent(tricky)}&download=1`);
+  assert.equal(r1.status, 200);
+  const cd = r1.headers.get("content-disposition") ?? "";
+  assert.match(cd, /^attachment; filename="[^"]+"; filename\*=UTF-8''/);
+  assert.ok(!cd.includes("filename*=UTF-8''" + tricky), "non-ASCII and special chars encoded");
+  assert.ok(cd.includes("%27") && cd.includes("%3B"), `RFC 5987 must percent-encode ' and ;, got: ${cd}`);
+  await r1.arrayBuffer();
+
+  // XML must NOT receive allow-scripts CSP (strict SVG_CSP instead)
+  writeFileSync(path.join(ROOT, "feed.xml"), "<root/>");
+  writeFileSync(path.join(ROOT, "page.html"), "<p>hi</p>");
+  writeFileSync(path.join(ROOT, "icon.svg"), "<svg/>");
+  const rXml = await get("feed.xml");
+  assert.equal(rXml.status, 200);
+  const xmlCsp = rXml.headers.get("content-security-policy") ?? "";
+  assert.match(xmlCsp, /^sandbox;/);
+  assert.equal(/allow-scripts/i.test(xmlCsp), false, "XML must not get allow-scripts");
+  await rXml.text();
+
+  const rSvg = await get("icon.svg");
+  assert.equal(/allow-scripts/i.test(rSvg.headers.get("content-security-policy") ?? ""), false);
+  await rSvg.text();
+
+  const rHtml = await get("page.html");
+  assert.match(rHtml.headers.get("content-security-policy") ?? "", /allow-scripts/);
+  await rHtml.text();
+
+  // HTTP symlink escape returns 403
+  if (process.platform !== "win32") {
+    const out = mkdtempSync(path.join(tmpdir(), "zai-file-sym-out-"));
+    const secret = path.join(out, "secret.txt");
+    writeFileSync(secret, "nope");
+    const link = path.join(ROOT, "escape-link.txt");
+    try {
+      symlinkSync(secret, link);
+      const rSym = await get("escape-link.txt");
+      assert.equal(rSym.status, 403);
+      assert.deepEqual(await rSym.json(), { error: "forbidden" });
+    } finally {
+      rmSync(link, { force: true });
+      rmSync(out, { recursive: true, force: true });
+    }
+  }
+});
+

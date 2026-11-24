@@ -7,6 +7,21 @@
 //         dirProblem, driveProblem, dirProblemText, dirAllowed }
 export function fileRoutes(deps) {
   const { sendJson } = deps;
+  const inFlightBytes = new Map(); // userId -> reserved bytes for concurrent uploads (BUG-302)
+  const reserve = (uid, n) => {
+    if (!uid || !n) return () => {};
+    inFlightBytes.set(uid, (inFlightBytes.get(uid) ?? 0) + n);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const cur = (inFlightBytes.get(uid) ?? 0) - n;
+      if (cur > 0) inFlightBytes.set(uid, cur);
+      else inFlightBytes.delete(uid);
+    };
+  };
+  const fallbackDir = ({ user }) => (typeof deps.defaultDir === "function" ? deps.defaultDir(user, deps.chatDir) : deps.homeDir);
+
   return [
     // Binary attachment upload: streamed to the session folder. Tenants may
     // only land files inside their own scope, within their per-file limit and
@@ -37,15 +52,30 @@ export function fileRoutes(deps) {
         }
         if (admin) return deps.handleUpload(req, res, url, dir);
         const quota = config.TELEHARNESS_TENANT_UPLOAD_QUOTA;
-        const used = quota ? deps.tenantUploadBytes(user) : 0;
-        const declared = Number(req.headers["content-length"]) || 0;
+        const uid = user?.id ?? "";
+        const inFlight = quota ? (inFlightBytes.get(uid) ?? 0) : 0;
+        const used = (quota ? deps.tenantUploadBytes(user) : 0) + inFlight;
+        const rawLen = Number(req.headers["content-length"]);
+        const declared = Number.isFinite(rawLen) && rawLen > 0 ? rawLen : 0;
         if (quota && used + declared > quota) {
           req.resume();
           return sendJson(res, 413, { error: "upload quota exceeded" });
         }
         const perFile = config.TELEHARNESS_TENANT_UPLOAD_LIMIT || deps.uploadLimit;
         const left = quota ? Math.max(0, quota - used) : Infinity;
-        return deps.handleUpload(req, res, url, dir, Math.min(perFile, left, deps.uploadLimit));
+        const maxBytes = Math.min(perFile, left, deps.uploadLimit);
+        const reserved = quota ? (declared > 0 ? declared : maxBytes) : 0;
+        const release = reserve(uid, reserved);
+        res.once?.("finish", release);
+        res.once?.("close", release);
+        try {
+          const ret = deps.handleUpload(req, res, url, dir, maxBytes);
+          if (ret && typeof ret.finally === "function") return ret.finally(release);
+          return ret;
+        } catch (err) {
+          release();
+          throw err;
+        }
       },
     },
     // ISSUE-009: a chip removed before sending takes its uploaded file with it
@@ -97,7 +127,7 @@ export function fileRoutes(deps) {
       method: ["GET", "HEAD"],
       path: "/teleharness/api/file",
       scope: "dirQuery",
-      dirDefault: () => deps.homeDir,
+      dirDefault: fallbackDir,
       handler: ({ req, res, url, user, dir }) =>
         deps.serveWorkspaceFile(req, res, {
           directory: dir,
@@ -112,7 +142,7 @@ export function fileRoutes(deps) {
       method: "GET",
       path: "/teleharness/api/file/exists",
       scope: "dirQuery",
-      dirDefault: () => deps.homeDir,
+      dirDefault: fallbackDir,
       handler: ({ res, url, user, dir }) => {
         const paths = url.searchParams.getAll("path");
         if (paths.length === 0 || paths.length > 100) return sendJson(res, 400, { error: "1..100 path params required" });

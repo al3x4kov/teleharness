@@ -245,3 +245,66 @@ test("BUG-273: доска — у карточки ревью нет строки
   assert.deepEqual(rv.project, { name: "shop", dir: "/p/shop" });
   assert.deepEqual(b.projects, [{ dir: "/p/shop", name: "shop" }], "один проект в фильтре");
 });
+
+test("BUG-303: ReviewService.lock освобождает ключ в this.locks после завершения (одиночный и конкурентный)", async () => {
+  const { ReviewService, ReviewStore } = await import("../lib/review.js");
+  const data = mkdtempSync(path.join(os.tmpdir(), "zai-rv-lock-"));
+  try {
+    const svc = new ReviewService({ store: new ReviewStore({ dir: path.join(data, "review"), log: () => {} }), objectsRoot: path.join(data, "o"), tmpDir: path.join(data, "t"), log: () => {} });
+    await svc.lock("u1", async () => "ok");
+    assert.equal(svc.locks.size, 0, "после одиночного вызова ключ удалён из locks");
+
+    const order = [];
+    let releaseFirst;
+    const gate = new Promise((r) => (releaseFirst = r));
+    const p1 = svc.lock("u1", async () => {
+      order.push("1-start");
+      await gate;
+      order.push("1-end");
+    });
+    const p2 = svc.lock("u1", async () => {
+      order.push("2-start");
+      order.push("2-end");
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(svc.locks.has("u1"), true, "пока очередь активна — ключ удерживается");
+    releaseFirst();
+    await Promise.all([p1, p2]);
+    assert.deepEqual(order, ["1-start", "1-end", "2-start", "2-end"], "операции сериализованы");
+    assert.equal(svc.locks.size, 0, "после завершения очереди ключ удалён и не утекает");
+  } finally {
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("BUG-303: ReviewService.chatDeleted помечает открытые ревью ветки (source.kind === 'branch') и чата", async () => {
+  const { ReviewService, ReviewStore } = await import("../lib/review.js");
+  const data = mkdtempSync(path.join(os.tmpdir(), "zai-rv-del-"));
+  try {
+    const emitted = [];
+    const svc = new ReviewService({
+      store: new ReviewStore({ dir: path.join(data, "review"), log: () => {} }),
+      objectsRoot: path.join(data, "o"),
+      tmpDir: path.join(data, "t"),
+      log: () => {},
+      emit: (users, props) => emitted.push({ users, id: props.id }),
+    });
+    const d = svc.store.data("u1");
+    d.items.rv_CHAT00000001 = { ...item({ id: "rv_CHAT00000001", source: { kind: "chat", sid: "ses_del" } }), owner: "u1", version: 1, base: { at: 1 } };
+    d.items.rv_BRCH00000001 = { ...item({ id: "rv_BRCH00000001", source: { kind: "branch", sid: "ses_del", branch: "feat/x" } }), owner: "u1", version: 1, base: { at: 1 } };
+    d.items.rv_CLOSED000001 = { ...item({ id: "rv_CLOSED000001", state: "accepted", source: { kind: "branch", sid: "ses_del", branch: "feat/old" } }), owner: "u1", version: 1, base: { at: 1 } };
+    d.starts.ses_del = { at: 1 };
+    svc.store.save("u1");
+
+    svc.chatDeleted("ses_del");
+
+    assert.equal(d.items.rv_CHAT00000001.chatDeleted, true, "ревью чата помечено");
+    assert.equal(d.items.rv_BRCH00000001.chatDeleted, true, "открытое ревью ветки тоже помечено");
+    assert.equal(d.items.rv_CLOSED000001.chatDeleted, undefined, "закрытое ревью не тронуто");
+    assert.equal(d.starts.ses_del, undefined, "starts[sid] очищен");
+    assert.deepEqual(emitted.map((e) => e.id).sort(), ["rv_BRCH00000001", "rv_CHAT00000001"]);
+  } finally {
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+

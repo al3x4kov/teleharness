@@ -1158,3 +1158,46 @@ test("FEAT-20.2: broadcastToUser reaches only that user's streams, without ring 
   assert.ok(!b.join("").includes('"teleharness.attention"'), "bob gets nothing");
   assert.ok(!/id: .*\n.*teleharness\.attention/.test(a.join("")), "no id line: not in the replay ring");
 });
+
+test("non-terminal session.error (terminal: false) keeps turn busy and preserves dialogs", async () => {
+  const up = startAbortUpstream();
+  const hub = new EventHub({ stallAbortMs: 5000, stallTickMs: 5000 });
+  hub.start(await up.base);
+  cleanups.push(async () => {
+    hub.stop();
+    await up.close();
+  });
+  await sleep(100);
+  up.emitSse(JSON.stringify({ type: "session.status", properties: { sessionID: "ses_nt", status: { type: "busy" } } }));
+  up.emitSse(JSON.stringify({ type: "permission.asked", properties: { id: "per_nt", sessionID: "ses_nt", action: "read" } }));
+  await sleep(50);
+  assert.equal(Object.keys(hub.busySnapshot()).length, 1);
+  assert.equal(hub.dialogsSnapshot().length, 1);
+
+  up.emitSse(JSON.stringify({ type: "session.error", properties: { sessionID: "ses_nt", error: { name: "StepError", data: { message: "retryable" } }, terminal: false } }));
+  await sleep(50);
+  assert.equal(Object.keys(hub.busySnapshot()).length, 1, "non-terminal step error must not finish turn");
+  assert.equal(hub.dialogsSnapshot().length, 1, "active dialog must remain until turn ends");
+
+  up.emitSse(JSON.stringify({ type: "session.error", properties: { sessionID: "ses_nt", error: { name: "FatalError", data: { message: "done" } }, terminal: true } }));
+  await sleep(50);
+  assert.equal(Object.keys(hub.busySnapshot()).length, 0, "terminal error ends turn");
+  assert.equal(hub.dialogsSnapshot().length, 0);
+});
+
+test("permission.asked / question.asked from engine:acp stay out of opencode auto-deny dialogs", async () => {
+  const up = startAbortUpstream();
+  const hub = new EventHub({ stallAbortMs: 5000, stallTickMs: 5000 });
+  hub.start(await up.base);
+  cleanups.push(async () => {
+    hub.stop();
+    await up.close();
+  });
+  await sleep(100);
+  hub.emit({ type: "permission.asked", properties: { id: "per_acp", sessionID: "ses_acp", teleharness: { engine: "acp" } } });
+  hub.emit({ type: "question.asked", properties: { id: "q_acp", sessionID: "ses_acp", teleharness: { engine: "acp" } } });
+  hub.emit({ type: "permission.asked", properties: { id: "per_oc", sessionID: "ses_oc" } });
+  await sleep(50);
+  const ids = hub.dialogsSnapshot().map((d) => d.id);
+  assert.deepEqual(ids, ["per_oc"], "ACP dialogs belong to bridge, not opencode auto-deny");
+});

@@ -282,6 +282,7 @@ test("session.status object shape: busy sets busy, {type:'idle'} clears", () => 
 test("openSession reads upstream busy status (reload into a hung chat shows Прервать)", async () => {
   const { openSession, sessions: sessionsSignal } = await import("../src/lib/store.js");
   const realFetch = globalThis.fetch;
+  const HUNG = "ses_hung_open";
   const fake = (statusMap) => async (url) => {
     const path = String(url).split("?")[0];
     if (path.endsWith("/status")) return { ok: true, status: 200, json: async () => statusMap };
@@ -289,12 +290,12 @@ test("openSession reads upstream busy status (reload into a hung chat shows Пр
   };
   try {
     sessionsSignal.value = [];
-    globalThis.fetch = fake({ [SES]: { type: "busy" } });
-    await openSession(SES);
+    globalThis.fetch = fake({ [HUNG]: { type: "busy" } });
+    await openSession(HUNG);
     assert.equal(active.value.status, "busy", "a hung upstream turn must open as busy");
 
     globalThis.fetch = fake({});
-    await openSession(SES);
+    await openSession(HUNG);
     assert.equal(active.value.status, "idle");
   } finally {
     globalThis.fetch = realFetch;

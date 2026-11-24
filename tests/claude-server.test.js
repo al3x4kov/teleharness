@@ -289,7 +289,7 @@ test("POST /session records the chosen binding; claude drops the agent", async (
 // BUG-013 (dogfood 2026-11-02): a relative project path landed the session in
 // the service cwd (C:\WINDOWS\system32). The route must refuse it up front.
 test("POST /session with a relative or parent-hopping directory → 400", async () => {
-  for (const dir of ["relative\\folder", "..\\x", "C:\\Users\\..\\Windows"]) {
+  for (const dir of ["relative\\folder", "..\\x", "../x", "C:\\Users\\..\\Windows", "/tmp/../etc"]) {
     const r = await call("/teleharness/api/session?directory=" + encodeURIComponent(dir), { method: "POST" });
     assert.equal(r.status, 400, `${dir} must be refused`);
     // BUG-12.11: one path policy; the machine-readable code is the contract.

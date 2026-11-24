@@ -168,3 +168,27 @@ test("квота z.ai /teleharness/api/usage не тронута; журнал �
   const bad = await api("/teleharness/api/costs/summary?period=custom&from=2026-11-10&to=2026-11-01");
   assert.equal(bad.status, 422);
 });
+
+test("BUG-302: тенанту backfill всегда []; битый %-код (%zz) в chat/run/budgets → 400 bad_id (не 500)", async () => {
+  // Запускаем backfill под админом, чтобы в ledger появились записи о backfill
+  const bf = await api("/teleharness/api/costs/backfill", { method: "POST", body: {} });
+  assert.equal(bf.status, 202);
+  const admSummary = await waitFor(async () => {
+    const s = await json("/teleharness/api/costs/summary");
+    return Array.isArray(s.backfill) && s.backfill.length > 0 ? s : null;
+  }, { what: "admin backfill state" });
+  assert.ok(admSummary.backfill.length > 0, "админ видит состояние backfill");
+
+  const tenantSummary = await json("/teleharness/api/costs/summary", { token: alice.token });
+  assert.deepEqual(tenantSummary.backfill, [], "тенанту глобальный backfill не утекает");
+
+  for (const [method, p, body] of [
+    ["GET", "/teleharness/api/costs/chat/%zz", undefined],
+    ["GET", "/teleharness/api/costs/run/%zz", undefined],
+    ["PUT", "/teleharness/api/costs/budgets/%zz", { usdMonth: 5 }],
+  ]) {
+    const r = await api(p, { method, body });
+    assert.equal(r.status, 400, `${method} ${p}`);
+    assert.deepEqual(await r.json(), { error: "bad_id" }, `${method} ${p}`);
+  }
+});

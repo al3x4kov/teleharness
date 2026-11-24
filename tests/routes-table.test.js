@@ -6,6 +6,9 @@ import assert from "node:assert/strict";
 import { SCOPES, dispatchRoute, matchRoute, validateTable } from "../routes/router.js";
 import { fileRoutes } from "../routes/files.js";
 import { catalogRoutes } from "../routes/catalog.js";
+import { isUnderAny } from "../lib/paths.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 // Absolute on this OS (the dirQuery scope wants an absolute folder):
@@ -19,7 +22,7 @@ const sendJson = (res, status, body) => {
   res.status = status;
   res.body = body;
 };
-const dirAllowed = (user, dir) => user.role === "admin" || String(dir).toLowerCase().startsWith(OWN.toLowerCase());
+const dirAllowed = (user, dir) => user.role === "admin" || isUnderAny(String(dir ?? ""), [OWN]);
 const spy = (name, ret = undefined) => (...a) => {
   calls.push([name, ...a]);
   return ret;
@@ -160,4 +163,98 @@ test("unmatched method or path falls through to the legacy chain", async () => {
   assert.equal(matchRoute(TABLE, "POST", "/teleharness/api/file"), null);
   assert.equal((await call(ADMIN, "DELETE", "/teleharness/api/usage")).handled, false);
   assert.equal((await call(ADMIN, "GET", "/teleharness/api/session")).handled, false);
+});
+
+test("TASK-14.21 dirAllowed: граница сегмента и регистрочувствительность на Linux", async () => {
+  const q = (d) => encodeURIComponent(d);
+  // /t/alice2 — не внутри /t/alice (граница сегмента)
+  assert.equal((await call(ALICE, "GET", `/teleharness/api/dircheck?directory=${q(OWN + "2")}`)).status, 403);
+  assert.equal((await call(ALICE, "GET", `/teleharness/api/dircheck?directory=${q(path.join(OWN, "sub"))}`)).status, 200);
+  // На POSIX регистр значим (/t/Alice ≠ /t/alice)
+  if (process.platform !== "win32") {
+    const upper = OWN.replace("alice", "Alice");
+    assert.equal((await call(ALICE, "GET", `/teleharness/api/dircheck?directory=${q(upper)}`)).status, 403, "POSIX: другой регистр — 403");
+  }
+});
+
+test("TASK-14.21: валидность полной реальной таблицы API_ROUTES из server.js (все группы маршрутов)", async () => {
+  const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const serverSrc = readFileSync(path.join(repoRoot, "server.js"), "utf8");
+  const m = serverSrc.match(/const API_ROUTES = validateTable\(\[([\s\S]*?)\n\]\);/);
+  assert.ok(m, "const API_ROUTES = validateTable([...]) найден в server.js");
+
+  // Извлекаем все верхнеуровневые фабрики маршрутов, подключённые в API_ROUTES server.js
+  const wired = new Set();
+  for (const hit of m[1].matchAll(/^  (?:\.\.\.)?(\w+(?:Routes|Route))\s*\(/gm)) {
+    wired.add(hit[1]);
+  }
+  assert.ok(wired.size >= 15, `ожидались все группы API_ROUTES, найдено ${wired.size}: ${[...wired].join(", ")}`);
+
+  const stubDeps = new Proxy(
+    {
+      ...deps,
+      readJsonBody: async () => ({}),
+      readBody: async () => Buffer.alloc(0),
+      apiError: () => {},
+      ledger: {},
+      reports: {},
+      backfill: { state: () => [] },
+      store: {},
+      connections: {},
+      reviews: {},
+      wt: {},
+      registry: {},
+      installer: {},
+      login: {},
+      hub: { epoch: 1, sessionsReport: () => [] },
+      pendingRemovals: { list: () => [] },
+      claude: {},
+      path,
+    },
+    { get: (t, k) => (k in t ? t[k] : () => {}) },
+  );
+
+  const factories = {
+    attentionRoutes: (await import("../routes/attention.js")).attentionRoutes,
+    costRoutes: (await import("../routes/costs.js")).costRoutes,
+    reviewRoutes: (await import("../routes/review.js")).reviewRoutes,
+    githubRoutes: (await import("../routes/github.js")).githubRoutes,
+    temporalRoutes: (await import("../routes/temporal.js")).temporalRoutes,
+    scheduleRoutes: (await import("../routes/temporal-schedules.js")).scheduleRoutes,
+    triggerRoutes: (await import("../routes/temporal-triggers.js")).triggerRoutes,
+    fileRoutes,
+    catalogRoutes,
+    acpCatalogRoutes: (await import("../routes/acp-catalog.js")).acpCatalogRoutes,
+    acpLoginRoute: (await import("../routes/acp-login.js")).acpLoginRoute,
+    adminRoutes: (await import("../routes/admin.js")).adminRoutes,
+    gitRoutes: (await import("../routes/git.js")).gitRoutes,
+    worktreeRoutes: (await import("../routes/worktrees.js")).worktreeRoutes,
+    pushRoutes: (await import("../routes/push.js")).pushRoutes,
+    voiceRoutes: (await import("../routes/voice.js")).voiceRoutes,
+    sessionRoutes: (await import("../routes/session.js")).sessionRoutes,
+  };
+
+  for (const name of wired) {
+    assert.ok(name in factories, `фабрика ${name} из server.js API_ROUTES должна проверяться в тесте`);
+  }
+
+  const allRoutes = [];
+  for (const name of wired) {
+    if (name === "acpLoginRoute") {
+      allRoutes.push(factories.acpLoginRoute({ sendJson, readJsonBody: stubDeps.readJsonBody, agent: "github-copilot-cli", login: {} }));
+      allRoutes.push(factories.acpLoginRoute({ sendJson, readJsonBody: stubDeps.readJsonBody, agent: "antigravity", login: {} }));
+    } else {
+      const built = factories[name](stubDeps);
+      assert.ok(Array.isArray(built) && built.length > 0, `${name} должна вернуть непустой массив маршрутов`);
+      allRoutes.push(...built);
+    }
+  }
+
+  const validated = validateTable(allRoutes);
+  assert.ok(validated.length >= 60, `ожидалось ≥60 маршрутов в полной таблице, получено ${validated.length}`);
+  for (const r of validated) {
+    assert.ok(SCOPES.has(r.scope), `неизвестный scope ${r.scope} у ${r.method} ${r.path}`);
+    assert.equal(typeof r.handler, "function", `нет handler у ${r.method} ${r.path}`);
+    if (typeof r.path === "string") assert.ok(r.path.startsWith("/teleharness/api/"), `неожиданный префикс пути ${r.path}`);
+  }
 });

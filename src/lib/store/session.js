@@ -276,10 +276,12 @@ export async function openSession(id) {
   // optimistic status died with the old page, and the SSE status event for an
   // already-running turn never re-fires. Without this, a hung chat shows no
   // stop button and the only exit is an ops intervention.
+  const statusAskedAt = Date.now();
   const statusP = api.getSessionStatus().then(
     (st) => {
       if (gen !== openGen) return;
-      const busy = !!(st?.[id]?.type && st[id].type !== "idle");
+      const stale = !busyMap.value[id] && idleSeenAt.has(id) && statusAskedAt - idleSeenAt.get(id) < STATUS_STALE_MS;
+      const busy = !stale && !!(st?.[id]?.type && st[id].type !== "idle");
       setBusyTracked(id, busy);
       patchActive(id, (a) => {
         if (busy) return applyStatusLive(a.status === "idle" ? { ...a, status: "busy" } : a, st?.[id]);
@@ -478,9 +480,12 @@ async function sendEdited(ed, parts, opts) {
   }
   const r = await revertLast(ed.sid, "edit");
   if (!r) return false;
+  const savedRevert = r.result?.revert ?? { messageID: r.last.info.id };
   editing.value = null;
   commitRevertLocally(ed.sid);
-  return sendParts([...parts, ...(ed.parts ?? [])], opts);
+  const ok = await sendParts([...parts, ...(ed.parts ?? [])], opts);
+  if (!ok) setRevert(ed.sid, savedRevert);
+  return ok;
 }
 
 // «Сгенерировать заново» (FEAT-01.57): the same question, a new answer.
@@ -491,8 +496,11 @@ export async function regenerate(sid) {
   if (!last || parts.length === 0) return false;
   const r = await revertLast(sid, "regenerate");
   if (!r) return false;
+  const savedRevert = r.result?.revert ?? { messageID: r.last.info.id };
   commitRevertLocally(sid);
-  return sendParts(parts, { sessionId: sid });
+  const ok = await sendParts(parts, { sessionId: sid });
+  if (!ok) setRevert(sid, savedRevert);
+  return ok;
 }
 
 // «Отменить ход» (FEAT-01.58): what will roll back, before the confirm.
@@ -881,7 +889,12 @@ export async function setSessionBinding(id, patch) {
   const optimistic = defaultBinding({ model, agent: nextAgent, claudeAgent: nextAgent, codexAgent: nextAgent });
   // FEAT-18.4: the permission mode rides the binding too.
   const permMode = "permMode" in (patch ?? {}) ? patch.permMode : prev?.permMode ?? null;
-  if (optimistic) sessions.value = upsertSession(sessions.value, { id, teleharness: { ...optimistic, prompted: cur?.prompted ?? false, ...(permMode ? { permMode } : {}) } });
+  if (optimistic) {
+    const nextTh = { ...(prev ?? {}), ...optimistic, prompted: cur?.prompted ?? false };
+    if (permMode) nextTh.permMode = permMode;
+    else delete nextTh.permMode;
+    sessions.value = upsertSession(sessions.value, { id, teleharness: nextTh });
+  }
   try {
     const r = await api.patchBinding(id, patch, { directory: sessionDir(id) });
     if (r?.teleharness) sessions.value = upsertSession(sessions.value, { id, teleharness: r.teleharness });

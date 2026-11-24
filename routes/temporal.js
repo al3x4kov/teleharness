@@ -1,6 +1,6 @@
 // FEAT-19.4 / TASK-19.8: owner and current project/engine checks on the server.
 import path from "node:path";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { DefinitionError, slugOf } from "../lib/temporal/definitions.js";
 import { workspaceOf, runFolderName, isPipelineFolder, pipeEngineAllowed } from "../lib/temporal/workspace.js";
 import { cleanInputs } from "../lib/temporal/inputs.js";
@@ -151,6 +151,7 @@ export function temporalRoutes(deps) {
       const v=record.versions.find(x=>x.version===row.version);
       if(!v) throw new DefinitionError(404,"Версия не найдена");
       access(user,v.definition,{engines:true});
+      let reworkWrite = null;
       if(command.action==="rework"){
         const step=v.definition.steps?.find(s=>s.id===command.stepId);
         if(!step || step.type!=="approval" || !step.reworkTarget)
@@ -161,10 +162,14 @@ export function temporalRoutes(deps) {
         const workspace=workspaceOf(v.definition.directory,slugOf(record));
         const folder=deps.results?.runFolder?.(match[1],()=>runFolderName(match[1]))??runFolderName(match[1]);
         const dir=path.join(workspace,"runs",folder);
-        await mkdir(dir,{recursive:true});
-        await writeFile(path.join(dir,`rework-${step.reworkTarget}.md`),note,"utf8");
+        reworkWrite = { dir, file: path.join(dir, `rework-${step.reworkTarget}.md`), note };
       }
-      deps.sendJson(res,200,await deps.applyAction(user.id,match[1],command));
+      const actionResult = await deps.applyAction(user.id,match[1],command);
+      if (reworkWrite) {
+        await mkdir(reworkWrite.dir,{recursive:true});
+        await writeFile(reworkWrite.file,reworkWrite.note,"utf8");
+      }
+      deps.sendJson(res,200,actionResult);
     }),
     // FEAT-19.32: продолжение завершённого/упавшего запуска с последнего успешного (или выбранного) шага.
     route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/resume$/, async ({req,res,user,match}) => {
@@ -182,7 +187,7 @@ export function temporalRoutes(deps) {
       const record = deps.store.get(user.id, row.definitionId);
       const sourceVersion = record.versions.find(v => v.version === row.version);
       if (!sourceVersion) throw new DefinitionError(404, "Опубликованная версия не найдена");
-      access(user, sourceVersion.definition, {engines:true});
+      access(user, sourceVersion.definition);
       const latestVersion = record.versions[record.versions.length - 1]?.version ?? row.version;
       const targetVersion = b.version ?? latestVersion;
       if (targetVersion !== row.version && targetVersion !== latestVersion)
@@ -215,6 +220,16 @@ export function temporalRoutes(deps) {
         seed: plan.seed,
         reusedSteps: plan.reusedSteps,
       });
+      const folder = deps.results?.runFolder?.(match[1]);
+      if (folder) {
+        const reused = new Set(plan.reusedSteps ?? []);
+        const runDir = path.join(workspaceOf(published.definition.directory, slugOf(record)), "runs", folder);
+        for (const s of published.definition.steps ?? []) {
+          if (!reused.has(s.id)) {
+            await rm(path.join(runDir, `rework-${s.id}.md`), { force: true }).catch(() => {});
+          }
+        }
+      }
       deps.sendJson(res, 202, result);
     }),
     route("POST", base+"/runs", async ({req,res,user}) => {

@@ -266,6 +266,7 @@ export function worktreeRoutes(deps) {
           if (!t.dir) return sendJson(res, t.status, { error: t.error });
           const plan = await wt.plan({ dir: t.dir, untrusted: true, tenant: !admin, owner: user.id }).catch(() => ({ repo: false, reason: "not-git" }));
           if (plan.repo || plan.reason === "no-commits") return sendJson(res, 409, { error: "Папка уже под git", kind: "exists" });
+          if (plan.reason === "dirty-config") return sendJson(res, 409, { error: plan.error || "Конфиг репозитория небезопасен", kind: "dirty-config" });
           const a = deps.gitAuthor(user.id);
           const id = ["-c", `user.name=${a.name || "teleharness"}`, "-c", `user.email=${a.email || "teleharness@localhost"}`];
           const run = (args) => runGit(args, { cwd: t.dir, untrusted: true, timeoutMs: 60_000 });

@@ -53,9 +53,10 @@ test("пробелы по краям обрезаются; пустое/не-с�
   for (const d of ["", "   ", null, undefined, 0, 42, {}, []]) assert.equal(isAbsoluteDir(d), false, String(d));
 });
 
-test("не-строка приводится через String(): объект с toString — по содержимому", () => {
-  assert.equal(isAbsoluteDir({ toString: () => "D:\\x" }), true);
-  assert.equal(isAbsoluteDir(["C:\\x"]), true, "String(['C:\\\\x']) === 'C:\\\\x'");
+test("не-строка отклоняется: объект с toString и массив → false", () => {
+  assert.equal(isAbsoluteDir({ toString: () => "D:\\x" }), false);
+  assert.equal(isAbsoluteDir(["C:\\x"]), false);
+  assert.equal(paths.isAbsoluteDir(["/tmp/x"], { platform: "linux" }), false);
 });
 
 // ---- dirProblem (BUG-12.11: единая политика каталогов чата/тенанта) ------------
@@ -298,4 +299,15 @@ test("POSIX: UNC, device-namespace и символы-маски — как на 
   assert.equal(posix("//./pipe/x"), "device-namespace");
   for (const d of ["/home/u/file*stream", "/home/u/a?b", "/home/u/a\"b", "/home/u/a<b", "/home/u/a|b", "/home/u/a\\b"]) assert.equal(posix(d), "alias", d);
   assert.equal(posix("/home/u/a b-c_d.e"), null, "обычные символы допустимы");
+});
+
+test("BUG-302 POSIX: dirProblem без явного portalRoot запрещает каталог портала тенанту", async () => {
+  const { fileURLToPath } = await import("node:url");
+  const nodePath = (await import("node:path")).default;
+  const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "..");
+  assert.equal(paths.dirProblem(repoRoot, { platform: "linux", tenant: true }), "portal");
+  assert.equal(paths.dirProblem(nodePath.posix.join(repoRoot, "data"), { platform: "linux", tenant: true }), "portal");
+  assert.equal(paths.dirProblem(repoRoot + "x", { platform: "linux", tenant: true }), null, "граница сегмента");
+  assert.equal(paths.dirProblem(repoRoot, { platform: "linux", tenant: false }), null, "владелец может");
+  assert.equal(paths.dirProblem(repoRoot, { platform: "linux", tenant: true, portalRoot: null }), null, "явный null отключает");
 });

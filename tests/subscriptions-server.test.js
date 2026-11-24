@@ -17,7 +17,17 @@ const api = (p, { token = ADMIN, method = "GET", body } = {}) => fetch(srv.base 
 
 before(async () => {
   up = await startFakeOpencode();
-  up.route("GET", "/provider", () => ({ status: 200, json: { all: [{ id: "zai-coding-plan", models: { "glm-5.3": { id: "glm-5.3", name: "GLM-5.3" } } }, { id: "openrouter", models: { "x/y": { id: "x/y", name: "Y" } } }], connected: ["zai-coding-plan", "openrouter"], default: {} } }));
+  up.route("GET", "/provider", () => ({
+    status: 200,
+    json: {
+      all: [
+        { id: "zai-coding-plan", models: { "glm-5.3": { id: "glm-5.3", name: "GLM-5.3" } } },
+        { id: "openrouter", models: { "x/y": { id: "x/y", name: "Y", cost: { input: 1, output: 2 } } } },
+      ],
+      connected: ["zai-coding-plan", "openrouter"],
+      default: {},
+    },
+  }));
   srv = await spawnPortal({ upstream: up.url, env: { TELEHARNESS_ADMIN_TOKEN: ADMIN, TELEHARNESS_AUTH_FILE: AUTH, TELEHARNESS_QUOTA_BASE: "http://127.0.0.1:9" } });
 });
 after(async () => {
@@ -42,7 +52,13 @@ test("FEAT-11.18: администратор и обычный пользова�
   const created = await (await api("/teleharness/api/admin/users", { method: "POST", body: { name: "subs-user" } })).json();
   const t = await api("/teleharness/api/subscriptions", { token: created.token });
   assert.equal(t.status, 200, "обычный пользователь видит расход");
-  assert.ok(Array.isArray((await t.json()).providers));
+  const tBody = await t.json();
+  assert.ok(Array.isArray(tBody.providers));
+  const tIds = tBody.providers.map((c) => c.id);
+  assert.equal(tIds.includes("claude"), false, "claude не отдаётся тенанту без разрешения");
+  assert.equal(tIds.includes("openrouter"), false, "платные админские провайдеры не отдаются тенанту");
+  assert.deepEqual(tIds, ["zai"], "тенант видит только разрешённые ему провайдеры");
+  assert.equal(JSON.stringify(tBody).includes("SECRET"), false);
   assert.equal((await api("/teleharness/api/usage", { token: created.token })).status, 403, "старый admin-маршрут остался закрытым");
   assert.equal((await fetch(srv.base + "/teleharness/api/subscriptions")).status, 401);
 });

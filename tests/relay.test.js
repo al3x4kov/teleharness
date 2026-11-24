@@ -79,7 +79,7 @@ test("RelayStore: отметки переживают перезапуск; forg
 test("BUG-232: возврат на движок, который уже вёл этот чат, — строка называет пропущенный промежуток и запрещает верить своей истории", () => {
   const out = relayMark(CLAUDE, GLM, { at: Date.UTC(2026, 10, 12, 14, 26, 0) });
   const back = relayMark(GLM, CLAUDE, { at: Date.UTC(2026, 10, 12, 14, 31, 0) });
-  const rule = relayRule([out, back], "D:\kb\journal\j.md");
+  const rule = relayRule([out, back], "D:\\kb\\journal\\j.md");
   assert.match(rule, /Ты уже вёл этот чат раньше/);
   assert.match(rule, /с 17:26 до 17:31 \(МСК\)/, "промежуток чужих ходов назван явно");
   assert.match(rule, /твоя история неполна/i);

@@ -284,27 +284,32 @@ npm run demo     # → http://127.0.0.1:4171/teleharness/
 | **Передача между движками** | Упёрлись в лимит посреди задачи? Тот же чат продолжается на другом движке или модели: та же папка, одна лента, новый движок получает пропущенные ходы. По желанию — автоматически, со своим порядком запасных моделей. |
 | **Подписки** | Расход и остаток по каждому подключённому провайдеру — там, где провайдер отдаёт их официальным API. |
 | **Устойчивый стриминг** | Один SSE-хаб для всех движков с replay, детектором зависаний и защитой от зацикливания — переживает нестабильную мобильную сеть. |
-| **Файлы** | Вложения и картинки — скрепкой, вставкой (Ctrl/⌘+V: снимок экрана получает имя с датой, длинный вставленный текст становится файлом .txt) или перетаскиванием в чат. Файлы-результаты приходят карточками; просмотр разрешённых папок. Своя папка на каждый чат.<br><img src="docs/screenshots/ru/phone-light-drop.png" alt="Три файла над чатом: «Отпустите, чтобы прикрепить»" width="180"> <img src="docs/screenshots/ru/phone-light-attached.png" alt="Вставленный снимок и перетащенные файлы — чипы в поле ввода" width="180"> |
+| **Файлы и превью Office** | Вложения и картинки — скрепкой, вставкой (Ctrl/⌘+V: снимок экрана получает имя с датой, длинный вставленный текст становится файлом .txt) или перетаскиванием в чат. Файлы-результаты приходят карточками со встроенным предпросмотром прямо в браузере для **PowerPoint (`.pptx`)** (слайды, списки, таблицы, встроенные картинки, заметки докладчика), `.docx`, `.xlsx`, `.csv`, `.pdf`, `.md`, `.html`, кода и медиа — и с авторизованным скачиванием, которое работает в standalone PWA на iOS/Android (Web Share API + Blob). Просмотр разрешённых папок; своя папка на каждый чат.<br><img src="docs/screenshots/ru/phone-light-pptx.png" alt="Встроенный предпросмотр презентации PowerPoint .pptx на телефоне: слайды, списки, заметки докладчика и таблица" width="180"> <img src="docs/screenshots/ru/phone-light-drop.png" alt="Три файла над чатом: «Отпустите, чтобы прикрепить»" width="180"> <img src="docs/screenshots/ru/phone-light-attached.png" alt="Вставленный снимок и перетащенные файлы — чипы в поле ввода" width="180"> |
 | **Obsidian как активный кэш** | Снапшот заметок в контексте, дайджесты ходов и журнал каждого чата обратно в хранилище, отдельная зона на пользователя. |
 | **Голос** | Локальные распознавание и синтез речи (Python-воркер, только CPU) и голосовой режим. |
 | **Push-уведомления** | Уведомление, когда долгий ход завершился или агенту нужно ваше решение (Web Push, VAPID). |
 | **Телефон по QR-коду** | Настройки → Подключить телефон показывают одноразовый QR-код (действует 10 минут): навели камеру — телефон вошёл под вашей учётной записью без ввода токена. Нужен `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/ru/phone-light-pair.png" alt="Подключение телефона: QR-код, срок действия, одноразовая ссылка и копирование" width="180"> |
 | **Несколько пользователей** | Админ и пользователи: свои папки, системный промпт, набор MCP, квоты, rate-limit. |
-| **Настройки → О приложении** | Точная версия портала и каждого движка в одном месте — удобно, когда создаёте issue.<br><img src="docs/screenshots/ru/phone-light-settings-about.png" alt="Настройки, страница «О приложении»: Teleharness 2.6.0, opencode 2.2.6, Claude Code" width="180"> |
-| **Mobile-first** | Сделано под iOS Safari: учёт клавиатуры, safe-area, светлая и тёмная темы, русский и английский интерфейс. |
+| **Настройки → О приложении** | Точная версия портала и каждого движка в одном месте — удобно, когда создаёте issue.<br><img src="docs/screenshots/ru/phone-light-settings-about.png" alt="Настройки, страница «О приложении»: Teleharness 2.8.0, opencode 2.2.6, Claude Code" width="180"> |
+| **Mobile-first** | Сделано под iOS Safari и Android Chrome (standalone PWA): нативное выделение текста касанием без прыжка экранной клавиатуры, кнопка «Копировать» у сообщений пользователя и ассистента, учёт клавиатуры, safe-area, светлая и тёмная темы, русский и английский интерфейс. |
 | **Без runtime-зависимостей** | Бэкенд — чистый stdlib Node.js. |
 
 ## Быстрый старт
+
+> [!TIP]
+> **Нужен рабочий весь функционал без пробелов?** Откройте **[Полное руководство по установке (`docs/installation.ru.md`)](docs/installation.ru.md)** ([English: `docs/installation.md`](docs/installation.md)) — пошаговая настройка на Linux, macOS и Windows для всех 4 семейств движков, HTTPS + QR-входа с телефона + iOS/Android PWA + Web Push, правой панели MCP/Skills, превью Office/PPTX, Git и Worktrees, активного кэша Obsidian, фоновых агентов GitHub, пайпов Temporal, локального голоса (CPU), песочницы для нескольких пользователей и автозапуска.
 
 ### Требования
 
 | | Версия | Для чего |
 |---|---|---|
-| [Node.js](https://nodejs.org) | ≥ 22 | портал |
+| [Node.js](https://nodejs.org) | ≥ 22.5 (22 LTS / 24 LTS) | портал и встроенный SQLite FTS5 (поиск, расходы, доска) |
+| [Git](https://git-scm.com) | ≥ 2.20 | экран Git, мобильное ревью диффов, изолированные Worktrees |
 | [opencode](https://opencode.ai) | 2.x (проверено на 2.2.6) | движок opencode |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x | движок Claude |
 | [Codex CLI](https://github.com/openai/codex) | 0.169+ | по желанию, движок Codex (админу по умолчанию; выдаётся пользователям) |
-| Python | 3.11+ | по желанию, голос |
+| ACP CLI (`gemini` / `copilot` / свой) | актуальная | по желанию, агенты ACP (подключаются в Настройки → Агенты ACP) |
+| Python | 3.11+ | по желанию, локальный голосовой воркер и воркер пайпов Temporal |
 
 Нужен хотя бы один движок.
 
@@ -324,7 +329,7 @@ npx github:al3x4kov/teleharness            # → http://127.0.0.1:4180/teleharne
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.6.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -343,7 +348,7 @@ claude setup-token                 # движок Claude: токен — в .env
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.6.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
@@ -361,7 +366,8 @@ node server.js                     # → http://127.0.0.1:4170/teleharness/
 ```
 </details>
 
-Пошагово для Mac, включая службы launchd и доступ с телефона: [`docs/macos.md`](docs/macos.md) (на английском). На Linux
+Полная пошаговая инструкция для **всех возможностей на Linux, macOS и Windows**: [`docs/installation.ru.md`](docs/installation.ru.md)
+(чек-лист для Mac с launchd и телефоном: [`docs/macos.md`](docs/macos.md)). На Linux
 запускайте портал службой systemd по образцу [`ops/linux/teleharness.service`](ops/linux/teleharness.service) — с ним один ход
 агента, которому не хватило памяти, не останавливает весь портал.
 
@@ -392,11 +398,12 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 
 ## Архитектура
 
-<p align="center"><img src="docs/architecture-components.ru.png" alt="Компоненты Teleharness: клиент, портал, harness трёх CLI, Obsidian, голос, песочница, пайпы Temporal, провайдеры моделей" width="900"></p>
+<p align="center"><img src="docs/architecture-components.ru.png" alt="Компоненты Teleharness: клиент с правой панелью и превью PPTX/Office, портал с SQLite FTS5/расходами/доской, harness четырёх семейств движков (opencode 2.x, Claude Code, Codex, ACP), Obsidian, голос, песочница, GitHub и пайпы Temporal, провайдеры моделей" width="900"></p>
 
 - **Портал** (`server.js`) — API, авторизация и пользователи, хаб событий, привязка чата к движку, передача
-  чата между движками. Для каждого движка свой адаптер: клиент `opencode serve` (1.x и 2.x) и раннер,
-  запускающий `claude` (или посредника Codex поверх `codex app-server`) на каждый ход.
+  чата между движками, полнотекстовый поиск SQLite FTS5, доска внимания, расходы и Git/Worktrees. Для каждого семейства
+  движков свой адаптер: `lib/oc-client.js` для `opencode serve` (1.x и 2.x), раннеры `claude` CLI и посредника Codex
+  поверх `codex app-server`, а также мост ACP JSON-RPC (`lib/acp-chat.js`) для Gemini / Copilot / своих ACP-агентов.
 - **Harness** — всё, что окружает CLI: агенты и оркестрация (oh-my-opencode-slim), плагин базы знаний
   и песочницы для opencode (`ops/opencode/plugin-v2` для 2.x, `vault-cache.ts` для 1.x), хуки Claude Code,
   скиллы, MCP-серверы. Здесь решается, что агенту можно и что он знает.
@@ -443,7 +450,8 @@ edge-сервер (`ops/portal-server.js`) или любой reverse proxy (Cadd
 | `TELEHARNESS_VOICE_PYTHON`, `TELEHARNESS_VOICE_MODELS` | `~/.teleharness/voice/…` | локальный голосовой воркер |
 
 Группы функций и тонкие настройки — в той же схеме: `TELEHARNESS_LISTEN_HOST` / `TELEHARNESS_ENV`
-(адрес привязки, guard стенда), `TELEHARNESS_PUSH…` (Web Push: вкл/выкл, VAPID-ключи, тихие часы),
+(адрес привязки, guard стенда), `TELEHARNESS_EDGE_ALLOWED_HOSTS` (белый список хостов edge для HTTPS-редиректа),
+`TELEHARNESS_ACP` (агенты ACP), `TELEHARNESS_PUSH…` (Web Push: вкл/выкл, VAPID-ключи, тихие часы),
 `TELEHARNESS_VOICE…` (лимиты распознавания и синтеза на пользователя), `TELEHARNESS_TENANT…`
 (лимиты запросов, загрузок и vision на пользователя) и набор Temporal — `TELEHARNESS_TEMPORAL_PIPELINES`,
 `TELEHARNESS_TEMPORAL_MODELS`, `TELEHARNESS_TEMPORAL_DRAIN` и соседние — описаны в

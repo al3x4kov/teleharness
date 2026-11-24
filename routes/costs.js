@@ -74,6 +74,13 @@ export function costRoutes(deps) {
   };
   // Ходы чата/запуска принадлежат одному пользователю; тенант с чужой строкой → 403.
   const ownsAll = (ctx, where, args) => ctx.admin || reports.owners(where, args).every((u) => u === ctx.user.id);
+  const decodeParam = (raw) => {
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
+  };
 
   const pricesFace = (admin) => {
     const v = ledger.priceVersion();
@@ -104,7 +111,7 @@ export function costRoutes(deps) {
         const withSubs = ctx.admin && !who.userId;
         const s = reports.summary({ period, userId: who.userId, project: proj.project, withSubs });
         // тенант: без подписок, «сэкономлено», чужих и прайса (кр. 11; P-9)
-        const out = { ...s, admin: ctx.admin, ledger: ledgerState(ctx.admin), backfill: deps.backfill?.state() ?? [] };
+        const out = { ...s, admin: ctx.admin, ledger: ledgerState(ctx.admin), backfill: ctx.admin ? (deps.backfill?.state() ?? []) : [] };
         if (!ctx.admin) {
           delete out.subscriptions;
           out.budget = reports.budget(ctx.user.id);
@@ -118,7 +125,8 @@ export function costRoutes(deps) {
       path: /^\/teleharness\/api\/costs\/chat\/([^/]+)$/,
       scope: "user",
       handler: wrap(async (ctx) => {
-        const sid = decodeURIComponent(ctx.match[1]);
+        const sid = decodeParam(ctx.match[1]);
+        if (sid === null) return sendJson(ctx.res, 400, { error: "bad_id" });
         if (!SID_RE.test(sid)) return sendJson(ctx.res, 400, { error: "bad sid" });
         if (!ownsAll(ctx, "sid = ? OR parent_sid = ?", [sid, sid])) return sendJson(ctx.res, 403, DENY);
         if (!ctx.admin && deps.chatAllowed && !(await deps.chatAllowed(ctx.user, sid))) return sendJson(ctx.res, 403, DENY);
@@ -144,7 +152,8 @@ export function costRoutes(deps) {
       path: /^\/teleharness\/api\/costs\/run\/([^/]+)$/,
       scope: "user",
       handler: wrap(async (ctx) => {
-        const id = decodeURIComponent(ctx.match[1]);
+        const id = decodeParam(ctx.match[1]);
+        if (id === null) return sendJson(ctx.res, 400, { error: "bad_id" });
         if (!RUN_RE.test(id)) return sendJson(ctx.res, 400, { error: "bad run" });
         if (!ownsAll(ctx, "run_id = ?", [id])) return sendJson(ctx.res, 403, DENY);
         return sendJson(ctx.res, 200, reports.run(id));
@@ -280,7 +289,8 @@ export function costRoutes(deps) {
       path: /^\/teleharness\/api\/costs\/budgets\/([^/]+)$/,
       scope: "admin",
       handler: wrap(async (ctx) => {
-        const uid = decodeURIComponent(ctx.match[1]);
+        const uid = decodeParam(ctx.match[1]);
+        if (uid === null) return sendJson(ctx.res, 400, { error: "bad_id" });
         if (!USER_RE.test(uid)) return sendJson(ctx.res, 400, { error: "bad user" });
         const b = await body(ctx.req);
         if (!b || !("usdMonth" in b)) return sendJson(ctx.res, 400, { error: "bad body" });

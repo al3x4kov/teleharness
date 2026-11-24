@@ -78,3 +78,50 @@ test("upstreamErrors5m: a second failure inside the window keeps the count risin
   assert.equal(upstreamErrors5m(T1 + 3_000), 2);
   assert.equal(upstreamErrors5m(T1 + 300_000 + 3_000), 0, "both aged out past the 5-minute window");
 });
+
+test("BUG-302 clientIp: XFF игнорируется для внешнего remoteAddress (защита от спуфинга), работает для loopback", () => {
+  assert.equal(clientIp({ headers: { "x-forwarded-for": "1.2.3.4" }, socket: { remoteAddress: "198.51.100.5" } }), "198.51.100.5");
+  assert.equal(clientIp({ headers: { "x-forwarded-for": "1.2.3.4" }, socket: { remoteAddress: "::1" } }), "1.2.3.4");
+  assert.equal(clientIp({ headers: { "x-forwarded-for": "1.2.3.5" }, socket: { remoteAddress: "::ffff:127.0.0.1" } }), "1.2.3.5");
+  assert.equal(clientIp({ headers: { "x-forwarded-for": "1.2.3.4" }, socket: {} }), "");
+});
+
+test("BUG-302 accessLogger: prune использует инжектированный now(), а не Date.now()", async () => {
+  const { writeFileSync, existsSync } = await import("node:fs");
+  const dir = mkdtempSync(path.join(tmpdir(), "zai-accesslog-prune-"));
+  try {
+    const oldFile = path.join(dir, "access-20260101.log");
+    writeFileSync(oldFile, '{"ok":1}\n', "utf8"); // mtime == сейчас (Date.now())
+    // Инжектируем now на 20 дней вперёд: с Date.now() файл не удалится, с now() — удалится
+    const future = new Date(Date.now() + 20 * 86_400_000);
+    const log = accessLogger({ dir, enabled: true, now: () => future });
+    log({ rid: "prune1" });
+    await sleep(200);
+    assert.equal(existsSync(oldFile), false, "файл старше 14 дней относительно now() должен быть удалён");
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test("BUG-302 accessLogger: ротация через >2 переполненные части (while вместо if)", async () => {
+  const { writeFileSync, truncateSync, existsSync } = await import("node:fs");
+  const dir = mkdtempSync(path.join(tmpdir(), "zai-accesslog-rot-"));
+  try {
+    const fixed = new Date("2026-11-20T12:00:00.000Z");
+    const base = path.join(dir, "access-20261120.log");
+    const part1 = path.join(dir, "access-20261120.1.log");
+    const part2 = path.join(dir, "access-20261120.2.log");
+    writeFileSync(base, "");
+    truncateSync(base, 10 * 1024 * 1024 + 10);
+    writeFileSync(part1, "");
+    truncateSync(part1, 10 * 1024 * 1024 + 10);
+
+    const log = accessLogger({ dir, enabled: true, now: () => fixed });
+    log({ rid: "rot-part-2" });
+    await sleep(250);
+    assert.equal(existsSync(part2), true, "переполненные .log и .1.log должны переключиться на .2.log");
+    assert.match(readFileSync(part2, "utf8"), /rot-part-2/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});

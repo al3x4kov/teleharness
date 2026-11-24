@@ -372,3 +372,170 @@ test("FEAT-20.3: uuidv5(namespace, name) различает разные соб�
   assert.notEqual(a, b, "разные события одного триггера обязаны давать разные requestId");
   assert.equal(uuidv5("6ba7b810-9dad-11d1-80b4-00c04fd430c8", "www.example.com"), "2ed6657d-e927-568b-95e1-2665a8aea6a2");
 });
+
+test("BUG-303: sweep() проверяет adminStopped, enabled, connectionOk и лимиты перед запуском из очереди", async () => {
+  const mkCase = async (mutate) => {
+    let status = "RUNNING";
+    const dir = tmp();
+    const store = triggerService(path.join(dir, "db.sqlite"), { secrets: { encrypt: (s) => `enc:${s}`, decrypt: (s) => s.replace(/^enc:/, "") } });
+    let connStatus = "ok";
+    const connections = { get: () => ({ login: "octo", status: connStatus }) };
+    const launches = [];
+    const dispatcher = createDispatcher({
+      store, connections, log: () => {},
+      describeRun: async () => ({ status }),
+      launch: async () => { launches.push(1); return { workflowId: `wf-${launches.length}` }; },
+    });
+    const trigger = store.create("u1", { definitionId: "00000000-0000-4000-8000-000000000001", repo: "octo/hello", kinds: [], filters: { trustedAuthors: ["octo"] }, limits: { perHour: 6, queue: 20 } });
+    try {
+      await dispatcher.processDelivery({ deliveryId: "d-1", triggerId: trigger.id, event: "issues", body: JSON.stringify({ action: "labeled", repository: { full_name: "octo/hello" }, sender: { login: "octo" }, issue: { number: 7, title: "T", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] }, label: { name: "agent" } }) });
+      await dispatcher.processDelivery({ deliveryId: "d-2", triggerId: trigger.id, event: "issue_comment", body: JSON.stringify({ action: "created", repository: { full_name: "octo/hello" }, sender: { login: "octo" }, issue: { number: 7, title: "T", html_url: "u", labels: [{ name: "agent" }] }, comment: { id: 9001, body: "/agent ещё задача", user: { login: "octo" }, html_url: "cu" } }) });
+      assert.equal(launches.length, 1);
+      status = "COMPLETED";
+      mutate({ store, trigger, setConn: (s) => { connStatus = s; } });
+      await dispatcher.sweep();
+      return { launches: launches.length, journal: store.journal("u1", trigger.id) };
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+
+  const cAdmin = await mkCase(({ store }) => store.setSetting("adminStopped", true));
+  assert.equal(cAdmin.launches, 1, "adminStopped блокирует выпуск из очереди");
+  assert.equal(cAdmin.journal[0].decision, "admin_stopped");
+
+  const cDisabled = await mkCase(({ store, trigger }) => store.update("u1", trigger.id, { enabled: false }));
+  assert.equal(cDisabled.launches, 1, "выключенный триггер блокирует выпуск из очереди");
+  assert.equal(cDisabled.journal[0].decision, "trigger_disabled");
+
+  const cConn = await mkCase(({ setConn }) => setConn("expired"));
+  assert.equal(cConn.launches, 1, "протухшее подключение блокирует выпуск из очереди");
+  assert.equal(cConn.journal[0].decision, "no_connection");
+
+  const cRate = await mkCase(({ store, trigger }) => store.update("u1", trigger.id, { limits: { perHour: 1, queue: 20 } }));
+  assert.equal(cRate.launches, 1, "исчерпанный лимит perHour блокирует выпуск из очереди");
+  assert.equal(cRate.journal[0].decision, "rate_limited");
+
+  const cClaude = await mkCase(({ store }) => store.setSetting("claude_background_per_day", 1));
+  assert.equal(cClaude.launches, 1, "исчерпанный claudePerDay блокирует выпуск из очереди");
+  assert.equal(cClaude.journal[0].decision, "claude_limit");
+});
+
+test("BUG-303: claude_background_per_day считает только пайпы с движком claude (не-Claude пайпы не расходуют и не блокируются)", async () => {
+  const dir = tmp();
+  const store = triggerService(path.join(dir, "db.sqlite"), { secrets: { encrypt: (s) => `enc:${s}`, decrypt: (s) => s.replace(/^enc:/, "") } });
+  const connections = { get: () => ({ login: "octo", status: "ok" }) };
+  const CLAUDE_DEF = "00000000-0000-4000-8000-000000000001";
+  const GLM_DEF = "00000000-0000-4000-8000-000000000002";
+  const dispatcher = createDispatcher({
+    store, connections, log: () => {},
+    usesClaude: (tr) => tr.definitionId === CLAUDE_DEF,
+    launch: async (_tr, ev) => ({ workflowId: `wf-${ev.number}` }),
+  });
+  const trGlm = store.create("u1", { definitionId: GLM_DEF, repo: "octo/hello", kinds: [], filters: { trustedAuthors: ["octo"] } });
+  const trClaude = store.create("u1", { definitionId: CLAUDE_DEF, repo: "octo/hello", kinds: [], filters: { trustedAuthors: ["octo"] } });
+  const deliver = (tr, id, n) => dispatcher.processDelivery({
+    deliveryId: id, triggerId: tr.id, event: "issues",
+    body: JSON.stringify({ action: "labeled", repository: { full_name: "octo/hello" }, sender: { login: "octo" }, issue: { number: n, title: "T", body: "B", html_url: "u", user: { login: "octo" }, labels: [{ name: "agent" }] }, label: { name: "agent" } }),
+  });
+  try {
+    store.setSetting("claude_background_per_day", 1);
+    // 2 запуска не-Claude (GLM) не расходуют квоту Claude
+    assert.equal(await deliver(trGlm, "g-1", 10), "started");
+    assert.equal(await deliver(trGlm, "g-2", 11), "started");
+    // 1 запуск Claude проходит, 2-й получает claude_limit
+    assert.equal(await deliver(trClaude, "c-1", 20), "started");
+    assert.equal(await deliver(trClaude, "c-2", 21), "claude_limit");
+    // После исчерпания лимита Claude не-Claude пайп по-прежнему запускается
+    assert.equal(await deliver(trGlm, "g-3", 12), "started");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("BUG-303: routes/temporal-triggers — GhError → 4xx/502, PATCH null/[] → 400, replay guards и claudeUsedToday", async () => {
+  const { triggerRoutes } = await import("../routes/temporal-triggers.js");
+  const { GhError } = await import("../lib/github/client.js");
+  const dir = tmp();
+  const store = triggerService(path.join(dir, "db.sqlite"), { secrets: { encrypt: (s) => `enc:${s}`, decrypt: (s) => s.replace(/^enc:/, "") } });
+  const CLAUDE_DEF = "00000000-0000-4000-8000-000000000001";
+  const GLM_DEF = "00000000-0000-4000-8000-000000000002";
+  let conn = { owner: "u1", login: "octo", status: "ok", tokenLast4: "1234" };
+  let permOk = false;
+  let ghErr = null;
+  let launched = 0;
+  const routes = triggerRoutes({
+    sendJson: (res, status, body) => { res.status = status; res.body = body; },
+    readJsonBody: async (req) => req.body,
+    store,
+    connections: { get: () => conn, list: () => (conn ? [conn] : []) },
+    pipelinesEnabled: () => true,
+    pipeOf: async () => ({ version: 1 }),
+    usesClaude: (tr) => tr.definitionId === CLAUDE_DEF,
+    permissionCheck: async (login) => login === "collab" && permOk,
+    launch: async () => {
+      if (ghErr) throw ghErr;
+      launched += 1;
+      return { workflowId: `wf-r-${launched}` };
+    },
+  });
+  const call = async (method, urlPath, body, user = { id: "u1", role: "admin" }) => {
+    const u = new URL("http://127.0.0.1" + urlPath);
+    const r = routes.find((x) => x.method === method && (typeof x.path === "string" ? x.path === u.pathname : x.path.test(u.pathname)));
+    assert.ok(r, `route ${method} ${urlPath}`);
+    const match = typeof r.path === "string" ? null : u.pathname.match(r.path);
+    const res = { status: 0, body: null };
+    await r.handler({ req: { body }, res, user, match, url: u });
+    return res;
+  };
+  try {
+    const trClaude = store.create("u1", { definitionId: CLAUDE_DEF, repo: "octo/hello", kinds: ["issue_labeled"] });
+    const trGlm = store.create("u1", { definitionId: GLM_DEF, repo: "octo/hello", kinds: ["issue_labeled"] });
+
+    // 1. PATCH с null / [] / примитивом → 400 (не 500)
+    assert.equal((await call("PATCH", `/teleharness/api/temporal/triggers/${trClaude.id}`, null)).status, 400);
+    assert.equal((await call("PATCH", `/teleharness/api/temporal/triggers/${trClaude.id}`, [])).status, 400);
+    assert.equal((await call("PATCH", `/teleharness/api/temporal/triggers/${trClaude.id}`, "str")).status, 400);
+
+    // 2. admin/background claudeUsedToday считает только Claude-триггеры
+    store.record({ triggerId: trGlm.id, eventKey: "k-g1", kind: "issue_labeled", repo: "octo/hello", decision: "started", workflowId: "wf-g1" });
+    store.record({ triggerId: trClaude.id, eventKey: "k-c1", kind: "issue_labeled", repo: "octo/hello", decision: "started", workflowId: "wf-c1" });
+    const bg = await call("GET", "/teleharness/api/admin/background");
+    assert.equal(bg.status, 200);
+    assert.equal(bg.body.claudeUsedToday, 1, "не-Claude запуск не засчитывается в claudeUsedToday");
+
+    // Подготавливаем replayable запись журнала для collaborator 'collab'
+    const ev = { kind: "issue_labeled", repo: "octo/hello", number: 5, action: "labeled", label: "agent", author: "collab", actor: "collab" };
+    store.record({ triggerId: trClaude.id, eventKey: "k-rep", kind: "issue_labeled", repo: "octo/hello", number: 5, actor: "collab", decision: "rate_limited", eventJson: JSON.stringify(ev) });
+    const eid = store.journal("u1", trClaude.id).find((r) => r.decision === "rate_limited").id;
+
+    // 3. replay при adminStopped → 409
+    store.setSetting("adminStopped", true);
+    assert.equal((await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {})).status, 409);
+    store.setSetting("adminStopped", false);
+
+    // 4. replay при невалидном подключении → 422
+    conn = { owner: "u1", login: "octo", status: "expired", tokenLast4: "1234" };
+    assert.equal((await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {})).status, 422);
+    conn = { owner: "u1", login: "octo", status: "ok", tokenLast4: "1234" };
+
+    // 5. replay проверяет permissionCheck (без права → 422, с правом → идёт дальше)
+    permOk = false;
+    assert.equal((await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {})).status, 422);
+    permOk = true;
+
+    // 6. replay проверяет суточный лимит Claude → 429
+    store.setSetting("claude_background_per_day", 1); // уже есть 1 Claude запуск (k-c1)
+    assert.equal((await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {})).status, 429);
+    store.setSetting("claude_background_per_day", 5);
+
+    // 7. GhError в маршруте маппится в 4xx/502, а не вылетает наружу как 500
+    ghErr = new GhError(503, "server", "GitHub unavailable");
+    assert.equal((await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {})).status, 502);
+    ghErr = new GhError(401, "auth", "Bad credentials");
+    assert.equal((await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {})).status, 401);
+    ghErr = null;
+
+    // 8. При всех пройденных проверках replay успешен (200)
+    const ok = await call("POST", `/teleharness/api/temporal/triggers/${trClaude.id}/journal/${eid}/replay`, {});
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.ok, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+

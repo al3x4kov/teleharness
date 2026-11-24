@@ -223,7 +223,7 @@ test("FEAT-20.3 (2.6, T-18): выключение триггера с идущи
   installFetch([
     { method: "GET", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}$`), reply: () => state },
     { method: "GET", path: "/teleharness/api/temporal/definitions/pipe-1", reply: () => ({ id: "pipe-1", name: "Задача → PR", versions: [{ version: 3 }] }) },
-    { method: "GET", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}/journal`), reply: () => ({ entries: ROWS, nextCursor: null }) },
+    { method: "GET", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}/journal`), reply: () => ROWS },
     { method: "GET", path: "/teleharness/api/temporal/triggers", reply: () => [state] },
     { method: "POST", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}/disable$`), reply: ({ body }) => { actions.push({ op: "disable", running: body?.running }); state = { ...state, enabled: false, activeCount: body?.running === "cancel" ? 0 : 2 }; return state; } },
     { method: "POST", path: new RegExp(`/teleharness/api/temporal/triggers/${TID}/enable$`), reply: () => { actions.push({ op: "enable" }); state = { ...state, enabled: true }; return state; } },

@@ -365,3 +365,68 @@ test("BUG-272: ход opencode 2.x с ошибкой 429 через перепи
   feed({ type: "session.execution.succeeded", location: loc, data: { sessionID: "q" } });
   assert.deepEqual(got.at(-1), ["q", "done", null]);
 });
+
+test("BUG-303: awaySummary — run-failed инкрементирует только counts.failed и не задваивает counts.runs", () => {
+  const dir = tmp();
+  try {
+    let t = NOW;
+    const s = new AttentionStore({ dir, now: () => t, log: () => {} });
+    s.touch("u1");
+    t += 60 * MIN;
+    s.touch("u1");
+    const runs = [
+      { workflowId: "w-ok", name: "Успешный", summary: { kind: "ok", closeTime: new Date(t - 20 * MIN).toISOString() } },
+      { workflowId: "w-err", name: "Упавший", summary: { kind: "err", closeTime: new Date(t - 10 * MIN).toISOString() } },
+    ];
+    const a = awaySummary(s.user("u1"), { runs, now: t });
+    assert.equal(a.counts.runs, 1, "run-failed не должен попадать в counts.runs");
+    assert.equal(a.counts.failed, 1, "run-failed инкрементирует counts.failed");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("BUG-303: attentionRoutes — POST /teleharness/api/attention/snooze принимает ключ review:* своего ревью и даёт 404 на чужое", async () => {
+  const { attentionRoutes } = await import("../routes/attention.js");
+  const dir = tmp();
+  try {
+    const store = new AttentionStore({ dir, now: () => NOW, log: () => {} });
+    const pings = [];
+    const routes = attentionRoutes({
+      sendJson: (res, status, body) => { res.status = status; res.body = body; },
+      readJsonBody: async (req) => req.body,
+      store,
+      chatsFor: async () => [],
+      live: () => ({ busy: {}, dialogs: [] }),
+      sources: () => ({ opencode: "ok" }),
+      boardRuns: async () => [],
+      reviews: async (u) => (u.id === "u1" ? [{ id: "rv_AAAAAAAAAAAA", key: "review:rv_AAAAAAAAAAAA" }] : []),
+      pinsOf: () => [],
+      ping: (uid, reason) => pings.push([uid, reason]),
+      now: () => NOW,
+    });
+    const snooze = routes.find((r) => r.path === "/teleharness/api/attention/snooze");
+    const resOk = {};
+    await snooze.handler({
+      req: { body: { key: "review:rv_AAAAAAAAAAAA", until: NOW + 60 * MIN } },
+      res: resOk,
+      user: { id: "u1" },
+      admin: false,
+    });
+    assert.equal(resOk.status, 200, "своё ревью можно отложить");
+    assert.equal(store.user("u1").snooze["review:rv_AAAAAAAAAAAA"]?.until, NOW + 60 * MIN);
+    assert.deepEqual(pings, [["u1", "snooze"]]);
+
+    const resForeign = {};
+    await snooze.handler({
+      req: { body: { key: "review:rv_BBBBBBBBBBBB", until: NOW + 60 * MIN } },
+      res: resForeign,
+      user: { id: "u1" },
+      admin: false,
+    });
+    assert.equal(resForeign.status, 404, "чужое/несуществующее ревью — 404");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+

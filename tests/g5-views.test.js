@@ -205,11 +205,12 @@ test("Projects: duplicate path → message + «Открыть его», trailing
   assert.equal(M.projects.findExistingProject("D:\\Work\\other", list), null);
   M.store.sessions.value = [];
   const el = mount(M.projects.AddProjectModal, { projects: list, onCreate: () => assert.fail("must not create"), onClose() {} });
-  const input = el.querySelector("input");
+  const modal = win.document.body.querySelector(".modal");
+  const input = modal.querySelector("input");
   input.value = "D:\\Work\\teleharness";
   input.dispatchEvent(new win.Event("input", { bubbles: true }));
   return flush().then(async () => {
-    byText(el, "button", "Создать").click();
+    byText(modal, "button", "Создать").click();
     await flush();
     assert.match(win.document.body.textContent, /уже есть в списке/);
     assert.ok(byText(win.document.body, "button", "Открыть его"));

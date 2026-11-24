@@ -13,7 +13,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -344,8 +344,10 @@ test("admin + tenant chat subfolder: dangerous repo config refused (409), the pr
   const aliceDir = alice.user.directories[0];
   const sub = path.join(aliceDir, "chats", "t2");
   const marker = path.join(sub, "fsmonitor-ran.txt");
-  const script = path.join(sub, "mon.cmd");
-  writeFileSync(script, `@echo ran> "${marker}"\r\n`);
+  const isWin = process.platform === "win32";
+  const script = path.join(sub, isWin ? "mon.cmd" : "mon.sh");
+  writeFileSync(script, isWin ? `@echo ran> "${marker}"\r\n` : `#!/bin/sh\necho ran > "${marker}"\n`);
+  if (!isWin) chmodSync(script, 0o755);
   execFileSync("git", ["config", "core.fsmonitor", script.split(path.sep).join("/")], { cwd: sub });
   try {
     for (const p of [`/teleharness/api/git/status${q({ sid: "ses_t2" })}`, `/teleharness/api/git/status${dirQ(sub)}`]) {
@@ -355,5 +357,34 @@ test("admin + tenant chat subfolder: dangerous repo config refused (409), the pr
     assert.equal(existsSync(marker), false, "fsmonitor program did not run");
   } finally {
     execFileSync("git", ["config", "--unset", "core.fsmonitor"], { cwd: sub });
+    rmSync(script, { force: true });
+    rmSync(marker, { force: true });
   }
 });
+
+test("BUG-303: PUT /teleharness/api/me/git отклоняет массив [] со статусом 400", async () => {
+  const r = await api("/teleharness/api/me/git", { method: "PUT", body: [] });
+  assert.equal(r.status, 400);
+});
+
+test("BUG-303: при падении pre-commit хука gitCommit откатывает добавленные untracked-файлы из индекса", async () => {
+  const hookPath = path.join(adminRepo, ".git", "hooks", "pre-commit");
+  const untrackedFile = path.join(adminRepo, "hook-fail-untracked.txt");
+  writeFileSync(untrackedFile, "new content\n");
+  writeFileSync(hookPath, "#!/bin/sh\necho 'pre-commit hook rejected' >&2\nexit 1\n");
+  chmodSync(hookPath, 0o755);
+  try {
+    const r = await api(`/teleharness/api/git/commit${dirQ(adminRepo)}`, {
+      method: "POST",
+      body: { files: ["hook-fail-untracked.txt"], message: "should fail" },
+    });
+    assert.equal(r.status, 409);
+    const porcelain = sh(adminRepo, "status", "--porcelain");
+    assert.match(porcelain, /^\?\? hook-fail-untracked\.txt$/m, `файл должен остаться untracked (??), а не staged: ${JSON.stringify(porcelain)}`);
+  } finally {
+    rmSync(hookPath, { force: true });
+    rmSync(untrackedFile, { force: true });
+    try { sh(adminRepo, "reset", "-q", "HEAD", "--", "hook-fail-untracked.txt"); } catch {}
+  }
+});
+

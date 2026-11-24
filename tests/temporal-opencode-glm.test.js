@@ -38,27 +38,6 @@ function ocDefinition(dir, overrides = {}) {
   };
 }
 
-function makeRouteCaller(routes, user) {
-  return async (method, urlPath, bodyObj) => {
-    const full = "/teleharness/api/temporal" + urlPath;
-    for (const r of routes) {
-      if (r.method !== method) continue;
-      const m = typeof r.path === "string" ? (r.path === full ? [full] : null) : full.match(r.path);
-      if (!m) continue;
-      let status = 0;
-      let payload = null;
-      await r.handler({
-        req: { _body: bodyObj },
-        res: {},
-        user,
-        match: m,
-      });
-      return { status, body: payload };
-    }
-    throw new Error(`No route for ${method} ${full}`);
-  };
-}
-
 test("FEAT-19.31: validateDefinition принимает engine='opencode' с glm-5.3-flash", () => {
   const ok = validateDefinition(ocDefinition("/proj"));
   assert.equal(ok.valid, true, JSON.stringify(ok.errors));

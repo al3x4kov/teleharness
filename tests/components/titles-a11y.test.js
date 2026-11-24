@@ -94,9 +94,9 @@ test("ручное переименование уходит PATCH-ем с title
   const { root } = t$.mount(ui.HomeView);
   const btn = await t$.waitFor(() => $$(root, "button").find((b) => /^Переименовать чат/.test(b.getAttribute("aria-label") ?? "")));
   t$.click(btn);
-  t$.typeInto(await t$.waitFor(() => $(root, ".modal-input")), "Квартал");
-  t$.click(byText(root, ".modal button", "Сохранить"));
-  await t$.waitFor(() => !$(root, ".modal"));
+  t$.typeInto(await t$.waitFor(() => $(document.body, ".modal-input")), "Квартал");
+  t$.click(byText(document.body, ".modal button", "Сохранить"));
+  await t$.waitFor(() => !$(document.body, ".modal"));
   assert.deepEqual(patches, [{ title: "Квартал" }]);
   assert.deepEqual(rowTitles(root), ["Квартал"]);
 });
@@ -260,15 +260,58 @@ test("BUG-01.38: лента — постоянный polite-регион: «Аг
   await t$.waitFor(() => region.textContent === "Агент ответил");
 });
 
-test("BUG-01.38: копирование своего сообщения озвучивается постоянным регионом; визуальная плашка aria-hidden", async () => {
+test("BUG-300 / BUG-01.38: выделение/contextmenu на сообщениях не перехватывается; кнопка .copy-user копирует и озвучивается постоянным регионом", async () => {
   const user = msg(SID, "u1", "user", "Привет");
-  const h = t$.mount(ui.MessageList, { sessionId: SID, messages: [user], streamingId: null, busy: false });
+  const asst = msg(SID, "a1", "assistant", "Ответ агента");
+  const h = t$.mount(ui.MessageList, { sessionId: SID, messages: [user, asst], streamingId: null, busy: false });
+
+  // 1. contextmenu on user & assistant messages must NOT call preventDefault() so native mobile selection works
+  const cmUser = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  $(h.root, ".msg-user").dispatchEvent(cmUser);
+  assert.equal(cmUser.defaultPrevented, false, "contextmenu на .msg-user не перехватывается");
+  const cmAsst = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+  $(h.root, ".msg-assistant").dispatchEvent(cmAsst);
+  assert.equal(cmAsst.defaultPrevented, false, "contextmenu на .msg-assistant не перехватывается");
+
+  // 2. Explicit copy button under user bubble: success path
   const region = $(h.root, '.msg-user .sr-only[role="status"]');
-  assert.equal(!!region, true, "регион есть до копирования");
+  assert.equal(!!region, true, "постоянный live-регион есть до копирования");
   assert.equal(region.textContent, "");
-  t$.fire($(h.root, ".msg-user"), "contextmenu", {}, MouseEvent);
-  await t$.waitFor(() => /Скопировано|Не удалось скопировать/.test(region.textContent));
-  assert.equal($(h.root, ".copy-flash").getAttribute("aria-hidden"), "true");
+  const btn = $(h.root, ".msg-user .copy-user");
+  assert.ok(btn, "кнопка копирования сообщения пользователя присутствует");
+
+  const origClip = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+  let copied = null;
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText: async (s) => (copied = s) },
+    configurable: true,
+  });
+  try {
+    t$.click(btn);
+    await t$.waitFor(() => region.textContent === "Скопировано");
+    assert.equal(copied, "Привет");
+    assert.equal(btn.classList.contains("is-done"), true);
+
+    // 3. Failure path on assistant .copy-turn: adds .is-fail so error text is visibly shown
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async () => { throw new Error("denied"); } },
+      configurable: true,
+    });
+    const origExec = document.execCommand;
+    document.execCommand = () => false;
+    try {
+      const asstBtn = $(h.root, ".msg-assistant .copy-turn");
+      assert.ok(asstBtn, "кнопка копирования ответа присутствует");
+      t$.click(asstBtn);
+      await t$.waitFor(() => asstBtn.classList.contains("is-fail"));
+      assert.match(asstBtn.textContent, /Не скопировалось/);
+    } finally {
+      document.execCommand = origExec;
+    }
+  } finally {
+    if (origClip) Object.defineProperty(navigator, "clipboard", origClip);
+    else delete navigator.clipboard;
+  }
 });
 
 test("BUG-01.38: карточка разрешения/вопроса озвучивается постоянным регионом экрана чата", async () => {
@@ -295,10 +338,10 @@ test("BUG-01.38: модалка переименования — Tab по кру
   const pencil = $$(root, "button").find((b) => b.getAttribute("aria-label") === "Переименовать чат «Отчёт»");
   pencil.focus();
   t$.click(pencil);
-  const input = await t$.waitFor(() => $(root, ".modal-input"));
+  const input = await t$.waitFor(() => $(document.body, ".modal-input"));
   await t$.flush();
   assert.equal(document.activeElement, input, "фокус в поле");
-  const modal = $(root, ".modal");
+  const modal = $(document.body, ".modal");
   const inside = [...modal.querySelectorAll("input, button:not([disabled])")];
   const last = inside.at(-1);
   // Shift+Tab с первого → последний; Tab с последнего → первый
@@ -312,7 +355,7 @@ test("BUG-01.38: модалка переименования — Tab по кру
   t$.key(pencil, "Tab");
   assert.equal(modal.contains(document.activeElement), true);
   t$.key(input, "Escape");
-  await t$.waitFor(() => !$(root, ".modal"));
+  await t$.waitFor(() => !$(document.body, ".modal"));
   await t$.flush();
   assert.equal(document.activeElement, pencil, "фокус вернулся на вызвавшую кнопку");
 });
@@ -372,24 +415,30 @@ function shellWithOpener(label) {
   return { shell, opener };
 }
 
-test("BUG-01.38: модалка удаления чата — фокус внутри, Tab по кругу, Escape возвращает фокус на 🗑", async () => {
-  const { opener } = shellWithOpener("🗑");
-  let open = true;
-  const h = t$.mount(ui.DeleteModal, { session: ses("ses_a", "Отчёт"), onConfirm: () => {}, onClose: () => (open = false) });
-  await t$.flush();
-  const modal = $(document.body, ".modal");
-  assert.equal(modal.contains(document.activeElement), true, "фокус в модалке");
-  const btns = [...modal.querySelectorAll("button")];
-  btns.at(-1).focus();
-  t$.key(btns.at(-1), "Tab");
-  assert.equal(document.activeElement, btns[0]);
-  t$.key(btns[0], "Tab", { shiftKey: true });
-  assert.equal(document.activeElement, btns.at(-1));
-  t$.key(btns.at(-1), "Escape");
-  assert.equal(open, false, "Escape закрывает");
-  h.unmount();
-  await t$.flush();
-  assert.equal(document.activeElement, opener, "фокус вернулся");
+test("BUG-01.38: модалка удаления чата — фон inert, фокус внутри, Tab по кругу, Escape возвращает фокус на 🗑", async () => {
+  const { shell, opener } = shellWithOpener("🗑");
+  try {
+    let open = true;
+    const h = t$.mount(ui.DeleteModal, { session: ses("ses_a", "Отчёт"), onConfirm: () => {}, onClose: () => (open = false) });
+    await t$.flush();
+    assert.equal(shell.hasAttribute("inert"), true, "фон inert");
+    const modal = $(document.body, ".modal");
+    assert.equal(modal.contains(document.activeElement), true, "фокус в модалке");
+    const btns = [...modal.querySelectorAll("button")];
+    btns.at(-1).focus();
+    t$.key(btns.at(-1), "Tab");
+    assert.equal(document.activeElement, btns[0]);
+    t$.key(btns[0], "Tab", { shiftKey: true });
+    assert.equal(document.activeElement, btns.at(-1));
+    t$.key(btns.at(-1), "Escape");
+    assert.equal(open, false, "Escape закрывает");
+    h.unmount();
+    await t$.flush();
+    assert.equal(shell.hasAttribute("inert"), false, "inert снят");
+    assert.equal(document.activeElement, opener, "фокус вернулся");
+  } finally {
+    shell.remove();
+  }
 });
 
 test("BUG-01.38: модалка токена — фон inert, Tab удерживается, «Готово» возвращает фокус на «Создать»", async () => {

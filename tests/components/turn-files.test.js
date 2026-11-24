@@ -25,6 +25,7 @@ before(async () => {
 });
 afterEach(() => {
   t$.cleanup();
+  ui.resetProbes();
   tf.turnFiles.value = { key: null, sid: null, byLast: null };
   ui.store.sessions.value = [];
   ui.store.active.value = null;

@@ -3874,8 +3874,13 @@ function crossSite(req) {
   if (origin === undefined) return false;
   if (origin === "null") return true; // sandboxed documents (lib/file.js CSP)
   try {
-    const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").split(",")[0].trim().toLowerCase();
-    return new URL(origin).host.toLowerCase() !== host;
+    const rawHost = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").split(",")[0].trim();
+    if (!rawHost || /[\s/@\\]/.test(rawHost)) return true;
+    const xfp = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0].trim().toLowerCase();
+    const expectedProto = xfp === "https" || xfp === "http" ? `${xfp}:` : (req.socket?.encrypted ? "https:" : "http:");
+    const expected = new URL(`${expectedProto}//${rawHost}`);
+    const parsed = new URL(origin);
+    return parsed.origin !== expected.origin;
   } catch {
     return true;
   }

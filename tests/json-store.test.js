@@ -170,3 +170,37 @@ test("writeJsonAtomicAsync: resolves false when the target path is a directory",
   assert.equal(await writeJsonAtomicAsync(target, { a: 1 }, { log: (m) => logs.push(m) }), false);
   assert.equal(logs.length, 1);
 });
+
+test("BUG-302 writeJsonAtomicAsync: параллельные записи одного файла не конфликтуют по tmp-имени", async () => {
+  const dir = freshDir("async-parallel");
+  const file = path.join(dir, "store.json");
+  const logs = [];
+  const results = await Promise.all(
+    Array.from({ length: 20 }, (_, i) => writeJsonAtomicAsync(file, { seq: i, pad: "x".repeat(256) }, { log: (m) => logs.push(m) })),
+  );
+  assert.ok(results.every((r) => r === true), `some parallel writes failed: ${logs.join("; ")}`);
+  assert.equal(logs.length, 0, logs.join("\n"));
+  assert.deepEqual(readdirSync(dir).filter((n) => n.endsWith(".tmp")), []);
+  const parsed = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(typeof parsed.seq, "number");
+});
+
+test("BUG-302 writeJsonAtomic / Async: права 0o600 по умолчанию для users.json, sessions.json, vapid.json и опция mode", { skip: process.platform === "win32" }, async () => {
+  const { statSync } = await import("node:fs");
+  const dir = freshDir("secret-perms");
+  const prevUmask = process.umask(0o022);
+  try {
+    for (const name of ["users.json", "sessions.json", "vapid.json"]) {
+      const f1 = path.join(dir, name);
+      assert.equal(writeJsonAtomic(f1, { secret: name }), true);
+      assert.equal(statSync(f1).mode & 0o777, 0o600, `sync ${name} must be 0o600`);
+      assert.equal(await writeJsonAtomicAsync(f1, { secret: name, v: 2 }), true);
+      assert.equal(statSync(f1).mode & 0o777, 0o600, `async ${name} must be 0o600`);
+    }
+    const custom = path.join(dir, "custom.json");
+    assert.equal(writeJsonAtomic(custom, { x: 1 }, { mode: 0o600 }), true);
+    assert.equal(statSync(custom).mode & 0o777, 0o600, "explicit mode 0o600");
+  } finally {
+    process.umask(prevUmask);
+  }
+});

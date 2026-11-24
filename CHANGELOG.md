@@ -6,6 +6,46 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-11-24
+
+### Added
+- **Built-in PowerPoint (`.pptx`) preview in FileViewer.** Client-side OOXML parser (`parsePptx` in
+  `src/lib/office.js`) renders slides in presentation order with titles, bullet lists, tables, embedded images
+  from `ppt/media/*`, and expandable speaker notes directly in the browser — zero server load, instant on mobile.
+- **Standalone PWA & mobile file downloads.** FileViewer download buttons now fetch with credentials and deliver
+  files via the Web Share API (`navigator.share` with `File`, when supported on mobile standalone PWA) or an
+  object-URL `Blob` download fallback, eliminating silent no-ops on iOS standalone home-screen apps.
+- **Explicit Copy button on user messages.** Both user and assistant bubbles provide a one-tap Copy action in the
+  footer, alongside unrestricted native OS text selection.
+- **Full-feature cross-platform installation guides.** Added comprehensive bilingual guides
+  ([`docs/installation.md`](docs/installation.md) and [`docs/installation.ru.md`](docs/installation.ru.md))
+  covering all 4 engine families, HTTPS/QR/PWA/Push, MCP/Skills right panel, Office/PPTX preview, Git/Worktrees,
+  Obsidian, GitHub Background Agents, Temporal pipelines, local CPU voice, multi-user sandboxing, and autostart
+  services on Linux, macOS, and Windows.
+
+### Fixed
+- **Mobile copy no longer jumps the chat to mid-screen.** Removed long-press `onTouchStart` / `onContextMenu`
+  interception in `MessageBubble` (restoring native partial text selection and system Copy menu), guarded
+  `AppShell` keyboard detection against `readonly` / off-screen clipboard `<textarea>` elements, and updated
+  `clipboard.js` to mark its fallback element `data-clipboard-helper="1"` with `focus({ preventScroll: true })`.
+- **Office, Markdown, CSV, and XML preview edge cases.** Hardened `src/lib/office.js` and `FileViewer.jsx`
+  against ZIP/OOXML edge cases, UTF-8 BOM & quoted multiline CSV cells, SVG/data-URL safety, filename sanitization,
+  POSIX path handling, and upload quota checks.
+- **Right panel & UI accessibility polish.** Portaled `SkillModal` directly to `document.body` with focus
+  management and Escape/backdrop close, refined `Drawer`, `Composer`, `HomeView`, `ProjectView`, and
+  `Settings` state handling.
+- **Edge routing & security hardening.** Hardened `ops/portal-server.js` Host validation against open redirects
+  (with optional `TELEHARNESS_EDGE_ALLOWED_HOSTS` allowlist), case-normalized prefix redirects, and immediate
+  upstream SSE teardown on client disconnect; hardened `worktrees`, `hub`, `oc-client`, and `acp` flows.
+- **`.env.example` boolean values.** Updated example flags to `1`/`0` so copying `.env.example` to `.env`
+  passes `lib/config.js` strict boolean validation cleanly out of the box.
+
+### Changed
+- **Refreshed architecture diagrams & docs.** Updated `docs/architecture-components*.{svg,png}`,
+  `docs/architecture.md`, `docs/macos.md`, `ops/README-teleharness.md`, and `ops/voice/README.md` to match
+  the current 4-engine architecture (`lib/oc-client.js`, ACP JSON-RPC, SQLite FTS5, desktop right panel,
+  built-in PPTX/Office preview, GitHub triggers, Temporal resume-from-checkpoint).
+
 ## [2.7.1] — 2026-11-23
 
 This release combines the 2.7.0 and 2.7.1 changes (everything since v2.6.0).

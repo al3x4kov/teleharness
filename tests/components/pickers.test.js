@@ -300,37 +300,37 @@ test("Проекты: карточки из папок чатов — имя, с
 
 test("Новый проект: относительный и системный путь отклоняются без запроса к серверу", async () => {
   const created = [];
-  const { root } = t$.mount(ui.AddProjectModal, { projects: [], onCreate: (d) => created.push(d), onClose() {} });
-  const input = $(root, 'input[aria-label="Папка проекта"]');
-  const createBtn = byText(root, ".modal-actions button", "Создать");
+  t$.mount(ui.AddProjectModal, { projects: [], onCreate: (d) => created.push(d), onClose() {} });
+  const input = $(document.body, 'input[aria-label="Папка проекта"]');
+  const createBtn = byText(document.body, ".modal-actions button", "Создать");
   assert.equal(createBtn.disabled, true, "пустой путь — «Создать» выключена");
   t$.typeInto(input, "projects\\app");
   t$.click(createBtn);
   await t$.flush();
   // TASK-17.18: сервер бывает и Linux — подсказка называет обе формы абсолютного пути
-  assert.match($(root, ".modal-error").textContent, /Нужен полный путь: \/home\/user\/project или, например D:\\Projects\\my-app/);
+  assert.match($(document.body, ".modal-error").textContent, /Нужен полный путь: \/home\/user\/project или, например D:\\Projects\\my-app/);
   assert.equal(input.getAttribute("aria-invalid"), "true");
   t$.typeInto(input, "C:\\Windows\\System32\\x");
-  assert.equal($(root, ".modal-error"), null, "ввод снимает ошибку");
+  assert.equal($(document.body, ".modal-error"), null, "ввод снимает ошибку");
   t$.key(input, "Enter");
   await t$.flush();
-  assert.match($(root, ".modal-error").textContent, /Системные папки Windows/);
+  assert.match($(document.body, ".modal-error").textContent, /Системные папки Windows/);
   assert.deepEqual(created, []);
   assert.equal(fetchCalls.some((c) => c.path === "/teleharness/api/dircheck"), false);
 });
 
 test("Новый проект: дубликат (регистр и хвостовой слэш не важны) → «уже есть» + «Открыть его»", async () => {
   let closed = 0;
-  const { root } = t$.mount(ui.AddProjectModal, {
+  t$.mount(ui.AddProjectModal, {
     projects: [{ directory: "D:\\Work\\Alpha" }],
     onCreate: () => assert.fail("дубликат не создаётся"),
     onClose: () => (closed += 1),
   });
-  t$.typeInto($(root, "input.modal-input"), "d:\\work\\alpha\\");
-  t$.click(byText(root, ".modal-actions button", "Создать"));
+  t$.typeInto($(document.body, "input.modal-input"), "d:\\work\\alpha\\");
+  t$.click(byText(document.body, ".modal-actions button", "Создать"));
   await t$.flush();
-  assert.match($(root, ".modal-error").textContent, /Эта папка уже есть в списке проектов/);
-  t$.click(byText(root, ".modal-error button", "Открыть его"));
+  assert.match($(document.body, ".modal-error").textContent, /Эта папка уже есть в списке проектов/);
+  t$.click(byText(document.body, ".modal-error button", "Открыть его"));
   assert.equal(closed, 1);
   assert.equal(location.hash, "#/project/" + encodeURIComponent("D:\\Work\\Alpha"));
 });
@@ -339,16 +339,16 @@ test("Новый проект: вердикт сервера (/dircheck) пок�
   let verdict = { ok: false, error: "Такого диска нет на сервере." };
   installFetch([{ method: "GET", path: "/teleharness/api/dircheck", reply: () => verdict }]);
   const created = [];
-  const { root } = t$.mount(ui.AddProjectModal, { projects: [], onCreate: (d) => created.push(d), onClose() {} });
-  t$.typeInto($(root, "input.modal-input"), "Z:\\nowhere");
-  t$.click(byText(root, ".modal-actions button", "Создать"));
-  await t$.waitFor(() => $(root, ".modal-error"));
-  assert.equal($(root, ".modal-error").textContent, "Такого диска нет на сервере.");
+  t$.mount(ui.AddProjectModal, { projects: [], onCreate: (d) => created.push(d), onClose() {} });
+  t$.typeInto($(document.body, "input.modal-input"), "Z:\\nowhere");
+  t$.click(byText(document.body, ".modal-actions button", "Создать"));
+  await t$.waitFor(() => $(document.body, ".modal-error"));
+  assert.equal($(document.body, ".modal-error").textContent, "Такого диска нет на сервере.");
   assert.equal(fetchCalls.find((c) => c.path === "/teleharness/api/dircheck").query.directory, "Z:\\nowhere");
   assert.deepEqual(created, []);
   verdict = { ok: true };
-  t$.typeInto($(root, "input.modal-input"), "  D:\\Projects\\new-app ");
-  t$.click(byText(root, ".modal-actions button", "Создать"));
+  t$.typeInto($(document.body, "input.modal-input"), "  D:\\Projects\\new-app ");
+  t$.click(byText(document.body, ".modal-actions button", "Создать"));
   await t$.waitFor(() => created.length === 1);
   assert.deepEqual(created, ["D:\\Projects\\new-app"], "путь обрезан по краям");
 });
@@ -359,10 +359,10 @@ test("Проекты: «+» открывает «Новый проект», со
   const { root } = t$.mount(ui.ProjectsView);
   await t$.flush();
   t$.click($(root, 'button[aria-label="Добавить проект"]'));
-  const dlg = await t$.waitFor(() => $(root, '.modal[aria-label="Новый проект"]'));
+  const dlg = await t$.waitFor(() => $(document.body, '.modal[aria-label="Новый проект"]'));
   t$.typeInto($(dlg, "input.modal-input"), "D:\\Projects\\delta");
   t$.click(byText(dlg, ".modal-actions button", "Создать"));
-  await t$.waitFor(() => !$(root, ".modal"));
+  await t$.waitFor(() => !$(document.body, ".modal"));
   assert.ok($$(root, ".project-name").some((n) => n.textContent.startsWith("delta")));
   assert.deepEqual(ui.store.userProjects.value, ["D:\\Projects\\delta"]);
   const key = Object.keys(localStorage).find((k) => k.startsWith("teleharness.projects"));

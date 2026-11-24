@@ -592,7 +592,9 @@ const CMD_BARE_IMG_RE = new RegExp(
 const CMD_CD_RE = /^\s*(?:cd|set-location|pushd)\s+(?:\/d\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|]+))\s*(?:&&|;|\|\|)/i;
 
 const isAbsWin = (p) => /^[A-Za-z]:[\\/]/.test(p) || /^\\\\[^\\/]/.test(p);
+const isAbsPosix = (p) => /^\/(?!\/)/.test(p);
 const toWin = (p) => String(p).replace(/\//g, "\\");
+const toPosix = (p) => String(p).replace(/\\/g, "/");
 // BUG-098: Git Bash / MSYS paths «/d/Apps/x.png» (and «/mnt/d/…») are the
 // drive D: — not a path under the chat folder (that gave 404s).
 const fromMsys = (p) => {
@@ -605,7 +607,11 @@ const fromMsys = (p) => {
 function joinRel(base, rel) {
   const r = String(rel).replace(/^\.[\\/]/, "");
   if (/(^|[\\/])\.\.([\\/]|$)/.test(r) || /^\.teleharness-uploads[\\/]/i.test(r)) return null;
-  return `${String(base).replace(/[\\/]+$/, "")}\\${toWin(r)}`;
+  const b = String(base ?? "");
+  if (isAbsPosix(b) && !isAbsWin(b)) {
+    return `${b.replace(/\/+$/, "")}/${toPosix(r).replace(/^\/+/, "")}`;
+  }
+  return `${b.replace(/[\\/]+$/, "")}\\${toWin(r)}`;
 }
 
 // Image paths a COMPLETED shell tool call names in its command, resolved to
@@ -616,18 +622,24 @@ export function commandImagePaths(part, sessionDir) {
   const input = part.state?.input ?? {};
   const command = typeof input.command === "string" ? input.command : Array.isArray(input.command) ? input.command.join(" ") : "";
   if (!command || !sessionDir) return [];
+  const posixSession = isAbsPosix(sessionDir) && !isAbsWin(sessionDir);
   // Working folder: the tool's own (opencode bash `workdir`, others `cwd`),
   // then a leading `cd`, else the session folder; relative ones join it.
   const resolveDir = (d) => {
-    const s = typeof d === "string" ? fromMsys(d.trim()) : "";
-    if (!s) return null;
-    return isAbsWin(s) ? toWin(s) : joinRel(sessionDir, s);
+    const raw = typeof d === "string" ? d.trim() : "";
+    if (!raw) return null;
+    if (posixSession && isAbsPosix(raw)) return raw;
+    const s = fromMsys(raw);
+    if (isAbsWin(s)) return toWin(s);
+    if (isAbsPosix(s)) return s;
+    return joinRel(sessionDir, s);
   };
-  let base = resolveDir(input.workdir ?? input.cwd ?? input.directory) ?? toWin(sessionDir);
+  let base = resolveDir(input.workdir ?? input.cwd ?? input.directory) ?? (posixSession ? sessionDir : toWin(sessionDir));
   const cd = CMD_CD_RE.exec(command);
   if (cd) {
-    const d = fromMsys(cd[1] ?? cd[2] ?? cd[3]);
-    base = (isAbsWin(d) ? toWin(d) : joinRel(base, d)) ?? base;
+    const rawD = cd[1] ?? cd[2] ?? cd[3];
+    const d = posixSession && isAbsPosix(rawD) ? rawD : fromMsys(rawD);
+    base = (isAbsWin(d) ? toWin(d) : isAbsPosix(d) ? d : joinRel(base, d)) ?? base;
   }
   const raw = [];
   const bare = command.replace(CMD_QUOTED_IMG_RE, (m, q, inner) => {
@@ -647,7 +659,7 @@ export function commandImagePaths(part, sessionDir) {
     if (/\$|%[A-Za-z_][\w()]*%/.test(s)) continue;
     // BUG-098: a glob («ls *.png», «rm shot-?.jpg») names no single file.
     if (/[*?]/.test(s)) continue;
-    s = fromMsys(s);
+    if (!(posixSession && isAbsPosix(s))) s = fromMsys(s);
     if (isAbsWin(s)) out.push(toWin(s));
     else if (/^[\\/]/.test(s)) out.push(s); // root/unix path: kept as is, the scope check decides
     else {
@@ -1139,6 +1151,7 @@ export function fileKindOf(name) {
   if (ext === "csv" || ext === "tsv") return "csv";
   if (ext === "xlsx" || ext === "xlsm") return "xlsx";
   if (ext === "docx") return "docx";
+  if (ext === "pptx") return "pptx";
   if (VIDEO_EXT.includes(ext)) return "video";
   if (AUDIO_EXT.includes(ext)) return "audio";
   if (TEXT_EXT.includes(ext)) return "text";
@@ -1195,7 +1208,7 @@ export function middleEllipsis(name, max = 40) {
 // Human type line for the viewer header: «Таблица Excel · 84 КБ».
 const KIND_LABEL = {
   image: () => t("files.kind.image"), pdf: () => "PDF", html: () => t("files.type.html"), md: () => "Markdown",
-  csv: () => t("files.type.csv"), xlsx: () => t("files.type.xlsx"), docx: () => t("files.type.docx"),
+  csv: () => t("files.type.csv"), xlsx: () => t("files.type.xlsx"), docx: () => t("files.type.docx"), pptx: () => t("files.type.pptx"),
   video: () => t("files.kind.video"), audio: () => t("files.kind.audio"), text: () => t("files.type.text"),
   binary: () => t("files.kind.file"),
 };
@@ -1253,7 +1266,7 @@ export function parseCsv(text, delim = ",") {
         i += 1;
       } else if (c === '"') quoted = false;
       else cell += c;
-    } else if (c === '"') quoted = true;
+    } else if (c === '"' && cell === "") quoted = true;
     else if (c === delim) {
       row.push(cell);
       cell = "";

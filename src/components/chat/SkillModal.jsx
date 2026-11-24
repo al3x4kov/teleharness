@@ -1,11 +1,13 @@
 // Modal dialog displaying a skill's title, description, optional filesystem
 // path (admin only), and rendered SKILL.md body.
 import { useEffect, useRef, useState } from "preact/hooks";
+import { createPortal } from "preact/compat";
 import { api } from "../../lib/api.js";
+import { useModalFocus } from "../Pickers.jsx";
 import { t } from "../../lib/i18n.js";
 import Markdown from "./Markdown.jsx";
 
-const FRONTMATTER_RE = /^---\r?\n[\w-]+:[^\r\n]*\r?\n(?:(?:[ \t]*[\w-]+:[^\r\n]*|[ \t]*- [^\r\n]*|[ \t]*)\r?\n)*---\r?\n?/;
+const FRONTMATTER_RE = /^---\r?\n[^\s:-][^\r\n:]*:[^\r\n]*\r?\n(?:(?:[ \t]*[^\s:-][^\r\n:]*:[^\r\n]*|[ \t]*- [^\r\n]*|[ \t]*)\r?\n)*---\r?\n?/;
 export function stripSkillFrontmatter(text) {
   return String(text ?? "").replace(FRONTMATTER_RE, "");
 }
@@ -23,24 +25,27 @@ export default function SkillModal({ skill, directory, onClose }) {
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const closeRef = useRef(null);
+  const modalRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const skillId = skill?.id || skill?.name || "";
 
+  useModalFocus(modalRef, { inertShell: true });
+
   useEffect(() => {
-    const prev = document.activeElement;
     closeRef.current?.focus?.();
     const onKey = (e) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current?.();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      if (prev && typeof prev.focus === "function") prev.focus();
     };
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     if (!skillId) return;
@@ -70,18 +75,20 @@ export default function SkillModal({ skill, directory, onClose }) {
   const filePath = detail?.path || skill?.path || "";
   const bodyText = stripSkillFrontmatter(detail?.content ?? "").trim();
 
-  return (
+  return createPortal(
     <div
       class="rp-modal-backdrop"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) onCloseRef.current?.();
       }}
     >
       <div
+        ref={modalRef}
         class="rp-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="rp-skill-modal-title"
+        tabIndex={-1}
       >
         <header class="rp-modal-head">
           <div class="rp-modal-meta">
@@ -126,6 +133,7 @@ export default function SkillModal({ skill, directory, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

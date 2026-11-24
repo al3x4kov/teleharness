@@ -50,7 +50,7 @@ const deleteBtn = (rootEl, id) =>
 
 async function openDelete(h, id) {
   t$.click(deleteBtn(h.root, id));
-  return t$.waitFor(() => $(h.root, '.modal[aria-label="Удалить чат?"]'));
+  return t$.waitFor(() => $(document.body, '.modal[aria-label="Удалить чат?"]'));
 }
 
 test("HomeView: занятый чат — в окне удаления предупреждение «Ответ ещё идёт», затем abort → DELETE; строка исчезает", async () => {
@@ -72,7 +72,7 @@ test("HomeView: занятый чат — в окне удаления пред�
   await t$.waitFor(() => stopThenDelete("ses_run").length >= 2);
   assert.deepEqual(stopThenDelete("ses_run"), ["POST", "DELETE"], "сначала стоп хода, потом удаление");
   await t$.waitFor(() => !ui.store.sessions.value.some((s) => s.id === "ses_run"));
-  assert.equal($(h.root, '.modal[aria-label="Удалить чат?"]'), null, "окно закрылось");
+  assert.equal($(document.body, '.modal[aria-label="Удалить чат?"]'), null, "окно закрылось");
 });
 
 test("HomeView: свободный чат — предупреждения нет, abort не уходил, удаляется как раньше", async () => {
@@ -115,4 +115,40 @@ test("ProjectView: свободный чат — предупреждения н
   await t$.waitFor(() => !ui.store.sessions.value.some((s) => s.id === "ses_pidle"));
   assert.deepEqual(stopThenDelete("ses_pidle"), ["DELETE"], "один DELETE, без abort");
   assert.equal(anyAbort(), false, "abort не уходил");
+});
+
+test("BUG-304: ProjectView скрывает pipeline-step сессии и нормализует слеши/хвостовые слеши каталога", async () => {
+  ui.store.sessions.value = [
+    ses("ses_norm", "D:/qa-proj/"),
+    { ...ses("ses_pipe", DIR), title: "⇄ Шаг 1 (пайплайн)" },
+    ses("ses_other", "D:\\other-proj"),
+  ];
+  const h = t$.mount(ui.ProjectView, { id: DIR });
+  await t$.waitFor(() => $$(h.root, ".swipe").length === 1);
+  assert.match(h.root.textContent, /Чат ses_norm/);
+  assert.doesNotMatch(h.root.textContent, /Шаг 1/);
+  assert.doesNotMatch(h.root.textContent, /Чат ses_other/);
+});
+
+test("BUG-304: двойной клик по «Удалить» в DeleteModal отправляет только один DELETE", async () => {
+  let resolveDel;
+  installFetch([
+    {
+      method: "DELETE",
+      path: "/teleharness/api/session/ses_dbl",
+      reply: () => new Promise((r) => { resolveDel = () => r(true); }),
+    },
+  ]);
+  ui.store.sessions.value = [ses("ses_dbl")];
+  const h = t$.mount(ui.HomeView);
+  await t$.waitFor(() => $$(h.root, ".swipe").length === 1);
+  const dlg = await openDelete(h, "ses_dbl");
+  const btn = byText(dlg, "button", "Удалить");
+  t$.click(btn);
+  t$.click(btn);
+  await t$.flush();
+  assert.equal(btn.disabled, true, "кнопка заблокирована пока DELETE в полёте");
+  assert.equal(fetchCalls.filter((c) => c.method === "DELETE").length, 1, "ушёл ровно один DELETE");
+  resolveDel();
+  await t$.waitFor(() => !ui.store.sessions.value.some((s) => s.id === "ses_dbl"));
 });

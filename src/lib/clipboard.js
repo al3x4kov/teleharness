@@ -18,11 +18,24 @@ export async function copyText(text, env = globalThis) {
   }
   const doc = env?.document;
   if (!doc?.createElement || !doc.body) return false;
+  const sel = doc.getSelection?.();
+  const savedRanges = [];
+  if (sel && sel.rangeCount > 0) {
+    for (let i = 0; i < sel.rangeCount; i += 1) {
+      try {
+        savedRanges.push(sel.getRangeAt(i).cloneRange());
+      } catch {}
+    }
+  }
   const ta = doc.createElement("textarea");
   ta.value = s;
+  ta.readOnly = true;
+  ta.tabIndex = -1;
   ta.setAttribute("readonly", "");
+  ta.setAttribute("aria-hidden", "true");
+  ta.setAttribute("data-teleharness-clipboard", "1");
   // Off-screen, 16px: iOS zooms on focusing a smaller field even for a tick.
-  ta.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0;font-size:16px";
+  ta.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0;font-size:16px;pointer-events:none";
   doc.body.appendChild(ta);
   const prevFocus = doc.activeElement;
   let ok = false;
@@ -37,8 +50,16 @@ export async function copyText(text, env = globalThis) {
     if (typeof ta.remove === "function") ta.remove();
     else doc.body.removeChild?.(ta);
   } catch {}
+  if (sel && savedRanges.length > 0) {
+    try {
+      sel.removeAllRanges();
+      for (const r of savedRanges) sel.addRange(r);
+    } catch {}
+  }
   try {
-    prevFocus?.focus?.({ preventScroll: true });
+    if (prevFocus && prevFocus !== doc.body && prevFocus !== doc.documentElement) {
+      prevFocus.focus?.({ preventScroll: true });
+    }
   } catch {}
   return ok;
 }

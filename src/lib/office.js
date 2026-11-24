@@ -1,24 +1,29 @@
-// Lightweight xlsx/docx preview (FEAT-05.10/FV-02) without a spreadsheet or
-// word library: both formats are ZIP containers of XML. A minimal ZIP reader
-// (central directory + DecompressionStream "deflate-raw", available in every
-// evergreen browser and node ≥ 21) pulls the few XML parts we need; tolerant
-// regex scanners turn them into plain data. Nothing is executed — macros,
-// embedded objects and formulas are ignored (only cached values are shown).
+// Lightweight xlsx/docx/pptx preview (FEAT-05.10/FV-02, BUG-301) without
+// heavy office libraries: all three OOXML formats are ZIP containers of XML.
+// A minimal ZIP reader (central directory + DecompressionStream "deflate-raw",
+// available in every evergreen browser and node >= 21) pulls the XML/media
+// parts we need; tolerant scanners turn them into plain data. Nothing is
+// executed — macros, embedded objects, active scripts, and formulas are
+// ignored (only cached values and raster images are shown).
 // Pure (no DOM): runs in the browser and under `node --test`.
 import { lang, t as tr } from "./i18n.js";
 
-const MAX_ENTRY_BYTES = 40 * 1024 * 1024; // zip-bomb guard per XML part
+const MAX_ENTRY_BYTES = 40 * 1024 * 1024; // zip-bomb guard per entry
+const MAX_TOTAL_BYTES = 64 * 1024 * 1024; // cumulative budget across one document
 const SHEET_ROW_CAP = 300;
 const SHEET_COL_CAP = 40;
 const SHEET_CAP = 12;
 const DOCX_BLOCK_CAP = 3000;
+const PPTX_SLIDE_CAP = 100;
+const PPTX_IMG_MAX_BYTES = 2 * 1024 * 1024;
+const PPTX_IMG_TOTAL_BYTES = 12 * 1024 * 1024;
 
 export class OfficeError extends Error {}
 
 const u16 = (b, o) => b[o] | (b[o + 1] << 8);
 const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
 
-// Central directory → Map<name, {method, offset, compSize, size}>.
+// Central directory -> Map<name, {method, offset, compSize, size}>.
 export function readZipIndex(buf) {
   const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let eocd = -1;
@@ -42,6 +47,7 @@ export function readZipIndex(buf) {
     const extraLen = u16(b, p + 30);
     const commentLen = u16(b, p + 32);
     const offset = u32(b, p + 42);
+    if (p + 46 + nameLen + extraLen + commentLen > b.length) throw new OfficeError("broken zip directory");
     const name = dec.decode(b.subarray(p + 46, p + 46 + nameLen));
     out.set(name, { method, offset, compSize, size });
     p += 46 + nameLen + extraLen + commentLen;
@@ -49,7 +55,7 @@ export function readZipIndex(buf) {
   return out;
 }
 
-async function inflateRaw(bytes) {
+async function inflateRaw(bytes, limit = MAX_ENTRY_BYTES) {
   if (typeof DecompressionStream !== "function") throw new OfficeError("no DecompressionStream");
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
   const reader = stream.getReader();
@@ -59,7 +65,7 @@ async function inflateRaw(bytes) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.length;
-    if (total > MAX_ENTRY_BYTES) {
+    if (total > limit) {
       try {
         await reader.cancel();
       } catch {}
@@ -76,20 +82,39 @@ async function inflateRaw(bytes) {
   return out;
 }
 
-export async function readZipText(buf, index, name) {
+export async function readZipBytes(buf, index, name, budget = null, maxBytes = MAX_ENTRY_BYTES) {
   const b = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   const e = index.get(name);
   if (!e) return null;
-  if (e.size > MAX_ENTRY_BYTES) throw new OfficeError("entry too large");
+  const cap = Math.min(maxBytes, MAX_ENTRY_BYTES);
+  if (e.size > cap) throw new OfficeError("entry too large");
+  if (e.method === 0 && e.compSize !== e.size) throw new OfficeError("broken stored entry");
   const lh = e.offset;
-  if (u32(b, lh) !== 0x04034b50) throw new OfficeError("broken local header");
+  if (lh + 30 > b.length || u32(b, lh) !== 0x04034b50) throw new OfficeError("broken local header");
   const start = lh + 30 + u16(b, lh + 26) + u16(b, lh + 28);
+  if (start > b.length || start + e.compSize > b.length) throw new OfficeError("broken local header");
   const raw = b.subarray(start, start + e.compSize);
+  const remaining = budget ? Math.max(0, budget.max - budget.used) : MAX_TOTAL_BYTES;
+  const effCap = Math.min(cap, remaining);
   let data;
-  if (e.method === 0) data = raw;
-  else if (e.method === 8) data = await inflateRaw(raw);
-  else throw new OfficeError("unsupported compression");
-  return new TextDecoder().decode(data);
+  if (e.method === 0) {
+    if (raw.length > effCap) throw new OfficeError("entry too large");
+    data = raw.slice();
+  } else if (e.method === 8) {
+    data = await inflateRaw(raw, effCap);
+  } else {
+    throw new OfficeError("unsupported compression");
+  }
+  if (budget) {
+    budget.used += data.byteLength;
+    if (budget.used > budget.max) throw new OfficeError("archive too large");
+  }
+  return data;
+}
+
+export async function readZipText(buf, index, name, budget = null) {
+  const data = await readZipBytes(buf, index, name, budget);
+  return data == null ? null : new TextDecoder().decode(data);
 }
 
 // ---- XML helpers ----------------------------------------------------------
@@ -110,7 +135,7 @@ const attr = (tag, name) => {
   return m ? decodeXml(m[1]) : null;
 };
 
-// Text of every <t>…</t> (or <x:t>) inside a fragment, in order.
+// Text of every <t>...</t> (or <x:t>) inside a fragment, in order.
 function tTexts(xml, tag = "t") {
   const re = new RegExp(`<(?:\\w+:)?${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:\\w+:)?${tag}>`, "g");
   let s = "";
@@ -118,7 +143,7 @@ function tTexts(xml, tag = "t") {
   return s;
 }
 
-// "AB12" → 27 (0-based column index).
+// "AB12" -> 27 (0-based column index).
 export function colIndex(ref) {
   const letters = /^[A-Z]+/i.exec(String(ref ?? ""))?.[0]?.toUpperCase() ?? "";
   let n = 0;
@@ -126,26 +151,61 @@ export function colIndex(ref) {
   return n - 1;
 }
 
-const resolveTarget = (target) => {
-  const t = String(target ?? "").replace(/^\/+/, "");
-  return t.startsWith("xl/") ? t : "xl/" + t.replace(/^\.\//, "");
-};
+// Resolve an OOXML relationship Target against a base folder (e.g. "xl/",
+// "ppt/", "ppt/slides/"), normalizing "./" and "../" segments safely inside
+// the ZIP root.
+function resolveZipTarget(baseDir, target) {
+  const raw = String(target ?? "").trim();
+  if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return null;
+  const combined = raw.startsWith("/") ? raw.slice(1) : `${baseDir.replace(/\/+$/, "")}/${raw}`;
+  const parts = [];
+  for (const seg of combined.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") {
+      if (parts.length === 0) return null;
+      parts.pop();
+    } else {
+      parts.push(seg);
+    }
+  }
+  return parts.join("/");
+}
+
+const resolveTarget = (target) => resolveZipTarget("xl", target) ?? "";
+
+function parseRelsMap(relsXml, baseDir) {
+  const out = new Map();
+  for (const m of String(relsXml ?? "").matchAll(/<(?:\w+:)?Relationship\b[^>]*>/g)) {
+    const id = attr(m[0], "Id");
+    const target = attr(m[0], "Target");
+    const type = attr(m[0], "Type") ?? "";
+    const mode = attr(m[0], "TargetMode") ?? "";
+    if (!id || !target || /^external$/i.test(mode)) continue;
+    const resolved = resolveZipTarget(baseDir, target);
+    if (resolved) out.set(id, { target: resolved, type });
+  }
+  return out;
+}
 
 // ---- xlsx -----------------------------------------------------------------
-// → {sheets:[{name, rows:[[string]], truncatedRows, truncatedCols}]}
+// -> {sheets:[{name, rows:[[string]], truncatedRows, truncatedCols}]}
 
 export async function parseXlsx(buf) {
+  const budget = { used: 0, max: MAX_TOTAL_BYTES };
   const index = readZipIndex(buf);
-  const wb = await readZipText(buf, index, "xl/workbook.xml");
+  const wb = await readZipText(buf, index, "xl/workbook.xml", budget);
   if (wb == null) throw new OfficeError("no workbook");
-  const relsXml = (await readZipText(buf, index, "xl/_rels/workbook.xml.rels")) ?? "";
+  const relsXml = (await readZipText(buf, index, "xl/_rels/workbook.xml.rels", budget)) ?? "";
   const rels = new Map();
   for (const m of relsXml.matchAll(/<(?:\w+:)?Relationship\b[^>]*>/g)) {
     const id = attr(m[0], "Id");
     const target = attr(m[0], "Target");
-    if (id && target) rels.set(id, resolveTarget(target));
+    if (id && target) {
+      const resolved = resolveTarget(target);
+      if (resolved) rels.set(id, resolved);
+    }
   }
-  const ssXml = (await readZipText(buf, index, "xl/sharedStrings.xml")) ?? "";
+  const ssXml = (await readZipText(buf, index, "xl/sharedStrings.xml", budget)) ?? "";
   const shared = [];
   for (const m of ssXml.matchAll(/<(?:\w+:)?si(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?si>/g)) {
     // Phonetic runs (<rPh>) are reading aids, not cell text.
@@ -161,7 +221,7 @@ export async function parseXlsx(buf) {
     const state = attr(m[0], "state");
     if (state === "hidden" || state === "veryHidden") continue;
     const path = (rid && rels.get(rid)) || `xl/worksheets/sheet${n}.xml`;
-    const xml = await readZipText(buf, index, path);
+    const xml = await readZipText(buf, index, path, budget);
     if (xml == null) continue;
     sheets.push({ name, ...parseSheetXml(xml, shared) });
   }
@@ -173,10 +233,20 @@ export function parseSheetXml(xml, shared = []) {
   let truncatedRows = false;
   let truncatedCols = false;
   let maxCol = 0;
+  let rowBase = 0;
+  let seenAnyRow = false;
   const data = /<(?:\w+:)?sheetData[^>]*>([\s\S]*?)<\/(?:\w+:)?sheetData>/.exec(xml)?.[1] ?? "";
   for (const rm of data.matchAll(/<(?:\w+:)?row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?row>)/g)) {
     const rAttr = /\sr="(\d+)"/.exec(rm[1])?.[1];
-    const rowIdx = rAttr ? Number(rAttr) - 1 : rows.length;
+    let absIdx = rAttr ? Number(rAttr) - 1 : rowBase + rows.length;
+    if (!seenAnyRow) {
+      seenAnyRow = true;
+      // Sparse sheets that begin at row >= 301 (e.g. templates with large top offsets)
+      // rebase from the first present row instead of returning empty.
+      if (absIdx >= SHEET_ROW_CAP) rowBase = absIdx;
+    }
+    const rowIdx = absIdx - rowBase;
+    if (rowIdx < 0) continue;
     if (rowIdx >= SHEET_ROW_CAP) {
       truncatedRows = true;
       break;
@@ -217,15 +287,57 @@ export function parseSheetXml(xml, shared = []) {
 }
 
 // ---- docx -----------------------------------------------------------------
-// → {blocks:[{type:"h", level, runs} | {type:"p", runs, list} | {type:"table", rows:[[string]]}], truncated}
+// -> {blocks:[{type:"h", level, runs} | {type:"p", runs, list} | {type:"table", rows:[[string]]}], truncated}
 // runs: [{text, bold, italic}]
+
+// Matching close tag for a nestable element starting at `from`.
+function matchClose(xml, from, name) {
+  const open = new RegExp(`<${name}(?=[\\s>/])`, "g");
+  const close = `</${name}>`;
+  let depth = 0;
+  let i = from;
+  for (;;) {
+    open.lastIndex = i;
+    const o = open.exec(xml);
+    const c = xml.indexOf(close, i);
+    if (c < 0) return xml.length;
+    if (o && o.index < c) {
+      // Self-closing tag <name .../> does not increment depth.
+      const gt = xml.indexOf(">", o.index);
+      if (gt > o.index && xml[gt - 1] === "/") {
+        i = gt + 1;
+      } else {
+        depth += 1;
+        i = o.index + name.length + 1;
+      }
+    } else {
+      depth -= 1;
+      i = c + close.length;
+      if (depth === 0) return i;
+    }
+  }
+}
 
 function parseRuns(pXml) {
   const runs = [];
-  for (const rm of pXml.matchAll(/<w:r\b[^>]*>([\s\S]*?)<\/w:r>/g)) {
-    const r = rm[1];
-    const rPr = /<w:rPr>([\s\S]*?)<\/w:rPr>/.exec(r)?.[1] ?? "";
-    const on = (tag) => new RegExp(`<w:${tag}(?:\\s+w:val="(?:true|1|on)")?\\s*/>`).test(rPr);
+  const re = /<w:r(?=[\s>])/g;
+  let i = 0;
+  for (;;) {
+    re.lastIndex = i;
+    const m = re.exec(pXml);
+    if (!m) break;
+    const gt = pXml.indexOf(">", m.index);
+    if (gt < 0) break;
+    if (pXml[gt - 1] === "/") {
+      i = gt + 1;
+      continue;
+    }
+    const end = matchClose(pXml, m.index, "w:r");
+    const r = pXml.slice(gt + 1, end - 6);
+    i = end;
+    const rPr = /<w:rPr\b[^>]*>([\s\S]*?)<\/w:rPr>/.exec(r)?.[1] ?? "";
+    const on = (tag) =>
+      new RegExp(`<w:${tag}(?:\\s+w:val="(?:true|1|on)")?\\s*(?:/>|>\\s*</w:${tag}>)`).test(rPr);
     let text = "";
     for (const tm of r.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:tab\s*\/>|<w:br\b[^>]*\/>|<w:cr\s*\/>/g)) {
       if (tm[1] != null) text += decodeXml(tm[1]);
@@ -246,34 +358,43 @@ function paragraphBlock(pXml) {
   return { type: "p", runs, list: /<w:numPr\b/.test(pXml) || /^list/i.test(style) };
 }
 
-// Matching close tag for a nestable element starting at `from`.
-function matchClose(xml, from, name) {
-  const open = new RegExp(`<${name}(?=[\\s>/])`, "g");
-  const close = `</${name}>`;
-  let depth = 0;
-  let i = from;
-  for (;;) {
-    open.lastIndex = i;
-    const o = open.exec(xml);
-    const c = xml.indexOf(close, i);
-    if (c < 0) return xml.length;
-    if (o && o.index < c) {
-      depth += 1;
-      i = o.index + name.length + 1;
-    } else {
-      depth -= 1;
-      i = c + close.length;
-      if (depth === 0) return i;
-    }
-  }
-}
-
 function tableRows(tblXml) {
   const rows = [];
-  for (const tr of tblXml.matchAll(/<w:tr\b[^>]*>([\s\S]*?)<\/w:tr>/g)) {
+  const trRe = /<w:tr(?=[\s>])/g;
+  let ti = 0;
+  for (;;) {
+    trRe.lastIndex = ti;
+    const tr = trRe.exec(tblXml);
+    if (!tr) break;
+    const trEnd = matchClose(tblXml, tr.index, "w:tr");
+    const trSlice = tblXml.slice(tr.index, trEnd);
+    ti = trEnd;
     const cells = [];
-    for (const tc of tr[1].matchAll(/<w:tc\b[^>]*>([\s\S]*?)<\/w:tc>/g)) {
-      const paras = [...tc[1].matchAll(/<w:p\b[^>]*>([\s\S]*?)<\/w:p>/g)].map((p) => parseRuns(p[1]).map((r) => r.text).join(""));
+    const tcRe = /<w:tc(?=[\s>])/g;
+    let ci = 0;
+    for (;;) {
+      tcRe.lastIndex = ci;
+      const tc = tcRe.exec(trSlice);
+      if (!tc) break;
+      const tcEnd = matchClose(trSlice, tc.index, "w:tc");
+      const tcSlice = trSlice.slice(tc.index, tcEnd);
+      ci = tcEnd;
+      const paras = [];
+      const pRe = /<w:p(?=[\s>/])/g;
+      let pi = 0;
+      for (;;) {
+        pRe.lastIndex = pi;
+        const pm = pRe.exec(tcSlice);
+        if (!pm) break;
+        const gt = tcSlice.indexOf(">", pm.index);
+        if (gt > 0 && tcSlice[gt - 1] === "/") {
+          pi = gt + 1;
+          continue;
+        }
+        const pEnd = matchClose(tcSlice, pm.index, "w:p");
+        paras.push(parseRuns(tcSlice.slice(pm.index, pEnd)).map((r) => r.text).join(""));
+        pi = pEnd;
+      }
       cells.push(paras.join("\n"));
     }
     rows.push(cells);
@@ -282,7 +403,7 @@ function tableRows(tblXml) {
 }
 
 export function parseDocxXml(xml) {
-  const body = /<w:body>([\s\S]*)<\/w:body>/.exec(xml)?.[1] ?? "";
+  const body = /<w:body\b[^>]*>([\s\S]*)<\/w:body>/.exec(xml)?.[1] ?? "";
   const blocks = [];
   let truncated = false;
   const re = /<w:(tbl|p)(?=[\s>/])/g;
@@ -308,10 +429,9 @@ export function parseDocxXml(xml) {
       i = gt + 1;
       continue;
     }
-    const end = body.indexOf("</w:p>", m.index);
-    const stop = end < 0 ? body.length : end + 6;
-    blocks.push(paragraphBlock(body.slice(m.index, stop)));
-    i = stop;
+    const end = matchClose(body, m.index, "w:p");
+    blocks.push(paragraphBlock(body.slice(m.index, end)));
+    i = end;
   }
   // Collapse runs of empty paragraphs (Word spacing) to one.
   const out = [];
@@ -324,8 +444,218 @@ export function parseDocxXml(xml) {
 }
 
 export async function parseDocx(buf) {
+  const budget = { used: 0, max: MAX_TOTAL_BYTES };
   const index = readZipIndex(buf);
-  const xml = await readZipText(buf, index, "word/document.xml");
+  const xml = await readZipText(buf, index, "word/document.xml", budget);
   if (xml == null) throw new OfficeError("no document");
   return parseDocxXml(xml);
+}
+
+// ---- pptx (BUG-301) -------------------------------------------------------
+// -> {slides:[{index, title, blocks:[{type:"p", runs, list, level}|{type:"table", rows}], images:[{mime, bytes, name}], notes}], truncated}
+
+const RASTER_MIME = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+};
+
+function parseDrawingRuns(pXml) {
+  const runs = [];
+  for (const m of pXml.matchAll(/<a:r\b[^>]*>([\s\S]*?)<\/a:r>|<a:br\b[^>]*\/?>|<a:fld\b[^>]*>([\s\S]*?)<\/a:fld>/g)) {
+    if (m[0].startsWith("<a:br")) {
+      runs.push({ text: "\n", bold: false, italic: false });
+      continue;
+    }
+    const inner = m[1] ?? m[2] ?? "";
+    const rPr = /<a:rPr\b([^>]*?)(?:\/>|>[\s\S]*?<\/a:rPr>)/.exec(inner)?.[1] ?? "";
+    const bold = /\sb="(?:1|true)"/i.test(rPr);
+    const italic = /\si="(?:1|true)"/i.test(rPr);
+    const text = tTexts(inner, "t");
+    if (text) runs.push({ text, bold, italic });
+  }
+  return runs;
+}
+
+function parseDrawingParagraphs(xml) {
+  const out = [];
+  for (const pm of xml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)) {
+    const pXml = pm[1];
+    const runs = parseDrawingRuns(pXml);
+    const plain = runs.map((r) => r.text).join("").trim();
+    if (!plain) continue;
+    const pPrMatch = /<a:pPr\b([^>]*?)(?:\/>|>([\s\S]*?)<\/a:pPr>)/.exec(pXml);
+    const pPrAttrs = pPrMatch?.[1] ?? "";
+    const pPrBody = pPrMatch?.[2] ?? "";
+    const lvlNum = Number(/\slvl="(\d+)"/.exec(pPrAttrs)?.[1] ?? 0);
+    const hasBuNone = /<a:buNone\b/.test(pPrBody);
+    const hasBullet = !hasBuNone && (/<a:(?:buChar|buAutoNum|buBlip)\b/.test(pPrBody) || lvlNum > 0);
+    out.push({ type: "p", runs, list: hasBullet, level: Number.isFinite(lvlNum) ? lvlNum : 0 });
+  }
+  return out;
+}
+
+function parseDrawingTable(tblXml) {
+  const rows = [];
+  for (const tr of tblXml.matchAll(/<a:tr\b[^>]*>([\s\S]*?)<\/a:tr>/g)) {
+    const cells = [];
+    for (const tc of tr[1].matchAll(/<a:tc\b[^>]*>([\s\S]*?)<\/a:tc>/g)) {
+      const paras = parseDrawingParagraphs(tc[1]).map((p) => p.runs.map((r) => r.text).join(""));
+      cells.push(paras.join("\n"));
+    }
+    if (cells.length > 0) rows.push(cells);
+  }
+  return rows;
+}
+
+function parseNotesText(notesXml) {
+  if (!notesXml) return "";
+  const parts = [];
+  const spRe = /<p:sp(?=[\s>])/g;
+  let i = 0;
+  for (;;) {
+    spRe.lastIndex = i;
+    const m = spRe.exec(notesXml);
+    if (!m) break;
+    const end = matchClose(notesXml, m.index, "p:sp");
+    const sp = notesXml.slice(m.index, end);
+    i = end;
+    const phType = /<p:ph\b[^>]*\btype="([^"]*)"/.exec(sp)?.[1] ?? "";
+    if (phType && phType !== "body") continue; // skip slideNum / sldImg placeholders
+    const text = parseDrawingParagraphs(sp)
+      .map((p) => p.runs.map((r) => r.text).join(""))
+      .join("\n")
+      .trim();
+    if (text) parts.push(text);
+  }
+  return parts.join("\n\n").trim();
+}
+
+export async function parsePptx(buf) {
+  const budget = { used: 0, max: MAX_TOTAL_BYTES };
+  const index = readZipIndex(buf);
+  const presXml = await readZipText(buf, index, "ppt/presentation.xml", budget);
+  if (presXml == null) throw new OfficeError("no presentation");
+
+  const presRelsXml = (await readZipText(buf, index, "ppt/_rels/presentation.xml.rels", budget)) ?? "";
+  const presRels = parseRelsMap(presRelsXml, "ppt");
+
+  // Slide order strictly follows <p:sldIdLst> in ppt/presentation.xml.
+  const slidePaths = [];
+  for (const m of presXml.matchAll(/<(?:\w+:)?sldId\b[^>]*\/?>/g)) {
+    const rid = attr(m[0], "r:id") ?? attr(m[0], "id");
+    const rel = rid && presRels.get(rid);
+    if (rel?.target) slidePaths.push(rel.target);
+  }
+  // Fallback only if sldIdLst had no rels entries (unusual hand-built archives).
+  if (slidePaths.length === 0) {
+    const fallback = [...index.keys()]
+      .filter((k) => /^ppt\/slides\/slide\d+\.xml$/i.test(k))
+      .sort((a, b) => Number(/\d+/.exec(a)?.[0] ?? 0) - Number(/\d+/.exec(b)?.[0] ?? 0));
+    slidePaths.push(...fallback);
+  }
+
+  const truncated = slidePaths.length > PPTX_SLIDE_CAP;
+  const shownPaths = slidePaths.slice(0, PPTX_SLIDE_CAP);
+  const slides = [];
+  let imgTotalBytes = 0;
+
+  for (let sIdx = 0; sIdx < shownPaths.length; sIdx += 1) {
+    const slidePath = shownPaths[sIdx];
+    const slideXml = await readZipText(buf, index, slidePath, budget);
+    if (slideXml == null) continue;
+
+    const dir = slidePath.includes("/") ? slidePath.slice(0, slidePath.lastIndexOf("/")) : "";
+    const base = slidePath.includes("/") ? slidePath.slice(slidePath.lastIndexOf("/") + 1) : slidePath;
+    const relsPath = dir ? `${dir}/_rels/${base}.rels` : `_rels/${base}.rels`;
+    const slideRelsXml = (await readZipText(buf, index, relsPath, budget)) ?? "";
+    const slideRels = parseRelsMap(slideRelsXml, dir || "ppt/slides");
+
+    let title = "";
+    const blocks = [];
+    const embedIds = [];
+
+    // Walk top-level shapes (<p:sp>), graphicFrames (<p:graphicFrame> tables), and pictures (<p:pic>) in document order.
+    const itemRe = /<p:(sp|graphicFrame|pic)(?=[\s>])/g;
+    let cursor = 0;
+    for (;;) {
+      itemRe.lastIndex = cursor;
+      const m = itemRe.exec(slideXml);
+      if (!m) break;
+      const tag = `p:${m[1]}`;
+      const end = matchClose(slideXml, m.index, tag);
+      const frag = slideXml.slice(m.index, end);
+      cursor = end;
+
+      if (m[1] === "sp") {
+        const phType = /<p:ph\b[^>]*\btype="([^"]*)"/.exec(frag)?.[1] ?? "";
+        // Skip slide numbers / footers / dates placeholders so slides stay clean
+        if (phType === "sldNum" || phType === "ftr" || phType === "dt") continue;
+        const paras = parseDrawingParagraphs(frag);
+        if (paras.length === 0) continue;
+        if (!title && (phType === "title" || phType === "ctrTitle")) {
+          title = paras.map((p) => p.runs.map((r) => r.text).join("")).join(" ").trim();
+        } else {
+          blocks.push(...paras);
+        }
+      } else if (m[1] === "graphicFrame") {
+        for (const tm of frag.matchAll(/<a:tbl\b[^>]*>[\s\S]*?<\/a:tbl>/g)) {
+          const rows = parseDrawingTable(tm[0]);
+          if (rows.length > 0) blocks.push({ type: "table", rows });
+        }
+      } else if (m[1] === "pic") {
+        for (const bm of frag.matchAll(/<a:blip\b[^>]*>/g)) {
+          const rid = attr(bm[0], "r:embed");
+          if (rid) embedIds.push(rid);
+        }
+      }
+    }
+
+    // Embedded raster images (capped per image and total; never SVG/EMF/WMF).
+    const images = [];
+    const seenImg = new Set();
+    for (const rid of embedIds) {
+      const rel = slideRels.get(rid);
+      if (!rel?.target || seenImg.has(rel.target)) continue;
+      seenImg.add(rel.target);
+      const ext = rel.target.split(".").pop()?.toLowerCase() ?? "";
+      const mime = RASTER_MIME[ext];
+      if (!mime) continue;
+      const entry = index.get(rel.target);
+      if (!entry || entry.size > PPTX_IMG_MAX_BYTES) continue;
+      if (imgTotalBytes + entry.size > PPTX_IMG_TOTAL_BYTES) continue;
+      try {
+        const imgBytes = await readZipBytes(buf, index, rel.target, budget, PPTX_IMG_MAX_BYTES);
+        if (!imgBytes || imgBytes.byteLength === 0) continue;
+        if (imgTotalBytes + imgBytes.byteLength > PPTX_IMG_TOTAL_BYTES) continue;
+        imgTotalBytes += imgBytes.byteLength;
+        images.push({ mime, bytes: imgBytes, name: rel.target.split("/").pop() ?? "image" });
+      } catch {
+        // Skip broken individual image rather than failing the whole slide deck.
+      }
+    }
+
+    // Speaker notes (optional).
+    let notes = "";
+    for (const rel of slideRels.values()) {
+      if (/\/notesSlide$/i.test(rel.type) || /notesSlides\//i.test(rel.target)) {
+        const notesXml = await readZipText(buf, index, rel.target, budget);
+        notes = parseNotesText(notesXml);
+        if (notes) break;
+      }
+    }
+
+    slides.push({
+      index: slides.length + 1,
+      title,
+      blocks,
+      images,
+      notes,
+    });
+  }
+
+  return { slides, truncated };
 }

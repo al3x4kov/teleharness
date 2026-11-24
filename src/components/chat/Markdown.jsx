@@ -39,13 +39,15 @@ function makeParser(highlight) {
             : esc(text);
         const label = esc(base || "code");
         // Visible label + icon, 32px tall with a 44px hit zone (R-17). The
-        // icon is a CSS mask (.md-copy::before): the sanitizer strips svg.
+        // copy button is injected AFTER DOMPurify.sanitize() so untrusted
+        // markdown HTML can never emit <button> or data-* attributes.
         return (
-          `<div class="md-code"><div class="md-code-head"><span>${label}</span>` +
-          `<button type="button" class="md-copy" data-raw="${encodeURIComponent(text ?? "")}">` +
-          `<span class="md-copy-label">${esc(t("common.copy"))}</span></button>` +
-          `</div><pre><code class="hljs">${body}</code></pre></div>`
+          `<div class="md-code"><div class="md-code-head"><span>${label}</span></div>` +
+          `<pre><code class="hljs">${body}</code></pre></div>`
         );
+      },
+      checkbox({ checked }) {
+        return `<span class="md-chk${checked ? " is-checked" : ""}" role="img" aria-label="${esc(checked ? t("markdown.checkDone") : t("markdown.checkTodo"))}">${checked ? "☑" : "☐"}</span> `;
       },
       link({ href, title, tokens }) {
         const t = title ? ` title="${esc(title)}"` : "";
@@ -58,6 +60,8 @@ function makeParser(highlight) {
 const MD_FULL = makeParser(true);
 const MD_FAST = makeParser(false);
 
+const CODE_HEAD_RE = /(<div class="md-code"><div class="md-code-head"><span>[^<]*<\/span>)(<\/div><pre><code\b)/g;
+
 function render(text, streaming) {
   let html;
   try {
@@ -65,7 +69,11 @@ function render(text, streaming) {
   } catch {
     html = `<p>${esc(text)}</p>`;
   }
-  return DOMPurify.sanitize(html, SANITIZE_CONFIG);
+  const clean = DOMPurify.sanitize(html, SANITIZE_CONFIG);
+  return clean.replace(
+    CODE_HEAD_RE,
+    `$1<button type="button" class="md-copy"><span class="md-copy-label">${esc(t("common.copy"))}</span></button>$2`,
+  );
 }
 
 // Relative src/href rewrite (FV-19, FileViewer only): DOMPurify output keeps
@@ -82,7 +90,7 @@ function rewriteUrls(html, resolveUrl) {
 function onCopyClick(e) {
   const btn = e.target?.closest?.(".md-copy");
   if (!btn) return;
-  const raw = decodeURIComponent(btn.dataset.raw ?? "");
+  const raw = btn.closest(".md-code")?.querySelector("pre code")?.textContent ?? "";
   const label = btn.querySelector(".md-copy-label");
   copyText(raw).then((ok) => {
     if (!label) return;

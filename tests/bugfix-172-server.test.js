@@ -251,8 +251,10 @@ test("BUG-142: a Claude chat is titled and announced while its first turn is sti
   assert.match(evt.properties.info.title, /^Тема /);
   const list = await (await api(srv, `/teleharness/api/session/${s.id}/message`)).json();
   assert.equal(list.some((m) => m.info?.role === "assistant" && m.info.time?.completed), false, "the turn is still running");
-  const st = await (await api(srv, "/teleharness/api/session/status")).json().catch(() => null);
-  if (st && typeof st === "object" && st[s.id]) assert.equal(st[s.id].type, "busy");
+  const stRes = await api(srv, "/teleharness/api/status");
+  assert.equal(stRes.status, 200);
+  const st = await stRes.json();
+  assert.equal(st?.[s.id]?.type, "busy");
   assert.equal(patchesOf(up, s.id).length, 1, "titled once");
   await api(srv, `/teleharness/api/session/${s.id}/abort`, { method: "POST" });
   await sleep(300); // пауза по смыслу (QA-07): окно, за которым конец хода не ретайтлит
@@ -456,7 +458,7 @@ test("BUG-04.6: account deletion removes its chats, disposes the instance, repor
   const holderReady = path.join(tdir, ".holder-ready");
   const holder = spawn(process.execPath, ["-e", "require('fs').writeFileSync(process.argv[1], '1'); setTimeout(() => {}, 120000)", holderReady], { cwd: tdir, stdio: "ignore", windowsHide: true });
   const holderExit = new Promise((r) => holder.once("exit", r));
-  await waitFor(() => existsSync(holderReady), { label: "holder-процесс стартовал (маркер записан)" });
+  await waitFor(() => existsSync(holderReady), { what: "holder-процесс стартовал (маркер записан)" });
   // POSIX: a file inside a read-only folder cannot be unlinked → rm fails (EACCES).
   // (after the marker: the holder cannot write it into a read-only folder)
   if (posix) {

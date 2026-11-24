@@ -10,7 +10,7 @@ import "../views.css";
 import {
   busyMap, createAndOpen, deleteChat, explainApiError, removeUserProject, renameSession, agents, sessions, setNotice, userProjects,
 } from "../../lib/store.js";
-import { dirBasename, groupSessionsByDate, isSubagentSession, projectDisplayName } from "../../lib/normalize.js";
+import { dirBasename, groupSessionsByDate, isPipelineStepSession, isSubagentSession, projectDisplayName } from "../../lib/normalize.js";
 import { navigate } from "../../lib/router.js";
 import { gitHash } from "../../lib/git-client.js"; // FEAT-18.8
 import BranchIcon from "../git/BranchIcon.jsx"; // TASK-18.13 D9
@@ -22,6 +22,11 @@ import {
 } from "./HomeView.jsx";
 import { t } from "../../lib/i18n.js";
 
+function normDir(p) {
+  const s = String(p ?? "").trim().replace(/[\\/]+$/, "").replace(/\\/g, "/");
+  return /^[a-zA-Z]:/.test(s) ? s.toLowerCase() : s;
+}
+
 export default function ProjectView({ id }) {
   const [loadState, retry] = useSessionList();
   const [creating, setCreating] = useState(false);
@@ -29,12 +34,16 @@ export default function ProjectView({ id }) {
   const [openId, setOpenId] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   const dir = typeof id === "string" ? id : "";
+  const dirKey = normDir(dir);
   const origin = "/project/" + encodeURIComponent(dir);
-  const items = sessions.value.filter((s) => s.directory === dir && !isSubagentSession(s, agents.value));
+  const items = sessions.value.filter(
+    (s) => normDir(s.directory) === dirKey && !isSubagentSession(s, agents.value) && !isPipelineStepSession(s),
+  );
   const groups = groupSessionsByDate(items);
-  const isUserAdded = userProjects.value.some((x) => x.toLowerCase() === dir.toLowerCase());
+  const isUserAdded = userProjects.value.some((x) => normDir(x) === dirKey);
   const name = projectDisplayName(dir) || t("project.fallbackName");
 
   async function newChat() {
@@ -131,11 +140,18 @@ export default function ProjectView({ id }) {
           session={deleting}
           // BUG-216: как в «Чатах» — предупреждение и стоп хода перед удалением.
           busy={!!busyMap.value[deleting.id]}
-          onClose={() => setDeleting(null)}
-          onConfirm={() => {
-            deleteChat(deleting.id, { stopFirst: !!busyMap.value[deleting.id] });
-            setDeleting(null);
-            setOpenId(null);
+          pending={deletingBusy}
+          onClose={() => !deletingBusy && setDeleting(null)}
+          onConfirm={async () => {
+            if (deletingBusy) return;
+            setDeletingBusy(true);
+            try {
+              await deleteChat(deleting.id, { stopFirst: !!busyMap.value[deleting.id] });
+              setDeleting(null);
+              setOpenId(null);
+            } finally {
+              setDeletingBusy(false);
+            }
           }}
         />
       )}

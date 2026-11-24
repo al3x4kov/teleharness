@@ -282,27 +282,32 @@ All screenshots are taken from `npm run demo` — what you see is what you get.
 | **Relay between engines** | Hit a usage limit mid-task? Continue the same chat on another engine or model: same folder, one feed, and the new engine gets the turns it missed. Optionally automatic, with your own order of backup models. |
 | **Subscriptions** | Usage and remaining quota per connected provider, where the provider reports it through an official API. |
 | **Reliable streaming** | One SSE hub for every engine with replay, stall detection and loop protection — survives flaky mobile networks. |
-| **Files** | Attach files and images with the paperclip, paste them (Ctrl/⌘+V — a screenshot gets a dated name, a long pasted text becomes a .txt file) or drag them onto the chat. Result files come back as cards; browse allowed folders. A folder per chat.<br><img src="docs/screenshots/phone-light-drop.png" alt="Dragging three files over a chat: Drop to attach" width="180"> <img src="docs/screenshots/phone-light-attached.png" alt="Pasted screenshot and dropped files as chips in the composer" width="180"> |
+| **Files & Office preview** | Attach files and images with the paperclip, paste them (Ctrl/⌘+V — a screenshot gets a dated name, a long pasted text becomes a .txt file) or drag them onto the chat. Result files come back as cards with built-in browser preview for **PowerPoint (`.pptx`)** (slides, bullet lists, tables, embedded images, speaker notes), `.docx`, `.xlsx`, `.csv`, `.pdf`, `.md`, `.html`, code, and media — plus authenticated downloads that work reliably in iOS/Android standalone PWA (Web Share API + Blob fallback). Browse allowed folders; a folder per chat.<br><img src="docs/screenshots/phone-light-pptx.png" alt="Built-in PowerPoint .pptx preview on a phone: slides, bullet lists, speaker notes and table" width="180"> <img src="docs/screenshots/phone-light-drop.png" alt="Dragging three files over a chat: Drop to attach" width="180"> <img src="docs/screenshots/phone-light-attached.png" alt="Pasted screenshot and dropped files as chips in the composer" width="180"> |
 | **Obsidian as active cache** | Vault snapshot in context, turn digests and a per-chat journal written back, an isolated zone per user. |
 | **Voice** | Local speech-to-text and text-to-speech (Python worker, CPU only) and a hands-free voice mode. |
 | **Push notifications** | Get notified when a long turn is done or an agent needs your decision (Web Push, VAPID). |
 | **Phone pairing by QR** | Settings → Connect a phone shows a one-time QR code (valid 10 minutes); scan it and the phone is signed in to your account — no token typing. Needs `TELEHARNESS_PUBLIC_URL`.<br><img src="docs/screenshots/phone-light-pair.png" alt="Connect a phone: QR code, expiry, one-time link and Copy" width="180"> |
 | **Multi-user** | Admin and users with own folders, system prompts, MCP sets, upload and voice quotas, rate limits. |
-| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.6.0, opencode 2.2.6, Claude Code" width="180"> |
-| **Mobile-first** | Built for iOS Safari: keyboard-aware layout, safe areas, light and dark themes, English and Russian UI. |
+| **Settings → About** | The exact version of the portal and every engine in one place — handy when filing an issue.<br><img src="docs/screenshots/phone-light-settings-about.png" alt="Settings, About detail page: Teleharness 2.8.0, opencode 2.2.6, Claude Code" width="180"> |
+| **Mobile-first** | Built for iOS Safari and Android Chrome (standalone PWA): native touch text selection without virtual-keyboard jumps, one-tap Copy on both user and assistant messages, keyboard-aware layout, safe areas, light and dark themes, English and Russian UI. |
 | **Zero runtime dependencies** | The backend is plain Node.js stdlib. |
 
 ## Quick start
+
+> [!TIP]
+> **Want every feature working out of the box?** See the **[Full Installation Guide (`docs/installation.md`)](docs/installation.md)** ([по-русски: `docs/installation.ru.md`](docs/installation.ru.md)) — complete step-by-step setup for Linux, macOS, and Windows covering all 4 engine families, HTTPS + QR phone pairing + iOS/Android PWA + Web Push, MCP/Skills right panel, Office/PPTX preview, Git & Worktrees, Obsidian active cache, GitHub Background Agents, Temporal pipelines, local CPU voice, multi-user sandboxing, and autostart services.
 
 ### Requirements
 
 | | Version | For |
 |---|---|---|
-| [Node.js](https://nodejs.org) | ≥ 22 | the portal |
+| [Node.js](https://nodejs.org) | ≥ 22.5 (22 LTS / 24 LTS) | the portal & built-in SQLite FTS5 search/costs/board |
+| [Git](https://git-scm.com) | ≥ 2.20 | Git screen, mobile diff review, isolated Worktrees |
 | [opencode](https://opencode.ai) | 2.x (tested with 2.2.6) | the opencode engine |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | 2.x | the Claude engine |
 | [Codex CLI](https://github.com/openai/codex) | 0.169+ | optional, the Codex engine (admin by default; grantable per user) |
-| Python | 3.11+ | optional, voice |
+| ACP CLI (`gemini` / `copilot` / custom) | latest | optional, ACP agents configured in Settings → ACP Agents |
+| Python | 3.11+ | optional, local CPU voice worker & Temporal pipeline worker |
 
 You need at least one engine.
 
@@ -322,7 +327,7 @@ found (and how to install the missing ones) and prints the admin token. Options:
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.6.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -341,7 +346,7 @@ claude setup-token                 # Claude engine: put the token into .env as C
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.6.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
@@ -359,7 +364,8 @@ node server.js                     # → http://127.0.0.1:4170/teleharness/
 ```
 </details>
 
-Step-by-step for a Mac, including launchd services and phone access: [`docs/macos.md`](docs/macos.md). On Linux, run it as a
+Full step-by-step guide for **all features on Linux, macOS, and Windows**: [`docs/installation.md`](docs/installation.md)
+(Mac-specific launchd & phone checklist: [`docs/macos.md`](docs/macos.md)). On Linux, run it as a
 systemd service from [`ops/linux/teleharness.service`](ops/linux/teleharness.service) — it keeps one agent turn that runs
 out of memory from stopping the whole portal.
 
@@ -390,11 +396,12 @@ so the Windows sandbox is intentionally not ported to other systems.
 
 ## Architecture
 
-<p align="center"><img src="docs/architecture-components.png" alt="Teleharness components: client, portal, harness of three CLIs, Obsidian, voice, sandbox, Temporal pipelines, model providers" width="900"></p>
+<p align="center"><img src="docs/architecture-components.png" alt="Teleharness components: client with right panel and PPTX/Office preview, portal with SQLite FTS5/costs/board, harness of four engine families (opencode 2.x, Claude Code, Codex, ACP), Obsidian, voice, sandbox, GitHub and Temporal pipelines, model providers" width="900"></p>
 
 - **Portal** (`server.js`) — API, auth and users, the event hub, chat-to-engine binding, the handoff between
-  engines. One adapter per engine: a client for `opencode serve` (1.x and 2.x) and a runner that starts
-  `claude` (or the Codex shim over `codex app-server`) per turn.
+  engines, SQLite FTS5 chat search, attention board, costs, and Git/Worktree APIs. One adapter per engine family:
+  `lib/oc-client.js` for `opencode serve` (1.x and 2.x), runners for `claude` CLI and the Codex shim over
+  `codex app-server`, and the ACP JSON-RPC bridge (`lib/acp-chat.js`) for Gemini / Copilot / custom ACP agents.
 - **Harness** — everything around the CLI: agents and orchestration (oh-my-opencode-slim), the
   knowledge-base and sandbox plugin for opencode (`ops/opencode/plugin-v2` for 2.x, `vault-cache.ts` for 1.x),
   Claude Code hooks, skills, MCP servers. This decides what an agent can do and
@@ -442,7 +449,8 @@ Everything is configured with environment variables; the schema with types, defa
 | `TELEHARNESS_VOICE_PYTHON`, `TELEHARNESS_VOICE_MODELS` | `~/.teleharness/voice/…` | local voice worker |
 
 Feature groups and tuning knobs are in the same schema: `TELEHARNESS_LISTEN_HOST` / `TELEHARNESS_ENV`
-(bind address, stand guard), `TELEHARNESS_PUSH…` (Web Push: on/off, VAPID keys, quiet-hour batching),
+(bind address, stand guard), `TELEHARNESS_EDGE_ALLOWED_HOSTS` (edge HTTPS redirect allowlist), `TELEHARNESS_ACP`
+(ACP agents), `TELEHARNESS_PUSH…` (Web Push: on/off, VAPID keys, quiet-hour batching),
 `TELEHARNESS_VOICE…` (speech-to-text / text-to-speech limits per user), `TELEHARNESS_TENANT…` (per-user
 rate, upload and vision limits), and the Temporal set — `TELEHARNESS_TEMPORAL_PIPELINES`,
 `TELEHARNESS_TEMPORAL_MODELS`, `TELEHARNESS_TEMPORAL_DRAIN` and friends — documented in

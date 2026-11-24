@@ -74,22 +74,41 @@ export default function AppShell() {
     if (!vv) return undefined;
     const root = document.documentElement;
     let tall = vv.height;
+    let lastW = vv.width;
     let pred = null;
     let kbH = null;
     try {
       kbH = Number(localStorage.getItem(KB_KEY)) || null;
     } catch {}
     let raf = 0;
-    const timers = [];
+    let settleTimer = 0;
     let poll = 0;
+    // BUG-300: ignore readonly/disabled/clipboard-fallback textareas and
+    // non-textual inputs so mobile copy/selection never triggers keyboard jump.
+    const NON_TEXT_INPUT = new Set(["checkbox", "radio", "button", "submit", "reset", "file", "hidden", "range", "color"]);
+    const isEditableText = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag !== "TEXTAREA" && tag !== "INPUT") return false;
+      if (el.readOnly || el.disabled) return false;
+      if (el.hasAttribute?.("readonly") || el.hasAttribute?.("data-teleharness-clipboard")) return false;
+      if (tag === "INPUT" && NON_TEXT_INPUT.has(String(el.type || "text").toLowerCase())) return false;
+      return true;
+    };
     const apply = () => {
       // Pinch-zoom тоже ресайзит visual viewport — это транзитное состояние,
       // его пропускаем; пропуск НЕ теряет обновление навсегда: расписание
       // ниже перезапускает apply, когда жест уляжется (scale вернётся в 1).
       if (vv.scale !== 1) return;
+      // BUG-304: portrait ↔ landscape changes viewport width significantly —
+      // reset tall so landscape height is not misread as an open keyboard.
+      if (Math.abs(vv.width - lastW) >= 40) {
+        lastW = vv.width;
+        tall = vv.height;
+        pred = null;
+      }
       if (vv.height > tall) tall = vv.height;
-      const tag = document.activeElement?.tagName;
-      const typing = tag === "TEXTAREA" || tag === "INPUT";
+      const typing = isEditableText(document.activeElement);
       // BUG-177 (запись с iPhone): Safari сообщает новую высоту с опозданием
       // ~130–150 мс — пока предсказание в силе, верим ему (src/lib/kb-predict.js).
       const now = performance.now();
@@ -133,17 +152,16 @@ export default function AppShell() {
       apply();
       follow = performance.now() + 800;
       if (!raf) raf = requestAnimationFrame(tick);
-      timers.push(setTimeout(apply, 900));
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(apply, 900);
     };
     apply();
     // Named handlers: the cleanup must remove exactly these (CC-22 — the old
     // anonymous ones leaked and doubled the 300ms poll on every remount).
     // BUG-177: admin device trace of the keyboard transition (src/lib/kb-trace.js).
     const trace = (e, kind) => {
-      const tag = e?.target?.tagName;
-      if (me.value?.role === "admin" && (tag === "TEXTAREA" || tag === "INPUT")) startKbTrace(kind);
+      if (me.value?.role === "admin" && isEditableText(e?.target)) startKbTrace(kind);
     };
-    const isText = (e) => e?.target?.tagName === "TEXTAREA" || e?.target?.tagName === "INPUT";
     // BUG-177: предсказанный переход не прыжком, а вместе с клавиатурой (.kb-move → transition).
     let moveTimer = 0;
     const move = () => {
@@ -154,14 +172,18 @@ export default function AppShell() {
     };
     const onFocusOut = (e) => {
       trace(e, "blur");
-      if (isText(e)) pred = predictFor("close", { vvH: vv.height, tall, kbH, now: performance.now() });
+      // BUG-304: transferring focus directly to another editable field keeps
+      // the keyboard open — do not flash a close prediction.
+      if (isEditableText(e?.relatedTarget)) return;
+      if (isEditableText(e?.target)) pred = predictFor("close", { vvH: vv.height, tall, kbH, now: performance.now() });
       move();
       stopPoll();
       schedule();
     };
     const onFocusIn = (e) => {
+      if (!isEditableText(e?.target)) return;
       trace(e, "focus");
-      if (isText(e)) pred = predictFor("open", { vvH: vv.height, tall, kbH, now: performance.now() });
+      pred = predictFor("open", { vvH: vv.height, tall, kbH, now: performance.now() });
       move();
       stopPoll();
       if (poll === 0) poll = setInterval(apply, 300);
@@ -177,8 +199,8 @@ export default function AppShell() {
       stopPoll();
       cancelAnimationFrame(raf);
       clearTimeout(moveTimer);
+      clearTimeout(settleTimer);
       root.classList.remove("kb-move");
-      for (const id of timers) clearTimeout(id);
       vv.removeEventListener("resize", schedule);
       vv.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
@@ -186,6 +208,7 @@ export default function AppShell() {
       document.removeEventListener("focusout", onFocusOut);
       document.removeEventListener("focusin", onFocusIn);
       root.style.removeProperty("--vvh");
+      root.style.removeProperty("--vv-top");
       root.classList.remove("kb");
     };
   }, []);

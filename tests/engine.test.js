@@ -20,10 +20,14 @@ const GLM = { providerID: "zai-coding-plan", modelID: "glm-5.3-flash" };
 const OPUS = { providerID: "anthropic", modelID: "claude-opus-5-5" };
 const SIS = "Sisyphus - ultraworker";
 
-test("CLAUDE_PROVIDER = anthropic; engineOf: только anthropic → claude, всё прочее → opencode", () => {
+test("CLAUDE_PROVIDER = anthropic; engineOf: anthropic → claude, openai-codex → codex, acp-* → acp, прочее → opencode", () => {
   assert.equal(CLAUDE_PROVIDER, "anthropic");
   assert.equal(engineOf("anthropic"), "claude");
-  for (const p of ["zai-coding-plan", "Anthropic", "", undefined, null, 1]) assert.equal(engineOf(p), "opencode", String(p));
+  assert.equal(engineOf("openai-codex"), "codex");
+  assert.equal(engineOf("acp-antigravity"), "acp");
+  assert.equal(engineOf("acp-gemini"), "acp");
+  assert.equal(engineOf("acp-github-copilot-cli"), "acp");
+  for (const p of ["zai-coding-plan", "Anthropic", "acp-unknown", "", undefined, null, 1]) assert.equal(engineOf(p), "opencode", String(p));
 });
 
 test("ENGINE_LABEL / ENGINE_SHORT покрывают все движки", () => {
@@ -177,8 +181,10 @@ test("сквозной сценарий: bindingOf → bindingLine для зап
 // подписи пузыря и кнопки «Отправить» не должны обещать opencode-чату очередь.
 test("queuedLabel/queuedSendLabel: Claude — очередь после хода, opencode — учтёт на ближайшем шаге", async () => {
   const { queuedLabel, queuedSendLabel } = await import("../src/lib/engine.js");
-  assert.equal(queuedLabel("claude"), "В очереди — отправится после текущего хода");
-  assert.equal(queuedSendLabel("claude"), "Отправить — встанет в очередь за текущим ходом");
+  for (const e of ["claude", "codex", "acp"]) {
+    assert.equal(queuedLabel(e), "В очереди — отправится после текущего хода", e);
+    assert.equal(queuedSendLabel(e), "Отправить — встанет в очередь за текущим ходом", e);
+  }
   for (const e of ["opencode", null, undefined]) {
     assert.equal(queuedLabel(e), "Доставлено — агент учтёт его на ближайшем шаге");
     assert.equal(queuedSendLabel(e), "Отправить — агент учтёт на ближайшем шаге");

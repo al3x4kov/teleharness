@@ -4,7 +4,8 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { existsSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveStatic } from "../lib/static.js";
@@ -70,3 +71,32 @@ test("encoded %2e%2e traversal is blocked", async () => {
   assert.equal(res.statusCode, 403);
   res.resume();
 });
+
+test("BUG-302: symlink escaping public/ is blocked with 403", async () => {
+  const outside = mkdtempSync(path.join(tmpdir(), "zai-static-out-"));
+  const secret = path.join(outside, "secret.txt");
+  writeFileSync(secret, "top-secret");
+  const linkPath = path.join(ROOT, "public", `_test_escape_${process.pid}.txt`);
+  try {
+    symlinkSync(secret, linkPath);
+    const res = await fetch(`${base}/teleharness/_test_escape_${process.pid}.txt`);
+    assert.equal(res.status, 403);
+    assert.deepEqual(await res.json(), { error: "forbidden" });
+  } finally {
+    rmSync(linkPath, { force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("BUG-302: directory with a dot in its name answers 404 (never EISDIR crash)", async () => {
+  const dotDir = path.join(ROOT, "public", `_test_v1.0_${process.pid}`);
+  mkdirSync(dotDir, { recursive: true });
+  try {
+    const res = await fetch(`${base}/teleharness/_test_v1.0_${process.pid}`);
+    assert.equal(res.status, 404);
+    assert.deepEqual(await res.json(), { error: "not found" });
+  } finally {
+    rmSync(dotDir, { recursive: true, force: true });
+  }
+});
+

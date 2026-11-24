@@ -14,6 +14,7 @@ const JS = "const x = 1;\n".repeat(5000);
 writeFileSync(path.join(DIR, "app.js"), JS);
 writeFileSync(path.join(DIR, "tiny.css"), "a{}");
 writeFileSync(path.join(DIR, "icon.png"), Buffer.alloc(4096, 7));
+const prevPublicDir = process.env.TELEHARNESS_PUBLIC_DIR;
 process.env.TELEHARNESS_PUBLIC_DIR = DIR;
 const { serveStatic } = await import("../lib/static.js?compress-test");
 
@@ -26,6 +27,8 @@ before(async () => {
 });
 after(async () => {
   await new Promise((r) => server.close(r));
+  if (prevPublicDir === undefined) delete process.env.TELEHARNESS_PUBLIC_DIR;
+  else process.env.TELEHARNESS_PUBLIC_DIR = prevPublicDir;
   rmSync(DIR, { recursive: true, force: true });
 });
 

@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import Attachment from "./Attachment.jsx";
 import { active, activeSessionDir, cancelEdit, deleteUpload, editing, failedBubbleWith, loadDraft, prefs, providerCfg, saveDraft, sessions, uploadFile } from "../../lib/store.js";
-import { bindingOf, queuedSendLabel } from "../../lib/engine.js";
+import { bindingOf, isRunnerEngine, queuedSendLabel } from "../../lib/engine.js";
 import { PencilIcon } from "./TurnActions.jsx";
 import { createRecognizer, speechSupported } from "../../lib/voice.js";
 import { t } from "../../lib/i18n.js";
@@ -671,7 +671,9 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 2" />
           </svg>
-          {t("composer.queuedHint")}
+          {isRunnerEngine(bindingOf(sessions.value.find((s) => s.id === (active.value?.id ?? globalThis.__teleharnessActiveId)))?.engine)
+            ? t("composer.queuedHint")
+            : t("composer.queuedHintOpencode")}
         </div>
       )}
       {visionWarn && (

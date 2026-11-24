@@ -93,3 +93,43 @@ test("SSE через edge не буферизуется: первый кадр �
   assert.doesNotMatch(first, /second/, "второй кадр пришёл склеенным — edge буферизует SSE");
   res.destroy();
 });
+
+test("BUG-302: http /TELEHARNESS и /tElEhArNeSs → 308 на https://.../teleharness/ (нормализация пути)", { skip: noTls }, async () => {
+  for (const p of ["/TELEHARNESS", "/tElEhArNeSs"]) {
+    const r = await tlsEdge.request(p);
+    assert.equal(r.status, 308, p);
+    assert.equal(r.headers.location, "https://192.0.2.10/teleharness/", p);
+  }
+});
+
+test("BUG-302: невалидный Host при редиректе на https → 400 без Location (защита от Open Redirect)", { skip: noTls }, async () => {
+  for (const badHost of ["evil.example/foo", "evil.example@192.0.2.10", "evil.example?x=1", "bad host", "192.0.2.10:notport"]) {
+    const r = await tlsEdge.request("/teleharness/", { headers: { host: badHost } });
+    assert.equal(r.status, 400, badHost);
+    assert.equal(r.headers.location, undefined, badHost);
+  }
+  // allowlist через TELEHARNESS_EDGE_ALLOWED_HOSTS
+  const gated = await spawnEdge({ tls: true, env: { TELEHARNESS_EDGE_ALLOWED_HOSTS: "192.0.2.10,teleharness.example" } });
+  try {
+    const ok = await gated.request("/teleharness/", { headers: { host: "teleharness.example:80" } });
+    assert.equal(ok.status, 308);
+    assert.equal(ok.headers.location, "https://teleharness.example/teleharness/");
+    const bad = await gated.request("/teleharness/", { headers: { host: "attacker.example" } });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.headers.location, undefined);
+  } finally {
+    await gated.stop();
+  }
+});
+
+test("BUG-302: обрыв SSE-клиента немедленно закрывает upstream-запрос в edge", async () => {
+  const beforeClosed = plain.backend.sseClosed;
+  const res = await plain.request("/teleharness/api/event?silent=1", { raw: true });
+  await new Promise((resolve, reject) => {
+    res.once("data", () => resolve());
+    res.once("error", reject);
+  });
+  res.destroy();
+  const closed = await plain.backend.waitSseClose(beforeClosed, 1500);
+  assert.equal(closed, true, "upstream SSE-запрос должен закрыться при обрыве клиента");
+});

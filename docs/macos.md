@@ -1,67 +1,76 @@
-# Running Teleharness on macOS
+# Running Teleharness on macOS and Linux
 
-This guide takes a clean Mac to a portal you can open from your phone. Linux differs only in the
-service manager (systemd instead of launchd).
-
-> [!IMPORTANT]
-> The macOS path is covered by the automated test suite on GitHub's macOS runners, and the launch
-> scripts below are tested with stand-in binaries. The full setup on real hardware — opencode 2.x,
-> the Claude CLI, launchd — has **not** been walked through end to end yet. If a step does not match
-> what you see, please open an issue.
+> For the complete step-by-step setup of **every** Teleharness feature (all 4 engine families,
+> MCP/Skills, Git worktrees, GitHub Background Agents, Temporal pipelines, Obsidian, Voice,
+> HTTPS/PWA on iOS & Android, and multi-user isolation), see the full
+> [Installation Guide](installation.md) ([на русском](installation.ru.md)).
+>
+> **Note on testing:** the server and unit test suite run in GitHub Actions CI on `macos-latest`,
+> `ubuntu-latest`, and `windows-latest`. The live end-to-end launchd workflow below is community-tested;
+> if any step differs on your macOS version, please open an issue.
 
 ## 1. Prerequisites
 
 ```bash
-brew install node            # Node.js 22 or newer
-# opencode 2.x — see https://opencode.ai for the current installer; tested with 2.2.6
-# Claude Code — see https://docs.anthropic.com/en/docs/claude-code; the native installer puts it in ~/.local/bin
+brew install node git        # Node.js >= 22.5 (for built-in SQLite FTS5 search) and Git >= 2.20
+# Install at least one coding agent CLI:
+# - Claude Code:  https://docs.anthropic.com/en/docs/claude-code (native installer -> ~/.local/bin/claude)
+# - OpenCode 2.x: https://opencode.ai (tested with 2.2.6)
+# - Codex CLI:    npm i -g @openai/codex
+# - ACP agents (Gemini CLI, Antigravity, GitHub Copilot CLI): installable later from Settings -> ACP Agents
 ```
 
-You need at least one of the two engines. Check what you have:
+Verify your toolchain:
 
 ```bash
-node --version               # v22 or newer
-opencode --version           # 2.x
-claude --version
+node --version               # v22.5 or newer (Node 24 LTS recommended)
+git --version                # 2.20 or newer
+opencode --version           # 2.x (if using OpenCode)
+claude --version             # (if using Claude Code)
+codex --version              # (if using Codex)
 ```
 
-## 2. Get the portal
+## 2. Clone and build
 
 ```bash
-git clone --branch v1.21.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
-npm ci && npm run build
-cp .env.example .env         # every value is optional; the defaults live under your home folder
+npm ci
+TELEHARNESS_BUILD_PROD=1 npm run build
+cp .env.example .env         # all values are optional; defaults live under ~/.teleharness
 ```
 
-## 3. Sign the engines in
+## 3. Sign in to the engines you installed
 
 ```bash
-opencode auth login          # add the providers you want (z.ai Coding Plan, OpenRouter, …)
-claude setup-token           # prints a token: put it into .env as CLAUDE_CODE_OAUTH_TOKEN
+opencode auth login          # connect providers (Z.ai Coding Plan, OpenRouter, Anthropic, OpenAI, local...)
+claude setup-token           # prints a token -> add CLAUDE_CODE_OAUTH_TOKEN=... to .env (or run `claude` once)
+codex login                  # ChatGPT subscription login for Codex CLI
 ```
 
-## 4. Start
+## 4. Start the portal
 
-Two processes, each in its own terminal tab for the first run:
+If you use OpenCode 2.x, run two processes (each in its own terminal tab on first run):
 
 ```bash
 ./ops/opencode/serve-v2.sh   # opencode serve on 127.0.0.1:4196 (HTTP Basic, password in ~/.teleharness/oc2-password)
 ./ops/web-v2.sh              # the portal on http://127.0.0.1:4170/teleharness/
 ```
 
-`serve-v2.sh` creates the serve password on first run; `web-v2.sh` reads the same file, loads `.env`
-and starts `server.js` in opencode 2.x mode (`TELEHARNESS_OC_API=v2`). If you only use Claude Code, skip the
-first script and run `node server.js`.
+`serve-v2.sh` creates the serve password on first run; `web-v2.sh` reads the same file, loads `.env`,
+and starts `server.js` with `TELEHARNESS_OC_API=v2`. If you only use Claude Code, Codex, or ACP agents,
+skip `serve-v2.sh` and run `node server.js` directly (or `npx teleharness`).
 
-On first start the portal creates the admin and writes the login token to `data/admin-token.txt`.
-Open <http://127.0.0.1:4170/teleharness/> and paste it.
+On first start, Teleharness creates the admin account and prints the path to `data/admin-token.txt`.
+Open <http://127.0.0.1:4170/teleharness/> and paste the token to sign in.
 
-## 5. Keep it running (launchd)
+## 5. Keep it running
+
+### macOS (`launchd`)
 
 Create one agent per process in `~/Library/LaunchAgents/`. Replace `/Users/you/teleharness` with your
-checkout and make sure `PATH` contains the folders of `node`, `opencode` and `claude`
-(`/opt/homebrew/bin` on Apple silicon, `/usr/local/bin` on Intel).
+checkout and ensure `PATH` includes `node`, `git`, `opencode`, `claude`, and `codex`
+(`/opt/homebrew/bin` on Apple Silicon, `/usr/local/bin` on Intel).
 
 `~/Library/LaunchAgents/dev.teleharness.opencode.plist`:
 
@@ -83,8 +92,8 @@ checkout and make sure `PATH` contains the folders of `node`, `opencode` and `cl
 </plist>
 ```
 
-`~/Library/LaunchAgents/dev.teleharness.web.plist` is the same with the label `dev.teleharness.web`,
-the program `/Users/you/teleharness/ops/web-v2.sh` and the log `/Users/you/.teleharness/web.log`.
+`~/Library/LaunchAgents/dev.teleharness.web.plist` is the same with label `dev.teleharness.web`,
+program `/Users/you/teleharness/ops/web-v2.sh`, and log `/Users/you/.teleharness/web.log`.
 
 ```bash
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.teleharness.opencode.plist
@@ -92,39 +101,36 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.teleharness.web.plis
 launchctl kickstart -k gui/$(id -u)/dev.teleharness.web      # restart after an update
 ```
 
-A launch agent runs while you are logged in. For a headless Mac, enable automatic login or turn the
-agents into daemons in `/Library/LaunchDaemons` with a `UserName` key.
-
-### On Linux (systemd)
+### Linux (`systemd`)
 
 Use [`ops/linux/teleharness.service`](../ops/linux/teleharness.service) as a starting point: copy it to
-`/etc/systemd/system/`, set the user and the checkout path, then `systemctl enable --now teleharness`.
-Keep `OOMPolicy=continue` in it. Agent turns run as children of the portal, and with systemd's default
-(`OOMPolicy=stop`) one turn that runs out of memory — say, a browser or a test run started by an agent — stops
-the whole portal and every running chat.
+`/etc/systemd/system/`, update the user and checkout path, then run
+`sudo systemctl daemon-reload && sudo systemctl enable --now teleharness`.
+Keep `OOMPolicy=continue` so an out-of-memory child process (browser/tests spawned by an agent)
+cannot stop the whole portal.
 
-## 6. Reach it from your phone
+## 6. Reach it from your phone (HTTPS & PWA)
 
-The portal listens on loopback only. Put it behind TLS with whatever you already use:
+The portal listens on loopback (`127.0.0.1:4170`) by default. Put it behind HTTPS so iOS/Android
+PWA install, Clipboard API, Web Push, and microphone access work smoothly:
 
-- [Tailscale Serve](https://tailscale.com/kb/1312/serve): `tailscale serve --bg 4170` — the simplest way inside your tailnet;
-- Caddy or nginx as a reverse proxy to `127.0.0.1:4170`;
-- the bundled edge server `ops/portal-server.js` (TLS certificate paths in `.env`).
+- **[Tailscale Serve](https://tailscale.com/kb/1312/serve):** `tailscale serve --bg 4170` — zero-config TLS inside your tailnet;
+- **Caddy or nginx** reverse proxy to `http://127.0.0.1:4170` (disable response buffering for `/teleharness/api/event` SSE!);
+- **Bundled edge proxy:** `ops/portal-server.js` with TLS certificate paths in `.env`.
 
-## 7. Optional pieces
+Set `TELEHARNESS_PUBLIC_URL=https://<your-host>/teleharness/` in `.env` to enable one-scan QR phone pairing
+under **Settings → Connect phone**.
 
-- **Obsidian as agent memory** — set `TELEHARNESS_KB_ROOT` in `.env` to a folder of your vault, e.g. `~/Obsidian/agents`.
-  The chat journal (one file per chat, read by agents after a handoff between engines) is written to
-  `<that folder>/journal/`.
-- **Agent configs** — `./config/install.sh` copies the example Claude Code and opencode configs into place.
-  They contain absolute paths of the author's machine: review them first.
-- **Voice** — a Python 3.11+ venv in `~/.teleharness/voice/venv` (see `ops/voice/`).
+## 7. Optional features
 
-## Known limits on macOS
+- **ACP agents (Gemini CLI, Antigravity, GitHub Copilot CLI)** — install and sign in directly from **Settings → ACP Agents**.
+- **Built-in document preview** — `.pptx`, `.docx`, `.xlsx`, `.csv`, `.pdf`, `.md`, `.html`, images, audio, and video preview directly in the browser with no extra server software.
+- **Temporal durable pipelines** — supported natively on macOS and Linux; see [`docs/temporal.md`](temporal.md) and [`docs/installation.md`](installation.md).
+- **Obsidian active cache & cross-engine journal** — set `TELEHARNESS_KB_ROOT=/path/to/vault/agents` in `.env`.
+- **Local voice (Piper TTS + GigaAM STT)** — set up `~/.teleharness/voice/venv`; see [`ops/voice/README.md`](../ops/voice/README.md).
+- **Multi-user Linux sandbox** — see [`ops/sandbox/README.md`](../ops/sandbox/README.md) and [`ops/render/README-linux.md`](../ops/render/README-linux.md).
 
-- **Other users' shell commands are refused.** Isolation between users is being moved to one container per
-  user with the full agent runtime, the same on every host OS; the Windows-only AppContainer sandbox is
-  not ported to macOS on purpose. Until then a regular (non-admin) user on macOS or Linux can chat,
-  read and write files in their own folder, but agents cannot run shell commands for them. The admin
-  is not affected.
-- **Document rendering** (`ops/render`, LibreOffice previews) is tested on Windows only.
+## Platform notes
+
+- **macOS regular (non-admin) users:** non-admin shell commands are refused (fail-closed) until container-per-user isolation lands. Regular users can still chat and read/write files inside their own folder; admin is unaffected.
+- **Server-side LibreOffice rendering (`ops/render`):** optional; built-in browser preview already handles modern Office (`.pptx`, `.docx`, `.xlsx`), PDF, Markdown, HTML, CSV, and media on every OS.

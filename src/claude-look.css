@@ -829,7 +829,7 @@ body {
   color: var(--text-2);
 }
 
-.copy-turn:not(.is-done) > span {
+.copy-turn:not(.is-done):not(.is-fail) > span {
   position: absolute;
   width: 1px;
   height: 1px;

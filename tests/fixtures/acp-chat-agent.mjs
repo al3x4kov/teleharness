@@ -2,6 +2,7 @@
 import readline from "node:readline";
 const send = (value) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\n");
 if (process.argv.includes("--device-code")) process.exit(0);
+let workspaceRoots;
 let loaded = false;
 let modelId = "default";
 let seenMcpServers = [];
@@ -24,6 +25,7 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
       id,
       result: { protocolVersion: 1, agentCapabilities: { loadSession: true }, authMethods: [{ id: "oauth-personal" }] },
     });
+  if (method === "session/new" || method === "session/load") workspaceRoots = params.additionalDirectories;
   if (method === "authenticate") send({ id, result: {} });
   if (method === "session/new") { seenMcpServers = params?.mcpServers ?? []; send({ id, result: { sessionId: "s-test" } }); }
   if (method === "session/load") {
@@ -36,6 +38,9 @@ for await (const line of readline.createInterface({ input: process.stdin })) {
   }
   if (method === "session/set_model") { modelId = params.modelId; send({ id, result: {} }); }
   if (method === "session/prompt") {
+    if (params.prompt[0].text === "workspace-roots") {
+      send({ method: "session/update", params: { sessionId: params.sessionId, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: JSON.stringify(workspaceRoots ?? null) } } } });
+    }
     if (params.prompt[0].text === "selected-model") send({method:"session/update",params:{sessionId:params.sessionId,update:{sessionUpdate:"agent_message_chunk",content:{type:"text",text:modelId}}}});
     if (params.prompt[0].text === "mcp-servers") send({method:"session/update",params:{sessionId:params.sessionId,update:{sessionUpdate:"agent_message_chunk",content:{type:"text",text:JSON.stringify(seenMcpServers)}}}});
     if (params.prompt[0].text === "wait") continue;

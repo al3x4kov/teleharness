@@ -111,18 +111,18 @@ test("FEAT-20.3 3.7: канареечный токен не утекает в о
       const putConn = await callApi("PUT", "/teleharness/api/github/connection", { token: CANARY });
       assert.equal(putConn.status, 200);
       assert.equal(putConn.data.tokenLast4, "XYZW");
-      await callApi("GET", "/teleharness/api/github/connection");
-      await callApi("POST", "/teleharness/api/github/connection/check");
-      await callApi("GET", "/teleharness/api/github/repos");
+      assert.equal((await callApi("GET", "/teleharness/api/github/connection")).status, 200);
+      assert.equal((await callApi("POST", "/teleharness/api/github/connection/check")).status, 200);
+      assert.equal((await callApi("GET", "/teleharness/api/github/repos")).status, 200);
       const created = await callApi("POST", "/teleharness/api/temporal/triggers", {
         definitionId: "00000000-0000-4000-8000-000000000001", repo: "octo/hello", kinds: ["issue_labeled"],
       });
       assert.equal(created.status, 201);
       const tid = created.data.id;
-      await callApi("GET", "/teleharness/api/temporal/triggers");
-      await callApi("GET", `/teleharness/api/temporal/triggers/${tid}`);
-      await callApi("GET", `/teleharness/api/temporal/triggers/${tid}/events`);
-      await callApi("GET", "/teleharness/api/admin/background");
+      assert.equal((await callApi("GET", "/teleharness/api/temporal/triggers")).status, 200);
+      assert.equal((await callApi("GET", `/teleharness/api/temporal/triggers/${tid}`)).status, 200);
+      assert.equal((await callApi("GET", `/teleharness/api/temporal/triggers/${tid}/journal`)).status, 200);
+      assert.equal((await callApi("GET", "/teleharness/api/admin/background")).status, 200);
     } finally {
       srv.closeAllConnections?.(); srv.close();
     }

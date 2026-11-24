@@ -65,8 +65,9 @@ test("тап по карточке открывает FileViewer с этим ф�
   const { root } = mount(answer(["notes.md"]));
   t$.click($(root, ".file-card"));
   await t$.flush();
-  assert.ok(document.querySelector(".fv, .file-viewer, [role=dialog]"), "открыт просмотр");
-  assert.match(document.body.textContent, /notes\.md/);
+  const dlg = document.querySelector('.file-panel[role="dialog"]');
+  assert.ok(dlg, "открыт просмотр (.file-panel[role=dialog])");
+  assert.match(dlg.textContent, /notes\.md/);
 });
 
 test("ответ без файлов — блока карточек нет", () => {

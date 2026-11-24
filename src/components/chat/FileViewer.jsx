@@ -11,7 +11,7 @@
 // the content. Path-based pdf/html/media are HEAD-checked first.
 // z-index 45: topmost overlay. Focus is trapped inside and returns to the
 // chip that opened it (FV-18/BUG-01.38).
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
 import { activeSessionDir, fileUrl } from "../../lib/store.js";
 import {
@@ -26,7 +26,7 @@ import {
   parseCsv,
   resolveRelativePath,
 } from "../../lib/normalize.js";
-import { parseDocx, parseXlsx } from "../../lib/office.js";
+import { parseDocx, parsePptx, parseXlsx } from "../../lib/office.js";
 import Markdown from "./Markdown.jsx";
 import { t } from "../../lib/i18n.js";
 
@@ -42,13 +42,77 @@ export function isPreviewable(name = "") {
   return kindForFile(name) !== "binary";
 }
 
+function kindForDataUrl(dataUrl, name = "") {
+  const m = /^data:([^;,]+)/i.exec(String(dataUrl ?? ""));
+  const mime = (m?.[1] ?? "").trim().toLowerCase();
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "text/markdown") return "md";
+  if (mime === "text/csv" || mime === "text/tab-separated-values") return "csv";
+  if (mime === "text/html") return "html";
+  if (mime.startsWith("text/") || mime === "application/json") return "text";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("audio/")) return "audio";
+  return kindForFile(name);
+}
+
+function decodeDataUrl(dataUrl) {
+  const s = String(dataUrl ?? "");
+  const comma = s.indexOf(",");
+  if (comma < 0) return { bytes: new Uint8Array(0), mime: "application/octet-stream" };
+  const meta = s.slice(5, comma);
+  const mime = meta.split(";")[0]?.trim() || "application/octet-stream";
+  const payload = s.slice(comma + 1);
+  if (/;base64/i.test(meta)) {
+    const bin = atob(payload);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+    return { bytes: out, mime };
+  }
+  const text = decodeURIComponent(payload);
+  return { bytes: new TextEncoder().encode(text), mime };
+}
+
+async function readResponseBounded(res, cap) {
+  if (res.body && typeof res.body.getReader === "function") {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value || value.byteLength === 0) continue;
+        total += value.byteLength;
+        if (total > cap) {
+          try { await reader.cancel(); } catch {}
+          return { tooBig: true, bytes: total, buffer: null };
+        }
+        chunks.push(value);
+      }
+    } finally {
+      try { reader.releaseLock(); } catch {}
+    }
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const c of chunks) {
+      out.set(c, off);
+      off += c.byteLength;
+    }
+    return { tooBig: false, bytes: total, buffer: out.buffer };
+  }
+  const buf = await res.arrayBuffer();
+  if (buf.byteLength > cap) return { tooBig: true, bytes: buf.byteLength, buffer: null };
+  return { tooBig: false, bytes: buf.byteLength, buffer: buf };
+}
+
 // Obsidian-style YAML frontmatter ("---\nkey: value\n...\n---") is metadata,
 // not prose: rendered by the markdown engine it mangles into a setext heading.
 // Only strips when the FIRST line is --- AND every line up to the closing ---
 // looks like "key: value" — a doc that merely opens with a rule survives.
 // BUG-153: nested YAML (indented "  key: v"), lists ("  - item") and blank lines
 // inside are frontmatter too — the first line must still be a top-level key.
-const FRONTMATTER_RE = /^---\r?\n[\w-]+:[^\r\n]*\r?\n(?:(?:[ \t]*[\w-]+:[^\r\n]*|[ \t]*- [^\r\n]*|[ \t]*)\r?\n)*---\r?\n?/;
+const FRONTMATTER_RE = /^---\r?\n[^\s:-][^\r\n:]*:[^\r\n]*\r?\n(?:(?:[ \t]*[^\s:-][^\r\n:]*:[^\r\n]*|[ \t]*- [^\r\n]*|[ \t]*)\r?\n)*---\r?\n?/;
 
 export function stripFrontmatter(text) {
   return String(text ?? "").replace(FRONTMATTER_RE, "");
@@ -128,9 +192,7 @@ function Runs({ runs }) {
   });
 }
 
-function DocxView({ data }) {
-  const blocks = data.blocks ?? [];
-  if (blocks.every((b) => b.empty)) return <p class="file-empty">{t("fileViewer.docx.empty")}</p>;
+function renderBlocks(blocks) {
   const out = [];
   let list = null;
   blocks.forEach((b, i) => {
@@ -152,22 +214,90 @@ function DocxView({ data }) {
       out.push(<p key={i}><Runs runs={b.runs} /></p>);
     }
   });
+  return out;
+}
+
+function DocxView({ data }) {
+  const blocks = data.blocks ?? [];
+  if (blocks.every((b) => b.empty)) return <p class="file-empty">{t("fileViewer.docx.empty")}</p>;
   return (
     <div class="file-docx md">
-      {out}
+      {renderBlocks(blocks)}
       {data.truncated && <p class="file-note">{t("fileViewer.docx.truncated")}</p>}
     </div>
   );
 }
 
+function PptxView({ data }) {
+  const slides = data.slides ?? [];
+  const imgUrls = useMemo(() => {
+    const map = new Map();
+    for (const s of slides) {
+      const list = (s.images ?? []).map((img) => ({
+        name: img.name,
+        url: URL.createObjectURL(new Blob([img.bytes], { type: img.mime || "application/octet-stream" })),
+      }));
+      map.set(s.index, list);
+    }
+    return map;
+  }, [data]);
+
+  useEffect(() => {
+    return () => {
+      for (const list of imgUrls.values()) {
+        for (const item of list) {
+          try { URL.revokeObjectURL(item.url); } catch {}
+        }
+      }
+    };
+  }, [imgUrls]);
+
+  if (slides.length === 0) return <p class="file-empty">{t("fileViewer.pptx.empty")}</p>;
+
+  return (
+    <div class="file-pptx">
+      {slides.map((s) => {
+        const imgs = imgUrls.get(s.index) ?? [];
+        const content = renderBlocks(s.blocks ?? []);
+        const isEmptySlide = !s.title && content.length === 0 && imgs.length === 0;
+        return (
+          <section class="file-slide md" key={s.index} aria-label={t("fileViewer.pptx.slide", { n: s.index })}>
+            <div class="file-slide-head">{t("fileViewer.pptx.slide", { n: s.index })}</div>
+            {s.title && <h3 class="file-slide-title">{s.title}</h3>}
+            {content}
+            {imgs.length > 0 && (
+              <div class="file-slide-imgs">
+                {imgs.map((img, j) => (
+                  <img key={j} class="file-slide-img" src={img.url} alt={img.name || t("fileViewer.pptx.imageAlt", { n: j + 1 })} loading="lazy" />
+                ))}
+              </div>
+            )}
+            {isEmptySlide && <p class="file-empty">{t("fileViewer.pptx.slideEmpty")}</p>}
+            {s.notes && (
+              <details class="file-pptx-notes">
+                <summary>{t("fileViewer.pptx.notes")}</summary>
+                <p>{s.notes}</p>
+              </details>
+            )}
+          </section>
+        );
+      })}
+      {data.truncated && (
+        <p class="file-note file-note--left">{t("fileViewer.pptx.truncated")}</p>
+      )}
+    </div>
+  );
+}
+
 export default function FileViewer({ file, onClose }) {
-  const kind = file.dataUrl ? "image" : kindForFile(file.name);
+  const kind = file.dataUrl ? kindForDataUrl(file.dataUrl, file.name) : kindForFile(file.name);
   const directory = file.directory ?? activeSessionDir() ?? ""; // FEAT-19.16: a run folder outside any chat
   const url = file.dataUrl ?? (file.path ? fileUrl(directory, file.path) : "");
   const downloadUrl = file.dataUrl ?? (file.path ? fileUrl(directory, file.path, true) : "");
-  const fetchBody = ["md", "text", "csv", "xlsx", "docx"].includes(kind);
+  const isOffice = kind === "xlsx" || kind === "docx" || kind === "pptx";
+  const fetchBody = ["md", "text", "csv", "xlsx", "docx", "pptx"].includes(kind);
   // phase: loading | ready | error | too-big | empty | unreadable
-  const [phase, setPhase] = useState(file.dataUrl && kind === "image" ? "ready" : "loading");
+  const [phase, setPhase] = useState(file.dataUrl && !fetchBody ? "ready" : "loading");
   const [status, setStatus] = useState(null);
   const [bytes, setBytes] = useState(null);
   const [text, setText] = useState("");
@@ -175,6 +305,8 @@ export default function FileViewer({ file, onClose }) {
   const [mediaReady, setMediaReady] = useState(false);
   const [imgDims, setImgDims] = useState(null); // ISSUE-012: «PNG · W×H · размер»
   const [attempt, setAttempt] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const [dlError, setDlError] = useState("");
   const closeRef = useRef(null);
   const panelRef = useRef(null);
 
@@ -205,7 +337,7 @@ export default function FileViewer({ file, onClose }) {
       if (e.key !== "Tab" || !panelRef.current) return;
       // Focus trap: Tab cycles inside the panel only.
       const items = [...panelRef.current.querySelectorAll(
-        'a[href], button:not([disabled]), iframe, video, audio, [tabindex]:not([tabindex="-1"])',
+        'a[href], button:not([disabled]), iframe, video, audio, summary, [tabindex]:not([tabindex="-1"])',
       )].filter((el) => el.offsetParent !== null || el === document.activeElement);
       if (items.length === 0) return;
       const first = items[0];
@@ -232,11 +364,56 @@ export default function FileViewer({ file, onClose }) {
     };
   }, []);
 
+  const parseOfficeBuffer = (buf) => {
+    if (kind === "xlsx") return parseXlsx(buf);
+    if (kind === "docx") return parseDocx(buf);
+    return parsePptx(buf);
+  };
+
   // Load: body-fetch kinds read the content; path-based previews HEAD-check
   // first so a 404 never lands as raw JSON inside an iframe/player.
   useEffect(() => {
-    if (file.dataUrl) return undefined;
     let dead = false;
+    if (file.dataUrl) {
+      if (!fetchBody) {
+        setPhase("ready");
+        return undefined;
+      }
+      setPhase("loading");
+      (async () => {
+        try {
+          const { bytes: raw } = decodeDataUrl(file.dataUrl);
+          if (dead) return;
+          setBytes(raw.byteLength);
+          const cap = isOffice ? OFFICE_CAP : TEXT_CAP;
+          if (raw.byteLength > cap) {
+            setPhase("too-big");
+            return;
+          }
+          if (isOffice) {
+            try {
+              const data = await parseOfficeBuffer(raw.buffer);
+              if (dead) return;
+              setOffice(data);
+              setPhase("ready");
+            } catch {
+              if (!dead) setPhase("unreadable");
+            }
+            return;
+          }
+          const t = new TextDecoder().decode(raw);
+          if (dead) return;
+          setText(t);
+          setPhase(t.trim() === "" ? "empty" : "ready");
+        } catch {
+          if (!dead) setPhase("unreadable");
+        }
+      })();
+      return () => {
+        dead = true;
+      };
+    }
+
     setPhase("loading");
     setStatus(null);
     setMediaReady(false);
@@ -247,17 +424,19 @@ export default function FileViewer({ file, onClose }) {
           const r = await fetch(url, { method: "HEAD" });
           if (dead) return;
           if (!r.ok) throw Object.assign(new Error("http"), { status: r.status });
-          const len = Number(r.headers.get("content-length"));
+          const rawLen = r.headers.get("content-length");
+          const len = rawLen !== null && rawLen !== "" ? Number(rawLen) : NaN;
           setBytes(Number.isFinite(len) ? len : null);
-          setPhase("ready");
+          setPhase(Number.isFinite(len) && len === 0 ? "empty" : "ready");
           return;
         }
         const res = await fetch(url);
         if (dead) return;
         if (!res.ok) throw Object.assign(new Error("http"), { status: res.status });
-        const len = Number(res.headers.get("content-length"));
+        const rawLen = res.headers.get("content-length");
+        const len = rawLen !== null && rawLen !== "" ? Number(rawLen) : NaN;
         if (Number.isFinite(len)) setBytes(len);
-        const cap = kind === "xlsx" || kind === "docx" ? OFFICE_CAP : TEXT_CAP;
+        const cap = isOffice ? OFFICE_CAP : TEXT_CAP;
         if (Number.isFinite(len) && len > cap) {
           try {
             res.body?.cancel?.();
@@ -265,12 +444,16 @@ export default function FileViewer({ file, onClose }) {
           setPhase("too-big");
           return;
         }
-        if (kind === "xlsx" || kind === "docx") {
-          const buf = await res.arrayBuffer();
-          if (dead) return;
-          setBytes(buf.byteLength);
+        const read = await readResponseBounded(res, cap);
+        if (dead) return;
+        setBytes(read.bytes);
+        if (read.tooBig) {
+          setPhase("too-big");
+          return;
+        }
+        if (isOffice) {
           try {
-            const data = kind === "xlsx" ? await parseXlsx(buf) : await parseDocx(buf);
+            const data = await parseOfficeBuffer(read.buffer);
             if (dead) return;
             setOffice(data);
             setPhase("ready");
@@ -279,10 +462,9 @@ export default function FileViewer({ file, onClose }) {
           }
           return;
         }
-        const t = await res.text();
+        const t = new TextDecoder().decode(read.buffer);
         if (dead) return;
         setText(t);
-        if (!Number.isFinite(len)) setBytes(new Blob([t]).size);
         setPhase(t.trim() === "" ? "empty" : "ready");
       } catch (err) {
         if (dead) return;
@@ -301,8 +483,73 @@ export default function FileViewer({ file, onClose }) {
     setPhase("error");
   };
 
+  const triggerDownload = (e) => {
+    if (!downloadUrl || (phase === "error" && status !== -1) || downloading) {
+      e.preventDefault();
+      return;
+    }
+    const isStandalone = Boolean(navigator.standalone) || Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches);
+    const isData = downloadUrl.startsWith("data:");
+    if (!isStandalone && !isData) return;
+
+    e.preventDefault();
+    setDownloading(true);
+    setDlError("");
+    const fname = file.name || "file";
+    (async () => {
+      try {
+        let blob;
+        if (isData) {
+          const { bytes: raw, mime } = decodeDataUrl(downloadUrl);
+          blob = new Blob([raw], { type: mime });
+        } else {
+          const res = await fetch(downloadUrl, { credentials: "same-origin" });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          blob = await res.blob();
+        }
+        if (typeof navigator.canShare === "function" && typeof navigator.share === "function" && typeof File === "function") {
+          const shareFile = new File([blob], fname, { type: blob.type || "application/octet-stream" });
+          let can = false;
+          try { can = navigator.canShare({ files: [shareFile] }); } catch { can = false; }
+          if (can) {
+            try {
+              await navigator.share({ files: [shareFile], title: fname });
+              return;
+            } catch (err) {
+              if (err?.name === "AbortError") return;
+            }
+          }
+        }
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = fname;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        const revokeTimer = setTimeout(() => {
+          try { URL.revokeObjectURL(objUrl); } catch {}
+        }, 60_000);
+        revokeTimer?.unref?.();
+      } catch {
+        setDlError(t("fileViewer.downloadFailed"));
+      } finally {
+        setDownloading(false);
+      }
+    })();
+  };
+
   const downloadBtn = (label = t("fileViewer.download")) => (
-    <a class="btn-primary file-bin-dl" href={downloadUrl} download={file.name || true}>{label}</a>
+    <a
+      class={"btn-primary file-bin-dl" + (downloading ? " is-busy" : "")}
+      href={downloadUrl || "#"}
+      download={file.name || true}
+      aria-busy={downloading || undefined}
+      onClick={triggerDownload}
+    >
+      {downloading ? t("fileViewer.downloading") : label}
+    </a>
   );
 
   const card = (title, note, actions) => (
@@ -310,6 +557,7 @@ export default function FileViewer({ file, onClose }) {
       <DocIcon />
       <p class="file-bin-name">{title}</p>
       {note && <p class="file-note">{note}</p>}
+      {dlError && <p class="file-note file-note--err" role="alert">{dlError}</p>}
       <div class="file-bin-actions">{actions}</div>
     </div>
   );
@@ -372,7 +620,7 @@ export default function FileViewer({ file, onClose }) {
                 if (im?.naturalWidth && im?.naturalHeight) setImgDims({ w: im.naturalWidth, h: im.naturalHeight });
                 setMediaReady(true);
               }}
-              onError={() => (file.dataUrl ? mediaFailed() : (setStatus(404), setPhase("error")))}
+              onError={mediaFailed}
             />
           </>
         );
@@ -405,6 +653,9 @@ export default function FileViewer({ file, onClose }) {
       case "docx":
         body = <DocxView data={office ?? { blocks: [] }} />;
         break;
+      case "pptx":
+        body = <PptxView data={office ?? { slides: [] }} />;
+        break;
       case "video":
         body = <video class="file-media" src={url} controls playsinline preload="metadata" onError={mediaFailed} />;
         break;
@@ -429,7 +680,7 @@ export default function FileViewer({ file, onClose }) {
     kind === "image" && imgDims ? `${imgDims.w}×${imgDims.h}` : "",
     shownBytes != null && Number.isFinite(shownBytes) ? fmtBytes(shownBytes) : "",
   ].filter(Boolean).join(" · ");
-  const wide = kind === "pdf" || kind === "html" || kind === "xlsx" || kind === "csv" || kind === "video";
+  const wide = kind === "pdf" || kind === "html" || kind === "xlsx" || kind === "pptx" || kind === "csv" || kind === "video";
 
   // createPortal to <body>: the viewer must NOT live inside the chat scroll
   // container (iOS Safari anchors position:fixed descendants of a touch
@@ -445,7 +696,7 @@ export default function FileViewer({ file, onClose }) {
           {kind === "pdf" && phase === "ready" && (
             <a class="file-head-link" href={url} target="_blank" rel="noopener noreferrer">{t("fileViewer.openFull")}</a>
           )}
-          <a class="file-head-btn" href={downloadUrl} download={file.name || true} aria-label={t("fileViewer.downloadAria", { name: file.name })}>
+          <a class={"file-head-btn" + (downloading ? " is-busy" : "")} href={downloadUrl || "#"} download={file.name || true} aria-label={t("fileViewer.downloadAria", { name: file.name })} aria-busy={downloading || undefined} onClick={triggerDownload}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -461,6 +712,9 @@ export default function FileViewer({ file, onClose }) {
             </svg>
           </button>
         </header>
+        {dlError && phase === "ready" && (
+          <div class="file-dl-banner" role="alert">{dlError}</div>
+        )}
         <div class="file-body">{body}</div>
       </div>
     </div>,

@@ -30,8 +30,12 @@ test("Codex role comes from the binding, not the user prompt agent field", () =>
   assert.equal(body.agent, "untrusted");
 });
 
-test("engineOf: anthropic is the claude CLI, everything else opencode", () => {
+test("engineOf: anthropic → claude, openai-codex → codex, acp-* → acp, прочее → opencode", () => {
   assert.equal(engineOf("anthropic"), "claude");
+  assert.equal(engineOf("openai-codex"), "codex");
+  assert.equal(engineOf("acp-antigravity"), "acp");
+  assert.equal(engineOf("acp-gemini"), "acp");
+  assert.equal(engineOf("acp-github-copilot-cli"), "acp");
   assert.equal(engineOf("zai-coding-plan"), "opencode");
   assert.equal(engineOf(undefined), "opencode");
 });
@@ -153,13 +157,17 @@ test("shared/engine.js is the single source of engine knowledge", async () => {
 // BUG-264 п.7 (dogfood 2026-11-19): в session-bindings.json стенда оказались ключи
 // "[object%20Object]" и "undefined" — сегмент пути с не-id принимался как id чата.
 test("BUG-264 п.7: BindingStore не пишет привязку под не-id ключом", async () => {
-  const { mkdtempSync, readFileSync, existsSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const p = (await import("node:path")).join(mkdtempSync((await import("node:path")).join(tmpdir(), "teleharness-bind-")), "b.json");
-  const store = new BindingStore({ storePath: p });
-  const b = { model: { providerID: "zai-coding-plan", modelID: "glm-5.3" } };
-  for (const bad of ["undefined", "null", "[object%20Object]", "[object Object]", { id: "x" }, "ses_a/../b", ""]) store.set(bad, b);
-  assert.equal(store.size(), 0, existsSync(p) ? readFileSync(p, "utf8") : "файла нет");
-  store.set("ses_e0dd9e073ffe7DDewzp1XKqH0j", b);
-  assert.equal(store.size(), 1);
+  const { existsSync } = await import("node:fs");
+  const dir = mkdtempSync(path.join(tmpdir(), "teleharness-bind-"));
+  try {
+    const p = path.join(dir, "b.json");
+    const store = new BindingStore({ storePath: p });
+    const b = { model: { providerID: "zai-coding-plan", modelID: "glm-5.3" } };
+    for (const bad of ["undefined", "null", "[object%20Object]", "[object Object]", { id: "x" }, "ses_a/../b", ""]) store.set(bad, b);
+    assert.equal(store.size(), 0, existsSync(p) ? readFileSync(p, "utf8") : "файла нет");
+    store.set("ses_e0dd9e073ffe7DDewzp1XKqH0j", b);
+    assert.equal(store.size(), 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

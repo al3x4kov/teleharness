@@ -107,19 +107,27 @@ test("v2 listSessions: GET /api/session?directory=, unwrap {data,cursor}, locati
   } finally { await up.close(); }
 });
 
-test("BUG-189: v2 listSessions отдаёт ВЕСЬ список — проходит курсор, а не первую страницу 50", async () => {
-  const many = Array.from({ length: 124 }, (_, i) => v2Session({ id: `ses_${String(i).padStart(3, "0")}` }));
+test("BUG-189: v2 listSessions отдаёт ВЕСЬ список — проходит курсор, а не первую страницу 200", async () => {
+  const many = Array.from({ length: 230 }, (_, i) => v2Session({ id: `ses_${String(i).padStart(3, "0")}` }));
   const up = await startFakeOpencodeV2({ password: PWD, sessions: many });
   try {
     const c = createOcClient({ api: "v2", base: up.url, password: PWD });
     const list = await c.listSessions({});
-    assert.equal(list.length, 124);
-    assert.equal(new Set(list.map((s) => s.id)).size, 124, "без дублей");
+    assert.equal(list.length, 230);
+    assert.equal(new Set(list.map((s) => s.id)).size, 230, "без дублей");
     assert.equal(list[0].id, "ses_000", "порядок upstream сохранён");
-    assert.equal(list.at(-1).id, "ses_123");
+    assert.equal(list.at(-1).id, "ses_229");
+    const firstReqs = up.requests.filter((r) => r.path === "/api/session");
+    assert.ok(firstReqs.length >= 2, `ожидалось >=2 страницы, получено ${firstReqs.length}`);
+    assert.ok(firstReqs.every((r) => !new URLSearchParams(r.query).has("directory")), "без directory параметр не передаётся");
+    assert.ok(firstReqs.slice(1).every((r) => new URLSearchParams(r.query).has("cursor")), "следующие страницы идут по курсору");
+
+    up.requests.length = 0;
     const dirList = await c.listSessions({ directory: DIR });
-    assert.equal(dirList.length, 124, "фильтр папки тоже листается до конца");
-    assert.ok(up.requests.filter((r) => r.path === "/api/session").every((r) => r.query.includes(`directory=`) || !r.query.includes("directory")));
+    assert.equal(dirList.length, 230, "фильтр папки тоже листается до конца");
+    const dirReqs = up.requests.filter((r) => r.path === "/api/session");
+    assert.ok(dirReqs.length >= 2, `с directory тоже >=2 страницы, получено ${dirReqs.length}`);
+    assert.ok(dirReqs.every((r) => new URLSearchParams(r.query).get("directory") === DIR), "каждая страница несёт точный directory");
   } finally { await up.close(); }
 });
 
@@ -759,9 +767,36 @@ test("SSE v2: reasoning — своя часть type=reasoning; tool-событ�
     assert.equal(tool[0].id, "call_1");
     assert.equal(tool[0].messageID, "msg_a1");
     assert.equal(tool[0].tool, "read");
-    assert.deepEqual(tool.at(-1).state, { status: "completed", input: { path: "a.txt" }, content: [{ type: "text", text: "ok" }], metadata: { truncated: false } }, "финал success");
+    assert.deepEqual(tool.at(-1).state, { status: "completed", input: { path: "a.txt" }, content: [{ type: "text", text: "ok" }], output: "ok", metadata: { truncated: false } }, "финал success с синтезированным state.output");
     stop.close();
   } finally { await up.close(); }
+});
+
+test("BUG-303: SSE v2 session.tool.success синтезирует строковый state.output; session.step.failed (reason:user) вызывает endRun, иначе terminal:false", () => {
+  const emitted = [];
+  const rw = ocClientNs.createV2Rewriter({ emit: (e) => emitted.push(e), throttleMs: 0 });
+  const loc = { location: { directory: DIR } };
+  const base = { sessionID: "ses_u", assistantMessageID: "msg_a" };
+  rw({ type: "session.text.delta", ...loc, data: { ...base, ordinal: 0, delta: "привет" } });
+  rw({ type: "session.tool.called", ...loc, data: { ...base, id: "c1", name: "bash", input: { command: "ls" } } });
+  const okEv = rw({
+    type: "session.tool.success", ...loc,
+    data: { ...base, id: "c1", content: [{ type: "text", text: "line1" }, { type: "image", data: "x" }, { type: "text", text: "line2" }] },
+  });
+  assert.equal(okEv.properties.part.state.output, "line1\nline2", "строковый state.output из text-блоков content");
+  assert.ok(rw._sizes().tool > 0 && rw._sizes().text > 0);
+
+  // Нетерминальный step.failed без reason:user -> terminal: false
+  const nonTerm = rw({ type: "session.step.failed", ...loc, data: { sessionID: "ses_u", error: { type: "provider.retry", message: "try again" } } });
+  assert.equal(nonTerm.type, "session.error");
+  assert.equal(nonTerm.properties.terminal, false);
+  assert.ok(rw._sizes().tool > 0, "нетерминальный step.failed не чистит ход раньше времени");
+
+  // step.failed с reason:user -> session.idle и очистка turn-карт (endRun)
+  const userStop = rw({ type: "session.step.failed", ...loc, data: { sessionID: "ses_u", reason: "user" } });
+  assert.equal(userStop.type, "session.idle");
+  assert.equal(rw._sizes().tool, 0, "tool-карта очищена через endRun");
+  assert.equal(rw._sizes().text, 0, "text-карта очищена через endRun");
 });
 
 test("BUG-196: SSE v2 — события хода без location (execution.*, renamed) получают папку сессии: из прошлых событий или dirOf", async () => {
@@ -1135,6 +1170,22 @@ test("формы v2: listQuestions разворачивает конверт /ap
     const del = up.requests.find((r) => r.method === "DELETE" && r.path === "/api/session/ses_f1/form/form_1");
     assert.ok(del, "reject — DELETE …/form/{fid}");
     assert.equal(del.query, "?message=%D0%BF%D0%B5%D1%80%D0%B5%D0%B4%D1%83%D0%BC%D0%B0%D0%BB%D0%B8", "message — в query");
+  } finally { await up.close(); }
+});
+
+test("BUG-303: replyQuestion v2 при пустом listForms ([]) бросает 404 OcError и не фабрикует q0..qN", async () => {
+  const up = await startFakeOpencodeV2({ password: PWD, forms: [] });
+  try {
+    const c = createOcClient({ api: "v2", base: up.url, password: PWD });
+    await assert.rejects(
+      () => c.replyQuestion({ directory: DIR, sessionID: "ses_f1", formID: "form_missing", answers: [["Да"]] }),
+      (err) => err instanceof OcError && err.status === 404,
+    );
+    assert.equal(
+      up.requests.some((r) => r.method === "POST" && r.path.includes("/reply")),
+      false,
+      "нельзя отправлять сфабрикованный q0 на несуществующую форму",
+    );
   } finally { await up.close(); }
 });
 

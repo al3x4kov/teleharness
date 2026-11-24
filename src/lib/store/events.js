@@ -147,7 +147,8 @@ function isKeepalive(evt) {
 // (deltas, tool part transitions, permission asks — any traffic proves the
 // turn is alive), then re-evaluates the stalled banner.
 export function handleEvent(evt) {
-  const sid = evt?.properties?.sessionID;
+  const p = evt?.properties;
+  const sid = p?.sessionID ?? p?.info?.sessionID ?? p?.part?.sessionID;
   if (typeof sid === "string" && !isKeepalive(evt)) {
     touchActive(sid, evt.type !== "session.status");
   }

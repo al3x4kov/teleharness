@@ -1,9 +1,9 @@
 // BUG-249 (BUG-05.29): a file the agent shows by absolute path outside
 // TELEHARNESS_FILE_ROOTS (e.g. the stage worktree D/teleharness-stage) was «недоступен в этом
 // чате» even for the admin. Admin: any existing file; tenant: own roots only.
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileRoots } from "../lib/auth.js";
@@ -11,6 +11,10 @@ import { workspaceFileExists, resolveInside } from "../lib/file.js";
 
 const chat = mkdtempSync(path.join(tmpdir(), "teleharness-chat-"));
 const elsewhere = mkdtempSync(path.join(tmpdir(), "teleharness-stage-"));
+after(() => {
+  rmSync(chat, { recursive: true, force: true });
+  rmSync(elsewhere, { recursive: true, force: true });
+});
 mkdirSync(path.join(elsewhere, "design"));
 const mock = path.join(elsewhere, "design", "temporal-ui-v2.html");
 writeFileSync(mock, "<!doctype html><p>макет</p>");

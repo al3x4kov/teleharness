@@ -17,7 +17,7 @@
 //   await edge.request("/TELEHARNESS/data/x")            // http
 //   await edge.request("/teleharness/", { https: true }) // https (самоподписанный CA — проверка выключена)
 //   edge.backend.requests                         // что дошло до «портала»
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
@@ -28,6 +28,14 @@ import { ROOT } from "./spawn-server.mjs";
 
 export const EDGE_SRC = path.join(ROOT, "ops", "portal-server.js");
 const CERT_DIR = path.join(ROOT, "ops", "certs");
+
+const OPENSSL = ["openssl", "C:\\Program Files\\Git\\usr\\bin\\openssl.exe"].find((bin) => {
+  try {
+    return spawnSync(bin, ["version"], { stdio: "ignore" }).status === 0;
+  } catch {
+    return false;
+  }
+});
 
 export async function freePort() {
   return new Promise((resolve, reject) => {
@@ -46,13 +54,21 @@ export async function freePort() {
 // небуферизованной прокачки).
 export async function startEchoBackend(name) {
   const requests = [];
+  let sseClosed = 0;
+  const sseWaiters = [];
   const server = http.createServer((req, res) => {
     requests.push({ method: req.method, url: req.url, headers: req.headers });
     if (req.url.startsWith("/teleharness/api/event")) {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
       res.write("data: first\n\n");
-      const t = setTimeout(() => res.write("data: second\n\n"), 50);
-      req.on("close", () => clearTimeout(t));
+      const silent = req.url.includes("silent=1");
+      const t = silent ? null : setTimeout(() => { if (!res.writableEnded) res.write("data: second\n\n"); }, 50);
+      const onClose = () => {
+        if (t) clearTimeout(t);
+        sseClosed += 1;
+        while (sseWaiters.length) sseWaiters.shift()(sseClosed);
+      };
+      res.once("close", onClose);
       return;
     }
     res.writeHead(200, { "content-type": "application/json", "x-backend": name });
@@ -63,6 +79,26 @@ export async function startEchoBackend(name) {
   return {
     port: server.address().port,
     requests,
+    get sseClosed() { return sseClosed; },
+    waitSseClose(afterCount = sseClosed, timeoutMs = 1500) {
+      if (sseClosed > afterCount) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          const i = sseWaiters.indexOf(on);
+          if (i !== -1) sseWaiters.splice(i, 1);
+          resolve(false);
+        }, timeoutMs);
+        const on = (n) => {
+          if (n > afterCount) {
+            clearTimeout(timer);
+            resolve(true);
+          } else {
+            sseWaiters.push(on);
+          }
+        };
+        sseWaiters.push(on);
+      });
+    },
     async close() {
       server.closeAllConnections?.();
       await new Promise((r) => server.close(() => r()));
@@ -90,7 +126,7 @@ export function patchEdgeSource(src, { teleharnessPort, tvPort, staticRoot }) {
   return out;
 }
 
-export async function spawnEdge({ tls = false, httpsOnly = true, readyTimeoutMs = 10_000, staticFiles = {} } = {}) {
+export async function spawnEdge({ tls = false, httpsOnly = true, readyTimeoutMs = 10_000, staticFiles = {}, env = {} } = {}) {
   const tmp = makeTmpRoot("teleharness-edge-");
   const teleharness = await startEchoBackend("teleharness");
   const tv = await startEchoBackend("tv");
@@ -131,10 +167,28 @@ export async function spawnEdge({ tls = false, httpsOnly = true, readyTimeoutMs 
   let cert = path.join(tmp.root, "no-cert.pem");
   let key = path.join(tmp.root, "no-key.pem");
   if (tls) {
-    const pem = existsSync(CERT_DIR) ? (await import("node:fs")).readdirSync(CERT_DIR).filter((f) => f.endsWith(".pem")) : [];
+    let pem = [];
+    try {
+      pem = existsSync(CERT_DIR) ? (await import("node:fs")).readdirSync(CERT_DIR).filter((f) => f.endsWith(".pem")) : [];
+    } catch {}
     const k = pem.find((f) => f.endsWith("-key.pem"));
     const c = k && pem.find((f) => f === k.replace(/-key\.pem$/, ".pem"));
-    if (k && c) { cert = path.join(CERT_DIR, c); key = path.join(CERT_DIR, k); }
+    if (k && c) {
+      cert = path.join(CERT_DIR, c);
+      key = path.join(CERT_DIR, k);
+    } else if (OPENSSL) {
+      const genCert = path.join(tmp.root, "cert.pem");
+      const genKey = path.join(tmp.root, "key.pem");
+      spawnSync(
+        OPENSSL,
+        ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", genKey, "-out", genCert, "-days", "1", "-subj", "/CN=127.0.0.1"],
+        { stdio: "ignore" },
+      );
+      if (existsSync(genCert) && existsSync(genKey)) {
+        cert = genCert;
+        key = genKey;
+      }
+    }
   }
   const tlsActive = existsSync(cert) && existsSync(key);
 
@@ -151,6 +205,7 @@ export async function spawnEdge({ tls = false, httpsOnly = true, readyTimeoutMs 
       TELEHARNESS_EDGE_TV_UPSTREAM: `127.0.0.1:${tv.port}`,
       TELEHARNESS_EDGE_ROOT: staticRoot,
       TELEHARNESS_EDGE_LOG_DIR: tmp.logs, // не в боевой data/logs
+      ...env,
     }),
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,

@@ -69,11 +69,58 @@ test("BUG-282: AgyLoginSessions.submit отклоняет чужой loopback-п
   await new Promise((r) => decoy.listen(0, "127.0.0.1", r));
   t.after(() => new Promise((r) => decoy.close(r)));
   const decoyPort = decoy.address().port;
-  const expectedPort = decoyPort + 1;
+  const expectedHits = [];
+  const expectedSrv = http.createServer((req, res) => { expectedHits.push(req.url); res.end("expected"); });
+  await new Promise((r) => expectedSrv.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise((r) => expectedSrv.close(r)));
+  const expectedPort = expectedSrv.address().port;
   c.stderr.write(`Open the following link to authenticate the ACP server: https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=${encodeURIComponent(`http://127.0.0.1:${expectedPort}/cb`)}\n`);
   await assert.rejects(agy.submit("owner", id, `http://127.0.0.1:${decoyPort}/?code=1`), /адрес/);
   await assert.rejects(agy.submit("owner", id, `http://127.0.0.1:${expectedPort}/other?code=1`), /адрес/);
   assert.deepEqual(decoyHits, [], "запрос на посторонний порт не уходит");
+  assert.deepEqual(expectedHits, [], "запрос на чужой путь не уходит");
+});
+
+test("BUG-303: AgyLoginSessions.submit переживает гонку finish(ready) до завершения fetch без TypeError и не перезаписывает ready", async (t) => {
+  const c = fakeChild();
+  const agy = new AgyLoginSessions(() => c);
+  const { id } = agy.start("owner");
+  c.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { protocolVersion: 1, authMethods: [{ id: "oauth-personal" }] } }) + "\n");
+  const relay = http.createServer((req, res) => {
+    // Имитация: ACP-процесс успел завершить authenticate и закрыться, оборвав сокет до ответа HTTP
+    c.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 2, result: {} }) + "\n");
+    req.socket.destroy();
+  });
+  await new Promise((r) => relay.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise((r) => relay.close(r)));
+  const port = relay.address().port;
+  c.stderr.write(`Open the following link to authenticate the ACP server: https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=${encodeURIComponent(`http://127.0.0.1:${port}/cb`)}\n`);
+  const st = await agy.submit("owner", id, `http://127.0.0.1:${port}/cb?code=1`);
+  assert.equal(st.status, "ready");
+  assert.equal(agy.get("owner").status, "ready");
+});
+
+test("BUG-303: AgyLoginSessions.submit использует redirect:manual и отклоняет 3xx-редирект без запроса на цель", async (t) => {
+  const c = fakeChild();
+  const agy = new AgyLoginSessions(() => c);
+  const { id } = agy.start("owner");
+  c.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { protocolVersion: 1, authMethods: [{ id: "oauth-personal" }] } }) + "\n");
+  const targetHits = [];
+  const target = http.createServer((req, res) => { targetHits.push(req.url); res.end("secret"); });
+  await new Promise((r) => target.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise((r) => target.close(r)));
+  const targetPort = target.address().port;
+  const relay = http.createServer((req, res) => {
+    res.writeHead(302, { Location: `http://127.0.0.1:${targetPort}/ssrf` });
+    res.end();
+  });
+  await new Promise((r) => relay.listen(0, "127.0.0.1", r));
+  t.after(() => new Promise((r) => relay.close(r)));
+  const port = relay.address().port;
+  c.stderr.write(`Open the following link to authenticate the ACP server: https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=${encodeURIComponent(`http://127.0.0.1:${port}/cb`)}\n`);
+  const st = await agy.submit("owner", id, `http://127.0.0.1:${port}/cb?code=1`);
+  assert.deepEqual(targetHits, [], "3xx редирект не должен автоматически выполняться");
+  assert.equal(st.status, "verification-timeout");
 });
 
 test("BUG-282: markAcpProfile ready не удаляет models-v1.json (удаляет только rejected)", async (t) => {

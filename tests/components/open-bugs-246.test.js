@@ -25,8 +25,10 @@ before(async () => {
 after(() => { ui?.store?.dispose?.(); });
 afterEach(() => {
   t$.cleanup();
+  delete globalThis.__zaiActiveId;
   ui.store.sessions.value = [];
   ui.store.active.value = null;
+  ui.store.subscriptions.value = [];
   installFetch();
 });
 

@@ -22,12 +22,16 @@ const filePart = (name, mime, bytes) => ({
   url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
 });
 
-test("sanitizeFilename strips path separators and control junk", () => {
+test("sanitizeFilename strips path separators, rejects dot-segments, and preserves stem around illegal chars", () => {
   assert.equal(sanitizeFilename("../../../etc/passwd"), "passwd");
   assert.equal(sanitizeFilename("C:\\temp\\отчёт.xlsx"), "отчёт.xlsx");
   assert.equal(sanitizeFilename(""), "file");
   assert.equal(sanitizeFilename(null), "file");
-  assert.equal(sanitizeFilename("a:b*c?d|e").length > 0, true);
+  assert.equal(sanitizeFilename("."), "file");
+  assert.equal(sanitizeFilename(".."), "file");
+  assert.equal(sanitizeFilename("..."), "file");
+  assert.equal(sanitizeFilename("отчёт: 2026.pdf"), "отчёт_ 2026.pdf");
+  assert.equal(sanitizeFilename("a:b*c?d|e"), "a_b_c_d_e");
 });
 
 test("non-image file part is materialized and swapped for a text reference", () => {

@@ -112,8 +112,15 @@ test("loginThrottled/loginFailure/loginSuccess: окно 60 с, порог 10, �
   assert.equal(auth.loginThrottled("8.8.8.8", T + 12_000), false, "another address is unaffected");
   auth.loginSuccess("9.9.9.9");
   assert.equal(auth.loginThrottled("9.9.9.9", T + 13_000), false, "a success resets the address");
-  // окно истекает: после 60 с лимит снят
-  auth.loginFailure("7.7.7.7", T);
-  auth.loginFailure("7.7.7.7", T + 1000);
-  assert.equal(auth.loginThrottled("7.7.7.7", T + 61_000), false, "the window has slid away");
+  // окно истекает: после 10 неудач IP реально заблокирован (429), через 60 с блокировка снимается
+  const ip = "7.7.7.7";
+  for (let i = 0; i < 10; i++) {
+    assert.equal(auth.loginThrottled(ip, T + i * 500), false, `failure ${i + 1} before threshold`);
+    auth.loginFailure(ip, T + i * 500);
+  }
+  assert.equal(auth.loginThrottled(ip, T + 5_000), true, "blocked after 10 failures (429)");
+  assert.equal(auth.loginThrottled(ip, T + 59_999), true, "still blocked right before 60s");
+  assert.equal(auth.loginThrottled(ip, T + 60_000), false, "unblocked once 60s window expires");
+  assert.equal(auth.loginFailure(ip, T + 60_001), 1, "new failure starts a fresh window");
+  assert.equal(auth.loginThrottled(ip, T + 60_002), false, "single failure in fresh window is not throttled");
 });

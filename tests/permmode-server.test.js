@@ -97,6 +97,7 @@ after(async () => {
   await srv?.stop();
   await up?.close();
   await pushSvc?.close();
+  tmp?.cleanup?.();
 });
 
 test("binding: permMode stored and shown; bad value 400; tenant «Без вопросов» 403; opencode outside 2.x 400", async () => {

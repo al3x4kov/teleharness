@@ -241,3 +241,23 @@ test("BUG-299: .drawer-foot — обычный flex-элемент без positi
   assert.match(scrollBlock, /min-height\s*:\s*0/i, ".drawer-scroll must allow flex shrinking");
   assert.equal(/padding-bottom\s*:\s*76px/i.test(scrollBlock), false, ".drawer-scroll no longer needs 76px overlay reserve");
 });
+
+test("BUG-304: ресайз окна с мобильной ширины (< 900px) на десктоп (≥ 900px) сбрасывает drawerOpen и модальность", async () => {
+  const origW = window.innerWidth;
+  try {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 440 });
+    const h = t$.mount(ui.Drawer, { view: "home", chatId: null });
+    t$.act(() => ui.openDrawer());
+    await t$.flush();
+    assert.equal(ui.drawerOpen.value, true);
+    assert.equal($(h.root, "nav.drawer").getAttribute("role"), "dialog");
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1280 });
+    window.dispatchEvent(new window.Event("resize"));
+    await t$.waitFor(() => ui.drawerOpen.value === false);
+    assert.equal($(h.root, "nav.drawer").getAttribute("role"), null, "на десктопе панель не держит role=dialog");
+    h.unmount();
+  } finally {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: origW });
+  }
+});

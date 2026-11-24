@@ -102,7 +102,7 @@ test("шапка Claude-чата: «Claude Opus 5.5 · Workflow» с агент�
 test("агент пропал из каталога: событие teleharness.notice показывает notice только в открытом чате, сброс привязки — через session.updated", () => {
   const SID = "ses_gone";
   ui.store.notice.value = null;
-  ui.store.sessions.value = [{ id: SID, title: "x", directory: "C:\Home", time: { created: 1, updated: 1 }, teleharness: { model: { providerID: "anthropic", modelID: "claude-opus-5-5" }, agent: "workflow", prompted: true } }];
+  ui.store.sessions.value = [{ id: SID, title: "x", directory: "C:\\Home", time: { created: 1, updated: 1 }, teleharness: { model: { providerID: "anthropic", modelID: "claude-opus-5-5" }, agent: "workflow", prompted: true } }];
   ui.store.active.value = { id: "other", messages: [], status: "idle" };
   ui.store.handleEvent({ type: "teleharness.notice", properties: { sessionID: SID, text: "Агент «Workflow» больше недоступен — ответ без агента." } });
   assert.equal(ui.store.notice.value, null, "чужой чат — без notice");

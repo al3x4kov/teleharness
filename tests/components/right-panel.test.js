@@ -337,49 +337,58 @@ test("FEAT-20.38: клик по Skill открывает модалку с Markd
     },
   ]);
 
-  const { root } = t$.mount(ui.RightPanel, { id: SID });
-  await t$.waitFor(() => $$(root, ".rp-skill").length === 2);
+  const shell = document.createElement("div");
+  shell.className = "shell";
+  document.body.appendChild(shell);
+  try {
+    const { root } = t$.mount(ui.RightPanel, { id: SID });
+    await t$.waitFor(() => $$(root, ".rp-skill").length === 2);
 
-  // 1) Клик открывает модалку (admin: с path, без YAML frontmatter)
-  t$.click($$(root, ".rp-skill")[0]);
-  await t$.waitFor(() => $(root, '.rp-modal[role="dialog"] .rp-modal-md') != null);
-  const dialog = $(root, '.rp-modal[role="dialog"]');
-  assert.equal(dialog.getAttribute("aria-modal"), "true");
-  assert.match($(dialog, ".rp-modal-title").textContent, /teleharness-xlsx/);
-  assert.match($(dialog, ".rp-modal-desc").textContent, /Excel-таблицы/);
-  assert.match($(dialog, ".rp-modal-path").textContent, /\/skills\/teleharness-xlsx\/SKILL\.md/);
-  assert.match($(dialog, ".rp-modal-md").textContent, /Инструкция/);
-  assert.doesNotMatch($(dialog, ".rp-modal-md").textContent, /name:\s*teleharness-xlsx/, "YAML frontmatter срезан");
+    // 1) Клик открывает модалку в портале document.body (admin: с path, без YAML frontmatter, фон inert)
+    t$.click($$(root, ".rp-skill")[0]);
+    await t$.waitFor(() => $(document.body, '.rp-modal[role="dialog"] .rp-modal-md') != null);
+    const dialog = $(document.body, '.rp-modal[role="dialog"]');
+    assert.equal(dialog.getAttribute("aria-modal"), "true");
+    assert.equal(shell.hasAttribute("inert"), true, "BUG-304: .shell становится inert при открытом SkillModal");
+    assert.match($(dialog, ".rp-modal-title").textContent, /teleharness-xlsx/);
+    assert.match($(dialog, ".rp-modal-desc").textContent, /Excel-таблицы/);
+    assert.match($(dialog, ".rp-modal-path").textContent, /\/skills\/teleharness-xlsx\/SKILL\.md/);
+    assert.match($(dialog, ".rp-modal-md").textContent, /Инструкция/);
+    assert.doesNotMatch($(dialog, ".rp-modal-md").textContent, /name:\s*teleharness-xlsx/, "YAML frontmatter срезан");
 
-  // Закрытие по Escape
-  t$.act(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-  });
-  await t$.flush();
-  assert.equal($(root, '.rp-modal[role="dialog"]'), null, "Escape закрыл модальное окно");
+    // Закрытие по Escape снимает inert
+    t$.act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await t$.flush();
+    assert.equal($(document.body, '.rp-modal[role="dialog"]'), null, "Escape закрыл модальное окно");
+    assert.equal(shell.hasAttribute("inert"), false, "inert снят после закрытия");
 
-  // 2) Ошибка загрузки → «Повторить» → успех (ветка тенанта без path)
-  detailMode = "error";
-  t$.click($$(root, ".rp-skill")[1]);
-  await t$.waitFor(() => $(root, ".rp-modal .rp-error") != null);
-  assert.match($(root, ".rp-modal .rp-error").textContent, /временно недоступны/);
+    // 2) Ошибка загрузки → «Повторить» → успех (ветка тенанта без path)
+    detailMode = "error";
+    t$.click($$(root, ".rp-skill")[1]);
+    await t$.waitFor(() => $(document.body, ".rp-modal .rp-error") != null);
+    assert.match($(document.body, ".rp-modal .rp-error").textContent, /временно недоступны/);
 
-  detailMode = "tenant";
-  t$.click($(root, ".rp-modal .rp-retry"));
-  await t$.waitFor(() => $(root, ".rp-modal .rp-modal-md") != null);
-  assert.equal($(root, ".rp-modal .rp-modal-path"), null, "тенанту path не отображается");
+    detailMode = "tenant";
+    t$.click($(document.body, ".rp-modal .rp-retry"));
+    await t$.waitFor(() => $(document.body, ".rp-modal .rp-modal-md") != null);
+    assert.equal($(document.body, ".rp-modal .rp-modal-path"), null, "тенанту path не отображается");
 
-  // Закрытие по клику на подложку
-  t$.click($(root, ".rp-modal-backdrop"));
-  await t$.flush();
-  assert.equal($(root, '.rp-modal[role="dialog"]'), null, "клик по подложке закрыл модальное окно");
+    // Закрытие по клику на подложку
+    t$.click($(document.body, ".rp-modal-backdrop"));
+    await t$.flush();
+    assert.equal($(document.body, '.rp-modal[role="dialog"]'), null, "клик по подложке закрыл модальное окно");
 
-  // Закрытие по кнопке ×
-  t$.click($$(root, ".rp-skill")[0]);
-  await t$.waitFor(() => $(root, ".rp-modal-close") != null);
-  t$.click($(root, ".rp-modal-close"));
-  await t$.flush();
-  assert.equal($(root, '.rp-modal[role="dialog"]'), null, "кнопка × закрыла модальное окно");
+    // Закрытие по кнопке ×
+    t$.click($$(root, ".rp-skill")[0]);
+    await t$.waitFor(() => $(document.body, ".rp-modal-close") != null);
+    t$.click($(document.body, ".rp-modal-close"));
+    await t$.flush();
+    assert.equal($(document.body, '.rp-modal[role="dialog"]'), null, "кнопка × закрыла модальное окно");
+  } finally {
+    shell.remove();
+  }
 });
 
 test("RightPanel & SkillModal localize into English when lang is en", async () => {
@@ -408,8 +417,8 @@ test("RightPanel & SkillModal localize into English when lang is en", async () =
     assert.match(root.textContent, /connected/);
     assert.match(root.textContent, /Plan for this turn/);
     t$.click($(root, ".rp-skill"));
-    await t$.waitFor(() => $(root, '.rp-modal[role="dialog"] .rp-modal-md') != null);
-    assert.equal($(root, ".rp-modal-close").getAttribute("aria-label"), "Close");
+    await t$.waitFor(() => $(document.body, '.rp-modal[role="dialog"] .rp-modal-md') != null);
+    assert.equal($(document.body, ".rp-modal-close").getAttribute("aria-label"), "Close");
   } finally {
     ui.setLang("ru");
   }

@@ -67,6 +67,9 @@ const TLS_PUBLIC_KEY = process.env.TELEHARNESS_TLS_PUBLIC_KEY || path.join(CERTS
 const TLS_PUBLIC_NAMES = new Set(
   (process.env.TELEHARNESS_TLS_PUBLIC_NAMES ?? "example.org,www.example.org").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
 );
+const ALLOWED_HOSTS = new Set(
+  (process.env.TELEHARNESS_EDGE_ALLOWED_HOSTS ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+);
 // Access log (TASK-12.20): TELEHARNESS_EDGE_LOG_DIR, "0" disables.
 const LOG_DIR = process.env.TELEHARNESS_EDGE_LOG_DIR ?? path.join(REPO, "data", "logs");
 // The portal cookie name(s) cut from /tv/api requests (ADR-009 п.1).
@@ -193,7 +196,10 @@ function proxy(req, res, target, { stripPrefix = "", hostRewrite = null, hsts = 
   );
   up.on("error", () => {
     if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
-    res.end("upstream unavailable");
+    if (!res.writableEnded && !res.destroyed) res.end("upstream unavailable");
+  });
+  res.on("close", () => {
+    if (!res.writableEnded) up.destroy();
   });
   req.pipe(up, { flush: true });
 }
@@ -286,10 +292,25 @@ function serveStatic(req, res, pathname) {
 const TLS_UP = existsSync(TLS_CERT) && existsSync(TLS_KEY);
 const HTTPS_ONLY = TLS_UP && process.env.TELEHARNESS_HTTPS_ONLY !== "0";
 
+const HOST_RE = /^(?:\[([0-9A-Fa-f:]+)\]|([A-Za-z0-9.-]+))(?::(\d{1,5}))?$/;
+
 function teleharnessToHttps(req, res) {
   const u = new URL(req.url, "http://x");
-  const host = (req.headers.host || "").split(":")[0] || "192.0.2.10";
-  const p = u.pathname === "/teleharness" ? "/teleharness/" : u.pathname;
+  const rawHost = String(req.headers.host ?? "").trim();
+  let host = "192.0.2.10";
+  if (rawHost) {
+    const m = HOST_RE.exec(rawHost);
+    if (!m || (m[3] !== undefined && Number(m[3]) > 65535)) {
+      res.writeHead(400, { "content-type": "text/plain" });
+      return res.end("bad host");
+    }
+    host = m[1] ? `[${m[1]}]` : m[2];
+  }
+  if (ALLOWED_HOSTS.size > 0 && !ALLOWED_HOSTS.has(host.toLowerCase())) {
+    res.writeHead(400, { "content-type": "text/plain" });
+    return res.end("bad host");
+  }
+  const p = u.pathname.toLowerCase() === "/teleharness" ? "/teleharness/" : u.pathname;
   res.writeHead(308, { location: `https://${host}${p}${u.search}` });
   res.end();
 }

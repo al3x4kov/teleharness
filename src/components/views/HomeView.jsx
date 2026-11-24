@@ -4,6 +4,7 @@
 // no picker sheet on every chat (user request 2026-10-31).
 // Also wires store.setNavigate once so createAndOpen can route.
 import { useEffect, useRef, useState } from "preact/hooks";
+import { createPortal } from "preact/compat";
 import "../../app.css"; // tokens first; component css second — esbuild keeps order
 import "../views.css";
 import {
@@ -363,22 +364,25 @@ export function SessionRow({ session: s, open, onOpen, onRename, onDelete, origi
 // control that opened it (✎/🗑 of the row, «Добавить проект»).
 export function Modal({ title, onClose, children }) {
   const dlgRef = useRef(null);
-  useModalFocus(dlgRef);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useModalFocus(dlgRef, { inertShell: true });
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") onCloseRef.current?.();
     };
     addEventListener("keydown", onKey);
     dlgRef.current?.focus();
     return () => removeEventListener("keydown", onKey);
   }, []);
-  return (
-    <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+  return createPortal(
+    <div class="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCloseRef.current?.()}>
       <div class="modal" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={dlgRef}>
         <h2 class="modal-title">{title}</h2>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -484,6 +488,7 @@ export default function HomeView() {
   const [openId, setOpenId] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [waitingOnly, setWaitingOnly] = useState(false); // FEAT-18.3: «Ждут вас»
   // FEAT-01.60: серверный поиск по текстам вопросов и ответов.
@@ -552,7 +557,7 @@ export default function HomeView() {
     for (const h of searchRes.hits) if (h?.sessionId) hitsById.set(h.sessionId, h);
   }
   const filtered = q
-    ? base.filter((s) => (s.title ?? "").toLowerCase().includes(q) || chatTitle(s).toLowerCase().includes(q) || hitsById.has(s.id))
+    ? base.filter((s) => chatTitle(s).toLowerCase().includes(q) || hitsById.has(s.id))
     : base;
   // FEAT-01.69: «Закреплённые» — над датами, в порядке закрепления; в датах
   // их уже нет. Н14: больше PINNED_FOLD — «Ещё N».
@@ -691,11 +696,18 @@ export default function HomeView() {
           // (rowState → busyMap); deleteChat, как в меню чата, сначала
           // останавливает ход и показывает то же предупреждение.
           busy={!!busyMap.value[deleting.id]}
-          onClose={() => setDeleting(null)}
-          onConfirm={() => {
-            deleteChat(deleting.id, { stopFirst: !!busyMap.value[deleting.id] });
-            setDeleting(null);
-            setOpenId(null);
+          pending={deletingBusy}
+          onClose={() => !deletingBusy && setDeleting(null)}
+          onConfirm={async () => {
+            if (deletingBusy) return;
+            setDeletingBusy(true);
+            try {
+              await deleteChat(deleting.id, { stopFirst: !!busyMap.value[deleting.id] });
+              setDeleting(null);
+              setOpenId(null);
+            } finally {
+              setDeletingBusy(false);
+            }
           }}
         />
       )}

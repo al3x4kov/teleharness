@@ -103,8 +103,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
   const [copied, setCopied] = useState(null); // null | "ok" | "fail"
   const [viewer, setViewer] = useState(null);
   const flashTimer = useRef(0);
-  const pressTimer = useRef(0);
-  const pressCopied = useRef(false);
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   const info = msg.info ?? {};
   const role = info.role === "user" ? "user" : "assistant";
@@ -287,26 +286,6 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
     copyText(t).then(flash);
   };
 
-  const onContextMenu = (e) => {
-    if (!copyPayload()) return;
-    e.preventDefault();
-    if (pressCopied.current) {
-      pressCopied.current = false; // long-press already copied
-      return;
-    }
-    copy();
-  };
-
-  const onTouchStart = () => {
-    clearTimeout(pressTimer.current);
-    pressTimer.current = setTimeout(() => {
-      pressCopied.current = true;
-      copy();
-      setTimeout(() => (pressCopied.current = false), 400);
-    }, 500);
-  };
-  const onTouchEnd = () => clearTimeout(pressTimer.current);
-
   const directiveCard = directiveTexts.length > 0 && (
     <div class="msg msg-system" key="sys">
       <div class="sys-card">
@@ -428,16 +407,15 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
         : info.failReason === "stopped"
           ? t("message.fail.stopped")
           : t("message.fail.network");
+    const sid = act?.id ?? info.sessionID ?? globalThis.__teleharnessActiveId;
+    const userEngine = bindingOf(sessions.value.find((s) => s.id === sid))?.engine;
+    const canEdit = !isQueued && !info.failed && lastUserId === info.id && !beingEdited && userEngine !== "acp";
+    const canCopyUser = Boolean(copyPayload());
     return (
       <>
         <div
           class={"msg msg-user" + (highlighted ? " is-search-hit" : "")}
           data-mid={info.id ?? undefined}
-          onContextMenu={onContextMenu}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-          onTouchMove={onTouchEnd}
-          onTouchCancel={onTouchEnd}
         >
           <div class={"bubble-user" + (info.failed ? " is-failed" : "") + (isQueued ? " is-queued" : "") + (beingEdited ? " is-editing" : "")}>
             {voiced && (
@@ -476,20 +454,29 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
               <button class="retry-btn" type="button" onClick={() => retryFailed(info.id)}>{t("common.retry")}</button>
             </div>
           )}
-          {!isQueued && !info.failed && lastUserId === info.id && !beingEdited && bindingOf(sessions.value.find((s) => s.id === (act?.id ?? globalThis.__teleharnessActiveId)))?.engine !== "acp" && (
+          {(canCopyUser || canEdit) && (
             <div class="msg-under turn-acts">
-              <EditButton sid={act.id} />
+              {canCopyUser && (
+                <button
+                  class={"copy-user" + (copied === "ok" ? " is-done" : copied === "fail" ? " is-fail" : "")}
+                  type="button"
+                  onClick={copy}
+                >
+                  {copied === "ok" ? <OkIcon /> : <CopyIcon />}
+                  <span>{copied === "ok" ? t("common.copied") : copied === "fail" ? t("message.copyFailedShort") : t("message.copyMessage")}</span>
+                </button>
+              )}
+              {canEdit && <EditButton sid={act.id} />}
             </div>
           )}
           {isQueued && (
             <div class="msg-under">
-              <span class="queue-tag"><ClockIcon />{queuedLabel(bindingOf(sessions.value.find((s) => s.id === (act?.id ?? globalThis.__teleharnessActiveId)))?.engine)}</span>
+              <span class="queue-tag"><ClockIcon />{queuedLabel(userEngine)}</span>
             </div>
           )}
           {/* BUG-01.38: a persistent live region (a status node inserted
               together with its text is often not announced). */}
           <span class="sr-only" role="status" aria-live="polite">{copied ? (copied === "ok" ? t("common.copied") : t("message.copyFailed")) : ""}</span>
-          {copied && <span class="copy-flash" aria-hidden="true">{copied === "ok" ? t("common.copied") : t("message.copyFailed")}</span>}
           {viewer && <FileViewer file={viewer} onClose={() => setViewer(null)} />}
         </div>
         {directiveCard}
@@ -537,11 +524,6 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
     <div
       class={"msg msg-assistant" + (streaming || revealing ? " is-streaming" : "") + (highlighted ? " is-search-hit" : "")}
       data-mid={info.id ?? undefined}
-      onContextMenu={onContextMenu}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      onTouchMove={onTouchEnd}
-      onTouchCancel={onTouchEnd}
     >
       {isTurnHead && showRole && (author.name || author.claude) ? (
         <div class="msg-author">
@@ -583,7 +565,7 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
       {isTurnEnd && (copyPayload() || meta || isLastTurn) && (
         <div class="turn-foot">
           {copyPayload() && (
-            <button class={"copy-turn" + (copied === "ok" ? " is-done" : "")} type="button" onClick={copy}>
+            <button class={"copy-turn" + (copied === "ok" ? " is-done" : copied === "fail" ? " is-fail" : "")} type="button" onClick={copy}>
               {copied === "ok" ? <OkIcon /> : <CopyIcon />}
               <span aria-live="polite">{copied === "ok" ? t("common.copied") : copied === "fail" ? t("message.copyFailedShort") : t("message.copyAnswer")}</span>
             </button>
@@ -599,7 +581,6 @@ export default function MessageBubble({ msg, streaming = false, showRole = true,
         </div>
       )}
       {!isTurnEnd && <span class="sr-only" role="status" aria-live="polite">{copied ? (copied === "ok" ? t("common.copied") : t("message.copyFailed")) : ""}</span>}
-      {copied && !isTurnEnd && <span class="copy-flash" aria-hidden="true">{copied === "ok" ? t("common.copied") : t("message.copyFailed")}</span>}
       {viewer && <FileViewer file={viewer} onClose={() => setViewer(null)} />}
     </div>
   );

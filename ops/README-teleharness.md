@@ -1,39 +1,32 @@
-# teleharness — scaffold state
+# ops/ — Operations, Launchers, Sandbox & Optional Services
 
-Claude-mobile-app-style web UI for opencode. This scaffold contains the
-**server/tooling layer only** — no frontend code yet (frontend agents add
-`src/main.jsx` and `public/index.html` later).
+This folder holds the operational scripts and optional sidecar services that accompany Teleharness.
+For full end-to-end installation instructions across Linux, macOS, and Windows, see
+[`docs/installation.md`](../docs/installation.md) ([`docs/installation.ru.md`](../docs/installation.ru.md)).
 
-## What exists
+## Directory map
 
-| Path | Purpose |
-|---|---|
-| `package.json` | name `teleharness`, private; devDeps: esbuild, preact, @preact/signals, marked, dompurify, highlight.js. Runtime deps: none (node stdlib only). |
-| `build.mjs` | esbuild bundler: `src/main.jsx` → `public/app.js` (preact JSX, iife, es2020, minified). Exits 0 with a message when `src/main.jsx` doesn't exist yet. |
-| `server.js` | zero-dep `node:http` server on `127.0.0.1`, `PORT` env or 4170. `/teleharness/api/*` → mock (if `TELEHARNESS_MOCK=1`) or 501 "real proxy not implemented yet". Everything else → static from `public/` (`/teleharness/` prefix stripped, `index.html` default). |
-| `lib/mock.js` | `mockHandler(req,res) → boolean`. Replays fixtures for GET `/teleharness/api/session`, `/teleharness/api/session/:id/message`, `/teleharness/api/provider`, `/teleharness/api/agent`, `/teleharness/api/project`. GET `/teleharness/api/event` streams `fixtures/events.sse` frames paced 150 ms, then stays open with `: ping` comments every 10 s. Any POST `/teleharness/api/*` → `{"mock":true}` and appends `{ts,url,body}` to `fixtures/_captured.jsonl`. Unknown → false (falls through). |
-| `tests/mock.test.js` | node:test contract tests: fixture round-trip for session + message, POST capture to `_captured.jsonl`, SSE content-type + at least one `data:` frame. Spawns the real `server.js` on an ephemeral port with `TELEHARNESS_MOCK=1`. |
-| `fixtures/` | Live-recorded from opencode 1.19.5 at `http://127.0.0.1:4096` (GET + SSE capture only), raw and untrimmed. |
+| Path | Platform | Purpose |
+|---|---|---|
+| `web-v2.sh` / `web-v2.cmd` | Linux, macOS / Windows | Loads `.env`, reads the OpenCode 2.x Basic-auth password file, and starts `server.js` with `TELEHARNESS_OC_API=v2`. |
+| `opencode/serve-v2.sh` / `serve-v2.cmd` | Linux, macOS / Windows | Starts `opencode serve` 2.x on loopback (`:4196`) with an auto-generated HTTP Basic password (`~/.teleharness/oc2-password`) and `OPENCODE_DISABLE_PROJECT_CONFIG=1`. |
+| `opencode/` | All | Reference OpenCode 2.x plugin (`vault-cache.ts`), skills (`teleharness-docx`, `teleharness-pdf`, `teleharness-pptx`, `teleharness-xlsx`, `teleharness-html`), and plugin unit tests. |
+| `linux/teleharness.service` | Linux | `systemd` unit template with `OOMPolicy=continue` so one heavy agent turn cannot kill the portal. |
+| `portal-server.js` | All | Optional zero-dependency HTTPS edge reverse proxy (`:80`/`:443`) with TLS, host allow-list, HTTP→HTTPS redirect, and non-buffered SSE streaming. |
+| `voice/` | Linux, macOS, Windows | Optional local voice worker (`voice-worker.py`: Piper TTS + GigaAM v2 STT over JSON lines, CPU-only). See [`ops/voice/README.md`](voice/README.md). |
+| `render/` | Linux, Windows | Optional server-side LibreOffice / headless Chromium document renderer (note: modern `.pptx`, `.docx`, `.xlsx`, `.csv`, `.pdf`, `.md`, `.html` already preview directly in the browser with zero server setup). See [`ops/render/README-linux.md`](render/README-linux.md). |
+| `sandbox/` | Linux, Windows | Optional per-tenant command isolation (`linux/teleharness-tenant-run` on Linux; AppContainer `TeleharnessJail.cs` on Windows). See [`ops/sandbox/README.md`](sandbox/README.md). |
+| `temporal/` | Linux, macOS | Reference OpenCode text-only config for non-admin Temporal pipeline turns. See [`docs/temporal.md`](../docs/temporal.md). |
+| `stand/stand-v2.ps1` | Windows | Helper to launch an isolated staging instance on separate ports (`:4174`/`:4101`). |
+| `watchdog-teleharness.ps1` | Windows | Scheduled watchdog script checking portal and OpenCode loopback ports. |
 
-## Run
+## Quick verification
 
-```cmd
-cd D:\Apps\teleharness
-npm install
-set TELEHARNESS_MOCK=1 && node server.js       :: mock API + static UI on http://127.0.0.1:4170
-npm test                                :: 4 contract tests
-npm run build                           :: bundles src/main.jsx once it exists
+```bash
+# Run the server against OpenCode 2.x (Linux / macOS)
+./ops/opencode/serve-v2.sh &
+./ops/web-v2.sh
+
+# Health check
+curl -s http://127.0.0.1:4170/teleharness/healthz
 ```
-
-Without `TELEHARNESS_MOCK=1`, `/teleharness/api/*` answers `501 {"error":"real proxy not implemented yet"}` until the real proxy task lands (it will forward to opencode at `http://127.0.0.1:4096`).
-
-## Where fixtures came from
-
-Recorded 2026-10-31 against the live `opencode serve` on `127.0.0.1:4096`, read-only:
-
-- `sessions.json` — GET `/session` (27 sessions)
-- `messages-ses_*.json` — GET `/session/:id/message` for the 3 most recently updated sessions
-- `provider.json` — GET `/provider`; `agents.json` — GET `/agent`; `projects.json` — GET `/project`
-- `events.sse` — GET `/event` captured for 45 s (raw chunk bytes): `server.connected`, one `message.part.updated`, several `server.heartbeat` frames
-
-`fixtures/_captured.jsonl` (created at runtime) accumulates every POST the mock receives — handy for seeing what the frontend sends without spending tokens. It is safe to delete anytime.

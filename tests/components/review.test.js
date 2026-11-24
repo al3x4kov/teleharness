@@ -195,12 +195,14 @@ test("T-6, кр. 6, N-5: «Вернуть агенту» — превью, од�
   let fail = true;
   const { root } = await mountReview(d, [
     { method: "POST", path: `/teleharness/api/review/${ID}/preview`, reply: () => ({ text: "## Ревью · 1 комментарий к 1 файлу (ревизия 2)\n\nтекст\n<!-- teleharness-review:rv_AAAAAAAAAAAA:r2 -->", count: 1, busy: true, shortened: false }) },
-    { method: "POST", path: `/teleharness/api/review/${ID}/send`, reply: () => (fail ? "network" : { already: false, count: 1, at: Date.now() }) },
-  ]);
-  installFetch([
-    { method: "POST", path: `/teleharness/api/review/${ID}/preview`, reply: () => ({ text: "## Ревью · 1 комментарий к 1 файлу (ревизия 2)\n\nтекст\n<!-- teleharness-review:rv_AAAAAAAAAAAA:r2 -->", count: 1, busy: true, shortened: false }) },
-    { method: "POST", path: `/teleharness/api/review/${ID}/send`, reply: "network" },
-    { method: "GET", path: `/teleharness/api/review/${ID}`, reply: () => d },
+    {
+      method: "POST",
+      path: `/teleharness/api/review/${ID}/send`,
+      reply: () => {
+        if (fail) throw new TypeError("fetch failed");
+        return { already: false, count: 1, at: Date.now() };
+      },
+    },
   ]);
   const back = $(root, ".rv-bar .bd-btn");
   assert.equal(back.textContent, "Вернуть агенту · 1");
@@ -212,16 +214,16 @@ test("T-6, кр. 6, N-5: «Вернуть агенту» — превью, од�
   t$.click(go());
   await t$.waitFor(() => document.querySelector(".rv-sheet .rv-error"));
   assert.match(document.querySelector(".rv-sheet .rv-error").textContent, /Не отправлено — нет связи/);
-  const k1 = fetchCalls.find((c) => c.path.endsWith("/send")).body.key;
-  installFetch([
-    { method: "POST", path: `/teleharness/api/review/${ID}/send`, reply: () => ({ already: false, count: 1, at: Date.now() }) },
-    { method: "GET", path: `/teleharness/api/review/${ID}`, reply: () => d },
-  ]);
+  const sends1 = fetchCalls.filter((c) => c.path.endsWith("/send"));
+  assert.equal(sends1.length, 1);
+  const k1 = sends1[0].body.key;
+  assert.ok(typeof k1 === "string" && k1.length > 0, "сгенерирован ключ идемпотентности");
+  fail = false;
   assert.equal(go().textContent, "Повторить отправку");
   t$.click(go());
-  await t$.waitFor(() => fetchCalls.some((c) => c.path.endsWith("/send")));
-  assert.equal(fetchCalls.find((c) => c.path.endsWith("/send")).body.key, k1, "тот же ключ — сервер не задвоит");
-  void fail;
+  await t$.waitFor(() => fetchCalls.filter((c) => c.path.endsWith("/send")).length === 2);
+  const sends2 = fetchCalls.filter((c) => c.path.endsWith("/send"));
+  assert.equal(sends2[1].body.key, k1, "тот же ключ — сервер не задвоит");
 });
 
 test("T-9, кр. 8, N-3: «Принять» — предупреждение о непросмотренных; 409 already — «Уже принято на другом устройстве в …»", async () => {

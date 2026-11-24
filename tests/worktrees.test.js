@@ -606,3 +606,90 @@ test("TASK-20.34 п.4 / FEAT-20.7 кр. 12: continueAfterMerge переводи�
   assert.equal(it.state, "ready");
   assert.equal((await svc.status(it)).canUndoMerge, false);
 });
+
+test("BUG-303: POST /teleharness/api/worktrees/init блокирует dirty-config (409) и не запускает git init", async () => {
+  const { worktreeRoutes } = await import("../routes/worktrees.js");
+  const { dispatchRoute } = await import("../routes/router.js");
+  const { svc } = makeSvc();
+  const repo = makeRepo();
+  sh(repo, "config", "core.fsmonitor", "/bin/false");
+  let status = 0;
+  let body = null;
+  const routes = worktreeRoutes({
+    wt: svc,
+    sendJson: (res, s, b) => { status = s; body = b; },
+    readJsonBody: async () => ({}),
+    dirAllowed: () => true,
+    existingChatFolder: () => true,
+    chatDirOf: async () => repo,
+    isUnderAny: () => false,
+    gitAuthor: () => ({ name: "T", email: "t@t" }),
+    tenantDir: () => null,
+    titleOf: () => null,
+  });
+  await dispatchRoute(routes, {
+    req: { method: "POST" },
+    res: {},
+    url: new URL(`http://test/teleharness/api/worktrees/init?directory=${encodeURIComponent(repo)}`),
+    user: { id: "u" },
+    admin: true,
+  }, { sendJson: (res, s, b) => { status = s; body = b; } });
+  assert.equal(status, 409);
+  assert.equal(body?.kind, "dirty-config");
+});
+
+test("BUG-303: revertMerge сбрасывает overlapCache и рассылает base-moved соседним копиям", async () => {
+  const events = [];
+  const { svc } = makeSvc({ emit: (item, what) => events.push({ id: item.id, what }) });
+  const repo = makeRepo();
+  const it1 = await mk(svc, repo, "ses_rev1");
+  const it2 = await mk(svc, repo, "ses_rev2");
+  commitIn(it1.path, "r1.txt", "v1\n");
+  commitIn(it2.path, "r2.txt", "v2\n");
+  const op = await waitOp(svc, await svc.merge(it1, { method: "merge", skipTests: true, reason: "test" }));
+  assert.equal(op.phase, "done");
+  // Заполняем overlapCache
+  await svc.status(it2);
+  assert.ok(svc.overlapCache.has(it1.repoKey), "overlapCache должен быть заполнен перед revertMerge");
+  events.length = 0;
+
+  await svc.revertMerge(it1);
+  assert.equal(svc.overlapCache.has(it1.repoKey), false, "revertMerge обязан сбросить overlapCache");
+  const siblingMoved = events.some((e) => e.id === it2.id && e.what === "base-moved");
+  assert.equal(siblingMoved, true, "соседняя копия должна получить событие base-moved");
+});
+
+test("BUG-303: gc не удаляет ветку живой устаревшей run-копии при переводе в orphaned — restore() проходит", async () => {
+  let now = 1_000_000;
+  const { svc } = makeSvc({ now: () => now, limits: { runKeepMs: 1000 } });
+  const repo = makeRepo();
+  const it = await svc.create({ sid: "run_live_1", kind: "run", owner: "u", dir: repo, text: "pipe run" });
+  // 0 коммитов и 0 незакоммиченного, но копия старше runKeepMs и запуск жив (isLive = true)
+  now += 5000;
+  const res = await svc.gc({ isLive: () => true });
+  assert.deepEqual(res.saved, [it.id]);
+  assert.equal(it.state, "orphaned");
+  // Ветка обязана сохраниться, чтобы restore() не падал
+  const branchCheck = sh(repo, "branch", "--list", it.branch).trim();
+  assert.ok(branchCheck.includes(it.branch), "ветка orphaned run-копии не должна удаляться");
+  await svc.restore(it);
+  assert.equal(existsSync(it.path), true, "restore() должен успешно восстановить orphaned копию");
+});
+
+test("BUG-303: touchRepoOf учитывает baseChanged и conflicts в сигнатуре overlapCache", async () => {
+  const events = [];
+  const { svc } = makeSvc({ emit: (item, what) => events.push({ id: item.id, what }) });
+  const repo = makeRepo();
+  const it = await mk(svc, repo, "ses_sig");
+  commitIn(it.path, "a.txt", "branch change\n");
+  await svc.touchRepoOf(it);
+  events.length = 0;
+
+  // Меняем тот же файл a.txt на базе (main): sets (a.txt) и main (пуст) не изменились,
+  // но появились baseChanged=['a.txt'] и conflicts (pairKey(it.id, 'base'))!
+  commitIn(repo, "a.txt", "main conflicting change\n", "main edit");
+  await svc.touchRepoOf(it);
+  const overlapEvts = events.filter((e) => e.id === it.id && e.what === "overlap");
+  assert.ok(overlapEvts.length >= 1, "touchRepoOf должен замечать изменение baseChanged/conflicts");
+});
+

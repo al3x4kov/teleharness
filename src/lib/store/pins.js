@@ -64,7 +64,11 @@ export async function togglePin(id) {
     pins.value = cleanIds(r?.ids ?? next);
     return true;
   } catch (err) {
-    pins.value = before;
+    pins.value = pinning
+      ? pins.value.filter((x) => x !== id)
+      : pins.value.includes(id)
+        ? pins.value
+        : [...pins.value, id];
     if (pinning && err?.status === 404) {
       chatGone(id);
       return false;

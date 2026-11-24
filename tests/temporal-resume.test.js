@@ -280,4 +280,65 @@ describe("Temporal resume from step (FEAT-19.32)", () => {
       h.close();
     }
   });
+
+  it("BUG-303: checks engine access against target version (allows resume on v2 when v1 engine is disallowed) and removes stale rework-*.md for re-run steps", async () => {
+    const { existsSync, mkdirSync } = await import("node:fs");
+    const { workspaceOf } = await import("../lib/temporal/workspace.js");
+    const { slugOf } = await import("../lib/temporal/definitions.js");
+    const h = makeHarness();
+    try {
+      const def1 = makeDraft(h.dir, [
+        { id: "s1", name: "Шаг 1", type: "model", dependsOn: [], engine: "opencode", model: "glm-5.3-flash", instruction: "A", timeoutSeconds: 60, maxAttempts: 1 },
+        { id: "s2", name: "Шаг 2", type: "model", dependsOn: ["s1"], engine: "opencode", model: "glm-5.3-flash", instruction: "B", timeoutSeconds: 60, maxAttempts: 1 },
+      ], []);
+      const rec = h.store.create("admin", def1);
+      const p1 = h.store.publish("admin", rec.id, rec.revision);
+      const started = await h.call("POST", "/teleharness/api/temporal/runs", {
+        body: { definitionId: rec.id, version: 1, requestId: "66666666-2222-4333-8444-555555555555", inputs: {} },
+      });
+      assert.equal(started.status, 202);
+      const srcId = started.data.workflowId;
+
+      // Publish v2 switching s1/s2 to allowed claude
+      const def2 = makeDraft(h.dir, [
+        { id: "s1", name: "Шаг 1", type: "model", dependsOn: [], engine: "claude", model: "sonnet", instruction: "A", timeoutSeconds: 60, maxAttempts: 1 },
+        { id: "s2", name: "Шаг 2", type: "model", dependsOn: ["s1"], engine: "claude", model: "sonnet", instruction: "B", timeoutSeconds: 60, maxAttempts: 1 },
+      ], []);
+      const s2 = h.store.save("admin", rec.id, p1.revision, def2);
+      h.store.publish("admin", rec.id, s2.revision);
+
+      // Prepare run folder with stale rework-s1.md (reused) and rework-s2.md (will be re-run)
+      const folder = "20261124-0001-rework";
+      h.artifacts.runFolder(srcId, () => folder);
+      const runDir = path.join(workspaceOf(h.dir, slugOf(rec)), "runs", folder);
+      mkdirSync(runDir, { recursive: true });
+      writeFileSync(path.join(runDir, "rework-s1.md"), "old s1 note");
+      writeFileSync(path.join(runDir, "rework-s2.md"), "stale s2 note");
+
+      h.workflowStates.set(srcId, {
+        status: "FAILED",
+        state: { steps: { s1: "completed", s2: "running" } },
+      });
+
+      // Now disallow opencode (which v1 used), allow only claude (which v2 uses)
+      h.setAllowedEngines(new Set(["claude"]));
+
+      // Resuming on v1 still blocked with 403
+      const rV1 = await h.call("POST", `/teleharness/api/temporal/runs/${srcId}/resume`, {
+        body: { requestId: "77777777-2222-4333-8444-555555555555", version: 1 },
+      });
+      assert.equal(rV1.status, 403, "целевая v1 с запрещённым opencode отклоняется");
+
+      // Resuming on v2 succeeds (202) and removes stale rework-s2.md while keeping rework-s1.md
+      const rV2 = await h.call("POST", `/teleharness/api/temporal/runs/${srcId}/resume`, {
+        body: { requestId: "88888888-2222-4333-8444-555555555555", version: 2, fromStepId: "s2" },
+      });
+      assert.equal(rV2.status, 202, "целевая v2 с разрешённым claude должна запускаться");
+      assert.equal(existsSync(path.join(runDir, "rework-s2.md")), false, "старый rework-s2.md для перезапускаемого шага удалён");
+      assert.equal(existsSync(path.join(runDir, "rework-s1.md")), true, "rework-s1.md для переиспользуемого шага не тронут");
+    } finally {
+      h.close();
+    }
+  });
 });
+

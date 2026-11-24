@@ -121,6 +121,39 @@ test("FEAT-20.1 кр. 14: POST /actions rework пишет rework-code.md и mode
   }
 });
 
+test("failed applyAction does not leave rework-<target>.md on disk", async () => {
+  const { existsSync } = await import("node:fs");
+  const { workspaceOf } = await import("../lib/temporal/workspace.js");
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "teleharness-rework-fail-"));
+  try {
+    const wfId = "11111111-1111-4111-8111-111111111119";
+    const runId = "22222222-2222-4222-8222-222222222229";
+    const def = {
+      name: "Plan Code Review",
+      directory: tmp,
+      inputs: [{ name: "task", type: "string", required: true }],
+      steps: PLAN_APPROVE_CODE_REVIEW_TEMPLATE.steps,
+    };
+    const record = { id: "def-fail", slug: "plan-code-review", versions: [{ version: 1, definition: def }] };
+    const routes = temporalRoutes({
+      sendJson: () => {},
+      readJsonBody: async () => ({ action: "rework", actionId: "33333333-3333-4333-8333-333333333339", runId, stepId: "review", generation: runId, note: "Rollback" }),
+      store: { get: () => record },
+      dirAllowed: () => true,
+      engineAllowed: () => true,
+      lookupRun: async () => ({ workflowId: wfId, definitionId: "def-fail", version: 1, inputs: "{}" }),
+      results: { runFolder: () => "run-fail", steps: () => [] },
+      applyAction: async () => { throw new Error("Temporal unavailable"); },
+    });
+    const actRoute = routes.find((r) => r.method === "POST" && r.path instanceof RegExp && r.path.test(`/teleharness/api/temporal/runs/${wfId}/actions`));
+    await assert.rejects(() => actRoute.handler({ req: {}, res: {}, user: { id: "u1", role: "admin" }, match: [wfId, wfId] }), /Temporal unavailable/);
+    const reworkFile = path.join(workspaceOf(tmp, "plan-code-review"), "runs", "run-fail", "rework-code.md");
+    assert.equal(existsSync(reworkFile), false, "rework-code.md must not be created when applyAction fails");
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test("FEAT-20.1 кр. 14: python-воркер — цикл rework до 3 раз, 4-я попытка отклоняется rework_limit_reached", { skip: !hasPython && "нужен python3" }, () => {
   const out = execFileSync(pythonBin, ["tests/temporal-worker/pipeline_rework_unit.py"], { encoding: "utf8", timeout: 60_000, env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } });
   assert.match(out, /ALL OK/, out);
