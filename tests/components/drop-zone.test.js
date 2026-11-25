@@ -164,3 +164,66 @@ test("зона — по всей области вида (main.view), а не п
   fireWin("dragover", data, 100, 400); // над списком чатов
   assert.equal(zone(), null);
 });
+
+test("dragInfo fallback on application/x-moz-file and items without exact Files prevents browser open", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await mountChat();
+  const data = { types: ["application/x-moz-file"], items: [fileItem(xlsx("moz.xlsx"))], files: [xlsx("moz.xlsx")], dropEffect: "" };
+  assert.equal(fireWin("dragenter", data), false);
+  assert.equal(fireWin("dragover", data), false);
+  assert.ok(zone());
+  assert.equal(fireWin("drop", data), false);
+  await t$.waitFor(() => uploads().length === 1);
+  assert.equal(uploads()[0].query.name, "moz.xlsx");
+});
+
+test("zone clears on right/bottom window leave, dragend and blur", async () => {
+  await mountChat();
+  const data = dt([fileItem(xlsx("a.xlsx"))]);
+
+  fireWin("dragenter", data);
+  fireWin("dragenter", data);
+  fireWin("dragover", data);
+  assert.ok(zone());
+  fireWin("dragleave", data, window.innerWidth, 200);
+  assert.equal(zone(), null);
+
+  fireWin("dragenter", data);
+  fireWin("dragenter", data);
+  fireWin("dragover", data);
+  assert.ok(zone());
+  fireWin("dragleave", data, 200, window.innerHeight);
+  assert.equal(zone(), null);
+
+  fireWin("dragenter", data);
+  fireWin("dragover", data);
+  assert.ok(zone());
+  t$.fire(window, "dragend");
+  assert.equal(zone(), null);
+
+  fireWin("dragenter", data);
+  fireWin("dragover", data);
+  assert.ok(zone());
+  t$.fire(window, "blur");
+  assert.equal(zone(), null);
+});
+
+test("blocking overlays suppress drop zone and attachment while still calling preventDefault", async () => {
+  await mountChat();
+  for (const cls of ["file-backdrop", "modal-backdrop", "sheet-backdrop", "rp-modal-backdrop", "vm-backdrop", "rv-scrim"]) {
+    const overlay = document.createElement("div");
+    overlay.className = cls;
+    document.body.appendChild(overlay);
+    try {
+      const data = dt([fileItem(xlsx("hidden.xlsx"))]);
+      fireWin("dragenter", data);
+      assert.equal(fireWin("dragover", data), false, `${cls}: dragover prevented`);
+      assert.equal(zone(), null, `${cls}: no .dz over overlay`);
+      assert.equal(data.dropEffect, "none", `${cls}: dropEffect=none`);
+      assert.equal(fireWin("drop", data), false, `${cls}: drop prevented`);
+      assert.equal(uploads().length, 0, `${cls}: no upload behind overlay`);
+    } finally {
+      overlay.remove();
+    }
+  }
+});

@@ -1,6 +1,6 @@
 {
   "name": "teleharness",
-  "version": "2.8.1",
+  "version": "2.8.2",
   "license": "MIT",
   "private": true,
   "type": "module",

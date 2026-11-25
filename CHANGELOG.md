@@ -6,6 +6,27 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.8.2] — 2026-11-25
+
+### Fixed
+- **Clipboard file paste outside focused textarea.** Added a window-level `paste` listener in `Composer` with
+  `WeakSet` bubbling deduplication so pressing `Ctrl/⌘+V` in an open chat attaches files and focuses the input
+  even when the textarea is not focused, while ignoring pastes inside other editable controls (`input`,
+  `textarea`, `select`, `contenteditable`) or behind blocking overlays.
+- **Finder, Explorer, Linux file managers & browser "Copy image" pastes.** Refined `pasteAction()` so copied
+  image files carrying companion filenames, local paths, `file://` URIs, or single-`<img>` HTML fragments
+  attach as files instead of pasting raw text, while preserving the narrow Word/Excel text+render exception.
+- **Clipboard folder detection, rapid-paste races & SVG uploads.** Unified `extractEntries()` detects pasted
+  folders via `webkitGetAsEntry()` (showing the folder error while still attaching sibling files) and recovers
+  files from `dt.files` on partial `getAsFile() === null`; synchronous `filesRef` + batch reservation prevents
+  duplicate filenames and quota drift across rapid pastes/drops; `image/svg+xml` uploads as a binary file to
+  `.teleharness-uploads` instead of an inline data URL; `uploadOne` falls back to `sessionDir(sessionId)`;
+  pasting while a chat is stopping shows a clear refusal notice.
+- **Drag-and-drop reliability & overlay guards.** `dragInfo()` now recognizes `application/x-moz-file`,
+  `items` with `kind === "file"`, and `dt.files` fallbacks; `DropZone` clears on all four window edges,
+  `dragend`, and `blur`, and suppresses the drop overlay and attachment behind open modals, sheets,
+  `FileViewer`, `SkillModal`, `VoiceMode`, and review scrims while still calling `preventDefault()`.
+
 ## [2.8.1] — 2026-11-24
 
 ### Added

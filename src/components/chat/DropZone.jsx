@@ -8,7 +8,7 @@
 // файл вместо портала; прикрепление — только внутри области и не при остановке.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { createPortal } from "preact/compat";
-import { countLabel, dragInfo, droppedEntries } from "../../lib/paste-drop.js";
+import { countLabel, dragInfo, droppedEntries, hasBlockingOverlay } from "../../lib/paste-drop.js";
 import { t } from "../../lib/i18n.js";
 
 const DropIcon = () => (
@@ -45,8 +45,16 @@ export default function DropZone({ targetRef, filesApi }) {
 
   useEffect(() => {
     let depth = 0;
+    const clear = () => {
+      depth = 0;
+      set(null);
+    };
     const files = (e) => dragInfo(e.dataTransfer).files;
     const track = (e) => {
+      if (hasBlockingOverlay()) {
+        set(null);
+        return false;
+      }
       const api = filesApi?.current;
       const rect = rectOf(targetRef?.current);
       if (!api || !inside(rect, e)) {
@@ -72,38 +80,38 @@ export default function DropZone({ targetRef, filesApi }) {
     const onLeave = (e) => {
       if (!files(e)) return;
       depth = Math.max(0, depth - 1);
-      // курсор ушёл из окна: relatedTarget пуст и счётчик обнулился
-      if (depth === 0 || e.relatedTarget == null && (e.clientX <= 0 || e.clientY <= 0)) {
-        depth = 0;
-        set(null);
-      }
+      const outOfWindow =
+        e.relatedTarget == null &&
+        (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight);
+      if (depth === 0 || outOfWindow) clear();
     };
     const onDrop = (e) => {
       if (!files(e)) return;
       e.preventDefault();
-      depth = 0;
-      set(null);
+      clear();
+      if (hasBlockingOverlay()) return;
       const api = filesApi?.current;
       if (!api || api.blocked || !inside(rectOf(targetRef?.current), e)) return;
       const { files: list, folders } = droppedEntries(e.dataTransfer);
       if (list.length > 0 || folders.length > 0) api.add(list, folders);
     };
     const onKey = (e) => {
-      if (e.key === "Escape" && cur.current) {
-        depth = 0;
-        set(null);
-      }
+      if (e.key === "Escape" && cur.current) clear();
     };
     window.addEventListener("dragenter", onEnter);
     window.addEventListener("dragover", onOver);
     window.addEventListener("dragleave", onLeave);
     window.addEventListener("drop", onDrop);
+    window.addEventListener("dragend", clear);
+    window.addEventListener("blur", clear);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("dragenter", onEnter);
       window.removeEventListener("dragover", onOver);
       window.removeEventListener("dragleave", onLeave);
       window.removeEventListener("drop", onDrop);
+      window.removeEventListener("dragend", clear);
+      window.removeEventListener("blur", clear);
       window.removeEventListener("keydown", onKey);
     };
   }, []);

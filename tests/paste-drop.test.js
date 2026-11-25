@@ -143,3 +143,82 @@ test("BUG-269 п.2: чипы вложений — одна строка с пр�
   assert.match(css, /\.composer-chips > \.attach \{\s*max-width: 212px;/, "чип в поле ввода — не шире 212 px: следующий выглядывает");
   assert.match(css, /\.composer-chips \.attach-thumb \{\s*width: 28px;/, "миниатюра в поле ввода 28 px — имя помещается");
 });
+
+// ---- Clipboard paste and drag-and-drop reliability regressions -------------
+
+const cdHtml = ({ files = [], text = "", html = "", items = null } = {}) => ({
+  files,
+  items,
+  getData: (t) => (t === "text/plain" ? text : t === "text/html" ? html : ""),
+});
+
+test("pasteAction: Finder / Explorer / Linux image files with text/plain -> files", () => {
+  const photo = file("photo.png", "image/png");
+  assert.equal(pasteAction(cdHtml({ files: [photo], text: "photo.png" })).kind, "files");
+  assert.equal(pasteAction(cdHtml({ files: [photo], text: "/home/user/Pictures/photo.png" })).kind, "files");
+  assert.equal(pasteAction(cdHtml({ files: [photo], text: "file:///home/user/Pictures/photo.png" })).kind, "files");
+  assert.equal(pasteAction(cdHtml({ files: [photo], text: "C:\\Users\\USER\\photo.png" })).kind, "files");
+  const gen = file("image.png", "image/png");
+  assert.equal(pasteAction(cdHtml({ files: [gen], text: "image.png" })).kind, "files");
+  assert.equal(pasteAction(cdHtml({ files: [gen], text: "/tmp/image.png" })).kind, "files");
+  const multi = [file("a.png", "image/png"), file("b.jpg", "image/jpeg")];
+  assert.equal(pasteAction(cdHtml({ files: multi, text: "a.png\nb.jpg" })).kind, "files");
+  assert.equal(pasteAction(cdHtml({ files: multi, text: "caption for two images" })).kind, "files");
+});
+
+test("pasteAction: browser Copy image (<img> + URL) -> files; Word/Excel -> text", () => {
+  const img = file("image.png", "image/png");
+  assert.equal(
+    pasteAction(cdHtml({ files: [img], text: "https://example.com/pic.png", html: '<img src="https://example.com/pic.png" alt="pic">' })).kind,
+    "files",
+  );
+  assert.equal(
+    pasteAction(cdHtml({ files: [img], text: "https://example.com/pic.png", html: '<html><body><!--StartFragment--><a href="https://example.com"><img src="https://example.com/pic.png"></a><!--EndFragment--></body></html>' })).kind,
+    "files",
+  );
+  assert.equal(
+    pasteAction(cdHtml({ files: [img], text: "A1\tB1\nA2\tB2", html: "<table><tr><td>A1</td><td>B1</td></tr></table>" })).kind,
+    "default",
+  );
+  assert.equal(
+    pasteAction(cdHtml({ files: [img], text: "line ".repeat(1200), html: "<p>lots of text</p>" })).kind,
+    "longText",
+  );
+});
+
+test("pasteAction: clipboard folders via webkitGetAsEntry -> files + folders", () => {
+  const doc = file("report.pdf");
+  const folderItem = { kind: "file", type: "", getAsFile: () => file("Exports", ""), webkitGetAsEntry: () => ({ isDirectory: true, name: "Exports" }) };
+  const docItem = { kind: "file", type: "application/pdf", getAsFile: () => doc, webkitGetAsEntry: () => ({ isDirectory: false, name: "report.pdf" }) };
+  assert.deepEqual(pasteAction(cdHtml({ files: [file("Exports", ""), doc], items: [folderItem, docItem], text: "Exports\nreport.pdf" })), {
+    kind: "files",
+    files: [doc],
+    folders: ["Exports"],
+  });
+  assert.deepEqual(pasteAction(cdHtml({ files: [file("Exports", "")], items: [folderItem], text: "Exports" })), {
+    kind: "files",
+    files: [],
+    folders: ["Exports"],
+  });
+});
+
+test("droppedEntries and pasteAction recover files from dt.files on partial getAsFile() === null", () => {
+  const a = file("a.pdf");
+  const b = file("b.pdf");
+  const dt = {
+    items: [
+      { kind: "file", type: "application/pdf", getAsFile: () => a, webkitGetAsEntry: () => ({ isDirectory: false, name: "a.pdf" }) },
+      { kind: "file", type: "application/pdf", getAsFile: () => null, webkitGetAsEntry: () => null },
+    ],
+    files: [a, b],
+  };
+  assert.deepEqual(droppedEntries(dt), { files: [a, b], folders: [] });
+  assert.deepEqual(pasteAction(cdHtml({ items: dt.items, files: dt.files })), { kind: "files", files: [a, b] });
+});
+
+test("dragInfo recognizes application/x-moz-file, items kind=file and dt.files without exact Files", () => {
+  assert.deepEqual(dragInfo({ types: ["application/x-moz-file"], items: [{ kind: "file", type: "application/pdf" }] }), { files: true, count: 1, images: false });
+  assert.deepEqual(dragInfo({ types: [], items: [{ kind: "file", type: "image/png" }] }), { files: true, count: 1, images: true });
+  assert.deepEqual(dragInfo({ types: [], items: [], files: [file("a.png", "image/png"), file("b.png", "image/png")] }), { files: true, count: 2, images: true });
+  assert.deepEqual(dragInfo({ types: ["text/plain"], items: [{ kind: "string", type: "text/plain" }], files: [] }), { files: false, count: 0, images: false });
+});

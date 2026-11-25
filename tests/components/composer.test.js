@@ -463,3 +463,129 @@ test("FEAT-01.88: filesApi — зона перетаскивания добав�
   mountComposer({ filesApi: api, status: "stopping" });
   assert.equal(api.current.blocked, true, "остановка — запрет");
 });
+
+// ---- Unfocused paste, Finder images, folders, SVG, rapid-paste races -------
+
+const clipEx = ({ files = [], text = "", html = "", items = null } = {}) => ({
+  files,
+  items,
+  getData: (t) => (t === "text/plain" ? text : t === "text/html" ? html : ""),
+});
+const pasteOn = (target, data) => t$.fire(target, "paste", {}, Event, { clipboardData: data });
+
+test("Ctrl+V file when textarea is unfocused (on document.body) attaches file and focuses textarea", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  const { root } = mountComposer();
+  const doc = new File(["%PDF"], "report.pdf", { type: "application/pdf" });
+  const ok = pasteOn(document.body, clipEx({ files: [doc], text: "report.pdf" }));
+  assert.equal(ok, false);
+  await t$.waitFor(() => uploads().length === 1, { tries: 3000 });
+  assert.equal(uploads()[0].query.name, "report.pdf");
+  assert.equal(document.activeElement, ta(root));
+});
+
+test("Ctrl+V inside another input or behind a blocking modal is not intercepted by Composer", () => {
+  echoUpload();
+  mountComposer();
+  const other = document.createElement("input");
+  document.body.appendChild(other);
+  const modal = document.createElement("div");
+  modal.className = "modal-backdrop";
+  try {
+    const doc = new File(["%PDF"], "x.pdf", { type: "application/pdf" });
+    assert.equal(pasteOn(other, clipEx({ files: [doc] })), true);
+    assert.equal(uploads().length, 0);
+    document.body.appendChild(modal);
+    assert.equal(pasteOn(document.body, clipEx({ files: [doc] })), true);
+    assert.equal(uploads().length, 0);
+  } finally {
+    other.remove();
+    modal.remove();
+  }
+});
+
+test("paste on textarea is not processed twice when bubbling to window", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  const { root } = mountComposer();
+  const doc = new File(["%PDF"], "once.pdf", { type: "application/pdf" });
+  paste(root, clipEx({ files: [doc] }));
+  await t$.waitFor(() => uploads().length === 1, { tries: 3000 });
+  await new Promise((r) => queueMicrotask(r));
+  assert.equal(uploads().length, 1);
+});
+
+test("Finder image (photo.png + text/plain) and rapid back-to-back screenshots get unique names", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  brokenImages(t);
+  echoUpload();
+  const { root } = mountComposer();
+  pasteOn(document.body, clipEx({ files: [new File([new Uint8Array([1])], "photo.png", { type: "image/png" })], text: "photo.png" }));
+  paste(root, clipEx({ files: [new File([new Uint8Array([2])], "image.png", { type: "image/png" })] }));
+  paste(root, clipEx({ files: [new File([new Uint8Array([3])], "image.png", { type: "image/png" })] }));
+  await t$.waitFor(() => uploads().length === 3, { tries: 3000 });
+  const names = uploads().map((c) => c.query.name);
+  assert.equal(new Set(names).size, 3, "unique names: " + names.join(" | "));
+  assert.ok(names.includes("photo.png"));
+  assert.ok(names.some((n) => / \(2\)\.png$/.test(n)));
+});
+
+test("pasting a folder + file rejects the folder with a reason and uploads the file", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  const { root } = mountComposer();
+  const pdf = new File(["%PDF"], "spec.pdf", { type: "application/pdf" });
+  const items = [
+    { kind: "file", type: "", getAsFile: () => new File([], "Exports"), webkitGetAsEntry: () => ({ isDirectory: true, name: "Exports" }) },
+    { kind: "file", type: "application/pdf", getAsFile: () => pdf, webkitGetAsEntry: () => ({ isDirectory: false, name: "spec.pdf" }) },
+  ];
+  pasteOn(document.body, clipEx({ items, files: [new File([], "Exports"), pdf], text: "Exports\nspec.pdf" }));
+  await t$.waitFor(() => uploads().length === 1, { tries: 3000 });
+  assert.equal(uploads()[0].query.name, "spec.pdf");
+  const err = await t$.waitFor(() => $(root, ".composer-error"));
+  assert.match(err.textContent, /Exports:/);
+});
+
+test("image/svg+xml uploads as binary file instead of inline data URL", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  const Orig = globalThis.Image;
+  globalThis.Image = class {
+    naturalWidth = 100;
+    naturalHeight = 100;
+    set src(_) {
+      queueMicrotask(() => this.onload?.());
+    }
+  };
+  t.after(() => (globalThis.Image = Orig));
+  const { root } = mountComposer();
+  const svg = new File(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], "diagram.svg", { type: "image/svg+xml" });
+  paste(root, clipEx({ files: [svg] }));
+  await t$.waitFor(() => uploads().length === 1, { tries: 3000 });
+  assert.equal(uploads()[0].query.name, "diagram.svg");
+});
+
+test("pasting while status=stopping displays a clear refusal reason", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { root } = mountComposer({ status: "stopping" });
+  pasteOn(document.body, clipEx({ files: [new File(["x"], "a.pdf", { type: "application/pdf" })] }));
+  assert.equal(uploads().length, 0);
+  const err = await t$.waitFor(() => $(root, ".composer-error"));
+  assert.match(err.textContent, /Сейчас прикрепить нельзя|Can't attach right now/);
+});
+
+test("uploadOne falls back to sessionDir(sessionId) when activeId is null", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  echoUpload();
+  ui.store.sessions.value = [{ id: "ses_dir_test", directory: "/tmp/proj" }];
+  ui.store.setActiveId(null);
+  t.after(() => {
+    ui.store.sessions.value = [];
+    ui.store.setActiveId(null);
+  });
+  const { root } = mountComposer({ sessionId: "ses_dir_test" });
+  paste(root, clipEx({ files: [new File(["x"], "notes.txt", { type: "text/plain" })] }));
+  await t$.waitFor(() => uploads().length === 1, { tries: 3000 });
+  assert.equal(uploads()[0].query.directory, "/tmp/proj");
+});

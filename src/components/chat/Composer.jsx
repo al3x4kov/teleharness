@@ -16,13 +16,13 @@
 // voice mode, a HOLD is still the dictation above (FEAT-06.1 unchanged).
 import { useEffect, useRef, useState } from "preact/hooks";
 import Attachment from "./Attachment.jsx";
-import { active, activeSessionDir, cancelEdit, deleteUpload, editing, failedBubbleWith, loadDraft, prefs, providerCfg, saveDraft, sessions, uploadFile } from "../../lib/store.js";
+import { active, activeSessionDir, cancelEdit, deleteUpload, editing, failedBubbleWith, loadDraft, prefs, providerCfg, saveDraft, sessionDir, sessions, uploadFile } from "../../lib/store.js";
 import { bindingOf, isRunnerEngine, queuedSendLabel } from "../../lib/engine.js";
 import { PencilIcon } from "./TurnActions.jsx";
 import { createRecognizer, speechSupported } from "../../lib/voice.js";
 import { t } from "../../lib/i18n.js";
 // FEAT-01.88: вставка из буфера и перетаскивание — тот же путь, что у скрепки
-import { folderError, pasteAction, pastedFileName, pastedTextName } from "../../lib/paste-drop.js";
+import { folderError, hasBlockingOverlay, isEditableTarget, pasteAction, pastedFileName, pastedTextName } from "../../lib/paste-drop.js";
 
 const MAX_H = 154; // 6 lines + vertical padding, keep in sync with .composer-ta
 const MAX_FILES = 20;
@@ -108,11 +108,17 @@ function hasAlpha(ctx, w, h) {
   return false;
 }
 
+const INLINE_PASS_MIME = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+// SVG is uploaded as a binary file to .teleharness-uploads (vision APIs reject image/svg+xml).
+const isInlineImage = (file) => typeof file?.type === "string" && file.type.startsWith("image/") && file.type !== "image/svg+xml";
+// Deduplicate bubbling paste events between <textarea> and window.
+const handledPasteEvents = new WeakSet();
+
 async function processImage(file) {
   const original = await readAsDataURL(file);
   const img = await loadImage(original);
   const scale = Math.min(1, 1568 / Math.max(img.naturalWidth, img.naturalHeight));
-  if (scale === 1) return { url: original, mime: file.type || "image/png" }; // small enough as-is
+  if (scale === 1 && INLINE_PASS_MIME.has(file.type)) return { url: original, mime: file.type }; // small enough & standard raster
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
   const h = Math.max(1, Math.round(img.naturalHeight * scale));
   const canvas = document.createElement("canvas");
@@ -139,6 +145,10 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
   const taRef = useRef(null);
   const fileRef = useRef(null);
   const filesRef = useRef(files);
+  const reservedRef = useRef({ count: 0, bytes: 0, names: new Set() });
+  const statusRef = useRef(status);
+  const sessionIdRef = useRef(sessionId);
+  const pasteHandlerRef = useRef(null);
   const errTimer = useRef(0);
   const voiceOk = speechSupported(); // false on insecure origins: plain typing as before
   const voiceRef = useRef(voice);
@@ -149,8 +159,14 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
   const finTimer = useRef(0);
   const justVoice = useRef(false); // swallow the click that follows a voice release
   const aborters = useRef({}); // chip key -> abort() of its in-flight upload
-  filesRef.current = files;
+  statusRef.current = status;
+  sessionIdRef.current = sessionId;
   voiceRef.current = voice;
+  const setFilesSync = (updater) => {
+    const next = typeof updater === "function" ? updater(filesRef.current) : updater;
+    filesRef.current = next;
+    setFiles(next);
+  };
   // FEAT-01.57: «Изменить» — the last question in the field, the draft
   // typed before it comes back on «Отмена».
   const ed = editing.value?.sid === sessionId ? editing.value : null;
@@ -372,7 +388,7 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
 
   function clearFiles(list) {
     list.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
-    setFiles([]);
+    setFilesSync([]);
   }
 
   function submit() {
@@ -388,7 +404,7 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
     if (ed) {
       // FEAT-01.57: the edited text stays in the field until the server took
       // the revert; then the draft typed before «Изменить» comes back.
-      clearFiles(files);
+      clearFiles(filesRef.current);
       Promise.resolve(sent).then((ok) => {
         if (ok === false && editing.peek()) return;
         setText(draftBeforeEdit.current ?? "");
@@ -401,13 +417,13 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
     // или уже закрыт») возвращает текст, файлы и черновик; при отказе с пузырём
     // «Не отправлено» текст уже живёт в нём и в черновике (ISSUE-015).
     const keptText = text;
-    const keptFiles = files;
+    const keptFiles = filesRef.current;
     setText("");
-    setFiles([]);
+    setFilesSync([]);
     Promise.resolve(sent).then((ok) => {
       if (ok === false && !failedBubbleWith(sessionId, keptText.trim())) {
         setText((cur) => (cur === "" ? keptText : cur));
-        setFiles((cur) => (cur.length === 0 ? keptFiles : cur));
+        setFilesSync((cur) => (cur.length === 0 ? keptFiles : cur));
         saveDraft(sessionId, keptText);
         return;
       }
@@ -432,13 +448,14 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
   // read them with tools. Each chip carries a stable key: progress updates and
   // the outcome patch THAT chip (R-26 — a failed upload stays visibly marked,
   // × on an in-flight chip aborts it).
-  const patchFile = (key, patch) => setFiles((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
+  const patchFile = (key, patch) => setFilesSync((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
 
   async function uploadOne(file) {
     const key = nextKey();
     const temp = { key, filename: file.name, bytes: file.size, uploading: true, progress: null, mime: file.type || "application/octet-stream" };
-    setFiles((prev) => [...prev, temp]);
-    const dir = activeSessionDir() ?? "";
+    setFilesSync((prev) => [...prev, temp]);
+    const sid = sessionIdRef.current;
+    const dir = (sid ? sessionDir(sid) : null) ?? activeSessionDir() ?? "";
     try {
       const { name } = await uploadWithProgress(file, dir, {
         onProgress: (p) => patchFile(key, { progress: p }),
@@ -473,11 +490,14 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
       return;
     }
     const errs = [...preErrs];
-    const room = MAX_FILES - files.length;
+    const res = reservedRef.current;
+    const curFiles = filesRef.current;
+    const room = MAX_FILES - (curFiles.length + res.count);
     const batch = picked.slice(0, Math.max(0, room));
     if (picked.length > room) errs.push(t("composer.files.max", { count: MAX_FILES }));
-    let bytesSoFar = files.reduce((n, f) => n + (f.bytes ?? 0), 0);
+    let bytesSoFar = curFiles.reduce((n, f) => n + (f.bytes ?? 0), 0) + res.bytes;
 
+    const accepted = [];
     for (const file of batch) {
       if (file.size > MAX_FILE_BYTES) {
         errs.push(`${file.name}: ${t("composer.files.over100")}`);
@@ -488,39 +508,88 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
         continue;
       }
       bytesSoFar += file.size;
-      if ((file.type ?? "").startsWith("image/")) {
-        const key = nextKey();
-        let preview = null;
-        try {
-          preview = URL.createObjectURL(file);
-        } catch {
-          preview = null; // not a real Blob — the decode below fails and uploads it
+      accepted.push(file);
+    }
+
+    // Reserve count, bytes and filenames synchronously before the first await
+    // so rapid back-to-back pastes/drops see accurate quotas and unique names.
+    const pending = accepted.map((file) => ({ file, released: false }));
+    for (const item of pending) {
+      res.count += 1;
+      res.bytes += item.file.size;
+      res.names.add(item.file.name);
+    }
+    const release = (item) => {
+      if (item.released) return;
+      item.released = true;
+      res.count = Math.max(0, res.count - 1);
+      res.bytes = Math.max(0, res.bytes - item.file.size);
+      res.names.delete(item.file.name);
+    };
+
+    try {
+      for (const item of pending) {
+        const { file } = item;
+        if (isInlineImage(file)) {
+          const key = nextKey();
+          let preview = null;
+          try {
+            preview = URL.createObjectURL(file);
+          } catch {
+            preview = null; // not a real Blob — the decode below fails and uploads it
+          }
+          setFilesSync((prev) => [...prev, { key, mime: file.type, filename: file.name, bytes: file.size, preview, processing: true }]);
+          release(item);
+          try {
+            const { url, mime } = await processImage(file);
+            patchFile(key, { mime, url, processing: false });
+          } catch {
+            if (preview) URL.revokeObjectURL(preview);
+            setFilesSync((prev) => prev.filter((f) => f.key !== key));
+            await uploadOne(file); // undecodable "image": upload as binary
+          }
+          continue;
         }
-        setFiles((prev) => [...prev, { key, mime: file.type, filename: file.name, bytes: file.size, preview, processing: true }]);
-        try {
-          const { url, mime } = await processImage(file);
-          patchFile(key, { mime, url, processing: false });
-        } catch {
-          if (preview) URL.revokeObjectURL(preview);
-          setFiles((prev) => prev.filter((f) => f.key !== key));
-          await uploadOne(file); // undecodable "image": upload as binary
-        }
-        continue;
+        release(item);
+        await uploadOne(file); // sequential: gentle on the phone and the server
       }
-      await uploadOne(file); // sequential: gentle on the phone and the server
+    } finally {
+      for (const item of pending) release(item);
     }
     if (errs.length > 0) showError(errs.join(" · "));
   }
 
-  // FEAT-01.88: Ctrl/⌘+V. Безымянный снимок — «Снимок <время>.png»; длинный
-  // текст — файлом «Вставка <время>.txt»; обычный текст — поведение браузера.
-  function onPaste(e) {
+  function focusComposer() {
+    try {
+      taRef.current?.focus({ preventScroll: true });
+    } catch {
+      try {
+        taRef.current?.focus();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // Handle Ctrl/⌘+V on the composer textarea and on window (for unfocused
+  // file pastes in an open chat). Deduplicates bubbling events via WeakSet.
+  function handlePaste(e, { fromWindow = false } = {}) {
+    if (!e || handledPasteEvents.has(e)) return;
+    if (fromWindow) {
+      if (e.defaultPrevented || hasBlockingOverlay()) return;
+      if (e.target === taRef.current || isEditableTarget(e.target)) return;
+    }
     const act = pasteAction(e.clipboardData);
     if (act.kind === "default") return;
+    if (fromWindow && act.kind === "longText") return;
+    handledPasteEvents.add(e);
     e.preventDefault();
-    if (status === "stopping") return; // скрепка в этот момент тоже недоступна
+    if (statusRef.current === "stopping") {
+      showError(`${t("drop.blocked")}: ${t("drop.blockedHint")}`);
+      return;
+    }
     const now = new Date();
-    const taken = new Set(files.map((f) => f.filename));
+    const taken = new Set([...filesRef.current.map((f) => f.filename), ...reservedRef.current.names]);
     if (act.kind === "longText") {
       addFiles([new File([act.text], pastedTextName(now, taken), { type: "text/plain" })]);
       return;
@@ -528,23 +597,33 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
     const list = act.files.map((f) => {
       const name = pastedFileName(f, now, taken);
       taken.add(name);
-      return name === f.name ? f : new File([f], name, { type: f.type, lastModified: f.lastModified });
+      if (name === f.name) return f;
+      const opts = { type: f.type, ...(Number.isFinite(f.lastModified) ? { lastModified: f.lastModified } : {}) };
+      return new File([f], name, opts);
     });
-    addFiles(list);
+    addFiles(list, (act.folders ?? []).map(folderError));
+    if (fromWindow) focusComposer();
   }
 
-  // FEAT-01.88: доступ зоны перетаскивания (ChatView) — свежие замыкания на каждом рендере
+  function onPaste(e) {
+    handlePaste(e, { fromWindow: false });
+  }
+
+  pasteHandlerRef.current = (e) => handlePaste(e, { fromWindow: true });
+  useEffect(() => {
+    const onWinPaste = (e) => pasteHandlerRef.current?.(e);
+    window.addEventListener("paste", onWinPaste);
+    return () => window.removeEventListener("paste", onWinPaste);
+  }, []);
+
+  // Expose drop-zone API to ChatView with fresh closures on every render
   useEffect(() => {
     if (!filesApi) return;
     filesApi.current = {
       blocked: status === "stopping",
       add: (list, folders = []) => {
         addFiles(list, folders.map(folderError));
-        try {
-          taRef.current?.focus({ preventScroll: true });
-        } catch {
-          /* focus без опций — старые браузеры */
-        }
+        focusComposer();
       },
     };
   });
@@ -554,10 +633,9 @@ export default function Composer({ status = "idle", onSend, onStop, onStopHidden
 
   function removeFile(key) {
     aborters.current[key]?.(); // cancel an in-flight upload
-    // ISSUE-009: an already uploaded file goes too — no orphans in .teleharness-uploads.
-    const done = files.find((x) => x.key === key);
+    const done = filesRef.current.find((x) => x.key === key);
     if (done?.storedName) deleteUpload(done.dir, done.storedName);
-    setFiles((prev) => {
+    setFilesSync((prev) => {
       const f = prev.find((x) => x.key === key);
       if (f?.preview) URL.revokeObjectURL(f.preview);
       return prev.filter((x) => x.key !== key);

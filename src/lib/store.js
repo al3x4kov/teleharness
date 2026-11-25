@@ -47,6 +47,7 @@ export {
   providerError,
   removeUserProject,
   rewindBusy,
+  sessionDir,
   sessions,
   sessionsError,
   setActiveId,

@@ -33,7 +33,7 @@ codex --version              # (if using Codex)
 ## 2. Clone and build
 
 ```bash
-git clone --branch v2.8.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.8.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
