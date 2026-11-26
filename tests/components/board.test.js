@@ -307,7 +307,7 @@ test("кр. 8, P-8, P-14: меню «⋯» — отложить, закрепи�
   await t$.flush();
   t$.click($$(root, '[data-key="chat:w1"] .bd-menu [role=menuitem]').find((x) => x.textContent === "Остановить ход…"));
   await t$.flush();
-  const dlg = $(root, ".bd-dialog");
+  const dlg = $(document.body, ".bd-dialog") ?? $(root, ".bd-dialog");
   assert.equal($(dlg, "h2").textContent, "Остановить ход?");
   assert.match($(dlg, ".bd-dialog-text").textContent, /Фоновые агенты \(2\) тоже остановятся/);
   assert.equal(fetchCalls.filter((c) => c.path.endsWith("/abort")).length, 0);

@@ -1,6 +1,7 @@
 // Menu: общее для бокового меню (FEAT-09.20) — сигнал открытия, кнопка ☰
 // в шапках экранов и знак teleharness. Отдельный модуль: экраны импортируют кнопку,
 // а Drawer импортирует chatTitle из HomeView — без цикла импортов.
+import { useEffect, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { t } from "../lib/i18n.js";
 import { boardCount } from "../lib/attention.js"; // FEAT-20.2
@@ -38,11 +39,30 @@ export function TeleharnessMark({ size = 40 }) {
   );
 }
 
+function isDesktopMenuViewport() {
+  return typeof window !== "undefined" && Number(window.innerWidth) >= 900;
+}
+
 export function MenuButton() {
   const c = boardCount.value;
+  const [desktop, setDesktop] = useState(isDesktopMenuViewport);
+  useEffect(() => {
+    const update = () => setDesktop(isDesktopMenuViewport());
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
   return (
-    <button class="icon-btn menu-btn float-btn" type="button" aria-label={c ? `${t("menu.menu")}, ${c.label}` : t("menu.menu")} aria-haspopup="dialog"
-      aria-expanded={drawerOpen.value ? "true" : "false"} onClick={openDrawer} style={c ? { position: "relative" } : undefined}>
+    <button
+      class="icon-btn menu-btn float-btn"
+      type="button"
+      aria-label={c ? `${t("menu.menu")}, ${c.label}` : t("menu.menu")}
+      aria-haspopup="dialog"
+      aria-expanded={drawerOpen.value ? "true" : "false"}
+      aria-hidden={desktop ? "true" : undefined}
+      tabIndex={desktop ? -1 : undefined}
+      onClick={openDrawer}
+      style={c ? { position: "relative" } : undefined}
+    >
       <Svg><path d="M4 7h16" /><path d="M4 12h12" /><path d="M4 17h8" /></Svg>
       {c && <span class={"menu-badge" + (c.kind === "failed" ? " is-failed" : "")} aria-hidden="true">{c.kind === "failed" ? "!" : c.text}</span>}
     </button>

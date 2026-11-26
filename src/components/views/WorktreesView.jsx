@@ -8,6 +8,7 @@ import { setNotice } from "../../lib/store.js";
 import { t } from "../../lib/i18n.js";
 import { aheadLine, filesWord, fmtBytes, shortBranch, wtApi, wtTick } from "../../lib/worktree-client.js";
 import { BranchIcon } from "../chat/Worktree.jsx";
+import { Modal } from "./HomeView.jsx";
 import "../worktree.css";
 
 function stateWord(it) {
@@ -26,6 +27,8 @@ export default function WorktreesView() {
   const [error, setError] = useState(null);
   const [settings, setSettings] = useState(null);
   const [testCmd, setTestCmd] = useState("");
+  const [confirmBranch, setConfirmBranch] = useState(null);
+  const [deletingBranch, setDeletingBranch] = useState(false);
   const load = async () => {
     try {
       const r = await wtApi.ofRepo(dir);
@@ -47,6 +50,19 @@ export default function WorktreesView() {
       setSettings(await wtApi.saveSettings(patch));
     } catch (err) {
       setNotice(err?.message ?? t("worktree.view.saveFailed"));
+    }
+  };
+  const doDeleteBranch = async () => {
+    if (!confirmBranch || deletingBranch) return;
+    setDeletingBranch(true);
+    try {
+      await wtApi.deleteBranch(dir, confirmBranch);
+      setConfirmBranch(null);
+      await load();
+    } catch (err) {
+      setNotice(err?.message ?? t("worktree.view.deleteBranchFailed"));
+    } finally {
+      setDeletingBranch(false);
     }
   };
   return (
@@ -78,7 +94,7 @@ export default function WorktreesView() {
               {(it.overlaps ?? []).length ? <div class="wt-muted">{t("worktree.view.overlaps", { list: it.overlaps.map((o) => (o.kind === "main" ? t("worktree.view.mainCopyLower") : o.kind === "base" ? it.base : `«${o.title ?? o.branch}»`) + ` (${o.files.length})`).join(", ") })}</div> : null}
               <div class="wt-card-actions">
                 {it.sid ? <button type="button" class="btn" onClick={() => navigate(`/chat/${it.sid}`)}>{t("worktree.view.openChat")}</button> : null}
-                {it.runId ? <button type="button" class="btn" onClick={() => navigate(`/temporal/runs/${encodeURIComponent(it.runId)}`)}>{t("worktree.view.openRun")}</button> : null}
+                {it.runId ? <button type="button" class="btn" onClick={() => navigate(`/temporal/run/${encodeURIComponent(it.runId)}`)}>{t("worktree.view.openRun")}</button> : null}
               </div>
             </div>
           );
@@ -91,15 +107,7 @@ export default function WorktreesView() {
                 <div class="wt-branch"><BranchIcon size={14} /><span class="wt-branch-name" title={b.name}>{shortBranch(b.name, 40)}</span></div>
                 <div class="wt-muted">{b.subject}</div>
                 <div class="wt-card-actions">
-                  <button type="button" class="btn is-danger-outline" onClick={async () => {
-                    if (!confirm(t("worktree.view.confirmDeleteBranch", { name: b.name }))) return;
-                    try {
-                      await wtApi.deleteBranch(dir, b.name);
-                      await load();
-                    } catch (err) {
-                      setNotice(err?.message ?? t("worktree.view.deleteBranchFailed"));
-                    }
-                  }}>{t("worktree.view.deleteBranch")}</button>
+                  <button type="button" class="btn is-danger-outline" onClick={() => setConfirmBranch(b.name)}>{t("worktree.view.deleteBranch")}</button>
                 </div>
               </div>
             ))}
@@ -137,6 +145,17 @@ export default function WorktreesView() {
           </div>
         ) : null}
       </div>
+      {confirmBranch ? (
+        <Modal title={t("worktree.view.deleteBranchTitle")} onClose={() => !deletingBranch && setConfirmBranch(null)}>
+          <p class="modal-body">
+            {t("worktree.view.deleteBranchLead")} <code>{confirmBranch}</code>? {t("worktree.view.deleteBranchNote")}
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="btn" disabled={deletingBranch} onClick={() => setConfirmBranch(null)}>{t("common.cancel")}</button>
+            <button type="button" class="btn-danger" disabled={deletingBranch} onClick={doDeleteBranch}>{deletingBranch ? t("worktree.view.deletingBranch") : t("worktree.view.deleteBranch")}</button>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

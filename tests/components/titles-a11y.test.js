@@ -169,7 +169,7 @@ test("BUG-01.19: 404 истории (чат удалён) → «Чат не на
   const { errors, rejections } = await watchConsole(async () => {
     chatRoutes({ list: [], msgStatus: 404 });
     const { root } = t$.mount(ui.ChatView, { id: SID });
-    await t$.waitFor(() => byText(root, "h2.hero", "Чат не найден"));
+    await t$.waitFor(() => byText(root, "h1.hero", "Чат не найден"));
     t$.cleanup();
   });
   assert.deepEqual(errors, []);
@@ -199,13 +199,13 @@ test("BUG-01.19: открытие удалённого чата по ссылк�
   chatRoutes({ list: [ses("ses_other", "Другой")], msgStatus: 404 });
   ui.store.sessions.value = [];
   const { root } = t$.mount(ui.ChatView, { id: SID });
-  await t$.waitFor(() => byText(root, "h2.hero", "Чат не найден"));
+  await t$.waitFor(() => byText(root, "h1.hero", "Чат не найден"));
   assert.deepEqual(historyAsks(), [], "GET …/message не было");
   // resync/idle по SSE тоже не переспрашивает историю удалённого чата
   await ui.store.resync();
   await t$.flush(10);
   assert.deepEqual(historyAsks(), []);
-  assert.equal(!!byText(root, "h2.hero", "Чат не найден"), true);
+  assert.equal(!!byText(root, "h1.hero", "Чат не найден"), true);
 });
 
 test("BUG-01.19: чат, которого ещё нет в локальном списке (создан в другой вкладке), — список обновляется, история грузится", async () => {

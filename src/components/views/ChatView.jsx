@@ -240,6 +240,9 @@ export default function ChatView({ id }) {
       }
     : null;
 
+  // Avoid requesting /worktrees for missing chats before history/list confirms existence.
+  const wtReady = !notFound && (Boolean(known) || (Boolean(mine) && !mine.loading && !mine.loadError));
+
   return (
     <div class="chat" ref={chatRef}>
       <DropZone targetRef={chatRef} filesApi={filesApi} />
@@ -252,9 +255,13 @@ export default function ChatView({ id }) {
           <MenuButton />
         )}
         <div class="chat-heading">
-          <h1 class="chat-title">{titleReady && !notFound ? title : " "}</h1>
+          {notFound ? (
+            <div class="chat-title" aria-hidden="true">{"\u00a0"}</div>
+          ) : (
+            <h1 class="chat-title">{titleReady ? title : "\u00a0"}</h1>
+          )}
           {notFound ? null : <div class="chat-sub">{(titleReady && subline) || "…"}</div>}
-          {notFound ? null : <WorktreeHeaderPill sessionId={id} onOpen={() => setWtSheet(true)} />}
+          {wtReady ? <WorktreeHeaderPill sessionId={id} onOpen={() => setWtSheet(true)} /> : null}
         </div>
         {/* FEAT-01.69: справа только «⋯» (по требованию — только меню).
             «Стоп» хода живёт в композере; когда там вместо него «Отправить»
@@ -296,7 +303,7 @@ export default function ChatView({ id }) {
               </div>
             ) : mine.loadError && !known ? (
               <>
-                <h2 class="hero">{t("chat.notFound.title")}</h2>
+                <h1 class="hero">{t("chat.notFound.title")}</h1>
                 <p class="hint">{t("chat.notFound.text")}</p>
                 <button class="btn-primary empty-cta" type="button" onClick={() => navigate("/")}>
                   {t("chat.notFound.back")}
@@ -403,7 +410,7 @@ export default function ChatView({ id }) {
           <DialogBar key={activeDialog.id} dialog={activeDialog} queue={queuedDialogs.length} />
         )}
         {/* FEAT-20.7: создание копии, её ошибки и пересечения — над композером */}
-        {notFound || activeDialog ? null : <WorktreeBand sessionId={id} busy={busy} directory={known?.directory ?? null} />}
+        {!wtReady || activeDialog ? null : <WorktreeBand sessionId={id} busy={busy} directory={known?.directory ?? null} />}
         {notFound ? null : (
           <footer class="composer">
             {!hasMessages && !reverted && mine && !mine.loading ? <WorktreeChip sessionId={id} /> : null}

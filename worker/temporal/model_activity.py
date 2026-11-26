@@ -24,22 +24,73 @@ def _import_psycopg():
     return psycopg
 
 
+class CancelSignal:
+    """Thread-safe socket cancellation handle for blocking Unix-socket calls."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._sock = None
+
+    @property
+    def cancelled(self):
+        return self._cancelled
+
+    def attach(self, sock):
+        with self._lock:
+            if self._cancelled:
+                _close_socket(sock)
+                raise InterruptedError("Portal call cancelled")
+            self._sock = sock
+
+    def detach(self):
+        with self._lock:
+            self._sock = None
+
+    def cancel(self):
+        with self._lock:
+            self._cancelled = True
+            sock = self._sock
+            self._sock = None
+        if sock is not None:
+            _close_socket(sock)
+
+
+def _close_socket(sock):
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        sock.close()
+    except OSError:
+        pass
+
+
 class PortalConnection(http.client.HTTPConnection):
+    def __init__(self, *args, cancel_signal=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._cancel_signal = cancel_signal
+
     def connect(self):
-        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.sock.settimeout(self.timeout)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(self.timeout)
         sock_path = os.environ.get("TELEHARNESS_TEMPORAL_MODEL_SOCKET")
         if not sock_path:
+            sock.close()
             raise KeyError("TELEHARNESS_TEMPORAL_MODEL_SOCKET")
+        if self._cancel_signal is not None:
+            self._cancel_signal.attach(sock)
+        self.sock = sock
         self.sock.connect(sock_path)
 
 
-def portal(action, request, deadline_ms=None):
+def portal(action, request, deadline_ms=None, cancel_signal=None):
     remaining = (deadline_ms / 1000 - time.time()) if deadline_ms else 30
     if remaining <= 0:
         raise TimeoutError("Activity deadline elapsed")
     max_timeout = 86400 if action == "step" else 3600
-    conn = PortalConnection("localhost", timeout=min(max_timeout, remaining))
+    conn = PortalConnection("localhost", timeout=min(max_timeout, remaining), cancel_signal=cancel_signal)
     headers = {"Content-Type": "application/json"}
     if deadline_ms:
         headers["X-Teleharness-Deadline-Ms"] = str(deadline_ms)
@@ -66,6 +117,8 @@ def portal(action, request, deadline_ms=None):
             raise ValueError('Oversized portal response')
         return json.loads(data)
     finally:
+        if cancel_signal is not None:
+            cancel_signal.detach()
         conn.close()
 
 
@@ -306,16 +359,18 @@ async def portal_step_command(step_id: str) -> dict:
     if not isinstance(step_id, str) or not step_id:
         raise ApplicationError("Invalid command step id", type="InvalidPortalCommand", non_retryable=True)
     deadline_ms = int((info.started_time + info.start_to_close_timeout).timestamp() * 1000)
-    hb_interval = min(10.0, info.heartbeat_timeout.total_seconds() / 3.0) if info.heartbeat_timeout else 10.0
+    hb_interval = min(2.0, info.heartbeat_timeout.total_seconds() / 3.0) if info.heartbeat_timeout else 2.0
     hb_interval = max(0.2, hb_interval)
     request = {"workflowId": info.workflow_id, "stepId": step_id}
-    task = asyncio.create_task(asyncio.to_thread(portal, "step", request, deadline_ms))
+    cancel_signal = CancelSignal()
+    task = asyncio.create_task(asyncio.to_thread(portal, "step", request, deadline_ms, cancel_signal))
     try:
         while not task.done():
             activity.heartbeat()
             await asyncio.wait({task}, timeout=hb_interval)
         reply = task.result()
     except asyncio.CancelledError:
+        cancel_signal.cancel()
         task.cancel()
         raise
     if not isinstance(reply, dict):

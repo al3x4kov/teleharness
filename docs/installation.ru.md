@@ -56,10 +56,10 @@ git --version     # 2.20 или новее
 
 ## 2. Установка и сборка портала
 
-Клонируйте релизный тег (`v2.8.2`), поставьте dev-зависимости сборки, соберите фронтенд и создайте `.env`:
+Клонируйте релизный тег (`v2.12.0`), поставьте dev-зависимости сборки, соберите фронтенд и создайте `.env`:
 
 ```bash
-git clone --branch v2.8.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.12.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
@@ -69,7 +69,7 @@ cp .env.example .env
 В Windows PowerShell:
 
 ```powershell
-git clone --branch v2.8.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.12.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 $env:TELEHARNESS_BUILD_PROD = "1"; npm run build
@@ -176,7 +176,7 @@ Ollama/LM Studio), субагентам `oh-my-opencode-slim` и скиллам.
    ```bash
    curl -s http://127.0.0.1:4170/teleharness/healthz
    ```
-   В ответе должно быть `"ok":true` и `"version":"2.8.2"`.
+   В ответе должно быть `"ok":true` и `"version":"2.12.0"`.
 
 ---
 
@@ -392,7 +392,7 @@ python3 -m venv ~/.teleharness/voice/venv
 
 После запуска пробегитесь по этим пунктам:
 
-- [ ] **Healthz:** `curl -s http://127.0.0.1:4170/teleharness/healthz` возвращает `{"ok":true,"version":"2.8.2",...}`.
+- [ ] **Healthz:** `curl -s http://127.0.0.1:4170/teleharness/healthz` возвращает `{"ok":true,"version":"2.12.0",...}`.
 - [ ] **Движки:** в **Новый чат → выбор модели** видны модели всех подключённых вами движков (Claude / OpenCode / Codex / ACP).
 - [ ] **Поиск:** строка поиска на главном экране находит сообщения (значит, активен встроенный SQLite FTS5 в Node ≥ 22.5).
 - [ ] **Git и Worktrees:** в проекте с git-репозиторием вкладка **Git** показывает диффы, а **Worktrees** создаёт изолированную ветку.

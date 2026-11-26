@@ -11,15 +11,28 @@ import { runHref } from "./RunsList.jsx";
 
 export default function StartRun({ definitionId, capabilities, initialVersion = Number(hashQuery().get("v")) || null }) {
   const [pipes, setPipes] = useState(null), [record, setRecord] = useState(null), [error, setError] = useState(null);
+  const [commands, setCommands] = useState(null);
   const [pick, setPick] = useState(definitionId ?? ""), [version, setVersion] = useState(initialVersion);
   const [busy, setBusy] = useState(false), [startError, setStartError] = useState(""), [done, setDone] = useState(null);
   const [values, setValues] = useState({}), [tried, setTried] = useState(false); // FEAT-19.16: run inputs
   const requestId = useRef(crypto.randomUUID());
-  useEffect(() => { api.temporalDefinitions().then(setPipes, setError); }, []);
   useEffect(() => {
-    if (!pick) { setRecord(null); return; }
+    api.temporalDefinitions().then(setPipes, setError);
+    api.temporalCommands?.().then((r) => setCommands(r?.items ?? []), () => setCommands(null));
+  }, []);
+  useEffect(() => {
+    if (!pick) { setRecord(null); return undefined; }
+    let alive = true;
     setRecord(null);
-    api.temporalDefinition(pick).then((r) => { setRecord(r); setVersion((v) => (r.versions.some((x) => x.version === v) ? v : r.versions.at(-1)?.version ?? null)); }, setError);
+    api.temporalDefinition(pick).then(
+      (r) => {
+        if (!alive) return;
+        setRecord(r);
+        setVersion((v) => (r.versions.some((x) => x.version === v) ? v : r.versions.at(-1)?.version ?? null));
+      },
+      (e) => { if (alive) setError(e); },
+    );
+    return () => { alive = false; };
   }, [pick]);
   useEffect(() => { requestId.current = crypto.randomUUID(); setStartError(""); }, [pick, version]);
 
@@ -36,7 +49,7 @@ export default function StartRun({ definitionId, capabilities, initialVersion = 
       <p>{t("temporal.start.acceptedText", { name: record?.draft?.name ?? record?.versions?.at(-1)?.definition?.name, version: done.version })}</p></Empty>;
   }
   const v = record?.versions.find((x) => x.version === version);
-  const reasons = v ? unsupportedReasons(v.definition, capabilities?.subscriptionModels, { ledger: capabilities?.ledger }) : [];
+  const reasons = v ? unsupportedReasons(v.definition, capabilities?.subscriptionModels, { ledger: capabilities?.ledger, ...(commands != null ? { commands } : {}) }) : [];
   const declared = v?.definition.inputs ?? [];
   const missing = declared.filter((i) => i.required && i.type !== "boolean" && !String(values[i.name] ?? "").trim());
   const setValue = (name, value) => { setValues((x) => ({ ...x, [name]: value })); requestId.current = crypto.randomUUID(); };
@@ -44,7 +57,15 @@ export default function StartRun({ definitionId, capabilities, initialVersion = 
     setBusy(true); setStartError("");
     setTried(true);
     if (missing.length) { setBusy(false); return; }
-    const inputs = Object.fromEntries((v.definition.inputs ?? []).filter((i) => values[i.name] !== undefined && values[i.name] !== "").map((i) => [i.name, values[i.name]]));
+    const entries = [];
+    for (const i of v.definition.inputs ?? []) {
+      if (i.type === "boolean") {
+        if (i.required || i.name in values) entries.push([i.name, values[i.name] === true]);
+      } else if (values[i.name] !== undefined && values[i.name] !== "") {
+        entries.push([i.name, values[i.name]]);
+      }
+    }
+    const inputs = Object.fromEntries(entries);
     try { setDone(await api.temporalStart({ definitionId: record.id, version, requestId: requestId.current, ...(Object.keys(inputs).length ? { inputs } : {}) })); }
     catch (e) { setStartError(errorText(e)); }
     finally { setBusy(false); }

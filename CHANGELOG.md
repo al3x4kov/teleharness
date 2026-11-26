@@ -6,6 +6,30 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.12.0] — 2026-11-27
+
+Desktop-first README & refreshed v2.12.0 architecture diagrams, Temporal pipeline hardening and cancellation, UI accessibility & layout polish, and full demo/mock route parity.
+
+### Added
+- **Temporal schedule & trigger management.** Delete schedules directly from the Schedules tab (including schedules whose pipe was deleted), create new GitHub triggers from a non-empty Triggers list via the *+ New trigger* button, and rotate webhook secrets or delete triggers with confirmation sheets directly from the trigger card.
+- **Worktrees branch deletion modal.** Replacing browser `confirm()` with an in-app confirmation modal in the Worktrees view.
+- **English architecture layers diagram.** Added an up-to-date English `docs/architecture-layers.svg` / `.png` alongside `docs/architecture-layers.ru.svg` / `.png` covering all four engine families (OpenCode 2.x, Claude Code, Codex, ACP) and Temporal pipelines.
+
+### Changed
+- **Desktop-first README & positioning.** Shifted `README.md`, `README.ru.md`, repository description, and topics toward the desktop web control room with desktop screenshots up front, presenting the mobile web / PWA view as an optional companion.
+- **Temporal pipeline ergonomics & safety.**
+  - Propagated Temporal activity cancellation through the Unix-socket model bridge (`CancelSignal` + `AbortSignal`) so canceled Command steps stop immediately instead of running to timeout.
+  - Added non-admin engine selector and rollback-on-failure in the trigger creation wizard, fixed `nightly-deps` schedule defaults (`overlap: "skip"`, `catchupSeconds: 3600`) and `step.repo` wiring for `pull_request` steps.
+  - Enforced per-user command allowlists on schedule creation/listing/resume and run resume, blocked non-admin users from enabling or triggering Claude-step workflows via explicit versions, and redacted host filesystem paths on outside-root command outputs for non-admin users.
+  - Fixed `workflowId` route regex to accept underscores (`_`), fixed `RUNNING` workflow describe after Temporal Reset not showing stale failures, added human-readable duration formatting on External Workflows, and serialized Definition Editor save-before-publish.
+- **UI accessibility & layout fixes.**
+  - Fixed desktop sidebar footer overlapping the *"Show all"* link at 1280×800 and ensured all navigation views expose exactly one `<h1>` (including Chat not-found, External Workflows, Triggers, and New Schedule).
+  - Set `inert` and `aria-hidden` on the closed mobile drawer so off-screen focusable controls are excluded from Tab order.
+  - Portaled Board confirmation dialogs to `document.body`, prevented `Sheet` Escape handlers from using stale closures, and updated `ExternalWorkflowsList` cards with explicit accessible labels.
+- **API hardening & mock/demo parity.**
+  - Added malformed URI validation (`400` instead of `500`) on review routes, body size limit (`413`) and invalid JSON handling (`400`) on `/api/auth/pair/claim`, prevented `PATCH /api/session/:id` from mutating local title cache on upstream `404`, and returned `404` for unknown chat IDs in non-admin cost queries.
+  - Completed `TELEHARNESS_MOCK=1` / demo-mode coverage across SPA routes (`/api/attention`, `/api/claude/agents`, `/api/github/connection`, `/api/me/pins`, `/api/push/key`, `/api/voice`, `/api/acp/catalog`, `/api/admin/users`, `POST/PATCH/DELETE /api/session`) and updated mock `opencodeVersion` to `2.2.6`.
+
 ## [2.10.0] — 2026-11-26
 
 ### Added

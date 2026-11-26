@@ -1,7 +1,7 @@
 # Full Installation Guide
 
 This guide walks through setting up **Teleharness** with **every feature enabled** — from the core
-mobile-first web portal to all four coding agent engine families, MCP & Skills, Git worktrees,
+desktop web control room (with optional mobile PWA) to all four coding agent engine families, MCP & Skills, Git worktrees,
 client-side Office/PPTX preview, HTTPS/PWA & Web Push, GitHub Background Agents, Temporal durable
 pipelines, Obsidian memory, local CPU voice, and multi-user isolation.
 
@@ -55,11 +55,11 @@ git --version     # 2.20 or newer
 
 ## 2. Install & build the portal
 
-Clone the latest release tag (`v2.8.2`), install dev build dependencies, build the production frontend
+Clone the latest release tag (`v2.12.0`), install dev build dependencies, build the production frontend
 bundle, and create `.env`:
 
 ```bash
-git clone --branch v2.8.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.12.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
@@ -69,7 +69,7 @@ cp .env.example .env
 On Windows PowerShell:
 
 ```powershell
-git clone --branch v2.8.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.12.0 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 $env:TELEHARNESS_BUILD_PROD = "1"; npm run build
@@ -175,7 +175,7 @@ initial login token to **`data/admin-token.txt`**.
    ```bash
    curl -s http://127.0.0.1:4170/teleharness/healthz
    ```
-   Expected response includes `"ok":true` and `"version":"2.8.2"`.
+   Expected response includes `"ok":true` and `"version":"2.12.0"`.
 
 ---
 
@@ -390,7 +390,7 @@ Register scheduled tasks (LogonType `S4U` or at startup) running:
 
 Run through this quick checklist after installation:
 
-- [ ] **Health:** `curl -s http://127.0.0.1:4170/teleharness/healthz` returns `{"ok":true,"version":"2.8.2",...}`.
+- [ ] **Health:** `curl -s http://127.0.0.1:4170/teleharness/healthz` returns `{"ok":true,"version":"2.12.0",...}`.
 - [ ] **Engines:** open **New chat → Model picker** and confirm every engine you installed (Claude / OpenCode / Codex / ACP) lists models.
 - [ ] **Search:** type a keyword in the Home search bar (confirms Node ≥ 22.5 `node:sqlite` FTS5 is active).
 - [ ] **Git & Worktrees:** open a git repository project → **Git** tab shows status/diffs; **Worktrees** tab creates a clean isolated branch.

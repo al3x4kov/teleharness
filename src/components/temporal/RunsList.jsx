@@ -7,7 +7,7 @@ import { navigate } from "../../lib/router.js";
 import { me } from "../../lib/store.js";
 import { Banner, Empty, KINDS, RunStatus, Skeleton, errorText, prNumber, prOutcome, sourceText, usePoll, useNow, when, duration } from "./ui.jsx";
 
-const RUNNING = ["run", "quota", "paused", "queued", "github"];
+const RUNNING = ["run", "quota", "slot", "paused", "queued", "github"];
 const ACTIVE = new Set(["wait", ...RUNNING]);
 const FILTERS = [
   ["all", () => true],

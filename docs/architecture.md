@@ -50,60 +50,50 @@ edge-сервер `ops/portal-server.js` на :80/:443.
 
 ```mermaid
 flowchart LR
-  subgraph Клиенты
-    B["Браузер / iPhone<br/>SPA public/app.js"]
+  subgraph Clients["Клиенты"]
+    B["Браузер (десктоп / мобильный PWA)<br/>SPA public/app.js"]
   end
-  subgraph Edge["ops/portal-server.js — задача teleharness-portal"]
+  subgraph Edge["ops/portal-server.js — edge HTTPS"]
     E80[":80 http<br/>/teleharness* → 308 https<br/>кроме /teleharness/ca.pem"]
-    E443[":443 https (mkcert)"]
-    ST["статика: allow-list<br/>только D:\Apps\tv"]
+    E443[":443 https (TLS / mkcert)"]
   end
-  subgraph Portal["server.js 127.0.0.1:4170 — задача teleharness-web"]
-    API["handleApi()<br/>/teleharness/api/*"]
+  subgraph Portal["server.js 127.0.0.1:4170 — портал"]
+    API["routes/* &amp; handleApi()<br/>/teleharness/api/*"]
     CFG["lib/config.js<br/>env-схема, fail-fast"]
     POL["lib/policy.js<br/>агенты/движки тенанта, редакция"]
     LOG["lib/accesslog.js<br/>data/logs/access-*.log"]
     AUTH["lib/auth.js<br/>sid-кука → пользователь, скоуп"]
     HUB["EventHub (lib/hub.js)<br/>SSE fan-out + watchdog"]
-    CR["ClaudeRunner (lib/claude.js)"]
+    CR["CLI-раннеры<br/>Claude · Codex · ACP"]
     BS["BindingStore (lib/binding.js)"]
     STA["lib/static.js → public/"]
   end
-  OC["opencode serve 2.2.6<br/>127.0.0.1:4196<br/>задача teleharness-opencode-v2<br/>зона D:\Apps\teleharness-oc2"]
-  OCS["opencode serve стенда v2<br/>127.0.0.1:4101<br/>D:\th-stage\oc2"]
-  CLI["claude.exe -p …<br/>stream-json, cwd = каталог чата"]
-  TELEHARNESS["api.z.ai<br/>квота Coding Plan"]
-  TV["TV API 127.0.0.1:8099"]
-  DATA[("data/*.json")]
-  STAND["Стенд server.js<br/>127.0.0.1:4172<br/>D:\th-stage"]
-  WD["watchdog (каждые 2 мин)<br/>D:\Apps\watchdog.ps1"]
+  OC["opencode serve 2.2.6<br/>127.0.0.1:4196<br/>lib/oc-client.js (v2, Basic)"]
+  CLI["claude / codex / ACP CLI<br/>cwd = каталог чата"]
+  TMP["Temporal (опц., Linux/macOS)<br/>server · Python worker · PostgreSQL / local"]
+  QUOTA["API провайдеров<br/>квоты подписок"]
+  DATA[("data/*.json + SQLite<br/>FTS5 поиск · доска · расходы")]
 
   B -- HTTPS --> E443
   B -- HTTP --> E80
-  E80 --> ST
   E443 -- "/teleharness/*" --> API
-  E443 -- "/tv/api/*" --> TV
-  E443 --> ST
   API --> AUTH
   API --> POL
   API --> LOG
   CFG -.-> API
-  API -- "адаптер lib/oc-client.js (TELEHARNESS_OC_API=v2, Basic)" --> OC
-  HUB -- "поток событий opencode (адаптер)" --> OC
+  API -- "REST (TELEHARNESS_OC_API=v2)" --> OC
+  HUB -- "поток событий opencode" --> OC
   API -- "SSE /teleharness/api/event" --> HUB
-  API -- prompt (engine=claude) --> CR
-  CR -- spawn --> CLI
+  API -- "prompt (claude/codex/acp)" --> CR
+  CR -- spawn / JSON-RPC --> CLI
   CR -- emit() --> HUB
+  API -- "запуски · мост моделей" --> TMP
   API --> BS
   API --> STA
-  API -- "/usage" --> TELEHARNESS
+  API -- "/usage" --> QUOTA
   AUTH --> DATA
   BS --> DATA
   CR --> DATA
-  STAND -- "тот же код, свой data/public,<br/>свой upstream (1.7.0, ADR-003)" --> OCS
-  WD -. "порты 80/443/4170/4196" .-> Edge
-  WD -.-> Portal
-  WD -.-> OC
 ```
 
 ### 1.2. Границы и доверие

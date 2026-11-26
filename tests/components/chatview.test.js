@@ -47,7 +47,7 @@ const bottomText = (root) => $(root, ".chat-bottom")?.textContent ?? "";
 test("чат, которого нет в списке, + 404 истории → «Чат не найден» и «К чатам»", async () => {
   routes({ list: [] });
   const { root } = t$.mount(ui.ChatView, { id: "ses_gone" });
-  const hero = await t$.waitFor(() => byText(root, "h2.hero", "Чат не найден"));
+  const hero = await t$.waitFor(() => byText(root, "h1.hero", "Чат не найден"));
   assert.equal(!!hero, true);
   assert.equal(!!byText(root, "button.empty-cta", "К чатам"), true);
 });

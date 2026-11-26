@@ -52,7 +52,7 @@ test("BUG-101: «Чат не найден» — нет композера, по�
     { method: "GET", path: /\/teleharness\/api\/session\/[^/]+\/message$/, reply: () => ({ status: 404, body: { error: "not found" } }) },
   ]);
   const { root } = t$.mount(ui.ChatView, { id: "ses_nonexistent000000000000" });
-  await t$.waitFor(() => byText(root, "h2.hero", "Чат не найден"));
+  await t$.waitFor(() => byText(root, "h1.hero", "Чат не найден"));
   await t$.flush(3);
   assert.equal(!!$(root, "footer.composer"), false, "композера нет — писать некуда");
   assert.equal(!!$(root, "textarea"), false, "поля ввода нет");

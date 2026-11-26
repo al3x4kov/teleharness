@@ -3,7 +3,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
 import { t } from "../../lib/i18n.js";
 import { navigate } from "../../lib/router.js";
-import { Banner, Empty, Sheet, Skeleton, StatusPill, errorText, useNow, when } from "./ui.jsx";
+import { Banner, Empty, Sheet, Skeleton, StatusPill, errorText, formatDurationStr, useNow, when } from "./ui.jsx";
 
 const STATUS_KEYS = [
   ["", "temporal.ext.st.all"],
@@ -179,7 +179,7 @@ export default function ExternalWorkflowsList() {
     <div class="t-stack" data-testid="external-workflows-list">
       <div class="t-head-row t-ext-head">
         <div>
-          <h2 class="t-h2">{t("temporal.ext.title")}</h2>
+          <h1>{t("temporal.ext.title")}</h1>
           <p class="t-muted t-small">
             {data ? `${data.namespace} @ ${data.address}` : t("temporal.ext.subtitle")}
           </p>
@@ -311,6 +311,7 @@ export default function ExternalWorkflowsList() {
               key={`${item.workflowId}:${item.runId}`}
               class="t-card t-ext-row"
               href={detailHref(item)}
+              aria-label={`${item.workflowType || "Workflow"} · ${item.workflowId}${item.status ? " · " + item.status : ""}`}
               data-testid={`ext-wf-${item.workflowId}`}
             >
               <div class="t-ext-row-main">
@@ -327,7 +328,7 @@ export default function ExternalWorkflowsList() {
               </div>
               <div class="t-ext-row-right">
                 <span class="t-meta">{when(item.startTime, now)}</span>
-                {item.executionDuration && <span class="t-meta t-mono">{item.executionDuration}</span>}
+                {item.executionDuration && <span class="t-meta t-mono">{formatDurationStr(item.executionDuration)}</span>}
               </div>
             </a>
           ))}

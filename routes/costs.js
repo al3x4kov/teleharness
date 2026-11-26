@@ -129,8 +129,10 @@ export function costRoutes(deps) {
         if (sid === null) return sendJson(ctx.res, 400, { error: "bad_id" });
         if (!SID_RE.test(sid)) return sendJson(ctx.res, 400, { error: "bad sid" });
         if (!ownsAll(ctx, "sid = ? OR parent_sid = ?", [sid, sid])) return sendJson(ctx.res, 403, DENY);
-        if (!ctx.admin && deps.chatAllowed && !(await deps.chatAllowed(ctx.user, sid))) return sendJson(ctx.res, 403, DENY);
+        const access = !ctx.admin && deps.chatAllowed ? await deps.chatAllowed(ctx.user, sid) : true;
+        if (!access) return sendJson(ctx.res, 403, DENY);
         const out = reports.chat(sid);
+        if (access === "missing" && !(out?.turns > 0)) return sendJson(ctx.res, 404, { error: "not found" });
         const month = resolvePeriod({ period: "month" }, ledger.tz(), now()).month;
         out.banner = ledger.pendingBanner(ctx.user.id, month);
         out.tz = ledger.tz();

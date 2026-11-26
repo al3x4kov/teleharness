@@ -127,6 +127,8 @@ export function gitQuery(where = {}, extra = {}) {
   return s ? `?${s}` : "";
 }
 
+const mcpInflight = new Map();
+
 export const api = {
   // FEAT-19.4: definitions use CAS revisions; execution is separately negotiated.
   temporalStart: body => json("POST", "/temporal/runs", body),
@@ -135,6 +137,7 @@ export const api = {
   temporalSchedules: () => json("GET","/temporal/schedules"),
   temporalCreateSchedule: body => json("POST","/temporal/schedules",body),
   temporalScheduleAction: (id,action) => json("POST","/temporal/schedules/"+idPath(id)+"/"+idPath(action),{}),
+  temporalDeleteSchedule: (id) => json("DELETE","/temporal/schedules/"+idPath(id)),
   temporalResult: (id,step) => json("GET", "/temporal/runs/" + workflowPath(id) + "/results/" + idPath(step)),
   temporalRun: id => json("GET", "/temporal/runs/" + workflowPath(id)),
   temporalRuns: () => json("GET", "/temporal/runs"),
@@ -185,6 +188,7 @@ export const api = {
   temporalTriggerEnable: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/enable", {}),
   temporalTriggerDisable: (id, running = "keep") => json("POST", "/temporal/triggers/" + idPath(id) + "/disable", { running }),
   temporalTriggerClearQueue: (id) => json("POST", "/temporal/triggers/" + idPath(id) + "/queue/clear", {}),
+  temporalTriggerDelete: (id, revision) => json("DELETE", "/temporal/triggers/" + idPath(id) + (revision != null ? "?revision=" + encodeURIComponent(String(revision)) : "")),
   adminBackground: () => json("GET", "/admin/background"),
   adminUpdateBackground: (body) => json("PUT", "/admin/background", body),
   temporalTemplates: () => json("GET", "/temporal/templates"),
@@ -387,7 +391,17 @@ export const api = {
   getProvider: ({ force = false } = {}) => json("GET", force ? "/provider?refresh=1" : "/provider"),
   getAgents: () => json("GET", "/agent"),
   getProjects: () => json("GET", "/project"),
-  getMcp: (directory) => json("GET", "/mcp" + withDir(directory)),
+  // Deduplicate concurrent /mcp requests for the same directory unless force: true.
+  getMcp: (directory, { force = false } = {}) => {
+    const k = directory || "";
+    const cur = !force ? mcpInflight.get(k) : null;
+    if (cur) return cur;
+    const p = json("GET", "/mcp" + withDir(directory)).finally(() => {
+      if (mcpInflight.get(k) === p) mcpInflight.delete(k);
+    });
+    mcpInflight.set(k, p);
+    return p;
+  },
   getSkills: (directory) => json("GET", "/skills" + withDir(directory)),
   getSkill: (id, directory) => json("GET", `/skills/${idPath(id)}` + withDir(directory)),
   getSessionPlan: (id) => json("GET", `/session/${idPath(id)}/plan`),

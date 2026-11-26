@@ -667,7 +667,7 @@ function AppearanceSection({ theme, setTheme }) {
 function McpSection() {
   const mcpList = mcp.value;
   const isAdminUser = me.value?.role === "admin";
-  if (mcpList == null) return mcpError.value ? <SectionError onRetry={() => refreshMcp()} /> : <Skeleton label={t("settings.mcp.loading")} />;
+  if (mcpList == null) return mcpError.value ? <SectionError onRetry={() => refreshMcp(0, { force: true })} /> : <Skeleton label={t("settings.mcp.loading")} />;
   return (
     <ul class="card-list">
       <li class="card">
@@ -933,16 +933,14 @@ export default function SettingsView({ section = null, sub = null } = {}) {
     // background tabs skip the poll (phone battery) and catch up on return.
     if (admin) refreshHost();
     const tick = admin ? setInterval(() => { if (!document.hidden) refreshHost(); }, 10_000) : null;
-    // «Подписка z.ai»: server caches for 60s, so polling faster is pointless;
-    // the small tick only redraws the «через N мин» countdown.
-    if (admin) refreshUsage();
-    refreshSubscriptions(); // FEAT-11.18: раздел «Подписки» виден всем
-    const usageTick = setInterval(() => { if (!document.hidden) { if (admin) refreshUsage(); refreshSubscriptions(); } }, 60_000);
+    // Subscriptions: server caches for 60s, so polling faster is pointless;
+    // the small tick only redraws the countdown.
+    refreshSubscriptions();
+    const usageTick = setInterval(() => { if (!document.hidden) refreshSubscriptions(); }, 60_000);
     const countdownTick = setInterval(() => setTick((x) => x + 1), 30_000);
     const onVisible = () => {
       if (!document.hidden && admin) {
         refreshHost();
-        refreshUsage();
       }
       if (!document.hidden) refreshSubscriptions();
     };
@@ -1068,7 +1066,7 @@ export default function SettingsView({ section = null, sub = null } = {}) {
         <button class="icon-btn float-btn settings-close" type="button" aria-label={t("settings.close")} onClick={() => navigate("/")}>
           <Glyph name="close" size={20} />
         </button>
-        <h1>{t("common.settings")}</h1>
+        {cur ? <div class="settings-root-h">{t("common.settings")}</div> : <h1>{t("common.settings")}</h1>}
         <span aria-hidden="true" />
       </header>
       <div class="set-account card">

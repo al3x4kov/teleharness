@@ -521,7 +521,18 @@ async function handlePairClaim(req, res) {
     claimFailure(ip);
     return sendJson(res, 415, { error: "ожидается application/json" });
   }
-  const body = await readJsonBody(req, 4 * 1024);
+  const raw = await readBody(req, 4 * 1024);
+  if (raw === null) {
+    claimFailure(ip);
+    return sendJson(res, 413, { error: "слишком большой запрос" });
+  }
+  let body;
+  try {
+    body = JSON.parse(raw.toString("utf8"));
+  } catch {
+    claimFailure(ip);
+    return sendJson(res, 400, { error: "некорректный JSON" });
+  }
   let user;
   try {
     user = claimPairCode(body?.code);
@@ -1006,6 +1017,11 @@ const github = (() => {
     if (!temporalDeps.startPipeline) throw new Error("Temporal-пайпы не подключены");
     const version = trigger.version ?? (await latestPublished(trigger.owner, trigger.definitionId));
     if (!version) throw new Error("У пайпа нет опубликованной версии");
+    // Defense-in-depth: block non-admin background launches if the resolved version uses Claude.
+    const ownerUser = getUser(trigger.owner);
+    if (!isAdmin(ownerUser) && pipeUsesClaude(trigger.owner, trigger.definitionId, version)) {
+      throw new Error("Claude в фоновых запусках доступен только администратору");
+    }
     const record = temporalDeps.store.get(trigger.owner, trigger.definitionId);
     const versionDef = record?.versions?.find((v) => v.version === version)?.definition ?? null;
     // Human text always rides inside the "data, not instructions" frame (BUG-323 p.3: title included).
@@ -2131,7 +2147,7 @@ const API_ROUTES = validateTable([
     sendJson, readJsonBody, errLog, ledger: costLedger, reports: costReports, backfill: costBackfill, dirAllowed, userName: costUserName,
     chatAllowed: async (user, sid) => {
       const dir = claude.dirOf(sid) ?? (await resolveSessionDir(sid).catch(() => null));
-      return dir ? dirAllowed(user, dir) : true; // удалённый чат: решают строки журнала (только свои)
+      return dir ? dirAllowed(user, dir) : "missing"; // deleted chat: ledger rows decide; without rows return 404
     },
   }),
   // FEAT-20.1: ревью и план (routes/review.js)
@@ -3280,12 +3296,18 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
     try {
       body = JSON.parse(raw.toString("utf8"));
     } catch {}
-    if (typeof body?.title === "string" && body.title.trim())
-      titler.userRenamed(id, body.title.trim(), { claudeChat: isRunnerEngine(bindingFor(id, await sessionRecord(id))?.engine) });
+    const trimmedTitle = typeof body?.title === "string" && body.title.trim() ? body.title.trim() : null;
+    const markRenamed = async () => {
+      if (!trimmedTitle) return;
+      titler.userRenamed(id, trimmedTitle, { claudeChat: isRunnerEngine(bindingFor(id, await sessionRecord(id))?.engine) });
+    };
     // A claude-only chat unknown upstream: the claude store is its home.
-    if (claude.titleInfo(id) && typeof body?.title === "string" && !(await resolveSessionDir(id))) return sendJson(res, 200, { id, title: body.title.trim() });
+    if (claude.titleInfo(id) && typeof body?.title === "string" && !(await resolveSessionDir(id))) {
+      await markRenamed();
+      return sendJson(res, 200, { id, title: body.title.trim() });
+    }
     if (OC.api === "v2") {
-      // №4: PATCH отвечает 204 — подтверждение повторным GET, лицо прежнее
+      // v2 PATCH responds 204 — confirm via GET; only mark renamed after upstream succeeds.
       try {
         const updated = await OC.patchSession(id, {
           directory: (admin ? null : scopeDir) ?? undefined,
@@ -3293,12 +3315,15 @@ async function sessionPatchDeleteRoute({ req, res, url, user, admin, match }) {
           ...(body && typeof body === "object" && Array.isArray(body?.parts) ? { parts: body.parts } : {}),
           timeoutMs: DEFAULT_OPTS.timeoutMs,
         });
+        await markRenamed();
         return sendJson(res, 200, updated ?? { id, title: body?.title ?? null });
       } catch (err) {
         return ocUpstreamError(res, err, "session.patch");
       }
     }
-    return proxyRequest(req, res, withDir(`/session/${id}`, upQ), { ...DEFAULT_OPTS, body: raw });
+    await proxyRequest(req, res, withDir(`/session/${id}`, upQ), { ...DEFAULT_OPTS, body: raw });
+    if (res.statusCode >= 200 && res.statusCode < 300) await markRenamed();
+    return;
   }
   // DELETE: local data (binding, claude history, live claude run) dies only
   // after the upstream confirmed the delete with a 2xx — a 5xx leaves the

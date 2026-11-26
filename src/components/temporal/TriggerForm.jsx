@@ -1,6 +1,7 @@
 // Background agent template wizard and custom pipe trigger form.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
+import { me } from "../../lib/store.js";
 import { githubConn, refreshGithubConn, refreshGithubTriggers } from "../../lib/github-conn.js";
 import { hasKey, t } from "../../lib/i18n.js";
 import { projectDisplayName } from "../../lib/normalize.js";
@@ -8,6 +9,7 @@ import { TEMPLATES, templateDraft } from "../../../shared/temporal-templates.js"
 import { Sheet, errorText, hashQuery } from "./ui.jsx";
 
 const KINDS = ["issue_labeled", "issue_opened", "comment_command", "ci_failed", "pr_opened"];
+const ENGINE_LABEL = { claude: "Claude", opencode: "OpenCode", codex: "Codex", acp: "Gemini (ACP)" };
 const POLL_VALUES = [60, 120, 300, 900];
 
 const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `r-${Date.now()}-${Math.random()}`);
@@ -53,19 +55,30 @@ export default function TriggerForm({ capabilities = null } = {}) {
   const tpl = TEMPLATES.find((x) => x.id === tplId) ?? null;
   const scheduled = !!tpl?.schedule;
   const repos = (githubConn.value?.repos ?? []).map((r) => r.fullName);
+  const isTenant = Boolean(me.value?.role && me.value.role !== "admin");
+  const allSub = capabilities?.subscriptionModels ?? {};
+  const allowedEngines = (isTenant ? ["opencode", "acp"] : ["claude", "opencode", "codex", "acp"])
+    .filter((e) => Array.isArray(allSub[e]) && allSub[e].length > 0);
+  const defaultEngine = allowedEngines[0] ?? (isTenant ? "opencode" : "claude");
+  const defaultModelFor = (eng) => {
+    const list = allSub[eng] ?? [];
+    const tplModel = tpl?.pipe.steps.find((s) => s.type === "model")?.model ?? null;
+    if (tplModel && list.includes(tplModel)) return tplModel;
+    return list[0] ?? (eng === "claude" ? tplModel : null);
+  };
 
   const [defs, setDefs] = useState(null);
   const [pick, setPick] = useState("");
   const projects = useProjects((d) => setDraft((x) => (x.directory ? x : { ...x, directory: d })));
   const [draft, setDraft] = useState({
-    repo: "", directory: "", model: null,
+    repo: "", directory: "", engine: defaultEngine, model: defaultModelFor(defaultEngine),
     kinds: tpl?.trigger ? [...tpl.trigger.kinds] : ["issue_labeled"],
     label: tpl?.trigger?.filters?.label ?? "",
     command: tpl?.trigger?.filters?.command ?? "",
     delivery: tpl?.trigger?.delivery ?? "auto",
     pollSeconds: tpl?.trigger?.pollSeconds ?? 120,
-    perHour: tpl?.trigger?.limits?.perHour ?? 6,
-    queue: tpl?.trigger?.limits?.queue ?? 20,
+    perHour: String(tpl?.trigger?.limits?.perHour ?? 6),
+    queue: String(tpl?.trigger?.limits?.queue ?? 20),
     trusted: "",
   });
   const [readiness, setReadiness] = useState(null);
@@ -76,11 +89,15 @@ export default function TriggerForm({ capabilities = null } = {}) {
   const [rules, setRules] = useState(false);
   const timer = useRef(null);
 
-  const models = capabilities?.subscriptionModels?.claude ?? [];
+  const models = allSub[draft.engine] ?? [];
   useEffect(() => {
     if (!tpl) api.temporalDefinitions().then((r) => setDefs(r ?? []), () => setDefs([]));
     refreshGithubConn();
-    setDraft((x) => ({ ...x, model: x.model ?? tpl?.pipe.steps.find((s) => s.type === "model")?.model ?? models[0] ?? null }));
+    setDraft((x) => ({
+      ...x,
+      engine: x.engine || defaultEngine,
+      model: x.model ?? defaultModelFor(x.engine || defaultEngine),
+    }));
   }, []);
 
   useEffect(() => {
@@ -90,20 +107,26 @@ export default function TriggerForm({ capabilities = null } = {}) {
       setReadiness(null);
       return undefined;
     }
+    let alive = true;
     timer.current = setTimeout(() => {
-      api.templateReadiness(tpl.id, { repo: draft.repo.trim(), directory: draft.directory, engine: "claude", model: draft.model })
-        .then(setReadiness, () => setReadiness(null));
+      api.templateReadiness(tpl.id, { repo: draft.repo.trim(), directory: draft.directory, engine: draft.engine, model: draft.model })
+        .then((r) => { if (alive) setReadiness(r); }, () => { if (alive) setReadiness(null); });
     }, 500);
-    return () => clearTimeout(timer.current);
-  }, [tpl, draft.repo, draft.directory, draft.model]);
+    return () => { alive = false; clearTimeout(timer.current); };
+  }, [tpl, draft.repo, draft.directory, draft.engine, draft.model]);
 
   const update = (patch) => setDraft((x) => ({ ...x, ...patch }));
   const trustedList = () => draft.trusted.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
   const webhookBlocked = draft.delivery === "webhook" && !capabilities?.triggers?.publicUrl;
+  const parseLimit = (raw, fallback, min, max) => {
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+  };
 
   async function create() {
     setBusy(true);
     setCreateErr("");
+    let createdPipeId = null;
     try {
       const filters = {};
       if (draft.label.trim()) filters.label = draft.label.trim();
@@ -112,14 +135,19 @@ export default function TriggerForm({ capabilities = null } = {}) {
       if (trusted.length) filters.trustedAuthors = trusted;
       let definitionId = pick;
       if (tpl) {
-        const rec = await api.temporalCreate(templateDraft(tpl, draft.directory));
+        const rec = await api.temporalCreate(templateDraft(tpl, draft.directory, {
+          engine: draft.engine,
+          model: draft.model,
+          repo: draft.repo.trim(),
+        }));
+        createdPipeId = rec.id;
         const pub = await api.temporalPublish(rec.id, rec.revision);
         definitionId = pub.id;
         if (scheduled) {
           await api.temporalCreateSchedule({
             definitionId: pub.id, version: pub.versions.at(-1).version, cron: tpl.schedule.cron,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-            overlap: false, catchupSeconds: 0, requestId: uid(),
+            overlap: "skip", catchupSeconds: 3600, requestId: uid(),
           });
           setCreated({ schedule: true });
           return;
@@ -130,11 +158,15 @@ export default function TriggerForm({ capabilities = null } = {}) {
         kinds: tpl ? tpl.trigger.kinds : draft.kinds,
         filters, delivery: webhookBlocked ? "poll" : draft.delivery,
         pollSeconds: draft.pollSeconds,
-        limits: { perHour: draft.perHour, queue: draft.queue },
+        limits: {
+          perHour: parseLimit(draft.perHour, 6, 1, 60),
+          queue: parseLimit(draft.queue, 20, 1, 100),
+        },
       });
       setCreated(trig);
       refreshGithubTriggers().catch(() => {});
     } catch (e) {
+      if (createdPipeId) await api.temporalDelete(createdPipeId).catch(() => {});
       setCreateErr(errorText(e));
     } finally {
       setBusy(false);
@@ -167,7 +199,7 @@ export default function TriggerForm({ capabilities = null } = {}) {
             <Field label={t("temporal.tf.key")}><input class="t-input" readonly value={created.key} /></Field>
             <Field label={t("temporal.tf.secret")}><input class="t-input" readonly value={created.secret} /></Field>
             {!capabilities?.triggers?.publicUrl && (
-              <p class="t-muted t-small">{t("temporal.tf.pollFallback", { min: Math.round(draft.pollSeconds / 60) })}</p>
+              <p class="t-muted t-small">{t("temporal.tf.pollFallback", { min: Math.max(1, Math.round(draft.pollSeconds / 60)) })}</p>
             )}
             {capabilities?.triggers?.publicUrl && (
               <div class="t-row">
@@ -178,7 +210,7 @@ export default function TriggerForm({ capabilities = null } = {}) {
           </>
         )}
         <div class="t-row">
-          <a class="t-btn t-primary" href="#/temporal/triggers">{t("temporal.tf.toTriggers")}</a>
+          <a class="t-btn t-primary" href={created.schedule ? "#/temporal/schedules" : "#/temporal/triggers"}>{created.schedule ? t("temporal.tf.toSchedules") : t("temporal.tf.toTriggers")}</a>
         </div>
       </div>
     );
@@ -249,8 +281,18 @@ export default function TriggerForm({ capabilities = null } = {}) {
           </Field>
         )}
 
+        {tpl && allowedEngines.length > 1 && (
+          <Field label={t("temporal.tf.engineField")}>
+            <select class="t-input" aria-label={t("temporal.tf.engineField")} value={draft.engine} onChange={(e) => {
+              const eng = e.currentTarget.value;
+              update({ engine: eng, model: defaultModelFor(eng) });
+            }}>
+              {allowedEngines.map((eng) => <option key={eng} value={eng} selected={eng === draft.engine}>{ENGINE_LABEL[eng] ?? eng}</option>)}
+            </select>
+          </Field>
+        )}
         {tpl && (
-          <Field label={t("temporal.tf.modelField")} note={t("temporal.tf.modelNote")}>
+          <Field label={t("temporal.tf.modelField")} note={!isTenant ? t("temporal.tf.modelNote") : t("temporal.tf.modelNoteTenant")}>
             <select class="t-input" value={draft.model ?? ""} onChange={(e) => update({ model: e.currentTarget.value })}>
               {(models.length ? models : [draft.model]).filter(Boolean).map((m) => <option key={m} value={m} selected={m === draft.model}>{m}</option>)}
             </select>
@@ -290,8 +332,8 @@ export default function TriggerForm({ capabilities = null } = {}) {
 
         {!scheduled && (
           <div class="t-row t-nowrap t-limits">
-            <Field label={t("temporal.tf.perHourLabel")}><input class="t-input" type="number" min="1" max="60" value={draft.perHour} onChange={(e) => update({ perHour: Number(e.currentTarget.value) })} /></Field>
-            <Field label={t("temporal.tf.queueLabel")}><input class="t-input" type="number" min="1" max="100" value={draft.queue} onChange={(e) => update({ queue: Number(e.currentTarget.value) })} /></Field>
+            <Field label={t("temporal.tf.perHourLabel")}><input class="t-input" type="number" min="1" max="60" value={draft.perHour} onInput={(e) => update({ perHour: e.currentTarget.value })} /></Field>
+            <Field label={t("temporal.tf.queueLabel")}><input class="t-input" type="number" min="1" max="100" value={draft.queue} onInput={(e) => update({ queue: e.currentTarget.value })} /></Field>
           </div>
         )}
 

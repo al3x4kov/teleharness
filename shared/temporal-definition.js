@@ -181,6 +181,7 @@ export function validateDefinition(value, options = {}) {
       // FEAT-20.3 (1.12): описание PR — ответ модельного шага, который идёт раньше.
       if (!key(step.source) || !prior.has(step.source) || byId.get(step.source)?.type!=="model") error(id,"PR: выберите модельный шаг, который идёт раньше — его ответ станет описанием PR");
       if (step.mode!==undefined && !["new","same-branch"].includes(step.mode)) error(id,"PR: режим «новая ветка» или «та же ветка»");
+      if (step.repo!==undefined && (typeof step.repo!=="string" || step.repo.length>200 || !/^[^\s/]+\/[^\s/]+$/.test(step.repo.trim()))) error(id,"PR: репозиторий должен быть в виде owner/name");
       const branchFields=[step.branch,step.base,step.title].filter((v)=>v!==undefined);
       for (const v of branchFields) if (typeof v!=="string" || v.length>200) { error(id,"PR: ветка, база и заголовок — строки до 200 символов"); break; }
       for (const ref of branchFields.filter((v)=>typeof v==="string").flatMap(templateRefs)) {

@@ -96,6 +96,7 @@ export default function Drawer({ view, chatId }) {
   const pinnedRef = useRef(null);
   const recentRef = useRef(null);
   const [recentLimit, setRecentLimit] = useState(RECENT_LIMIT);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== "undefined" ? (window.innerWidth || 0) < DESKTOP_BP : false));
   useEffect(() => { startTemporalAttention(); return stopTemporalAttention; }, []); // FEAT-19.14
 
   // Смена экрана закрывает панель (выбор пункта = переход).
@@ -164,7 +165,9 @@ export default function Drawer({ view, chatId }) {
     const scrollEl = scrollRef.current;
     if (!scrollEl || typeof window === "undefined") return undefined;
     const measure = () => {
-      if ((window.innerWidth || 0) < DESKTOP_BP) {
+      const mobileNow = (window.innerWidth || 0) < DESKTOP_BP;
+      setIsMobile((prev) => (prev === mobileNow ? prev : mobileNow));
+      if (mobileNow) {
         setRecentLimit(RECENT_LIMIT);
         return;
       }
@@ -234,11 +237,22 @@ export default function Drawer({ view, chatId }) {
     );
   };
 
+  const mobileHidden = isMobile && !open;
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    el.inert = mobileHidden;
+    if (mobileHidden) el.setAttribute("inert", "");
+    else el.removeAttribute("inert");
+  }, [mobileHidden]);
+
   return (
     <>
       <div class={"drawer-scrim" + (open ? " is-open" : "")} onClick={closeDrawer} aria-hidden="true" />
       <nav class={"drawer" + (open ? " is-open" : "")} ref={panelRef} aria-label={t("menu.menu")} data-req="FEAT-09.20"
         role={open ? "dialog" : undefined} aria-modal={open ? "true" : undefined}
+        aria-hidden={mobileHidden ? "true" : undefined}
+        inert={mobileHidden ? true : undefined}
         onClick={(e) => {
           // Тап по ссылке текущего экрана хэш не меняет — закрываем меню сами
           // (BUG-095), иначе оно остаётся висеть.
@@ -294,7 +308,7 @@ export default function Drawer({ view, chatId }) {
           <a class="drawer-avatar" href="#/settings" aria-label={t("drawer.account", { name: user?.name || t("drawer.profile") })} title={user?.name || ""}>
             {initials(user?.name)}
           </a>
-          <button class="dark-pill" type="button" onClick={newChat} disabled={creating}>
+          <button class="dark-pill" type="button" aria-label={creating ? t("home.creating") : t("home.newChat")} onClick={newChat} disabled={creating}>
             <Glyph name="plus" size={20} /> {creating ? t("home.creating") : t("home.newChat")}
           </button>
         </div>

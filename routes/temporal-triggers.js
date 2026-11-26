@@ -205,9 +205,10 @@ export function triggerRoutes(deps) {
       const pipe = await pipeOf(user, spec.definitionId);
       if (!pipe) throw fail(404, "Пайп не найден");
       // BUG-322: решение владельца Q1-а — фоновый триггер на пайп с Claude только для администратора.
-      const pipeUsesClaude = pipe.usesClaude !== undefined
-        ? Boolean(pipe.usesClaude)
-        : (deps.usesClaude ? Boolean(await deps.usesClaude({ owner: user.id, definitionId: spec.definitionId, version: spec.version ?? null })) : false);
+      // Check the specifically requested version (or latest when null) for Claude usage.
+      const pipeUsesClaude = deps.usesClaude
+        ? Boolean(await deps.usesClaude({ owner: user.id, definitionId: spec.definitionId, version: spec.version ?? null }))
+        : Boolean(pipe.usesClaude);
       if (user.role !== "admin" && pipeUsesClaude) {
         throw fail(403, "Claude в фоновых запусках доступен только администратору — выберите opencode");
       }
@@ -266,6 +267,11 @@ export function triggerRoutes(deps) {
         delivery: patch.delivery ?? row.delivery, pollSeconds: patch.pollSeconds ?? row.pollSeconds,
         limits: patch.limits ?? row.limits,
       });
+      // Enabling a trigger via PATCH enforces the same admin-only Claude restriction as POST /enable.
+      if (patch.enabled === true && user.role !== "admin") {
+        const usesClaude = deps.usesClaude ? Boolean(await deps.usesClaude(row)) : false;
+        if (usesClaude) throw fail(403, "Claude в фоновых запусках доступен только администратору — выберите opencode");
+      }
       const updated = store.update(user.id, match[1], patch, body.revision);
       sendJson(res, 200, face(updated));
     }),
@@ -325,9 +331,20 @@ export function triggerRoutes(deps) {
         }
         if (body.running === "cancel") clearActiveAll(store, row.id);
       } else {
+        const isClaude = deps.usesClaude ? Boolean(await deps.usesClaude(row)) : false;
+        if (user.role !== "admin" && isClaude) {
+          throw fail(403, "Claude в фоновых запусках доступен только администратору — выберите opencode");
+        }
         store.update(user.id, match[1], { enabled: true });
       }
-      const cur = store.get(user.id, match[1]); sendJson(res, 200, { ...face(cur), activeCount: activeWorkflows(store, cur.id).length });
+      const cur = store.get(user.id, match[1]);
+      const storm = store.setting?.(`storm:${cur.id}`, null);
+      sendJson(res, 200, {
+        ...face(cur),
+        activeCount: activeWorkflows(store, cur.id).length,
+        queuedCount: store.queuedCount?.(cur.id) ?? 0,
+        stormAt: Number.isFinite(storm?.at) ? storm.at : null,
+      });
     }),
 
     route("GET", new RegExp(`^${base}/([a-f0-9-]{36})/journal$`), async ({ res, user, match, url }) => {
@@ -359,6 +376,9 @@ export function triggerRoutes(deps) {
         throw fail(422, "Автор события не доверен — повтор отклонён");
       }
       const isClaude = deps.usesClaude ? Boolean(await deps.usesClaude(row)) : true;
+      if (isClaude && user.role !== "admin") {
+        throw fail(403, "Claude в фоновых запусках доступен только администратору — выберите opencode");
+      }
       if (isClaude) {
         const claudeLimit = store.setting("claude_background_per_day", 10) ?? 10;
         const claudeUsed = await countClaudeUsedToday(store, deps.usesClaude);

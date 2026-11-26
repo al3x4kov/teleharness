@@ -1,5 +1,6 @@
 """FEAT-19.5. Subscription pipeline worker and private preparation Activity."""
 import asyncio
+from datetime import timedelta
 import os
 
 from temporalio import activity
@@ -34,9 +35,12 @@ async def serve():
             grace_s=int(os.environ.get("TELEHARNESS_TEMPORAL_PERMIT_GRACE_S", "3600")),
         ))
     try:
+        # Cap Temporal SDK heartbeat throttling at 3s for fast cascading cancellation of command steps.
         await Worker(
             client, task_queue=os.environ.get("TELEHARNESS_TEMPORAL_QUEUE", "teleharness-stage-pipeline-v1"),
             workflows=[Pipeline], activities=[prepare_run, subscription_model, portal_step, portal_step_pr, portal_step_command],
+            max_heartbeat_throttle_interval=timedelta(seconds=3),
+            default_heartbeat_throttle_interval=timedelta(seconds=3),
         ).run()
     finally:
         if sweep is not None:

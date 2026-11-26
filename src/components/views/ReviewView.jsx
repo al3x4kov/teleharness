@@ -5,6 +5,7 @@
 // «Принять и закоммитить», «Убрать». Макет: design/mockups-v2/epic20-phone-review.html
 // (T-2…T-18, T-24, T-26; P-2, D-2, D-3, D-5), бриф BRIEF-20.1.
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { createPortal } from "preact/compat";
 import "../../app.css";
 import "../views.css";
 import "../board.css";
@@ -30,19 +31,20 @@ function splitPath(p) {
 
 export function Sheet({ title, children, onClose, labelId = "rv-sheet-title", wide = false }) {
   const ref = useRef(null);
-  useModalFocus(ref);
+  useModalFocus(ref, { inertShell: true });
   useEffect(() => {
     const k = (e) => e.key === "Escape" && onClose?.();
     document.addEventListener("keydown", k);
     return () => document.removeEventListener("keydown", k);
   }, []);
-  return (
+  return createPortal(
     <div class="rv-scrim" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
       <div class={"rv-sheet" + (wide ? " is-wide" : "")} role="dialog" aria-modal="true" aria-labelledby={labelId} ref={ref}>
         <h2 id={labelId}>{title}</h2>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -423,7 +425,14 @@ export default function ReviewView({ id }) {
         </div>
         <span aria-hidden="true" />
       </header>
-      <a class="rv-back" href={open && !wide ? undefined : "#/board/review"} role={open && !wide ? "button" : undefined} tabIndex={0} onClick={(e) => { if (open && !wide) { e.preventDefault(); setOpen(null); } }}>‹ {open && !wide ? t("review.back.files") : t("review.back.queue")}</a>
+      <a
+        class="rv-back"
+        href={open && !wide ? undefined : "#/board/review"}
+        role={open && !wide ? "button" : undefined}
+        tabIndex={0}
+        onClick={(e) => { if (open && !wide) { e.preventDefault(); setOpen(null); } }}
+        onKeyDown={(e) => { if (open && !wide && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen(null); } }}
+      >‹ {open && !wide ? t("review.back.files") : t("review.back.queue")}</a>
     </>
   );
 

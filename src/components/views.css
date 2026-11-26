@@ -2531,7 +2531,8 @@
     display: block;
   }
 
-  .settings-head h1 {
+  .settings-head h1,
+  .settings-head .settings-root-h {
     text-align: left;
     font-size: 22px;
   }

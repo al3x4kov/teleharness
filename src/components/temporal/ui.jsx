@@ -69,15 +69,17 @@ export function Skeleton({ rows = 4 }) {
 // scrim close it; focus moves into the sheet and returns on close.
 export function Sheet({ title, onClose, children }) {
   const ref = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     const back = document.activeElement;
     ref.current?.querySelector("textarea,input,button")?.focus();
-    const key = (e) => { if (e.key === "Escape") onClose(); };
+    const key = (e) => { if (e.key === "Escape") closeRef.current?.(); };
     addEventListener("keydown", key);
     return () => { removeEventListener("keydown", key); back?.focus?.(); };
   }, []);
   const node = (
-    <div class="t-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div class="t-scrim" onClick={(e) => { if (e.target === e.currentTarget) closeRef.current?.(); }}>
       <div class="t-sheet" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
         <div class="t-grab" aria-hidden="true" />
         <h2>{title}</h2>
@@ -121,6 +123,24 @@ export function when(iso, now = Date.now()) {
   const y = new Date(now - 86400000);
   if (d.toDateString() === y.toDateString()) return t("temporal.when.yesterday", { time: timeFmt().format(d) });
   return dayFmt().format(d) + ", " + timeFmt().format(d);
+}
+
+export function formatDurationStr(raw) {
+  if (raw == null || raw === "") return "";
+  const text = String(raw).trim();
+  const m = /^(\d+(?:\.\d+)?)s$/i.exec(text);
+  if (!m) return text;
+  const totalSec = Number(m[1]);
+  if (!Number.isFinite(totalSec) || totalSec < 0) return text;
+  if (totalSec < 1) return t("temporal.dur.lt1s");
+  const s = Math.round(totalSec);
+  if (s < 60) return t("temporal.dur.s", { n: s });
+  const mins = Math.floor(s / 60);
+  const remS = s % 60;
+  if (mins < 60) return remS ? t("temporal.dur.ms", { m: mins, s: remS }) : t("temporal.dur.m", { n: mins });
+  const hrs = Math.floor(mins / 60);
+  const remM = mins % 60;
+  return remM ? t("temporal.dur.hm", { h: hrs, m: remM }) : t("temporal.dur.h", { h: hrs });
 }
 
 export function duration(fromIso, toIso, now = Date.now()) {

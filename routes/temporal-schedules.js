@@ -4,6 +4,7 @@ import {projectPlan} from '../lib/temporal/prepare-bridge.js';
 import {scheduleOptions} from '../lib/temporal/schedules.js';
 import {hasRequiredInputs} from '../lib/temporal/inputs.js';
 import {pipeEngineAllowed} from '../lib/temporal/workspace.js';
+import {commandAllowed} from '../lib/temporal/command-catalog.js';
 
 export function scheduleRoutes(deps) {
   const base='/teleharness/api/temporal/schedules';
@@ -14,6 +15,12 @@ export function scheduleRoutes(deps) {
     if(!deps.dirAllowed(user,definition.directory) || definition.steps.some(s=>s.type==='model' &&
         !pipeEngineAllowed(deps.engineAllowed,user,s.engine)))
       throw new DefinitionError(403,'Пайп недоступен');
+    for(const s of definition.steps??[]) {
+      if(s.type!=='command')continue;
+      const entry=deps.commandCatalog?.get(s.command);
+      if(!entry || !commandAllowed(entry,user))
+        throw new DefinitionError(403,'Команда недоступна');
+    }
     return definition;
   }
   function route(method,path,handler) {
@@ -53,7 +60,10 @@ export function scheduleRoutes(deps) {
           }
           let name='Пайп';
           try{name=deps.store.get(user.id,row.definitionId).versions.find(v=>v.version===row.version)?.definition.name??name;}catch{}
-          visible.push({...row,name,blocked:'Нет доступа к проекту или движку пайпа — срабатывания пропускаются'});
+          const reason=error.message==='Команда недоступна'
+            ? 'Команда пайпа недоступна — срабатывания пропускаются'
+            : 'Нет доступа к проекту или движку пайпа — срабатывания пропускаются';
+          visible.push({...row,name,blocked:reason});
           continue;
         }
         visible.push({...await deps.schedules.describe(row),name:definition.name});
@@ -65,6 +75,12 @@ export function scheduleRoutes(deps) {
       const item=deps.schedules.get(user.id,match[1]);
       const definition=access(user,item);
       deps.sendJson(res,200,{...await deps.schedules.setPaused(user.id,item.id,match[2]==='pause'),name:definition.name});
+    }),
+    // Delete an owned schedule (including blocked or pipeDeleted schedules).
+    route('DELETE',/^\/teleharness\/api\/temporal\/schedules\/([a-f0-9-]{36})$/,async({res,user,match})=>{
+      if(typeof deps.schedules.remove!=='function')throw new DefinitionError(503,'Удаление расписаний не поддерживается');
+      const result=await deps.schedules.remove(user.id,match[1]);
+      deps.sendJson(res,200,{ok:true,...result});
     })
   ];
 }

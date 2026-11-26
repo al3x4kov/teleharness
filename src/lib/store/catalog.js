@@ -76,6 +76,8 @@ export async function logout() {
 // endpoint themselves; a failure keeps the last known list.
 let sessionsInflight = null;
 export function refreshSessions() {
+  // Share one in-flight GET /session across concurrent callers.
+  if (sessionsInflight) return sessionsInflight;
   const p = (async () => {
     try {
       sessions.value = mergeSessionList(sessions.value, (await api.listSessions()) ?? []); // BUG-088
@@ -211,12 +213,12 @@ export async function refreshAbout() {
 export const MCP_EMPTY_RETRY = { tries: 12, delayMs: 2500 };
 let mcpRetryTimer = null;
 
-export async function refreshMcp(attempt = 0) {
+export async function refreshMcp(attempt = 0, { force = false } = {}) {
   if (typeof attempt !== "number") attempt = 0;
   clearTimeout(mcpRetryTimer);
   mcpRetryTimer = null;
   try {
-    const list = normalizeMcp(await api.getMcp());
+    const list = normalizeMcp(await api.getMcp(undefined, { force }));
     mcpError.value = false;
     const settled = list.length > 0 && !list.some((s) => s.status === "pending");
     if (!settled && attempt < MCP_EMPTY_RETRY.tries) {

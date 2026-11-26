@@ -1,7 +1,8 @@
 // Trigger detail card: summary, filtered event journal, event sheet with replay
 // confirmation, CI log tail for exhausted attempts, and enable/disable sheet.
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api, explainApiError } from "../../lib/api.js";
+import { navigate } from "../../lib/router.js";
 import { refreshGithubTriggers } from "../../lib/github-conn.js";
 import { hasKey, t } from "../../lib/i18n.js";
 import { Banner, Sheet, Skeleton, eventTarget, when, usePoll, errorText } from "./ui.jsx";
@@ -84,6 +85,9 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [disableSheet, setDisableSheet] = useState(false);
+  const [rotateSheet, setRotateSheet] = useState(null);
+  const [deleteSheet, setDeleteSheet] = useState(false);
+  const paginatedRef = useRef(false);
 
   const load = async () => {
     try {
@@ -95,18 +99,20 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
     }
   };
   const loadJournal = async (nextFilter = filter, cursor = null) => {
+    if (cursor) paginatedRef.current = true;
     try {
       const rows = await api.temporalTriggerJournal(id, { filter: nextFilter || undefined, cursor });
-      setEntries((prev) => (cursor && prev ? { ...prev, list: [...prev.list, ...rows], cursor: rows.at(-1)?.id ?? null } : { list: rows, cursor: rows.at(-1)?.id ?? null }));
+      setEntries((prev) => (cursor && prev ? { ...prev, list: [...prev.list, ...rows], cursor: rows.at(-1)?.id ?? null, error: null } : { list: rows, cursor: rows.at(-1)?.id ?? null, error: null }));
     } catch (e) {
-      setEntries({ list: [], cursor: null, error: e });
+      setEntries((prev) => ({ list: prev?.list ?? [], cursor: prev?.cursor ?? null, error: e }));
     }
   };
   useEffect(() => {
+    paginatedRef.current = false;
     load();
     loadJournal();
   }, [id]);
-  usePoll(() => { loadJournal(); }, 15000, true);
+  usePoll(() => { if (!paginatedRef.current) loadJournal(); }, 15000, true);
 
   if (error) {
     const status = error?.status;
@@ -120,7 +126,7 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
   }
   if (!trig) return <Skeleton rows={3} />;
 
-  const pipeName = pipe?.name ?? t("temporal.defaultPipeName");
+  const pipeName = pipe?.draft?.name ?? pipe?.name ?? t("temporal.defaultPipeName");
   const lastVersion = pipe?.versions?.at(-1)?.version ?? null;
   const versionText = trig.version
     ? t("temporal.tr.versionNum", { v: trig.version })
@@ -134,6 +140,7 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
       : t("temporal.tr.deliveryAuto");
 
   const chooseFilter = (f) => {
+    paginatedRef.current = false;
     setFilter(f);
     setEntries(null);
     loadJournal(f);
@@ -183,6 +190,8 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
               finally { setBusy(false); }
             }}>{(trig.queuedCount ?? 0) > 0 ? t("temporal.tr.clearQueueBtnCount", { count: trig.queuedCount }) : t("temporal.tr.clearQueueBtn")}</button>
           )}
+          <button class="t-btn" type="button" data-action="rotate-trigger-secret" disabled={busy} onClick={() => setRotateSheet({ confirm: true })}>{t("temporal.tr.rotateBtn")}</button>
+          <button class="t-btn t-danger" type="button" data-action="delete-trigger" disabled={busy} onClick={() => setDeleteSheet(true)}>{t("temporal.tr.deleteBtn")}</button>
         </div>
         {note && <p class="t-lead" role="status">{note}</p>}
       </div>
@@ -197,7 +206,13 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
 
       {entries == null ? <Skeleton rows={4} /> : (
         <div class="t-list" role="list">
-          {entries.list.length === 0 && <p class="t-muted t-small">{t("temporal.tr.emptyJournal")}</p>}
+          {entries.error && (
+            <Banner tone="err" icon="⚠" title={t("temporal.tr.errJournalTitle")}
+              action={<button class="t-btn" type="button" onClick={() => loadJournal(filter)}>{t("common.retry")}</button>}>
+              {explainApiError(entries.error, t("temporal.tr.errJournalText"))}
+            </Banner>
+          )}
+          {!entries.error && entries.list.length === 0 && <p class="t-muted t-small">{t("temporal.tr.emptyJournal")}</p>}
           {entries.list.map((e) => {
             const p = decisionPill(e.decision, e.reason);
             return (
@@ -362,6 +377,65 @@ export default function TriggerCard({ id, capabilities = null } = {}) {
               </div>
             </>
           )}
+        </Sheet>
+      )}
+      {rotateSheet && (
+        <Sheet title={rotateSheet.confirm ? t("temporal.tr.rotateConfirmTitle") : t("temporal.tr.rotateNewTitle")} onClose={() => setRotateSheet(null)}>
+          {rotateSheet.confirm ? (
+            <>
+              <p class="t-lead">
+                {t("temporal.tr.rotateConfirmLead")}
+                {trig.hookId ? " " + t("temporal.tr.rotateConfirmHook") : ""}
+              </p>
+              <div class="t-row">
+                <button class="t-btn t-primary" type="button" data-action="confirm-rotate" disabled={busy} onClick={async () => {
+                  setBusy(true); setNote("");
+                  try {
+                    const res = await api.temporalTriggerRotate(id);
+                    setTrig(res);
+                    setRotateSheet({ secret: res.secret, note: res.note, githubUpdated: res.githubUpdated });
+                  } catch (e) { setNote(errorText(e)); setRotateSheet(null); }
+                  finally { setBusy(false); }
+                }}>{busy ? t("temporal.tr.rotating") : t("temporal.tr.rotateAction")}</button>
+                <button class="t-btn" type="button" disabled={busy} onClick={() => setRotateSheet(null)}>{t("common.cancel")}</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p class="t-lead">{rotateSheet.note || t("temporal.tr.rotateDoneLead")}</p>
+              {rotateSheet.secret && <pre class="t-code" data-testid="rotated-secret">{rotateSheet.secret}</pre>}
+              <div class="t-row">
+                {rotateSheet.secret && (
+                  <button class="t-btn" type="button" onClick={() => { navigator.clipboard?.writeText(rotateSheet.secret).catch(() => {}); setNote(t("temporal.tr.secretCopied")); }}>
+                    {t("temporal.tr.copySecret")}
+                  </button>
+                )}
+                <button class="t-btn t-primary" type="button" onClick={() => setRotateSheet(null)}>{t("temporal.tr.done")}</button>
+              </div>
+            </>
+          )}
+        </Sheet>
+      )}
+      {deleteSheet && (
+        <Sheet title={t("temporal.tr.deleteTitle", { repo: trig.repo })} onClose={() => setDeleteSheet(false)}>
+          <ul class="t-consequences">
+            <li>{t("temporal.tr.deleteItem1")}</li>
+            {trig.hookId && <li>{t("temporal.tr.deleteItemHook")}</li>}
+            <li>{t("temporal.tr.deleteItemHistory")}</li>
+          </ul>
+          <div class="t-row">
+            <button class="t-btn" type="button" disabled={busy} onClick={() => setDeleteSheet(false)}>{t("common.cancel")}</button>
+            <button class="t-btn t-danger-fill" type="button" data-action="confirm-delete-trigger" disabled={busy} onClick={async () => {
+              setBusy(true); setNote("");
+              try {
+                await api.temporalTriggerDelete(id, trig.revision);
+                setDeleteSheet(false);
+                refreshGithubTriggers().catch(() => {});
+                navigate("/temporal/triggers");
+              } catch (e) { setNote(errorText(e)); setDeleteSheet(false); }
+              finally { setBusy(false); }
+            }}>{busy ? t("temporal.tr.deleting") : t("temporal.tr.deleteConfirmBtn")}</button>
+          </div>
         </Sheet>
       )}
     </>

@@ -77,8 +77,8 @@ button.wt-band { cursor: pointer; }
 .wt-form { display: flex; flex-direction: column; gap: 12px; }
 .wt-field { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; border: 0; margin: 0; padding: 0; min-width: 0; }
 .wt-field > span, .wt-field > legend { color: var(--text-2); font-size: 12.5px; padding: 0; }
-.wt-field select, .wt-field input[type="text"], .wt-field textarea {
-  min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 8px); background: var(--input, var(--surface)); color: var(--text); font: inherit; box-sizing: border-box; width: 100%;
+.wt-field select, .wt-field input[type="text"], .wt-field input[type="number"], .wt-field textarea {
+  min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-sm, 8px); background: var(--input, var(--surface)); color: var(--text); font: inherit; font-size: 16px; box-sizing: border-box; width: 100%;
 }
 .wt-field textarea { min-height: 72px; resize: vertical; }
 .wt-radio, .wt-check { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 44px; font-size: 14px; }

@@ -65,7 +65,12 @@ export function reviewRoutes(deps) {
       path: /^\/teleharness\/api\/review\/chat\/([^/]+)$/,
       scope: "user",
       handler: ({ res, user, match }) => {
-        const sid = decodeURIComponent(match[1]);
+        let sid;
+        try {
+          sid = decodeURIComponent(match[1]);
+        } catch {
+          return sendJson(res, 400, { error: "bad sid" });
+        }
         if (!SID_RE.test(sid)) return sendJson(res, 400, { error: "bad sid" });
         const all = reviews.summaries(user.id, { all: true }).filter((s) => s.sid === sid);
         const open = reviews.store.openFor(user.id, sid);

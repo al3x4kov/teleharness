@@ -123,7 +123,7 @@ function CommandStepBox({ workflowId, step, meta, workerCmd, hasResult, onOpenFi
                 onOpen={() => onOpenFile({ name: baseName(f.path), path: f.path, directory: parentDir(f.path) })} />
             ) : (
               <span key={f.path} class="t-pill t-off t-mono" title={t("temporal.rd.cmd.outsideTitle")}>
-                {t("temporal.rd.cmd.pathOnly", { path: f.path })}
+                {me.value?.role === "admin" ? t("temporal.rd.cmd.pathOnly", { path: f.path }) : t("temporal.rd.cmd.outsideAllowed", { name: baseName(f.path) })}
               </span>
             ))}
           </div>
@@ -347,7 +347,7 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
                     <span class="t-node" aria-hidden="true">{quota || slotWait ? "⧗" : icon}</span>
                     <div class="t-tlbody">
                       <b>{step.name}</b>
-                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : slotWait ? t("temporal.rd.st.slot") : note}{resumedSet.has(step.id) ? t("temporal.rd.rs.carriedTag") : ""}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
+                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""}{step.type === "command" && (step.command ?? step.commandId) ? " · " + (step.command ?? step.commandId) : ""} · {quota ? t("temporal.rd.st.quota") : slotWait ? t("temporal.rd.st.slot") : note}{resumedSet.has(step.id) ? t("temporal.rd.rs.carriedTag") : ""}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
                       {result && (
                         <div class={"t-prbox" + (result.tone === "off" ? " t-prbox-off" : "")}>
                           <b>{result.title}</b>

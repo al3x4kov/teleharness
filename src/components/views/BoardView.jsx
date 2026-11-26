@@ -5,6 +5,7 @@
 // сервер (GET /teleharness/api/attention); здесь — только показ и действия.
 // Макет: design/mockups-v2/epic20-attention-board.html; бриф BRIEF-20.2.
 import { useEffect, useRef, useState } from "preact/hooks";
+import { createPortal } from "preact/compat";
 import "../../app.css";
 import "../views.css";
 import "../board.css";
@@ -41,13 +42,13 @@ const keySid = (key) => (key.startsWith("chat:") ? key.slice(5) : null);
 
 function Confirm({ title, children, ok, okClass = "", onOk, onCancel }) {
   const ref = useRef(null);
-  useModalFocus(ref);
+  useModalFocus(ref, { inertShell: true });
   useEffect(() => {
     const k = (e) => e.key === "Escape" && onCancel();
     document.addEventListener("keydown", k);
     return () => document.removeEventListener("keydown", k);
   }, []);
-  return (
+  return createPortal(
     <div class="bd-scrim" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div class="bd-dialog" role="dialog" aria-modal="true" aria-labelledby="bd-dialog-title" ref={ref}>
         <h2 id="bd-dialog-title">{title}</h2>
@@ -57,7 +58,8 @@ function Confirm({ title, children, ok, okClass = "", onOk, onCancel }) {
           <button type="button" class={"bd-btn bd-primary " + okClass} onClick={onOk}>{ok}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -12,7 +12,7 @@ import { accessTarget, useRoute, navigate } from "../lib/router.js";
 import { startKbTrace } from "../lib/kb-trace.js";
 import { installAppUpdate } from "../lib/app-update.js";
 import { KB_KEY, KB_MOVE_MS, learnKbH, predictFor, shellFrame } from "../lib/kb-predict.js";
-import { boot, connection, me, notice, noticeAction, onUnauthorized, setNavigate, setNotice } from "../lib/store.js";
+import { active, boot, connection, me, notice, noticeAction, onUnauthorized, sessions, setNavigate, setNotice } from "../lib/store.js";
 import HomeView from "./views/HomeView.jsx";
 import ProjectsView from "./views/ProjectsView.jsx";
 import ProjectView from "./views/ProjectView.jsx";
@@ -288,7 +288,14 @@ export default function AppShell() {
 
   const View = VIEWS[view] ?? HomeView;
   const conn = connection.value; // R-20: offline / «Связь восстановлена»
-  const hasRightPanel = view === "chat" && Boolean(params?.id) && isWideViewport;
+  const chatNotFound =
+    view === "chat" &&
+    Boolean(params?.id) &&
+    active.value?.id === params.id &&
+    !active.value.loading &&
+    Boolean(active.value.loadError) &&
+    !sessions.value.some((s) => s.id === params.id);
+  const hasRightPanel = view === "chat" && Boolean(params?.id) && isWideViewport && !chatNotFound;
   return (
     <div class={"shell" + (hasRightPanel ? " has-right-panel" : "")}>
       <Drawer view={view} chatId={view === "chat" ? params.id : null} />

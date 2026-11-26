@@ -150,17 +150,19 @@ body {
 }
 
 .page-header > h1,
+.page-header > .settings-root-h,
 .page-header > .project-heading {
   grid-column: 2;
   text-align: center;
   min-width: 0;
 }
 
-.page-header > :last-child:not(h1):not(.project-heading) {
+.page-header > :last-child:not(h1):not(.settings-root-h):not(.project-heading) {
   grid-column: 3;
 }
 
-.page-header h1 {
+.page-header h1,
+.page-header .settings-root-h {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.2px;
@@ -339,6 +341,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  background: var(--drawer-bg);
 }
 
 .drawer-avatar {
@@ -394,6 +397,25 @@ body {
     transition: none;
     box-shadow: none;
     border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  }
+
+  /* Compact >=40px rows on desktop so recent chats and footer never overlap at 1280x800. */
+  .drawer-item {
+    min-height: 40px;
+    font-size: 15.5px;
+  }
+
+  .drawer-item.is-chat {
+    min-height: 40px;
+    font-size: 15px;
+  }
+
+  .drawer-label {
+    padding: 12px 14px 4px;
+  }
+
+  .drawer-more {
+    min-height: 40px;
   }
 
   .drawer-scrim,
@@ -551,9 +573,10 @@ body {
   font-size: 15px;
 }
 
+/* Dark-theme --error (#f58a80) is for text; use #b8332e (6.14:1, WCAG AA) for white-text danger buttons. */
 .btn-danger {
   border-radius: 999px;
-  background: var(--error);
+  background: var(--danger-bg, #b8332e);
   color: #fff;
   font-size: 15px;
 }

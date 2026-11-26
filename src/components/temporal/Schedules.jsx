@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
 import { t, locale } from "../../lib/i18n.js";
 import { navigate } from "../../lib/router.js";
-import { Banner, Empty, Skeleton, StatusPill, errorText, hashQuery } from "./ui.jsx";
+import { Banner, Empty, Sheet, Skeleton, StatusPill, errorText, hashQuery } from "./ui.jsx";
 import { unsupportedReasons } from "./readiness.js";
 
 // Labels are resolved at render time so they follow the UI language.
@@ -56,27 +56,42 @@ export function previewTimes(preset, time, minute, zone, n = 3, from = Date.now(
 export function ScheduleForm({ capabilities }) {
   const q = hashQuery();
   const [pipes, setPipes] = useState(null), [record, setRecord] = useState(null), [error, setError] = useState(null);
+  const [commands, setCommands] = useState(null);
   const [pick, setPick] = useState(q.get("def") ?? ""), [version, setVersion] = useState(Number(q.get("v")) || null);
   const [preset, setPreset] = useState("daily"), [time, setTime] = useState("09:00"), [minute, setMinute] = useState("0"), [cron, setCron] = useState("0 9 * * *");
   const [zone, setZone] = useState(localZone()), [overlap, setOverlap] = useState("skip"), [catchup, setCatchup] = useState(3600);
   const [busy, setBusy] = useState(false), [serverError, setServerError] = useState(""), [tried, setTried] = useState(false);
   const requestId = useRef("");
-  useEffect(() => { api.temporalDefinitions().then(setPipes, setError); }, []);
   useEffect(() => {
-    if (!pick) return;
-    api.temporalDefinition(pick).then((r) => { setRecord(r); setVersion((v) => (r.versions.some((x) => x.version === v) ? v : r.versions.at(-1)?.version ?? null)); }, setError);
+    api.temporalDefinitions().then(setPipes, setError);
+    api.temporalCommands?.().then((r) => setCommands(r?.items ?? []), () => setCommands(null));
+  }, []);
+  useEffect(() => {
+    if (!pick) { setRecord(null); return undefined; }
+    let alive = true;
+    setRecord(null);
+    api.temporalDefinition(pick).then(
+      (r) => {
+        if (!alive) return;
+        setRecord(r);
+        setVersion((v) => (r.versions.some((x) => x.version === v) ? v : r.versions.at(-1)?.version ?? null));
+      },
+      (e) => { if (alive) setError(e); },
+    );
+    return () => { alive = false; };
   }, [pick]);
   useEffect(() => { requestId.current = ""; setServerError(""); }, [pick, version, preset, time, minute, cron, zone, overlap, catchup]);
-  if (error) return <Empty icon="⚠" title={t("temporal.pipes.loadError")} actions={<a class="t-btn" href="#/temporal/schedules">{t("temporal.sch.toSchedules")}</a>}><p>{errorText(error)}</p></Empty>;
-  if (!pipes) return <Skeleton rows={2} />;
+  const head = <div class="t-head"><div><h1>{t("temporal.sch.newTitle")}</h1><p class="t-lead">{t("temporal.sch.newLead")}</p></div></div>;
+  if (error) return <>{head}<Empty icon="⚠" title={t("temporal.pipes.loadError")} actions={<a class="t-btn" href="#/temporal/schedules">{t("temporal.sch.toSchedules")}</a>}><p>{errorText(error)}</p></Empty></>;
+  if (!pipes) return <>{head}<Skeleton rows={2} /></>;
   const published = pipes.filter((p) => p.latestVersion);
-  if (!published.length) return <Empty icon="⏱" title={t("temporal.sch.publishFirst")} actions={<a class="t-btn t-primary" href="#/temporal/pipes">{t("temporal.view.toPipes")}</a>}><p>{t("temporal.sch.publishFirstText")}</p></Empty>;
+  if (!published.length) return <>{head}<Empty icon="⏱" title={t("temporal.sch.publishFirst")} actions={<a class="t-btn t-primary" href="#/temporal/pipes">{t("temporal.view.toPipes")}</a>}><p>{t("temporal.sch.publishFirstText")}</p></Empty></>;
   const timeOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
   const minuteOk = /^([0-5]?\d)$/.test(minute);
   const cronOk = preset !== "cron" || /^\S+(\s+\S+){4}$/.test(cron.trim());
   const zoneOk = validZone(zone);
   const v = record?.versions.find((x) => x.version === version);
-  const reasons = v ? unsupportedReasons(v.definition, capabilities?.subscriptionModels) : [];
+  const reasons = v ? unsupportedReasons(v.definition, capabilities?.subscriptionModels, { ledger: capabilities?.ledger, ...(commands != null ? { commands } : {}) }) : [];
   // BUG-258: say exactly why — required inputs block a schedule before any click; «fix the
   // marked fields» only when a field is really marked.
   const required = (v?.definition.inputs ?? []).filter((i) => i.required);
@@ -95,7 +110,7 @@ export function ScheduleForm({ capabilities }) {
   }
   return (
     <>
-      <div class="t-head"><div><h1>{t("temporal.sch.newTitle")}</h1><p class="t-lead">{t("temporal.sch.newLead")}</p></div></div>
+      {head}
       <div class="t-card t-form">
         <label class="t-field"><span>{t("temporal.field.pipe")}</span>
           <select class="t-input" aria-label={t("temporal.field.pipe")} value={pick} onChange={(e) => setPick(e.currentTarget.value)}>
@@ -142,33 +157,56 @@ export function ScheduleForm({ capabilities }) {
   );
 }
 
-function ScheduleCard({ item, runs }) {
-  const [s, setS] = useState(item), [busy, setBusy] = useState(false), [error, setError] = useState("");
+function ScheduleCard({ item, runs, onDeleted }) {
+  const [s, setS] = useState(item), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmDelete, setConfirmDelete] = useState(false);
   async function toggle() {
     setBusy(true); setError("");
     try { setS({ ...s, ...(await api.temporalScheduleAction(s.id, s.paused ? "resume" : "pause")) }); }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
+  async function remove() {
+    setBusy(true); setError("");
+    try {
+      await api.temporalDeleteSchedule(s.id);
+      setConfirmDelete(false);
+      onDeleted?.(s.id);
+    } catch (e) {
+      setError(errorText(e));
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
   const fmt = new Intl.DateTimeFormat(locale(), { timeZone: validZone(s.timezone) ? s.timezone : "UTC", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const last = runs.find((r) => r.source === "schedule" && r.definitionId === s.definitionId);
   return (
-    <article class="t-card">
+    <article class="t-card" data-schedule-id={s.id}>
       <div class="t-row t-between">
         <h3>{s.pipeDeleted ? s.name : <a href={"#/temporal/pipe/" + encodeURIComponent(s.definitionId)}>{s.name}</a>}</h3>
         {!s.blocked && <button type="button" role="switch" aria-checked={!s.paused} class={"t-switch" + (s.paused ? "" : " is-on")}
           data-action={s.paused ? "resume-schedule" : "pause-schedule"} disabled={busy} onClick={toggle}>
           <span aria-hidden="true" />{s.paused ? t("temporal.sch.paused") : t("temporal.sch.on")}</button>}
       </div>
-      <p><b>{describeCron(s.cron)}</b> <span class="t-meta">· {s.timezone} · {t("temporal.sch.versionMeta", { n: s.version })}</span></p>
+      <p><b>{describeCron(s.cron)}</b><span class="t-meta">{s.timezone} · {t("temporal.sch.versionMeta", { n: s.version })}</span></p>
       {s.blocked && (s.pipeDeleted ? <Banner tone="info" icon="🗑" title={t("temporal.sch.pipeDeleted")}>{t("temporal.sch.pipeDeletedText")}</Banner>
         : <Banner tone="err" icon="🔒" title={t("temporal.sch.skipped")}>{s.blocked}. {t("temporal.sch.skippedText")}</Banner>)}
       {!s.blocked && <p class="t-meta">{s.paused ? t("temporal.sch.notWhilePaused") : s.nextTimes?.length ? t("temporal.sch.nextOne", { list: s.nextTimes.slice(0, 3).map((x) => fmt.format(new Date(x))).join(" · ") }) : ""}
         {last?.summary && <> · {t("temporal.sch.prev")} <StatusPill kind={last.summary.kind} /></>}</p>}
       <p class="t-meta">{OVERLAP[s.overlap] ? t(OVERLAP[s.overlap]) : s.overlap}</p>
-      {!s.pipeDeleted && <div class="t-row">
-        <a class="t-btn" href={"#/temporal/start/" + encodeURIComponent(s.definitionId) + "?v=" + s.version}>{t("temporal.sch.runNow")}</a>
-      </div>}
+      <div class="t-row">
+        {!s.pipeDeleted && !s.blocked && <a class="t-btn" href={"#/temporal/start/" + encodeURIComponent(s.definitionId) + "?v=" + s.version}>{t("temporal.sch.runNow")}</a>}
+        <button class="t-btn t-danger" type="button" data-action="delete-schedule" disabled={busy} onClick={() => setConfirmDelete(true)}>{t("temporal.sch.deleteBtn")}</button>
+      </div>
       {error && <p class="t-err-text" role="alert">{error}</p>}
+      {confirmDelete && (
+        <Sheet title={t("temporal.sch.deleteTitle")} onClose={() => !busy && setConfirmDelete(false)}>
+          <p class="t-lead">{t("temporal.sch.deleteLead", { name: s.name, cron: describeCron(s.cron) })}</p>
+          <div class="t-row t-stretch">
+            <button class="t-btn" type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>{t("common.cancel")}</button>
+            <button class="t-btn t-danger-fill" type="button" data-action="confirm-delete-schedule" disabled={busy} onClick={remove}>{busy ? t("temporal.sch.deleting") : t("temporal.sch.deleteConfirm")}</button>
+          </div>
+        </Sheet>
+      )}
     </article>
   );
 }
@@ -187,5 +225,5 @@ export default function SchedulesList({ capabilities }) {
   if (!items) return <>{head}<Skeleton rows={2} /></>;
   if (!items.length) return <>{head}<Empty icon="⏱" title={t("temporal.sch.empty")} actions={<a class="t-btn t-primary" href="#/temporal/schedules/new">{t("temporal.sch.createSchedule")}</a>}>
     <p>{t("temporal.sch.emptyText")}</p></Empty></>;
-  return <>{head}<div class="t-list">{items.map((i) => <ScheduleCard key={i.id} item={i} runs={runs} />)}</div></>;
+  return <>{head}<div class="t-list">{items.map((i) => <ScheduleCard key={i.id} item={i} runs={runs} onDeleted={(id) => setItems((prev) => (prev ?? []).filter((x) => x.id !== id))} />)}</div></>;
 }

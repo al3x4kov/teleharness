@@ -5,7 +5,7 @@ import { useEffect, useState } from "preact/hooks";
 import { api, explainApiError } from "../../lib/api.js";
 import { githubConn, refreshGithubConn, refreshGithubTriggers } from "../../lib/github-conn.js";
 import { hasKey, locale, t } from "../../lib/i18n.js";
-import { Banner, Empty, Skeleton, when, usePoll } from "./ui.jsx";
+import { Banner, Empty, Sheet, Skeleton, when, usePoll } from "./ui.jsx";
 
 const TPL_ICON = { "task-to-pr": "⇡", "fix-ci": "✚", "nightly-deps": "◷" };
 
@@ -56,6 +56,7 @@ export default function TriggersList({ capabilities = null } = {}) {
   const conn = githubConn.value;
   const [state, setState] = useState({ list: null, error: null, names: {} });
   const [templates, setTemplates] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
   const [clearingStorm, setClearingStorm] = useState(false);
   const [stormNote, setStormNote] = useState("");
 
@@ -80,10 +81,10 @@ export default function TriggersList({ capabilities = null } = {}) {
   usePoll(load, 15000, true);
 
   useEffect(() => {
-    if (state.list?.length === 0 && templates == null) {
+    if ((state.list?.length === 0 || showCreate) && templates == null) {
       api.temporalTemplates().then((r) => setTemplates(r.templates ?? []), () => setTemplates([]));
     }
-  }, [state.list, templates]);
+  }, [state.list, showCreate, templates]);
 
   const list = state.list;
   const err = state.error && list == null;
@@ -168,22 +169,36 @@ export default function TriggersList({ capabilities = null } = {}) {
     );
   }
 
+  const head = (action = null) => (
+    <div class="t-head">
+      <div>
+        <h1>{t("temporal.tl.title")}</h1>
+        <p class="t-lead">{t("temporal.tl.lead")}</p>
+      </div>
+      {action}
+    </div>
+  );
+
   if (err) {
     return (
-      <Empty
-        icon="⚠"
-        title={t("temporal.tl.errTitle")}
-        actions={<button class="t-btn t-primary" type="button" onClick={load}>{t("common.retry")}</button>}
-      >
-        <p>{explainApiError(state.error, t("temporal.tl.errFallback"))}</p>
-      </Empty>
+      <>
+        {head()}
+        <Empty
+          icon="⚠"
+          title={t("temporal.tl.errTitle")}
+          actions={<button class="t-btn t-primary" type="button" onClick={load}>{t("common.retry")}</button>}
+        >
+          <p>{explainApiError(state.error, t("temporal.tl.errFallback"))}</p>
+        </Empty>
+      </>
     );
   }
-  if (list == null) return <Skeleton rows={3} />;
+  if (list == null) return <>{head()}<Skeleton rows={3} /></>;
 
   if (list.length === 0) {
     return (
       <>
+        {head()}
         {banners}
         <Empty icon="⚡" title={t("temporal.tl.emptyTitle")}>
           <p>{t("temporal.tl.emptyText")}</p>
@@ -209,12 +224,17 @@ export default function TriggersList({ capabilities = null } = {}) {
 
   return (
     <>
+      {head(
+        <div class="t-row" style="margin-top:0">
+          <button class="t-btn t-primary" type="button" data-action="new-trigger" onClick={() => setShowCreate(true)}>{t("temporal.tl.newBtn")}</button>
+        </div>,
+      )}
       {banners}
       <div class="t-list" role="list">
         {list.map((tr) => {
           const p = triggerPill(tr, conn);
           return (
-            <a class="t-card t-trig" role="listitem" data-trigger={tr.id} href={`#/temporal/triggers/${tr.id}`}>
+            <a class="t-card t-trig" key={tr.id} role="listitem" data-trigger={tr.id} href={`#/temporal/triggers/${tr.id}`}>
               <span class="t-trig-ic" aria-hidden="true">⚡</span>
               <span class="t-trig-main">
                 <b class="t-trig-name">{state.names[tr.definitionId] ?? t("temporal.defaultPipeName")}</b>
@@ -230,6 +250,25 @@ export default function TriggersList({ capabilities = null } = {}) {
         })}
       </div>
       <p class="t-muted t-small">{t("temporal.tl.retention")}</p>
+      {showCreate && (
+        <Sheet title={t("temporal.tl.newTitle")} onClose={() => setShowCreate(false)}>
+          <div class="t-list">
+            {(templates ?? []).map((tp) => (
+              <a class="t-card t-tpl" key={tp.id} href={`#/temporal/triggers/new?tpl=${tp.id}`} onClick={() => setShowCreate(false)}>
+                <span class="t-tpl-ic" aria-hidden="true">{TPL_ICON[tp.id] ?? "⚡"}</span>
+                <span class="t-tpl-tx">
+                  <b>{tplName(tp)}</b>
+                  <span class="t-muted t-small">{tplDesc(tp)}</span>
+                </span>
+              </a>
+            ))}
+          </div>
+          <div class="t-row">
+            <a class="t-btn t-primary" href="#/temporal/triggers/new" onClick={() => setShowCreate(false)}>{t("temporal.tl.customTrigger")}</a>
+            <button class="t-btn" type="button" onClick={() => setShowCreate(false)}>{t("common.cancel")}</button>
+          </div>
+        </Sheet>
+      )}
     </>
   );
 }

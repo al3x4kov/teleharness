@@ -356,7 +356,7 @@ export function adminRoutes(deps) {
         if (!result.ok) {
           return sendJson(res, 422, { error: "Каталог команд повреждён — проверьте temporal-commands.json", errors: result.errors });
         }
-        return sendJson(res, 200, { ok: true, count: result.items.length, items: deps.commandCatalog.listAdmin().items });
+        return sendJson(res, 200, { ok: true, count: result.items.length, ...deps.commandCatalog.listAdmin() });
       },
     },
     {

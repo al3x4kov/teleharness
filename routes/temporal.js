@@ -49,6 +49,13 @@ export function temporalRoutes(deps) {
     if (!deps.dirAllowed(user,draft.directory)) throw new DefinitionError(403,"outside your scope");
     if (engines) for(const step of draft.steps??[]) if(step?.type==="model" && (!allowedEngine(user,step.engine) || !pipeEngineAllowed(deps.engineAllowed,user,step.engine))) throw new DefinitionError(403,"Движок шага недоступен");
   }
+  function assertCommandsAllowed(user,definition) {
+    for (const s of definition?.steps ?? []) {
+      if (s?.type !== "command") continue;
+      const entry = deps.commandCatalog?.get(s.command);
+      if (!entry || !commandAllowed(entry, user)) throw new DefinitionError(403, "Команда недоступна");
+    }
+  }
   function own(user,id) {
     const record=deps.store.get(user.id,id);
     access(user,record.draft);
@@ -89,7 +96,7 @@ export function temporalRoutes(deps) {
       if (typeof deps.commandsForUser==="function") return deps.sendJson(res,200,{items:deps.commandsForUser(user)});
       return deps.sendJson(res,200,{items:[]});
     }),
-    route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})$/, async ({user,res,match})=>{
+    route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9_:.+-]{1,150})$/, async ({user,res,match})=>{
       if (!deps.lookupRun) throw new DefinitionError(503,"Исполнение Temporal ещё не подключено");
       const row=await deps.lookupRun(user.id,match[1]);
       if (!row) throw new DefinitionError(404,"Запуск не найден");
@@ -115,6 +122,7 @@ export function temporalRoutes(deps) {
           let available=true, unavailableReason=null, plan=null;
           try {
             access(user,cand.definition,{engines:true});
+            assertCommandsAllowed(user,cand.definition);
             deps.validatePipeline?.(cand.definition);
             const declaredNames=new Set((cand.definition.inputs??[]).map(i=>i.name));
             const carried=Object.fromEntries(Object.entries(inputs).filter(([k])=>declaredNames.has(k)));
@@ -136,6 +144,13 @@ export function temporalRoutes(deps) {
           };
         })};
       }
+      const rawCommandMeta=deps.commandMeta?.(match[1])??{};
+      const commandMeta=user.role==="admin" ? rawCommandMeta : Object.fromEntries(
+        Object.entries(rawCommandMeta).map(([k,m])=>{
+          if (!m || !Array.isArray(m.files)) return [k,m];
+          return [k,{...m,files:m.files.map(f=>f&&!f.allowed?{...f,path:path.basename(String(f.path||""))||"файл"}:f)}];
+        }),
+      );
       deps.sendJson(res,200,{...detail,resultSteps:deps.results?.steps(match[1])??[],name:version.definition.name,version:row.version,
         latestVersion:latestPublished?.version??row.version,
         resumedFrom:row.resumedFrom??null,resumeFromStep:row.resumeFromStep??null,resumedSteps,
@@ -143,9 +158,9 @@ export function temporalRoutes(deps) {
         definitionId:row.definitionId,directory:version.definition.directory,source:source(match[1],row.source),triggerId:row.triggerId??null,eventRef:row.eventRef??null,
         eventUrl:row.eventUrl??null,attempt:Number.isSafeInteger(row.attempt)&&row.attempt>0?row.attempt:null,stepError:parseJson(row.stepError),steps,summary:summarizeRun(detail,steps),
         workspace,runFolder:folder?"runs/"+folder:null,files:folder?listRunFiles(workspace,"runs/"+folder):[],
-        chats:deps.results?.chats?.(match[1])??{},commandMeta:deps.commandMeta?.(match[1])??{},inputs,...(record.deletedAt?{pipeDeleted:true}:{})});
+        chats:deps.results?.chats?.(match[1])??{},commandMeta,inputs,...(record.deletedAt?{pipeDeleted:true}:{})});
     }),
-    route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/results\/([a-zA-Z][a-zA-Z0-9_-]{0,63})$/,async({res,user,match})=>{
+    route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9_:.+-]{1,150})\/results\/([a-zA-Z][a-zA-Z0-9_-]{0,63})$/,async({res,user,match})=>{
       const row=await deps.lookupRun?.(user.id,match[1]);
       if(!row || !deps.results) throw new DefinitionError(404,"Результат не найден");
       const v=deps.store.get(user.id,row.definitionId,{deleted:true}).versions.find(v=>v.version===row.version);
@@ -154,7 +169,7 @@ export function temporalRoutes(deps) {
       const text=await deps.results.read(match[1],match[2]);
       deps.sendJson(res,200,{text});
     }),
-    route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/actions$/,async({req,res,user,match})=>{
+    route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9_:.+-]{1,150})\/actions$/,async({req,res,user,match})=>{
       const command=await body(req,["action","actionId","runId","stepId","generation","reason","note"]);
       if(!deps.applyAction) throw new DefinitionError(503,"Управление не подключено");
       const row=await deps.lookupRun(user.id,match[1]);
@@ -184,7 +199,7 @@ export function temporalRoutes(deps) {
       deps.sendJson(res,200,actionResult);
     }),
     // FEAT-19.32: продолжение завершённого/упавшего запуска с последнего успешного (или выбранного) шага.
-    route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/resume$/, async ({req,res,user,match}) => {
+    route("POST", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9_:.+-]{1,150})\/resume$/, async ({req,res,user,match}) => {
       const b = await body(req, ["requestId","version","fromStepId"]);
       if (typeof b.requestId !== "string" || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(b.requestId))
         throw new DefinitionError(400, "Некорректный ключ запроса");
@@ -207,6 +222,7 @@ export function temporalRoutes(deps) {
       const published = record.versions.find(v => v.version === targetVersion);
       if (!published) throw new DefinitionError(404, "Опубликованная версия не найдена");
       access(user, published.definition, {engines:true});
+      assertCommandsAllowed(user, published.definition);
       deps.validatePipeline(published.definition);
       const detail = await deps.describeRun(match[1]);
       if (detail.status === "RUNNING")
@@ -253,11 +269,7 @@ export function temporalRoutes(deps) {
       const published = record.versions.find(v => v.version === b.version);
       if (!published) throw new DefinitionError(404, "Опубликованная версия не найдена");
       access(user, published.definition, {engines:true});
-      for (const s of published.definition.steps ?? []) {
-        if (s.type !== "command") continue;
-        const entry = deps.commandCatalog?.get(s.command);
-        if (!entry || !commandAllowed(entry, user)) throw new DefinitionError(403, "Команда недоступна");
-      }
+      assertCommandsAllowed(user, published.definition);
       if (deps.startPipeline) {
         deps.validatePipeline(published.definition);
         const inputs=cleanInputs(published.definition.inputs,b.inputs);

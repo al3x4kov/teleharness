@@ -1,11 +1,11 @@
 // Admin-only detail view for an external Temporal workflow:
 // status, input/result/failure, pending activities, history with Reset points,
 // Signal, Query, Reset, Cancel, Terminate.
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../lib/api.js";
 import { t } from "../../lib/i18n.js";
 import { navigate } from "../../lib/router.js";
-import { Banner, Empty, Sheet, Skeleton, StatusPill, errorText, hashQuery, useNow, when } from "./ui.jsx";
+import { Banner, Empty, Sheet, Skeleton, StatusPill, errorText, formatDurationStr, hashQuery, useNow, when } from "./ui.jsx";
 
 function statusToKind(status) {
   switch (String(status || "").toUpperCase()) {
@@ -29,8 +29,8 @@ function fmtJson(value) {
 export default function ExternalWorkflowDetail({ workflowId }) {
   const hq = hashQuery();
   const [runId, setRunId] = useState(hq.get("runId") || "");
-  const address = hq.get("address") || "";
-  const namespace = hq.get("namespace") || "";
+  const [address, setAddress] = useState(hq.get("address") || "");
+  const [namespace, setNamespace] = useState(hq.get("namespace") || "");
 
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -41,6 +41,7 @@ export default function ExternalWorkflowDetail({ workflowId }) {
   const [notice, setNotice] = useState(null);
   const [copiedKey, setCopiedKey] = useState("");
   const [queryOut, setQueryOut] = useState(null);
+  const loadSeqRef = useRef(0);
 
   const [sigName, setSigName] = useState("");
   const [sigInput, setSigInput] = useState("");
@@ -56,7 +57,19 @@ export default function ExternalWorkflowDetail({ workflowId }) {
 
   const now = useNow(15000);
 
+  useEffect(() => {
+    const syncQuery = () => {
+      const q = hashQuery();
+      setRunId(q.get("runId") || "");
+      setAddress(q.get("address") || "");
+      setNamespace(q.get("namespace") || "");
+    };
+    window.addEventListener("hashchange", syncQuery);
+    return () => window.removeEventListener("hashchange", syncQuery);
+  }, []);
+
   async function load(overrideRunId) {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     const targetRunId = overrideRunId !== undefined ? overrideRunId : runId;
@@ -66,20 +79,23 @@ export default function ExternalWorkflowDetail({ workflowId }) {
         address: address || undefined,
         namespace: namespace || undefined,
       });
+      if (loadSeqRef.current !== seq) return;
       setData(res);
       if (res.resetPoints?.length && !resetEventId) {
         setResetEventId(String(res.resetPoints[0].eventId));
       }
     } catch (ex) {
+      if (loadSeqRef.current !== seq) return;
       setError(ex);
     } finally {
-      setLoading(false);
+      if (loadSeqRef.current === seq) setLoading(false);
     }
   }
 
   useEffect(() => {
     load();
-  }, [workflowId, runId]);
+    return () => { loadSeqRef.current++; };
+  }, [workflowId, runId, address, namespace]);
 
   async function copyText(key, text) {
     try {
@@ -271,7 +287,7 @@ export default function ExternalWorkflowDetail({ workflowId }) {
       <div class="t-head-row t-ext-head">
         <div class="t-ext-title-wrap">
           <div class="t-row" style="gap:8px;flex-wrap:wrap">
-            <h2 class="t-h2">{wf.workflowType || "Workflow"}</h2>
+            <h1>{wf.workflowType || "Workflow"}</h1>
             <StatusPill kind={statusToKind(wf.status)} />
           </div>
           <div class="t-row" style="gap:8px;margin-top:4px;flex-wrap:wrap">
@@ -420,7 +436,7 @@ export default function ExternalWorkflowDetail({ workflowId }) {
               <dt>Run ID</dt><dd class="t-mono">{wf.runId || "—"}</dd>
               <dt>{t("temporal.ext.kvStarted")}</dt><dd>{when(wf.startTime, now) || "—"}</dd>
               {wf.closeTime && <><dt>{t("temporal.ext.kvClosed")}</dt><dd>{when(wf.closeTime, now)}</dd></>}
-              {wf.executionDuration && <><dt>{t("temporal.ext.kvDuration")}</dt><dd class="t-mono">{wf.executionDuration}</dd></>}
+              {wf.executionDuration && <><dt>{t("temporal.ext.kvDuration")}</dt><dd class="t-mono">{formatDurationStr(wf.executionDuration)}</dd></>}
               <dt>{t("temporal.ext.kvEvents")}</dt><dd>{data.totalEvents ?? wf.historyLength ?? 0}</dd>
             </dl>
           </section>

@@ -54,7 +54,7 @@ function mockMatchMedia(initialMatches) {
 function baseRoutes() {
   return [
     { method: "GET", path: "/teleharness/api/auth/me", reply: () => ({ id: "admin", name: "Admin", role: "admin" }) },
-    { method: "GET", path: "/teleharness/api/session", reply: () => [] },
+    { method: "GET", path: "/teleharness/api/session", reply: () => [{ id: "ses_mob", title: "Chat", directory: "/tmp", time: { created: 1, updated: 1 } }] },
     { method: "GET", path: "/teleharness/api/project", reply: () => [] },
     { method: "GET", path: "/teleharness/api/provider", reply: () => ({ all: [], default: {}, connected: [] }) },
     { method: "GET", path: "/teleharness/api/agent", reply: () => [] },
@@ -81,7 +81,8 @@ test("BUG-307: below 1024 px RightPanel is not mounted and sends no /mcp, /skill
   assert.equal($(root, "aside.right-panel"), null, "below 1024 px RightPanel is absent from the DOM");
   assert.equal($(root, ".shell.has-right-panel"), null, "the has-right-panel class is not set below 1024 px");
   assert.equal(ui.store.panelMcp.value, null, "RightPanel did not start loading panelMcp below 1024 px");
-  const panelOnlyCalls = fetchCalls.filter((c) => c.path === "/teleharness/api/skills" || /\/plan$/.test(c.path));
+  const isSessionPlan = (p) => /^\/teleharness\/api\/session\/[^/]+\/plan$/.test(p);
+  const panelOnlyCalls = fetchCalls.filter((c) => c.path === "/teleharness/api/skills" || isSessionPlan(c.path));
   assert.equal(panelOnlyCalls.length, 0, `below 1024 px there must be no /skills or /plan requests, got: ${JSON.stringify(panelOnlyCalls.map((c) => c.path))}`);
 
   // Resized to desktop (>= 1024 px): the panel mounts and loads its data.
@@ -89,7 +90,7 @@ test("BUG-307: below 1024 px RightPanel is not mounted and sends no /mcp, /skill
   t$.act(() => mm.set(true));
   await t$.waitFor(() => $(root, "aside.right-panel") != null);
   await t$.waitFor(() => fetchCalls.some((c) => c.path === "/teleharness/api/skills"));
-  await t$.waitFor(() => fetchCalls.some((c) => /\/plan$/.test(c.path)));
+  await t$.waitFor(() => fetchCalls.some((c) => isSessionPlan(c.path)));
   await t$.waitFor(() => fetchCalls.filter((c) => c.path === "/teleharness/api/mcp").length > mcpCountBefore);
   assert.ok($(root, ".shell.has-right-panel") != null);
 

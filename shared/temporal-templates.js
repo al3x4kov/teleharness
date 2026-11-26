@@ -70,7 +70,7 @@ export const TEMPLATES = [
     pipe: {
       name: "Ночное обновление",
       directory: "",
-      inputs: [input("repo", "string", true)],
+      inputs: [input("repo", "string", false)],
       steps: [
         {
           id: "work", name: "Обновление зависимостей", type: "model", engine: "claude", model: DEFAULT_CLAUDE_MODEL,
@@ -92,8 +92,20 @@ export const TEMPLATES = [
 export function templateFace(t) {
   return { id: t.id, name: t.name, description: t.description, needs: t.needs, trigger: t.trigger ?? null, schedule: t.schedule ?? null };
 }
-export function templateDraft(t, directory) {
-  return { ...t.pipe, directory };
+export function templateDraft(t, directory, { engine, model, repo } = {}) {
+  const cleanRepo = typeof repo === "string" ? repo.trim() : "";
+  const steps = (t.pipe.steps ?? []).map((step) => {
+    const next = { ...step };
+    if (next.type === "model") {
+      if (engine) next.engine = engine;
+      if (model) next.model = model;
+    }
+    if (next.type === "pull_request" && cleanRepo && t.schedule) {
+      next.repo = cleanRepo;
+    }
+    return next;
+  });
+  return { ...t.pipe, directory, inputs: (t.pipe.inputs ?? []).map((i) => ({ ...i })), steps };
 }
 export function templateById(id) {
   return TEMPLATES.find((t) => t.id === id) ?? null;

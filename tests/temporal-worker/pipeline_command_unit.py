@@ -183,7 +183,7 @@ async def main():
     # 5. TeleharnessPortalCommandV1: heartbeat при долгой команде + фильтрация stdout
     orig_portal = model_activity.portal
     try:
-        def fake_portal_slow(action, req, deadline_ms=None):
+        def fake_portal_slow(action, req, deadline_ms=None, cancel_signal=None):
             assert action == "step" and req == {"workflowId": "wf-cmd-1", "stepId": "cmd1"}
             time.sleep(0.45)
             return {"state": "done", "exitCode": 0, "durationMs": 450, "stdout": "SHOULD_NOT_PASS", "kind": "exec"}
@@ -194,8 +194,92 @@ async def main():
         check("TeleharnessPortalCommandV1 шлёт heartbeat пока команда работает", state["heartbeats"] >= 2)
         check("TeleharnessPortalCommandV1 не пропускает stdout в Temporal", res == {"state": "done", "exitCode": 0, "durationMs": 450, "kind": "exec"})
 
+        # Activity cancellation triggers cancel_signal immediately
+        import threading
+        seen_signal = {}
+        started_evt = threading.Event()
+        def fake_portal_blocking(action, req, deadline_ms=None, cancel_signal=None):
+            seen_signal["sig"] = cancel_signal
+            started_evt.set()
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline and not (cancel_signal and cancel_signal.cancelled):
+                time.sleep(0.02)
+            return {"state": "done", "exitCode": 0, "durationMs": 10}
+
+        model_activity.portal = fake_portal_blocking
+        cmd_task = asyncio.create_task(model_activity.portal_step_command("cmd1"))
+        for _ in range(50):
+            if started_evt.is_set():
+                break
+            await asyncio.sleep(0.01)
+        t0 = time.monotonic()
+        cmd_task.cancel()
+        try:
+            await cmd_task
+            check("Activity cancellation propagates CancelledError", False)
+        except asyncio.CancelledError:
+            elapsed = time.monotonic() - t0
+            check("Activity cancellation sets cancel_signal immediately",
+                  bool(seen_signal.get("sig") and seen_signal["sig"].cancelled) and elapsed < 1.0)
+
+        # CancelSignal interrupts blocking Unix-socket portal() request (POSIX only)
+        import os, socket, tempfile
+        if hasattr(socket, "AF_UNIX") and sys.platform != "win32":
+            tmp_dir = tempfile.mkdtemp(prefix="teleharness-cancel-test-")
+            sock_path = os.path.join(tmp_dir, "bridge.sock")
+            srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            srv.bind(sock_path)
+            srv.listen(2)
+            srv_closed = threading.Event()
+            def hold_connection():
+                try:
+                    conn, _ = srv.accept()
+                    conn.settimeout(5.0)
+                    conn.recv(4096)
+                    while True:
+                        chunk = conn.recv(64)
+                        if not chunk:
+                            srv_closed.set()
+                            break
+                    conn.close()
+                except OSError:
+                    srv_closed.set()
+            srv_thread = threading.Thread(target=hold_connection, daemon=True)
+            srv_thread.start()
+            prev_sock = os.environ.get("ZAI_TEMPORAL_MODEL_SOCKET")
+            prev_tel_sock = os.environ.get("TELEHARNESS_TEMPORAL_MODEL_SOCKET")
+            try:
+                os.environ["TELEHARNESS_TEMPORAL_MODEL_SOCKET"] = sock_path
+                sig = model_activity.CancelSignal()
+                def trigger_cancel():
+                    time.sleep(0.15)
+                    sig.cancel()
+                threading.Thread(target=trigger_cancel, daemon=True).start()
+                t0 = time.monotonic()
+                raised = False
+                try:
+                    orig_portal("step", {"workflowId": "wf-cancel", "stepId": "cmd1"}, int((time.time() + 30) * 1000), sig)
+                except Exception:
+                    raised = True
+                elapsed = time.monotonic() - t0
+                srv_thread.join(timeout=1.0)
+                check("CancelSignal interrupts Unix-socket portal() and server sees EOF < 1s",
+                      raised and elapsed < 1.0 and srv_closed.is_set())
+            finally:
+                srv.close()
+                try: os.unlink(sock_path)
+                except OSError: pass
+                try: os.rmdir(tmp_dir)
+                except OSError: pass
+                for k, v in (
+                    ("ZAI_TEMPORAL_MODEL_SOCKET", prev_sock),
+                    ("TELEHARNESS_TEMPORAL_MODEL_SOCKET", prev_tel_sock),
+                ):
+                    if v is None: os.environ.pop(k, None)
+                    else: os.environ[k] = v
+
         # failed retryable (exit != 0)
-        model_activity.portal = lambda *_a: {"state": "failed", "error": "Код выхода 2", "nonRetryable": False}
+        model_activity.portal = lambda *_a, **_kw: {"state": "failed", "error": "Код выхода 2", "nonRetryable": False}
         try:
             await model_activity.portal_step_command("cmd1")
             check("CommandFailed retryable", False)
@@ -203,7 +287,7 @@ async def main():
             check("CommandFailed retryable", err.type == "CommandFailed" and err.non_retryable is False and "Код выхода 2" in err.message)
 
         # failed nonRetryable (uncertain / 403)
-        model_activity.portal = lambda *_a: {"state": "failed", "error": "Команда прервана", "nonRetryable": True}
+        model_activity.portal = lambda *_a, **_kw: {"state": "failed", "error": "Команда прервана", "nonRetryable": True}
         try:
             await model_activity.portal_step_command("cmd1")
             check("CommandFailed nonRetryable", False)
@@ -211,7 +295,7 @@ async def main():
             check("CommandFailed nonRetryable", err.type == "CommandFailed" and err.non_retryable is True)
 
         # slot_wait
-        model_activity.portal = lambda *_a: {"state": "slot_wait", "reason": "command_slots_busy"}
+        model_activity.portal = lambda *_a, **_kw: {"state": "slot_wait", "reason": "command_slots_busy"}
         res_wait = await model_activity.portal_step_command("cmd1")
         check("TeleharnessPortalCommandV1 возвращает slot_wait", res_wait == {"state": "slot_wait", "reason": "command_slots_busy"})
 

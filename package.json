@@ -1,6 +1,6 @@
 {
   "name": "teleharness",
-  "version": "2.10.0",
+  "version": "2.12.0",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -31,7 +31,7 @@
   "devDependencies": {
     "happy-dom": "^21.0.4"
   },
-  "description": "Self-hosted control room for AI coding agents (Claude Code, Codex, Gemini/ACP, opencode): mobile-first chat, Attention Board, diff review & Plan-First, git worktrees, API-equivalent costs, cross-CLI handoff, and Temporal pipelines with GitHub background agents.",
+  "description": "Self-hosted desktop web control room (with optional mobile PWA) for AI coding agents — Claude Code, Codex, Gemini/ACP, and opencode: Attention Board, diff review & Plan-First, git worktrees, API-equivalent costs, cross-CLI handoff, and Temporal pipelines with GitHub background agents.",
   "repository": {
     "type": "git",
     "url": "https://github.com/al3x4kov/teleharness.git"
@@ -55,7 +55,7 @@
     "cost-tracking",
     "multi-agent",
     "self-hosted",
-    "mobile",
+    "web-ui",
     "pwa",
     "mcp"
   ]

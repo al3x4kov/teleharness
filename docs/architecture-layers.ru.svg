@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="2030" viewBox="0 0 1400 2030" font-family="Segoe UI, Inter, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1017"/><stop offset="1" stop-color="#111520"/></linearGradient>
+    <linearGradient id="srv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3ecf8e" stop-opacity="0.10"/><stop offset="1" stop-color="#3ecf8e" stop-opacity="0.03"/></linearGradient>
+    <linearGradient id="ocHead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4f8cff" stop-opacity="0.35"/><stop offset="1" stop-color="#4f8cff" stop-opacity="0.05"/></linearGradient>
+    <linearGradient id="clHead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e07a52" stop-opacity="0.38"/><stop offset="1" stop-color="#e07a52" stop-opacity="0.05"/></linearGradient>
+    <linearGradient id="cxHead" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#10a37f" stop-opacity="0.38"/><stop offset="1" stop-color="#10a37f" stop-opacity="0.05"/></linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.45"/></filter>
+    <marker id="aW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c9ced8"/></marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4f8cff"/></marker>
+    <marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e07a52"/></marker>
+    <marker id="aC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#10a37f"/></marker>
+    <marker id="aT" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8b8ff8"/></marker>
+    <marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3ecf8e"/></marker>
+    <style>
+      .t { fill:#e6e8ee; } .m { fill:#9aa3b2; } .d { fill:#6b7385; }
+      .h { font-weight:700; letter-spacing:0.6px; }
+      .mono { font-family: Cascadia Code, Consolas, DejaVu Sans Mono, monospace; }
+      .box { fill:#161a24; stroke:#2b3242; stroke-width:1.2; }
+      .chip { fill:#1e2432; stroke:#323a4d; stroke-width:1; }
+      .ext { fill:#13161d; fill-opacity:.55; stroke:#596173; stroke-width:1.3; stroke-dasharray:7 6; }
+    </style>
+  </defs>
+  <rect width="1400" height="2030" fill="url(#bg)"/>
+  <text x="60" y="62" font-size="30" font-weight="700" class="t">Teleharness — слои и путь запроса</text>
+  <text x="60" y="98" font-size="15" class="m">Четыре семейства движков (OpenCode 2.x, Claude Code, Codex, ACP) за одним порталом · v2.12.0</text>
+  <rect x="990" y="40" width="360" height="100" rx="10" class="box"/>
+  <rect x="1012" y="56" width="14" height="14" rx="3" fill="#3ecf8e" fill-opacity="0.25" stroke="#3ecf8e"/>
+  <text x="1036" y="68" font-size="13" class="t">этот сервер</text>
+  <rect x="1180" y="56" width="14" height="14" rx="3" fill="none" stroke="#596173" stroke-dasharray="3 3"/>
+  <text x="1204" y="68" font-size="13" class="t">вне сервера</text>
+  <path d="M1012 92 H1040" fill="none" stroke="#4f8cff" stroke-width="3"/>
+  <text x="1050" y="96" font-size="13" class="t">путь opencode</text>
+  <path d="M1180 92 H1208" fill="none" stroke="#e07a52" stroke-width="3"/>
+  <text x="1218" y="96" font-size="13" class="t">путь Claude Code</text>
+  <path d="M1012 120 H1040" fill="none" stroke="#10a37f" stroke-width="3"/>
+  <text x="1050" y="124" font-size="13" class="t">путь Codex / ACP</text>
+  <path d="M1180 120 H1208" fill="none" stroke="#8b8ff8" stroke-width="3"/>
+  <text x="1218" y="124" font-size="13" class="t">пайпы Temporal</text>
+  <rect x="420" y="160" width="560" height="86" rx="12" class="box" filter="url(#shadow)"/>
+  <text x="444" y="188" font-size="12" font-weight="700" class="m h">0 · КЛИЕНТ</text>
+  <text x="444" y="212" font-size="18" font-weight="700" class="t">Браузер на десктопе (мобильный PWA по желанию)</text>
+  <text x="444" y="234" font-size="13" class="m">SPA на Preact · public/app.js · REST /teleharness/api/* + поток SSE</text>
+  <path d="M700 252 V318" fill="none" stroke="#c9ced8" stroke-width="2.2" marker-end="url(#aW)" marker-start="url(#aW)"/>
+  <text x="714" y="290" font-size="13" class="m">HTTPS · https://&lt;ваш хост&gt;/teleharness/</text>
+  <rect x="40" y="324" width="1320" height="128" rx="18" class="ext"/>
+  <text x="62" y="348" font-size="12" font-weight="700" class="m h">ВНЕ СЕРВЕРА · СЕТЬ</text>
+  <text x="62" y="368" font-size="12" font-weight="700" class="t h">1 · ВХОДНАЯ СЕТЬ</text>
+  <rect x="150" y="378" width="300" height="54" rx="10" class="chip"/>
+  <text x="300" y="401" font-size="14" font-weight="700" text-anchor="middle" class="t">Публичный DNS</text>
+  <text x="300" y="421" font-size="12" text-anchor="middle" class="m">имя портала → публичный адрес</text>
+  <path d="M450 405 H544" fill="none" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+  <rect x="550" y="378" width="300" height="54" rx="10" class="chip"/>
+  <text x="700" y="401" font-size="14" font-weight="700" text-anchor="middle" class="t">NAT / межсетевой экран</text>
+  <text x="700" y="421" font-size="12" text-anchor="middle" class="m">проброс порта 443</text>
+  <path d="M850 405 H944" fill="none" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+  <rect x="950" y="378" width="300" height="54" rx="10" class="chip"/>
+  <text x="1100" y="401" font-size="14" font-weight="700" text-anchor="middle" class="t">reverse proxy (по желанию)</text>
+  <text x="1100" y="421" font-size="12" text-anchor="middle" class="m">upstream https → edge :443</text>
+  <path d="M1100 432 V476 H700 V520" fill="none" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+  <rect x="30" y="494" width="1340" height="1062" rx="24" fill="url(#srv)" stroke="#3ecf8e" stroke-width="2" stroke-dasharray="10 7"/>
+  <rect x="60" y="478" width="520" height="32" rx="16" class="box" style="fill:#0f2a1f;stroke:#3ecf8e"/>
+  <text x="80" y="500" font-size="14" font-weight="700" class="h" fill="#3ecf8e">ЭТОТ СЕРВЕР · Linux, macOS или Windows · Node.js</text>
+  <rect x="100" y="526" width="1200" height="66" rx="12" class="box"/>
+  <text x="124" y="550" font-size="12" font-weight="700" class="m h">2 · EDGE</text>
+  <text x="124" y="576" font-size="17" font-weight="700" class="t mono">ops/portal-server.js</text>
+  <text x="350" y="576" font-size="13" class="m">:80 / :443</text>
+  <text x="1276" y="568" font-size="13" text-anchor="end" class="m">TLS · http → https · allow-list статики · X-Forwarded-*</text>
+  <path d="M700 592 V626" fill="none" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+  <text x="714" y="614" font-size="12" class="m">только 127.0.0.1</text>
+  <rect x="100" y="632" width="1200" height="176" rx="12" class="box"/>
+  <text x="124" y="656" font-size="12" font-weight="700" class="m h">3 · ЯДРО ПОРТАЛА</text>
+  <text x="124" y="684" font-size="19" font-weight="700" class="t mono">server.js</text>
+  <text x="236" y="684" font-size="13" class="m">127.0.0.1:4170 · Node без runtime-зависимостей · API, пользователи, хаб событий</text>
+  <rect x="124" y="700" width="182" height="48" rx="8" class="chip"/>
+  <text x="215" y="720" font-size="13" font-weight="700" text-anchor="middle" class="t">auth.js · policy.js</text>
+  <text x="215" y="738" font-size="11" text-anchor="middle" class="m">сессии · тенанты · права</text>
+  <rect x="318" y="700" width="182" height="48" rx="8" class="chip"/>
+  <text x="409" y="720" font-size="13" font-weight="700" text-anchor="middle" class="t">routes/*</text>
+  <text x="409" y="738" font-size="11" text-anchor="middle" class="m">чаты · файлы · Git · admin</text>
+  <rect x="512" y="700" width="182" height="48" rx="8" class="chip"/>
+  <text x="603" y="720" font-size="13" font-weight="700" text-anchor="middle" class="t">BindingStore</text>
+  <text x="603" y="738" font-size="11" text-anchor="middle" class="m">чат → движок + модель + агент</text>
+  <rect x="706" y="700" width="182" height="48" rx="8" class="chip"/>
+  <text x="797" y="720" font-size="13" font-weight="700" text-anchor="middle" class="t">EventHub</text>
+  <text x="797" y="738" font-size="11" text-anchor="middle" class="m">SSE fan-out · replay</text>
+  <rect x="900" y="700" width="182" height="48" rx="8" class="chip"/>
+  <text x="991" y="720" font-size="13" font-weight="700" text-anchor="middle" class="t">relay.js · журнал</text>
+  <text x="991" y="738" font-size="11" text-anchor="middle" class="m">передача между движками</text>
+  <rect x="1094" y="700" width="182" height="48" rx="8" class="chip"/>
+  <text x="1185" y="720" font-size="13" font-weight="700" text-anchor="middle" class="t">JSON + SQLite</text>
+  <text x="1185" y="738" font-size="11" text-anchor="middle" class="m">FTS5 поиск · доска · расходы</text>
+  <text x="124" y="786" font-size="12.5" class="m">Каждый движок подключён своим адаптером; все пишут события в один хаб → единый поток SSE в браузер. Передача чата — тот же чат и папка, новый движок читает журнал.</text>
+  <path d="M293 808 V858" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#aB)"/>
+  <text x="305" y="838" font-size="12.5" font-weight="600" class="" fill="#4f8cff">REST + SSE · lib/oc-client.js</text>
+  <path d="M700 808 V858" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#aO)"/>
+  <text x="712" y="838" font-size="12.5" font-weight="600" class="" fill="#e07a52">spawn на каждый ход</text>
+  <path d="M1107 808 V858" fill="none" stroke="#10a37f" stroke-width="2.2" marker-end="url(#aC)"/>
+  <text x="1119" y="838" font-size="12.5" font-weight="600" class="" fill="#10a37f">codex shim · ACP JSON-RPC</text>
+  <rect x="100" y="864" width="386" height="236" rx="12" class="box" filter="url(#shadow)"/>
+  <path d="M100 876 a12 12 0 0 1 12 -12 h362 a12 12 0 0 1 12 12 v34 h-386 z" fill="url(#ocHead)"/>
+  <text x="120" y="892" font-size="16" font-weight="700" class="h" fill="#4f8cff">4a · OPENCODE</text>
+  <text x="120" y="934" font-size="15" font-weight="700" class="t mono">opencode serve</text>
+  <text x="466" y="934" font-size="12.5" text-anchor="end" class="m mono">1.x :4096 · 2.x :4196</text>
+  <text x="120" y="964" font-size="13" class="m">• агенты и оркестрация: oh-my-opencode-slim</text>
+  <text x="120" y="989" font-size="13" class="m">• плагин базы знаний и песочницы:</text>
+  <text x="120" y="1014" font-size="13" class="d mono">ops/opencode/plugin-v2 (2.x)</text>
+  <text x="120" y="1039" font-size="13" class="d mono">vault-cache.ts (1.x)</text>
+  <text x="120" y="1064" font-size="13" class="m">• любой провайдер, который знает opencode</text>
+  <rect x="507" y="864" width="386" height="236" rx="12" class="box" filter="url(#shadow)"/>
+  <path d="M507 876 a12 12 0 0 1 12 -12 h362 a12 12 0 0 1 12 12 v34 h-386 z" fill="url(#clHead)"/>
+  <text x="527" y="892" font-size="16" font-weight="700" class="h" fill="#e07a52">4b · CLAUDE CODE</text>
+  <text x="527" y="934" font-size="15" font-weight="700" class="t mono">ClaudeRunner</text>
+  <text x="873" y="934" font-size="12.5" text-anchor="end" class="m mono">lib/claude.js</text>
+  <text x="527" y="964" font-size="13" class="m">• на каждый ход — процесс CLI:</text>
+  <text x="527" y="989" font-size="13" class="d mono">claude -p --output-format stream-json</text>
+  <text x="527" y="1014" font-size="13" class="m">• хуки: Bash → песочница, отмена хода</text>
+  <text x="527" y="1039" font-size="13" class="m">• субагенты, фоновые агенты, скиллы, MCP</text>
+  <text x="527" y="1064" font-size="13" class="m">• вход по подписке Claude</text>
+  <rect x="914" y="864" width="386" height="236" rx="12" class="box" filter="url(#shadow)"/>
+  <path d="M914 876 a12 12 0 0 1 12 -12 h362 a12 12 0 0 1 12 12 v34 h-386 z" fill="url(#cxHead)"/>
+  <text x="934" y="892" font-size="16" font-weight="700" class="h" fill="#10a37f">4c · CODEX и ACP</text>
+  <text x="934" y="934" font-size="15" font-weight="700" class="t mono">Codex + ACP</text>
+  <text x="1280" y="934" font-size="12.5" text-anchor="end" class="m mono">codex-shim · acp-chat</text>
+  <text x="934" y="964" font-size="13" class="m">• codex app-server и ACP JSON-RPC (Gemini, Copilot)</text>
+  <text x="934" y="989" font-size="13" class="m">• режим «Спрашивать», роли агентов, Plan-First</text>
+  <text x="934" y="1014" font-size="13" class="m">• настройка и вход в мастере Настроек</text>
+  <text x="934" y="1039" font-size="13" class="m">• в чатах — admin (или выдаётся пользователю)</text>
+  <text x="934" y="1064" font-size="13" class="m">• в пайпах — Claude, Codex, ACP, OpenCode</text>
+  <rect x="100" y="1124" width="1200" height="112" rx="12" class="box" style="stroke:#8b8ff8;stroke-opacity:.7"/>
+  <text x="124" y="1150" font-size="13" font-weight="700" class="h" fill="#8b8ff8">4d · ПАЙПЫ TEMPORAL — по желанию, Linux и macOS</text>
+  <rect x="124" y="1164" width="254" height="52" rx="8" class="chip"/>
+  <text x="251" y="1186" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Сервер Temporal</text>
+  <text x="251" y="1204" font-size="11.5" text-anchor="middle" class="m">история, таймеры, повторы, расписания</text>
+  <rect x="392" y="1164" width="254" height="52" rx="8" class="chip"/>
+  <text x="519" y="1186" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Воркер на Python</text>
+  <text x="519" y="1204" font-size="11.5" text-anchor="middle" class="m">модель · команда · решение · PR · условие</text>
+  <rect x="660" y="1164" width="254" height="52" rx="8" class="chip"/>
+  <text x="787" y="1186" font-size="13.5" font-weight="700" text-anchor="middle" class="t">PostgreSQL / локально</text>
+  <text x="787" y="1204" font-size="11.5" text-anchor="middle" class="m">история · журнал · слоты (или LEDGER=none)</text>
+  <text x="1104" y="1184" font-size="13" font-weight="600" text-anchor="middle" class="" fill="#8b8ff8">шаг модели = ход чата портала</text>
+  <text x="1104" y="1204" font-size="12.5" text-anchor="middle" class="m">в папке пайпа, через закрытый сокет</text>
+  <path d="M70 720 H52 V1180 H96" fill="none" stroke="#8b8ff8" stroke-width="2.2" marker-end="url(#aT)"/>
+  <text x="44" y="950" font-size="12.5" font-weight="600" fill="#8b8ff8" transform="rotate(-90 44 950)" text-anchor="middle">API запусков · мост моделей</text>
+  <path d="M100 720 H70" fill="none" stroke="#8b8ff8" stroke-width="2.2"/>
+  <path d="M1316 980 H1334 V1340 H1304" fill="none" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)" marker-start="url(#aW)"/>
+  <text x="1350" y="1160" font-size="12" fill="#9aa3b2" transform="rotate(90 1350 1160)" text-anchor="middle">вызов инструмента ⇄ результат</text>
+  <rect x="100" y="1280" width="1200" height="128" rx="12" class="box"/>
+  <text x="124" y="1304" font-size="12" font-weight="700" class="h" fill="#3ecf8e">5 · ИНСТРУМЕНТЫ И ЛОКАЛЬНЫЕ СЕРВИСЫ — ВСЁ ЗДЕСЬ</text>
+  <text x="1276" y="1304" font-size="12" text-anchor="end" class="m">модель только просит вызвать инструмент — выполняет его этот сервер</text>
+  <rect x="124" y="1318" width="182" height="50" rx="8" class="chip"/>
+  <text x="215" y="1339" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Файлы проекта</text>
+  <text x="215" y="1357" font-size="11.5" text-anchor="middle" class="m">папка чата · Git</text>
+  <rect x="318" y="1318" width="182" height="50" rx="8" class="chip"/>
+  <text x="409" y="1339" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Команды оболочки</text>
+  <text x="409" y="1357" font-size="11.5" text-anchor="middle" class="m">тенант → песочница</text>
+  <rect x="512" y="1318" width="182" height="50" rx="8" class="chip"/>
+  <text x="603" y="1339" font-size="13.5" font-weight="700" text-anchor="middle" class="t">MCP-серверы</text>
+  <text x="603" y="1357" font-size="11.5" text-anchor="middle" class="m">инструменты агентов</text>
+  <rect x="706" y="1318" width="182" height="50" rx="8" class="chip"/>
+  <text x="797" y="1339" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Вложения</text>
+  <text x="797" y="1357" font-size="11.5" text-anchor="middle" class="m">.teleharness-uploads</text>
+  <rect x="900" y="1318" width="182" height="50" rx="8" class="chip"/>
+  <text x="991" y="1339" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Obsidian</text>
+  <text x="991" y="1357" font-size="11.5" text-anchor="middle" class="m">память · журнал чата</text>
+  <rect x="1094" y="1318" width="182" height="50" rx="8" class="chip"/>
+  <text x="1185" y="1339" font-size="13.5" font-weight="700" text-anchor="middle" class="t">Голос</text>
+  <text x="1185" y="1357" font-size="11.5" text-anchor="middle" class="m">Piper TTS · GigaAM STT</text>
+  <text x="124" y="1394" font-size="12.5" class="m">Песочница тенанта: Linux — раннер на пользователя (по желанию) · Windows — AppContainer · macOS — команды оболочки обычных пользователей запрещены (fail-closed).</text>
+  <path d="M700 1408 V1436" fill="none" stroke="#c9ced8" stroke-width="1.6" marker-end="url(#aW)"/>
+  <rect x="100" y="1442" width="1200" height="90" rx="12" class="box"/>
+  <text x="124" y="1466" font-size="12" font-weight="700" class="m h">6 · ВЫХОДНАЯ СЕТЬ</text>
+  <text x="124" y="1494" font-size="16" font-weight="700" class="t mono">исходящий трафик</text>
+  <text x="300" y="1494" font-size="13" class="m">только HTTPS к API моделей</text>
+  <text x="124" y="1516" font-size="12.5" class="m">маршрутизация — на усмотрение администратора</text>
+  <rect x="700" y="1458" width="574" height="58" rx="10" class="chip" style="stroke:#3ecf8e;fill:#0f2a1f"/>
+  <text x="987" y="1482" font-size="14" font-weight="700" text-anchor="middle" class="" fill="#3ecf8e">API провайдеров моделей</text>
+  <text x="987" y="1502" font-size="12" text-anchor="middle" class="m">напрямую или через корпоративный прокси</text>
+  <path d="M987 1516 V1594 H700 V1622" fill="none" stroke="#3ecf8e" stroke-width="2.2" marker-end="url(#aG)"/>
+  <text x="1000" y="1550" font-size="13" font-weight="700" class="" fill="#3ecf8e">HTTPS</text>
+  <rect x="40" y="1572" width="1320" height="362" rx="18" class="ext"/>
+  <text x="62" y="1598" font-size="12" font-weight="700" class="m h">ВНЕ СЕРВЕРА · ИНТЕРНЕТ И ОБЛАКА</text>
+  <rect x="400" y="1626" width="600" height="74" rx="12" class="box"/>
+  <text x="424" y="1650" font-size="12" font-weight="700" class="m h">7 · ИНТЕРНЕТ</text>
+  <text x="424" y="1676" font-size="17" font-weight="700" class="t">Публичный интернет</text>
+  <text x="424" y="1694" font-size="12" class="m">TLS до облаков провайдеров моделей</text>
+  <path d="M520 1700 V1720 H226 V1748" fill="none" stroke="#4f8cff" stroke-width="2.2" marker-end="url(#aB)"/>
+  <path d="M700 1700 V1748" fill="none" stroke="#e07a52" stroke-width="2.2" marker-end="url(#aO)"/>
+  <path d="M880 1700 V1720 H1174 V1748" fill="none" stroke="#10a37f" stroke-width="2.2" marker-end="url(#aC)"/>
+  <rect x="60" y="1754" width="412" height="160" rx="14" fill="#151a26" stroke="#4f8cff" stroke-width="2"/>
+  <text x="82" y="1782" font-size="12.5" font-weight="700" class="h" fill="#4f8cff">8a · ПРОВАЙДЕРЫ OPENCODE</text>
+  <text x="82" y="1814" font-size="19" font-weight="700" class="t">Любой провайдер opencode</text>
+  <text x="82" y="1846" font-size="13" class="m">Z.ai GLM · OpenAI · Gemini · Anthropic · локальные</text>
+  <text x="82" y="1870" font-size="13" class="m">ключи хранятся в opencode</text>
+  <rect x="494" y="1754" width="412" height="160" rx="14" fill="#151a26" stroke="#e07a52" stroke-width="2"/>
+  <text x="516" y="1782" font-size="12.5" font-weight="700" class="h" fill="#e07a52">8b · ANTHROPIC</text>
+  <text x="516" y="1814" font-size="19" font-weight="700" class="t">Claude · подписка</text>
+  <text x="516" y="1846" font-size="13" class="m">Opus · Sonnet · Haiku через Claude Code</text>
+  <text x="516" y="1870" font-size="13" class="m">вход claude CLI; в пайпах — без платного API</text>
+  <rect x="928" y="1754" width="412" height="160" rx="14" fill="#151a26" stroke="#10a37f" stroke-width="2"/>
+  <text x="950" y="1782" font-size="12.5" font-weight="700" class="h" fill="#10a37f">8c · OPENAI · GOOGLE · GITHUB</text>
+  <text x="950" y="1814" font-size="19" font-weight="700" class="t">Codex · Gemini · Copilot</text>
+  <text x="950" y="1846" font-size="13" class="m">Codex CLI, Antigravity / Gemini, Copilot CLI</text>
+  <text x="950" y="1870" font-size="13" class="m">вход по подписке и OAuth</text>
+  <rect x="40" y="1950" width="652" height="66" rx="12" fill="#0f2a1f" stroke="#3ecf8e" stroke-width="1.4"/>
+  <text x="60" y="1976" font-size="14" font-weight="700" class="" fill="#3ecf8e">ЗДЕСЬ (слои 2–6)</text>
+  <text x="60" y="2000" font-size="13" class="t">агентный цикл, инструменты, файлы, история, песочница, пайпы, поток SSE в браузер</text>
+  <rect x="708" y="1950" width="652" height="66" rx="12" class="ext"/>
+  <text x="728" y="1976" font-size="14" font-weight="700" class="t">ТАМ (слои 7–8): только инференс моделей</text>
+  <text x="728" y="2000" font-size="13" class="m">уходят промпт, история и результаты инструментов. Диска облако не видит</text>
+</svg>

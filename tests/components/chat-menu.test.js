@@ -246,7 +246,7 @@ test("Н12: у «не найденного» чата «⋯» нет", async () 
     { method: "GET", path: /\/teleharness\/api\/session\/[^/]+\/message$/, reply: () => ({ status: 404, body: { error: "nf" } }) },
   ]);
   const { root } = t$.mount(ui.ChatView, { id: "ses_gone" });
-  await t$.waitFor(() => byText(root, "h2.hero", "Чат не найден"));
+  await t$.waitFor(() => byText(root, "h1.hero", "Чат не найден"));
   assert.equal(dots(root), null);
 });
 

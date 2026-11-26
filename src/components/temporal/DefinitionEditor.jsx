@@ -51,6 +51,38 @@ function useProjects(current, onDefault) {
   return { list: withCurrent, loading: state.list === null, error: state.error };
 }
 
+// Numeric input that lets users clear the field while editing without writing 0/NaN to the draft.
+function NumInput({ value, onNumber, class: cls = "t-input", ...rest }) {
+  const [text, setText] = useState(() => (value == null ? "" : String(value)));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(value == null ? "" : String(value));
+  }, [value]);
+  return (
+    <input
+      {...rest}
+      type="number"
+      class={cls}
+      value={text}
+      onFocus={() => { focused.current = true; }}
+      onBlur={() => {
+        focused.current = false;
+        const trimmed = text.trim();
+        const n = Number(trimmed);
+        if (!trimmed || !Number.isFinite(n)) setText(value == null ? "" : String(value));
+      }}
+      onInput={(e) => {
+        const raw = e.currentTarget.value;
+        setText(raw);
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) onNumber(n);
+      }}
+    />
+  );
+}
+
 function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemove, errors, engines, subscriptionModels, modelLabels = {}, inputs = [], codexTextOnly = false, commands = [], commandsLoading = false, commandsError = null, isAdmin = false, ledger = "postgres", onCreateCommand = null }) {
   const ty = STEP_TYPES_UI[step.type] ?? { icon: "?", label: step.type };
   const unsupported = unsupportedReasons({ inputs: [], steps: [step] }, subscriptionModels, { ledger, commands: commandsLoading ? undefined : commands });
@@ -78,8 +110,8 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
           {step.type === "timer" && (
             <div class="t-field"><span>{t("temporal.ed.wait")}</span>
               <div class="t-row t-nowrap">
-                <input class="t-input t-num" type="number" min="1" aria-label={t("temporal.ed.wait")} value={(step.seconds || 0) / unit}
-                  onInput={(e) => onChange({ seconds: Math.round(Number(e.currentTarget.value) * unit) })} />
+                <NumInput class="t-input t-num" min="1" aria-label={t("temporal.ed.wait")} value={(step.seconds || 0) / unit}
+                  onNumber={(n) => onChange({ seconds: Math.round(n * unit) })} />
                 <select class="t-input t-auto" aria-label={t("temporal.ed.waitUnit")} value={unit} onChange={(e) => onChange({ seconds: Math.round((step.seconds || 0) / unit * Number(e.currentTarget.value)) })}>
                   {UNITS.map(([u]) => <option key={u} value={u}>{unitLabel(u)}</option>)}</select>
               </div><span class="t-help">{t("temporal.ed.waitHelp")}</span></div>
@@ -198,13 +230,13 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
 
               <div class="t-two">
                 <label class="t-field"><span>{t("temporal.ed.cmd.timeout")}</span>
-                  <input class="t-input" type="number" min="1" max="86400" aria-label={t("temporal.ed.cmd.timeoutAria")}
+                  <NumInput min="1" max="86400" aria-label={t("temporal.ed.cmd.timeoutAria")}
                     value={step.timeoutSeconds ?? 300}
-                    onInput={(e) => onChange({ timeoutSeconds: Number(e.currentTarget.value) })} /></label>
+                    onNumber={(n) => onChange({ timeoutSeconds: Math.round(n) })} /></label>
                 <label class="t-field"><span>{t("temporal.ed.attempts")}</span>
-                  <input class="t-input" type="number" min="1" max="10" aria-label={t("temporal.ed.cmd.attemptsAria")}
+                  <NumInput min="1" max="10" aria-label={t("temporal.ed.cmd.attemptsAria")}
                     value={step.maxAttempts ?? 1}
-                    onInput={(e) => onChange({ maxAttempts: Number(e.currentTarget.value) })} /></label>
+                    onNumber={(n) => onChange({ maxAttempts: Math.round(n) })} /></label>
               </div>
               <label class="t-field"><span>{t("temporal.ed.cmd.successWhen")}</span>
                 <select class="t-input" aria-label={t("temporal.ed.cmd.successWhenAria")} value={step.successWhen ?? "exit0"}
@@ -242,9 +274,9 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
               </label>
               <div class="t-two">
                 <label class="t-field"><span>{t("temporal.ed.timeout")}</span>
-                  <input class="t-input" type="number" min="1" max="60" aria-label={t("temporal.ed.timeoutAria")} value={Math.round((step.timeoutSeconds || 60) / 60)} onInput={(e) => onChange({ timeoutSeconds: Math.round(Number(e.currentTarget.value) * 60) })} /></label>
+                  <NumInput min="1" max="60" aria-label={t("temporal.ed.timeoutAria")} value={Math.round((step.timeoutSeconds || 60) / 60)} onNumber={(n) => onChange({ timeoutSeconds: Math.round(n * 60) })} /></label>
                 <label class="t-field"><span>{t("temporal.ed.attempts")}</span>
-                  <input class="t-input" type="number" min="1" max="10" aria-label={t("temporal.ed.attempts")} value={step.maxAttempts} onInput={(e) => onChange({ maxAttempts: Number(e.currentTarget.value) })} /></label>
+                  <NumInput min="1" max="10" aria-label={t("temporal.ed.attempts")} value={step.maxAttempts} onNumber={(n) => onChange({ maxAttempts: Math.round(n) })} /></label>
               </div>
             </>
           )}
@@ -289,8 +321,8 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
                 </select></label>
               {step.reworkTarget && (
                 <label class="t-field"><span>{t("temporal.ed.reworkMaxLabel")}</span>
-                  <input class="t-input" type="number" min="1" max="3" aria-label={t("temporal.ed.reworkMaxAria")} value={step.maxReworks ?? 3}
-                    onInput={(e) => onChange({ maxReworks: Number(e.currentTarget.value) })} /></label>
+                  <NumInput min="1" max="3" aria-label={t("temporal.ed.reworkMaxAria")} value={step.maxReworks ?? 3}
+                    onNumber={(n) => onChange({ maxReworks: Math.round(n) })} /></label>
               )}
             </div>
           )}
@@ -380,22 +412,34 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
   }, []);
 
   const canSave = draft.name.trim() && draft.directory.trim();
+  const savingRef = useRef(null);
   async function save() {
+    if (savingRef.current) {
+      const prev = await savingRef.current;
+      if (!latest.current.dirty) return prev;
+    }
     const { draft: d, saved: s } = latest.current;
     if (!d.name.trim() || !d.directory.trim()) return s;
     setStatus("saving");
-    try {
-      const next = s ? await api.temporalSave(s.id, s.revision, d) : await api.temporalCreate(d);
-      setSaved(next); savedAt.current = new Date();
-      if (latest.current.draft === d) setDirty(false);
-      setStatus("saved"); setError("");
-      if (!s && typeof history !== "undefined") history.replaceState(null, "", "#/temporal/pipe/" + encodeURIComponent(next.id));
-      return next;
-    } catch (e) {
-      if (e.status === 409) setStatus("conflict");
-      else { setStatus("error"); setError(errorText(e)); }
-      return null;
-    }
+    const p = (async () => {
+      try {
+        const next = s ? await api.temporalSave(s.id, s.revision, d) : await api.temporalCreate(d);
+        latest.current.saved = next;
+        setSaved(next); savedAt.current = new Date();
+        if (latest.current.draft === d) { latest.current.dirty = false; setDirty(false); }
+        setStatus("saved"); setError("");
+        if (!s && typeof history !== "undefined") history.replaceState(null, "", "#/temporal/pipe/" + encodeURIComponent(next.id));
+        return next;
+      } catch (e) {
+        if (e.status === 409) setStatus("conflict");
+        else { setStatus("error"); setError(errorText(e)); }
+        return null;
+      } finally {
+        if (savingRef.current === p) savingRef.current = null;
+      }
+    })();
+    savingRef.current = p;
+    return p;
   }
   // Autosave 1.2 s after the last change.
   useEffect(() => {
@@ -434,7 +478,7 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
     setRemoved({ steps: draft.steps, name: gone.name }); setSteps(steps);
   }
   async function reloadTheirs() {
-    try { const r = await api.temporalDefinition(saved.id); setSaved(r); setDraft(structuredClone(r.draft)); setDirty(false); setStatus("saved"); }
+    try { const r = await api.temporalDefinition(saved.id); latest.current.saved = r; setSaved(r); setDraft(structuredClone(r.draft)); setDirty(false); setStatus("saved"); }
     catch (e) { setError(errorText(e)); }
   }
   async function overwrite() {
@@ -446,9 +490,11 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
     if (!checks.valid) return;
     setBusy(true); setError("");
     try {
+      if (savingRef.current) await savingRef.current;
       let s = latest.current.dirty || !latest.current.saved ? await save() : latest.current.saved;
       if (!s) return;
       s = await api.temporalPublish(s.id, s.revision);
+      latest.current.saved = s;
       setSaved(s); setMessage(t("temporal.ed.published", { n: s.versions.at(-1).version })); setShowIssues(false);
     } catch (e) {
       if (e.status === 409 && e.body?.unchanged) setError(t("temporal.ed.unchanged", { n: e.body.unchanged })); // the server's «nothing changed» (not a revision conflict)
