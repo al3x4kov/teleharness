@@ -82,3 +82,57 @@ test("BUG-264 п.6: удаление — надгробие: пропадает 
  assert.equal((await prepareRun(deps,{launchRef:wf,workflowId:wf,runId:wf})).steps.length,2);
  await assert.rejects(prepareRun(deps,{launchRef:"schedule/"+sid,workflowId:"teleharness-scheduled-"+sid+"-2026-11-19T09:00:00Z",runId:wf}),{status:404});
 });
+
+test("шаг command — валидация с каталогом, ссылки {{input.*}}/{{steps.*}}, condition/artifact, projectPlan и prepareRun", async t => {
+ const { projectPlan, prepareRun } = await import("../lib/temporal/prepare-bridge.js");
+ const { DatabaseSync } = await import("node:sqlite");
+ const catalog = new Map([
+  ["run-report", {
+   id: "run-report",
+   kind: "exec",
+   params: [
+    { name: "date", required: true, pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    { name: "note", required: false },
+   ],
+   allow: { roles: ["admin"], users: [] },
+  }],
+ ]);
+ const def = {
+  name: "Отчёт по команде",
+  directory: "/tmp/proj",
+  inputs: [{ name: "date", type: "string", required: true }],
+  steps: [
+   { id: "collect", type: "command", name: "Собрать", dependsOn: [], command: "run-report", args: { date: "{{input.date}}" }, timeoutSeconds: 600, maxAttempts: 2, successWhen: "exit0" },
+   { id: "check", type: "condition", name: "Проверить", dependsOn: ["collect"], check: { source: "step", ref: "collect", op: "contains", value: "OK" } },
+   { id: "save", type: "artifact", name: "Сохранить", dependsOn: ["check"], source: "collect", filename: "report.md" },
+  ],
+ };
+ assert.equal(validateDefinition(def, { catalog }).valid, true);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], command: "missing-cmd" }] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], args: {} }] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], args: { date: "2026-11-25", extra: "x" } }] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], args: { date: "{{input.nope}}" } }] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], args: { date: "{{steps.save}}" } }, def.steps[1], def.steps[2]] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], timeoutSeconds: 0 }] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], maxAttempts: 11 }] }, { catalog }).valid, false);
+ assert.equal(validateDefinition({ ...def, steps: [{ ...def.steps[0], successWhen: "never" }] }, { catalog }).valid, false);
+ const plan = projectPlan(def);
+ assert.deepEqual(plan.steps[0], { id: "collect", type: "command", dependsOn: [], timeoutSeconds: 600, maxAttempts: 2 });
+ assert.equal("command" in plan.steps[0], false);
+ assert.equal("args" in plan.steps[0], false);
+ const { store } = fixture(t);
+ const rec = store.create("admin-1", def);
+ store.publish("admin-1", rec.id, rec.revision, { catalog });
+ const recT = store.create("alice", def);
+ store.publish("alice", recT.id, recT.revision, { catalog });
+ const db = new DatabaseSync(":memory:");
+ t.after(() => db.close());
+ const wfAdmin = "0b35f10a-c900-4c74-b290-88eb93bf3cf1";
+ const wfTenant = "0b35f10a-c900-4c74-b290-88eb93bf3cf2";
+ db.exec("CREATE TABLE starts(owner,request_id,definition_id,version,workflow_id UNIQUE,accepted,PRIMARY KEY(owner,request_id));");
+ db.prepare("INSERT INTO starts VALUES(?,?,?,?,?,1)").run("admin-1", "k1", rec.id, 1, wfAdmin);
+ db.prepare("INSERT INTO starts VALUES(?,?,?,?,?,1)").run("alice", "k2", recT.id, 1, wfTenant);
+ const okPlan = await prepareRun({ db, store, getUser: () => ({ id: "admin-1", role: "admin" }), dirAllowed: () => true, engineAllowed: () => true, commandCatalog: catalog }, { launchRef: wfAdmin, workflowId: wfAdmin, runId: wfAdmin });
+ assert.equal(okPlan.steps[0].type, "command");
+ await assert.rejects(prepareRun({ db, store, getUser: () => ({ id: "alice", role: "user" }), dirAllowed: () => true, engineAllowed: () => true, commandCatalog: catalog }, { launchRef: wfTenant, workflowId: wfTenant, runId: wfTenant }), { status: 403 });
+});

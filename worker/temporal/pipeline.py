@@ -24,6 +24,7 @@ class Pipeline:
         self.pr = {}
         self.reworks = {}
         self.rework_events = {}
+        self.commands = {}
         self.step_defs = {}
 
     @workflow.query
@@ -31,7 +32,7 @@ class Pipeline:
         return {"paused": self.paused, "pending": sorted(self.pending),
                 "generation": workflow.info().run_id, "steps": dict(self.steps), "waitReasons": dict(self.wait_reasons),
                 "conditions": dict(self.conditions), "files": dict(self.files), "pr": dict(self.pr),
-                "reworks": dict(self.reworks)}
+                "reworks": dict(self.reworks), "commands": dict(self.commands)}
 
     @workflow.update
     def control(self, request: dict) -> dict:
@@ -172,6 +173,37 @@ class Pipeline:
                         await workflow.sleep(300)
                     continue
                 raise invalid("unknown_pr_result")
+        elif step["type"] == "command":
+            if not workflow.patched("command-step-v1"):
+                raise invalid("runtime_unavailable")
+            while True:
+                await workflow.wait_condition(lambda: not self.paused)
+                self.steps[key] = "running"
+                outcome = await workflow.execute_activity(
+                    "TeleharnessPortalCommandV1", key,
+                    start_to_close_timeout=timedelta(seconds=step["timeoutSeconds"]),
+                    heartbeat_timeout=timedelta(seconds=min(30, step["timeoutSeconds"])),
+                    retry_policy=RetryPolicy(maximum_attempts=step["maxAttempts"]),
+                )
+                state = outcome.get("state")
+                if state == "done":
+                    meta = {}
+                    for field in ("exitCode", "durationMs", "filesCount"):
+                        val = outcome.get(field)
+                        if isinstance(val, int) and not isinstance(val, bool):
+                            meta[field] = val
+                    for field in ("childWorkflowId", "childStatus", "uiUrl", "kind"):
+                        val = outcome.get(field)
+                        if isinstance(val, str):
+                            meta[field] = val[:300]
+                    self.commands[key] = meta
+                    break
+                if state == "slot_wait":
+                    self.wait_reasons[key] = outcome.get("reason") or "command_slots_busy"
+                    self.steps[key] = "slot_wait"
+                    await workflow.sleep(10)
+                    continue
+                raise invalid("unknown_command_result")
         self.wait_reasons.pop(key, None)
         self.steps[key] = "completed"
 
@@ -191,7 +223,7 @@ class Pipeline:
             key = step.get("id")
             if not isinstance(key, str) or key in remaining or not isinstance(step.get("dependsOn"), list):
                 raise invalid("invalid_plan")
-            if step.get("type") not in ("approval", "timer", "parallel", "model", "condition", "artifact", "pull_request"):
+            if step.get("type") not in ("approval", "timer", "parallel", "model", "condition", "artifact", "pull_request", "command"):
                 raise invalid("runtime_unavailable")
             if step["type"] == "timer" and (type(step.get("seconds")) is not int or not 1 <= step["seconds"] <= 2592000):
                 raise invalid("invalid_duration")
@@ -199,6 +231,10 @@ class Pipeline:
                 for field, maximum in (("timeoutSeconds", 86400), ("maxAttempts", 10)):
                     if type(step.get(field)) is not int or not 1 <= step[field] <= maximum:
                         raise invalid("invalid_model_policy")
+            if step["type"] == "command":
+                for field, maximum in (("timeoutSeconds", 86400), ("maxAttempts", 10)):
+                    if type(step.get(field)) is not int or not 1 <= step[field] <= maximum:
+                        raise invalid("invalid_command_policy")
             remaining[key] = step
             self.steps[key] = "waiting"
         # Reject the whole snapshot before any branch can trigger an effect.
@@ -235,7 +271,8 @@ class Pipeline:
             raw_files = seed.get("files", {})
             raw_pr = seed.get("pr", {})
             raw_reworks = seed.get("reworks", {})
-            if not all(isinstance(x, dict) for x in (raw_conds, raw_files, raw_pr, raw_reworks)):
+            raw_commands = seed.get("commands", {})
+            if not all(isinstance(x, dict) for x in (raw_conds, raw_files, raw_pr, raw_reworks, raw_commands)):
                 raise invalid("invalid_seed")
             for key, value in raw_conds.items():
                 if key not in seeded_steps or remaining[key]["type"] != "condition" or not isinstance(value, bool):
@@ -258,6 +295,10 @@ class Pipeline:
                 if key not in seeded_steps or remaining[key]["type"] != "approval" or type(value) is not int or not 0 <= value <= 10:
                     raise invalid("invalid_seed")
                 self.reworks[key] = value
+            for key, value in raw_commands.items():
+                if key not in seeded_steps or remaining[key]["type"] != "command" or not isinstance(value, dict):
+                    raise invalid("invalid_seed")
+                self.commands[key] = dict(value)
             for key, status in seeded_steps.items():
                 self.steps[key] = status
                 del remaining[key]

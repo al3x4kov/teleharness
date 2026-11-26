@@ -36,7 +36,7 @@ export default function StartRun({ definitionId, capabilities, initialVersion = 
       <p>{t("temporal.start.acceptedText", { name: record?.draft?.name ?? record?.versions?.at(-1)?.definition?.name, version: done.version })}</p></Empty>;
   }
   const v = record?.versions.find((x) => x.version === version);
-  const reasons = v ? unsupportedReasons(v.definition, capabilities?.subscriptionModels) : [];
+  const reasons = v ? unsupportedReasons(v.definition, capabilities?.subscriptionModels, { ledger: capabilities?.ledger }) : [];
   const declared = v?.definition.inputs ?? [];
   const missing = declared.filter((i) => i.required && i.type !== "boolean" && !String(values[i.name] ?? "").trim());
   const setValue = (name, value) => { setValues((x) => ({ ...x, [name]: value })); requestId.current = crypto.randomUUID(); };

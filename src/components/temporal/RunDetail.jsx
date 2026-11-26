@@ -17,23 +17,118 @@ import FileViewer from "../chat/FileViewer.jsx";
 import { RunWorktree } from "../chat/Worktree.jsx"; // FEAT-20.7
 import { RunCost } from "./RunCost.jsx"; // FEAT-20.6
 
-const ACTIVE = new Set(["wait", "run", "quota", "paused", "github"]);
+const ACTIVE = new Set(["wait", "run", "quota", "slot", "paused", "github"]);
 const INPUT_PREVIEW = 240;
 const STEP_STATE = {
-  completed: ["done", "✓"], running: ["cur", "↻"], quota_wait: ["wait", "⧗"], rejected: ["fail", "✕"], waiting: ["todo", ""], skipped: ["skip", "↷"], github_wait: ["wait", "⧗"],
+  completed: ["done", "✓"], running: ["cur", "↻"], quota_wait: ["wait", "⧗"], slot_wait: ["wait", "⧗"], rejected: ["fail", "✕"], waiting: ["todo", ""], skipped: ["skip", "↷"], github_wait: ["wait", "⧗"],
 };
 
-function Result({ workflowId, step, open: initiallyOpen = false, label = null }) {
-  const [open, setOpen] = useState(initiallyOpen), [text, setText] = useState(null), [error, setError] = useState("");
+function fmtMs(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (ms < 1000) return t("temporal.rd.cmd.ms", { n: Math.round(ms) });
+  const s = Math.round(ms / 1000);
+  if (s < 60) return t("temporal.rd.cmd.sec", { n: s });
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return rem ? t("temporal.rd.cmd.minSec", { m, s: rem }) : t("temporal.rd.cmd.min", { m });
+}
+
+function parentDir(filePath) {
+  const s = String(filePath ?? "");
+  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+  return i > 0 ? s.slice(0, i) : "/";
+}
+
+function baseName(filePath) {
+  const s = String(filePath ?? "");
+  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+
+function Result({ workflowId, step, open: initiallyOpen = false, label = null, hideLabel = null, copyable = false }) {
+  const [open, setOpen] = useState(initiallyOpen), [text, setText] = useState(null), [error, setError] = useState(""), [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!open || text !== null) return;
     api.temporalResult(workflowId, step).then((r) => setText(r.text ?? ""), (e) => setError(errorText(e)));
   }, [open]);
+  async function copy() {
+    if (!text) return;
+    try {
+      await navigator.clipboard?.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
   return (
     <div class="t-result">
-      <button type="button" class="t-btn t-ghost t-tight" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? t("temporal.rd.hide") : (label ?? t("temporal.rd.show"))}</button>
+      <div class="t-row t-nowrap" style="gap:6px">
+        <button type="button" class="t-btn t-ghost t-tight" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? (hideLabel ?? t("temporal.rd.hide")) : (label ?? t("temporal.rd.show"))}</button>
+        {copyable && open && text && (
+          <button type="button" class="t-btn t-tight" data-action="copy-output" onClick={copy}>
+            {copied ? t("temporal.ext.copied") : t("temporal.ext.copy")}
+          </button>
+        )}
+      </div>
       {open && (error ? <p class="t-err-text" role="alert">{error}</p> : text === null ? <p class="t-muted t-small">{t("temporal.rd.loadingResult")}</p> : <div class="t-out md"><Markdown text={text || t("temporal.rd.noText")} /></div>)}
+    </div>
+  );
+}
+
+function CommandStepBox({ workflowId, step, meta, workerCmd, hasResult, onOpenFile }) {
+  const info = meta || workerCmd || null;
+  if (!info) return null;
+  const exitCode = info.exitCode ?? null;
+  const durationMs = info.durationMs ?? null;
+  const uiUrl = info.uiUrl ?? null;
+  const stderrTail = info.stderrTail ?? null;
+  const files = Array.isArray(info.files) ? info.files : [];
+  const uncertain = info.state === "uncertain";
+  return (
+    <div class="t-cmdbox" data-testid={`command-step-${step.id}`}>
+      {uncertain && (
+        <Banner tone="warn" icon="⚠" title={t("temporal.rd.cmd.uncertainTitle")}>
+          {stderrTail || t("temporal.rd.cmd.uncertainText")}
+        </Banner>
+      )}
+      <div class="t-cmd-meta">
+        {info.commandId && <span class="t-pill t-off t-mono">{info.commandId}</span>}
+        {exitCode !== null && (
+          <span class={"t-pill " + (exitCode === 0 ? "t-ok" : "t-err")}>{t("temporal.rd.cmd.exitCode", { code: exitCode })}</span>
+        )}
+        {durationMs !== null && <span class="t-meta">{fmtMs(durationMs)}</span>}
+        {info.attempt > 1 && <span class="t-meta">{t("temporal.rd.cmd.attempt", { n: info.attempt })}</span>}
+        {info.childWorkflowId && <span class="t-meta t-mono">wf: {info.childWorkflowId}</span>}
+      </div>
+      {uiUrl && (
+        <div class="t-row">
+          <a class="t-btn t-tight" href={uiUrl} target="_blank" rel="noreferrer">{t("temporal.rd.cmd.openUi")}</a>
+        </div>
+      )}
+      {hasResult && (
+        <Result workflowId={workflowId} step={step.id} label={t("temporal.rd.cmd.showStdout")} hideLabel={t("temporal.rd.cmd.hideStdout")} copyable />
+      )}
+      {stderrTail && !uncertain && (
+        <details class="t-more" style="margin-top:6px">
+          <summary>stderr</summary>
+          <pre class="t-code">{stderrTail}</pre>
+        </details>
+      )}
+      {files.length > 0 && (
+        <div class="t-cmd-files">
+          <span class="t-small t-muted">{t("temporal.rd.cmd.filesLabel")}</span>
+          <div class="t-files">
+            {files.map((f) => f.allowed ? (
+              <FileCard key={f.path} name={baseName(f.path)}
+                onOpen={() => onOpenFile({ name: baseName(f.path), path: f.path, directory: parentDir(f.path) })} />
+            ) : (
+              <span key={f.path} class="t-pill t-off t-mono" title={t("temporal.rd.cmd.outsideTitle")}>
+                {t("temporal.rd.cmd.pathOnly", { path: f.path })}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -229,24 +324,30 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
             <h2>{t("temporal.rd.steps")}</h2>
             <ol class="t-timeline">
               {steps.map((step, i) => {
-                const refused = refusals?.stepId === step.id ? refusals : null;
-                const cut = !running && ["running", "quota_wait", "github_wait"].includes(stepState[step.id]) && run.status !== "COMPLETED";
-                const st = refused ? "fail" : cut ? "stop" : pending.includes(step.id) ? "wait" : (STEP_STATE[stepState[step.id]]?.[0] ?? (run.status === "COMPLETED" ? "done" : "todo"));
+                const refused = refusals?.stepId === step.id && step.type !== "command" ? refusals : null;
+                const cmdErr = refusals?.stepId === step.id && step.type === "command" ? refusals : null;
+                const cut = !running && ["running", "quota_wait", "slot_wait", "github_wait"].includes(stepState[step.id]) && run.status !== "COMPLETED";
+                const st = (refused || cmdErr) ? "fail" : cut ? "stop" : pending.includes(step.id) ? "wait" : (STEP_STATE[stepState[step.id]]?.[0] ?? (run.status === "COMPLETED" ? "done" : "todo"));
                 const icon = st === "skip" ? "↷" : st === "stop" ? "■" : st === "wait" ? "◆" : st === "done" ? "✓" : st === "fail" ? "✕" : st === "cur" ? "↻" : String(i + 1);
                 const ty = step.type === "pull_request" ? { label: t("temporal.rd.portalStep") } : STEP_TYPES_UI[step.type] ?? { label: step.type };
-                const note = st === "wait" ? t(stepState[step.id] === "quota_wait" ? "temporal.rd.st.quota" : stepState[step.id] === "github_wait" ? "temporal.rd.st.githubWait" : "temporal.rd.st.wait")
+                const note = st === "wait" ? t(stepState[step.id] === "quota_wait" ? "temporal.rd.st.quota" : stepState[step.id] === "slot_wait" ? "temporal.rd.st.slot" : stepState[step.id] === "github_wait" ? "temporal.rd.st.githubWait" : "temporal.rd.st.wait")
                   : st === "fail" ? t(refused ? "temporal.rd.st.refused" : "temporal.rd.st.fail")
                   : ["skip", "stop", "cur", "done"].includes(st) ? t("temporal.rd.st." + st) : t(running ? "temporal.rd.st.ahead" : "temporal.rd.st.notRun");
                 const quota = running && stepState[step.id] === "quota_wait";
+                const slotWait = running && stepState[step.id] === "slot_wait";
                 const pr = step.type === "pull_request" ? state.pr?.[step.id] ?? null : null;
                 const result = prOutcome(pr, step.mode);
                 const ghw = running && stepState[step.id] === "github_wait" && step.type === "pull_request" ? ghWait(state.waitReasons?.[step.id]) : null;
+                const cmdMeta = step.type === "command" ? run.commandMeta?.[step.id] ?? null : null;
+                const workerCmd = step.type === "command" ? state.commands?.[step.id] ?? null : null;
+                const showResultInline = results.has(step.id) && !decide.some((d) => before(d.id)?.id === step.id) && step.id !== finalStep?.id;
+                const hasCmdBox = step.type === "command" && Boolean(cmdMeta || workerCmd);
                 return (
-                  <li key={step.id} class={"t-tl t-tl-" + (quota ? "wait" : st)}>
-                    <span class="t-node" aria-hidden="true">{quota ? "⧗" : icon}</span>
+                  <li key={step.id} class={"t-tl t-tl-" + (quota || slotWait ? "wait" : st)}>
+                    <span class="t-node" aria-hidden="true">{quota || slotWait ? "⧗" : icon}</span>
                     <div class="t-tlbody">
                       <b>{step.name}</b>
-                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : note}{resumedSet.has(step.id) ? t("temporal.rd.rs.carriedTag") : ""}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
+                      <span class="t-meta">{ty.label}{step.type === "model" && step.model ? " · " + (step.engine === "codex" ? "Codex " : step.engine === "acp" ? "Gemini (ACP) · " : step.engine === "opencode" ? "OpenCode · " : "") + (modelLabels[step.model] ?? step.model) : ""} · {quota ? t("temporal.rd.st.quota") : slotWait ? t("temporal.rd.st.slot") : note}{resumedSet.has(step.id) ? t("temporal.rd.rs.carriedTag") : ""}{step.type === "pull_request" && step.mode === "same-branch" ? t("temporal.rd.sameBranchTag") : ""}{step.type === "condition" && step.id in (state.conditions ?? {}) ? (state.conditions[step.id] ? t("temporal.rd.condYes") : t("temporal.rd.condNo")) : ""}</span>
                       {result && (
                         <div class={"t-prbox" + (result.tone === "off" ? " t-prbox-off" : "")}>
                           <b>{result.title}</b>
@@ -261,10 +362,27 @@ export default function RunDetail({ workflowId, modelLabels = {} }) {
                           <div class="t-row"><button class="t-btn" type="button" data-action="to-worktree" onClick={toWorktree}>{t("temporal.rd.openWorktree")}</button></div>
                         </div>
                       )}
+                      {cmdErr && (
+                        <div class="t-prbox t-prbox-err" role="alert">
+                          <b><span aria-hidden="true">✕ </span>{stepErrorTitle(cmdErr.code)}</b>
+                          <p>{cmdErr.message}</p>
+                        </div>
+                      )}
+                      {hasCmdBox && (
+                        <CommandStepBox
+                          workflowId={workflowId}
+                          step={step}
+                          meta={cmdMeta}
+                          workerCmd={workerCmd}
+                          hasResult={showResultInline}
+                          onOpenFile={setViewer}
+                        />
+                      )}
                       {ghw && <Banner tone="warn" icon="⧗" title={ghw.title} action={ghw.needToken ? <a class="t-btn" href="#/settings/github">{t("temporal.rd.updateToken")}</a> : undefined}>{ghw.text}</Banner>}
                       {run.chats?.[step.id] && <a class="t-btn t-ghost t-tight" href={"#/chat/" + encodeURIComponent(run.chats[step.id])}>{t("temporal.rd.openStepChat")}</a>}
                       {quota && <Banner tone="warn" icon="⧗" title={t("temporal.rd.quotaTitle")}>{t("temporal.rd.quotaText")}</Banner>}
-                      {results.has(step.id) && !decide.some((d) => before(d.id)?.id === step.id) && step.id !== finalStep?.id && <Result workflowId={workflowId} step={step.id} />}
+                      {slotWait && <Banner tone="warn" icon="⧗" title={t("temporal.rd.slotTitle")}>{t("temporal.rd.slotText")}</Banner>}
+                      {showResultInline && !hasCmdBox && <Result workflowId={workflowId} step={step.id} copyable={step.type === "command"} />}
                     </div>
                   </li>
                 );

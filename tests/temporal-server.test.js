@@ -47,3 +47,27 @@ test("выпуск немодельных пайпов не включает м�
    assert.deepEqual(caps.subscriptionModels,{});
  } finally {await isolated.stop();}
 });
+
+test("/teleharness/api/admin/temporal-workflows* — 401 без токена, 403 для тенанта, admin валидация", async () => {
+  const unauth = await fetch(srv.base + "/teleharness/api/admin/temporal-workflows");
+  assert.equal(unauth.status, 401);
+  for (const [method, path, body] of [
+    ["GET", "/teleharness/api/admin/temporal-workflows", undefined],
+    ["POST", "/teleharness/api/admin/temporal-workflows", { workflowType: "Demo", taskQueue: "q" }],
+    ["GET", "/teleharness/api/admin/temporal-workflows/wf-1", undefined],
+    ["POST", "/teleharness/api/admin/temporal-workflows/wf-1/signal", { name: "ping" }],
+    ["POST", "/teleharness/api/admin/temporal-workflows/wf-1/query", { type: "state" }],
+    ["POST", "/teleharness/api/admin/temporal-workflows/wf-1/reset", { eventId: 4, reason: "test" }],
+    ["POST", "/teleharness/api/admin/temporal-workflows/wf-1/cancel", {}],
+    ["POST", "/teleharness/api/admin/temporal-workflows/wf-1/terminate", { reason: "test" }],
+  ]) {
+    const r = await api(path, { token: alice.token, method, body });
+    assert.equal(r.status, 403, method + " " + path + " must return 403 for tenant");
+  }
+  const badStart = await api("/teleharness/api/admin/temporal-workflows", { method: "POST", body: { workflowType: "" } });
+  assert.equal(badStart.status, 400);
+  const badReset = await api("/teleharness/api/admin/temporal-workflows/wf-1/reset", { method: "POST", body: { eventId: 4 } });
+  assert.equal(badReset.status, 400);
+  const badTerm = await api("/teleharness/api/admin/temporal-workflows/wf-1/terminate", { method: "POST", body: {} });
+  assert.equal(badTerm.status, 400);
+});

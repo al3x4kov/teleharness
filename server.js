@@ -36,7 +36,7 @@ import { materializeFileParts, modelAcceptsImages, openUnique, sanitizeFilename,
 import { serveWorkspaceFile, workspaceFileExists } from "./lib/file.js";
 import { parseWindows, turnFiles } from "./lib/turn-files.js";
 import { dirProblem, dirProblemText, driveProblem, isUnderAny, pathInside } from "./lib/paths.js";
-import { accessLogger, clientIp, errLog, requestId, upstreamErrors5m } from "./lib/accesslog.js"; // TASK-12.29
+import { accessLogger, auditTemporalCommand, clientIp, errLog, requestId, upstreamErrors5m } from "./lib/accesslog.js";
 import { markClean, markStarted, readPrevious } from "./lib/run-state.js"; // TASK-12.29
 import { adminAgentFor, adminDefaultAgent, agentAllowedForTenant, defaultTenantAgent, modelInCatalog, parseModelRef, pickDefaultModel, providerForUser, publicAgent, redactMessages, redactPart, setTenantVaultRoots, tenantAgents, tenantEvent, tenantMustReject } from "./lib/policy.js";
 import { PendingRemovals, findOwnerlessTenantDirs, planGc, runEmptyChatGc, sweepOwnerlessTenantDirs, sweepTurnUndo } from "./lib/gc.js";
@@ -64,6 +64,9 @@ import {chatRoutingForPortal,chatRecoveryGuard} from "./lib/temporal/chat-routin
 import {connectPipeline} from "./lib/temporal/portal-runtime.js";
 import {scheduleRoutes} from "./routes/temporal-schedules.js";
 import { stageTimerStarter } from "./lib/temporal/stage-timer.js";
+import { socketPathProblem } from "./lib/temporal/cli.js";
+import { CommandCatalog } from "./lib/temporal/command-catalog.js";
+import { ExternalWorkflowsClient } from "./lib/temporal/external-workflows.js";
 import { DefinitionStore } from "./lib/temporal/definitions.js";
 import { chatStepRunner } from "./lib/temporal/chat-step.js";
 import { prStepRunner } from "./lib/temporal/pr-step.js";
@@ -1913,14 +1916,38 @@ const temporalDeps={sendJson,readJsonBody,dirAllowed,engineAllowed,getUser,errLo
     }
     return Math.max(0, limit - used);
   },
+  ledger: config.TELEHARNESS_TEMPORAL_LEDGER,
+  socketPathError: null,
+  commandCatalog: new CommandCatalog({
+    file: path.join(DATA_DIR, "temporal-commands.json"),
+    allowedRoots: config.TELEHARNESS_TEMPORAL_COMMAND_ROOTS.length ? config.TELEHARNESS_TEMPORAL_COMMAND_ROOTS : config.TELEHARNESS_FILE_ROOTS,
+    cli: config.TELEHARNESS_TEMPORAL_CLI,
+    address: config.TELEHARNESS_TEMPORAL_ADDRESS,
+    namespace: config.TELEHARNESS_TEMPORAL_NAMESPACE,
+  }),
+  externalWorkflows: new ExternalWorkflowsClient({
+    cli: config.TELEHARNESS_TEMPORAL_CLI,
+    address: config.TELEHARNESS_TEMPORAL_ADDRESS,
+    namespace: config.TELEHARNESS_TEMPORAL_NAMESPACE,
+    uiBase: config.TELEHARNESS_TEMPORAL_UI_URL,
+  }),
+  auditCommand: (entry) => auditTemporalCommand(logAccess, entry),
 };
 if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
-  const stage=process.env.TELEHARNESS_ENV === "stand";
-  const options={socketPath:path.join(DATA_DIR,"temporal-private","worker.sock"),
+  const stage=config.TELEHARNESS_ENV === "stand";
+  const socketPath=config.TELEHARNESS_TEMPORAL_MODEL_SOCKET || path.join(DATA_DIR,"temporal-private","worker.sock");
+  temporalDeps.socketPathError=socketPathProblem(socketPath);
+  const testQueue = process.env.TELEHARNESS_TEMPORAL_TEST_QUEUE ?? "";
+  const options={socketPath,
     databasePath:path.join(DATA_DIR,"temporal-stage-starts.sqlite"),
-    address:stage?"127.0.0.1:17233":"127.0.0.1:17235",namespace:stage?"teleharness-stage":"teleharness-production",
-    taskQueue:stage && /^qa-[a-z0-9-]{1,72}$/.test(process.env.TELEHARNESS_TEMPORAL_TEST_QUEUE??"")
-      ? process.env.TELEHARNESS_TEMPORAL_TEST_QUEUE : stage?"teleharness-stage-pipeline-v1":"teleharness-prod-pipeline-v1",
+    cli:config.TELEHARNESS_TEMPORAL_CLI,
+    address:config.TELEHARNESS_TEMPORAL_ADDRESS,
+    namespace:config.TELEHARNESS_TEMPORAL_NAMESPACE,
+    taskQueue:stage && /^qa-[a-z0-9-]{1,72}$/.test(testQueue)
+      ? testQueue : config.TELEHARNESS_TEMPORAL_QUEUE,
+    ledger:config.TELEHARNESS_TEMPORAL_LEDGER,
+    commandSlots:config.TELEHARNESS_TEMPORAL_COMMAND_SLOTS,
+    tenantHome:config.TELEHARNESS_TENANT_HOME,
     drain:process.env.TELEHARNESS_TEMPORAL_DRAIN==="1",
     openCodeDirectory:stage ? process.env.TELEHARNESS_TEMPORAL_OC_DIRECTORY : undefined,openCodeAddress:stage?"http://127.0.0.1:4168":"http://127.0.0.1:4169",
     subscriptionToken:stage ? process.env.CLAUDE_CODE_OAUTH_TOKEN : undefined};
@@ -2037,10 +2064,16 @@ if (process.env.TELEHARNESS_TEMPORAL_PIPELINES === "1") {
     onPushed:({repo,branch,sha})=>github?.store?.recordAgentBranchPush?.(repo,branch,sha),
     log:(m)=>console.log(m),
   });
-  Object.assign(temporalDeps,await connectPipeline(temporalDeps,options));
-  Object.defineProperty(temporalDeps,"subscriptionModels",{get:()=>temporalDeps.listSubscriptionModels(),enumerable:true}); // FEAT-19.15: live Codex catalog
-} else if (process.env.TELEHARNESS_ENV==="stand" && process.env.TELEHARNESS_TEMPORAL_STAGE_TIMERS==="1") {
-  Object.assign(temporalDeps,stageTimerStarter(path.join(DATA_DIR,"temporal-stage-starts.sqlite")));
+  if (temporalDeps.socketPathError) {
+    errLog("temporal.socket", new Error(temporalDeps.socketPathError));
+  } else {
+    Object.assign(temporalDeps,await connectPipeline(temporalDeps,options));
+    Object.defineProperty(temporalDeps,"subscriptionModels",{get:()=>temporalDeps.listSubscriptionModels(),enumerable:true});
+  }
+} else if (config.TELEHARNESS_ENV==="stand" && process.env.TELEHARNESS_TEMPORAL_STAGE_TIMERS==="1") {
+  Object.assign(temporalDeps,stageTimerStarter(path.join(DATA_DIR,"temporal-stage-starts.sqlite"),{
+    cli:config.TELEHARNESS_TEMPORAL_CLI,address:config.TELEHARNESS_TEMPORAL_ADDRESS,namespace:config.TELEHARNESS_TEMPORAL_NAMESPACE,
+  }));
 }
 // FEAT-20.2: чаты доски пользователя — тенант: свои папки; admin: папки, не
 // принадлежащие ни одному тенанту (правило pushRecipients). Временные папки — нет.
@@ -2163,6 +2196,9 @@ const API_ROUTES = validateTable([
     createPairCode, publicUrl: config.TELEHARNESS_PUBLIC_URL,
     getAutoRelay, setAutoRelay, cleanAutoRelay, readAutoRelay, AUTO_RELAY_ORDER_MAX, autoRelayModelOk, // FEAT-18.6
     storeKbTrace: (t) => storeKbTrace(config.TELEHARNESS_LOG_DIR, t),
+    commandCatalog: temporalDeps.commandCatalog,
+    externalWorkflows: temporalDeps.externalWorkflows,
+    auditCommand: temporalDeps.auditCommand,
   }),
   // FEAT-18.8: /teleharness/api/git/* and /teleharness/api/me/git (routes/git.js)
   ...gitRoutes({

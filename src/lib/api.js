@@ -189,6 +189,54 @@ export const api = {
   adminUpdateBackground: (body) => json("PUT", "/admin/background", body),
   temporalTemplates: () => json("GET", "/temporal/templates"),
   templateReadiness: (id, body) => json("POST", "/temporal/templates/" + idPath(id) + "/readiness", body),
+  // Command catalog (role-projected read + admin CRUD & schedule discovery)
+  temporalCommands: () => json("GET", "/temporal/commands"),
+  adminTemporalCommands: () => json("GET", "/admin/temporal-commands"),
+  adminCreateTemporalCommand: (body) => json("POST", "/admin/temporal-commands", body),
+  adminUpdateTemporalCommand: (id, body) => json("PUT", "/admin/temporal-commands/" + idPath(id), body),
+  adminDeleteTemporalCommand: (id) => json("DELETE", "/admin/temporal-commands/" + idPath(id)),
+  adminReloadTemporalCommands: () => json("POST", "/admin/temporal-commands/reload", {}),
+  adminTemporalSchedules: ({ address, namespace } = {}) => {
+    const q = new URLSearchParams();
+    if (address) q.set("address", address);
+    if (namespace) q.set("namespace", namespace);
+    const s = q.toString();
+    return json("GET", "/admin/temporal-commands/schedules" + (s ? "?" + s : ""));
+  },
+  // External Temporal workflows viewer & controller (admin-only)
+  adminExternalWorkflows: ({ status, workflowType, taskQueue, excludePortal, query, limit, address, namespace } = {}) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (workflowType) q.set("workflowType", workflowType);
+    if (taskQueue) q.set("taskQueue", taskQueue);
+    if (excludePortal !== undefined) q.set("excludePortal", excludePortal ? "1" : "0");
+    if (query) q.set("query", query);
+    if (limit) q.set("limit", String(limit));
+    if (address) q.set("address", address);
+    if (namespace) q.set("namespace", namespace);
+    const s = q.toString();
+    return json("GET", "/admin/temporal-workflows" + (s ? "?" + s : ""));
+  },
+  adminStartExternalWorkflow: (body) => json("POST", "/admin/temporal-workflows", body),
+  adminExternalWorkflow: (workflowId, { runId, address, namespace, historyLimit } = {}) => {
+    const q = new URLSearchParams();
+    if (runId) q.set("runId", runId);
+    if (address) q.set("address", address);
+    if (namespace) q.set("namespace", namespace);
+    if (historyLimit) q.set("historyLimit", String(historyLimit));
+    const s = q.toString();
+    return json("GET", "/admin/temporal-workflows/" + workflowPath(workflowId) + (s ? "?" + s : ""));
+  },
+  adminSignalExternalWorkflow: (workflowId, body) =>
+    json("POST", "/admin/temporal-workflows/" + workflowPath(workflowId) + "/signal", body),
+  adminQueryExternalWorkflow: (workflowId, body) =>
+    json("POST", "/admin/temporal-workflows/" + workflowPath(workflowId) + "/query", body),
+  adminResetExternalWorkflow: (workflowId, body) =>
+    json("POST", "/admin/temporal-workflows/" + workflowPath(workflowId) + "/reset", body),
+  adminCancelExternalWorkflow: (workflowId, body = {}) =>
+    json("POST", "/admin/temporal-workflows/" + workflowPath(workflowId) + "/cancel", body),
+  adminTerminateExternalWorkflow: (workflowId, body) =>
+    json("POST", "/admin/temporal-workflows/" + workflowPath(workflowId) + "/terminate", body),
   // ---- auth: the long token IS the credential; a match mints the year-long
   // HttpOnly cookie (the device-stays-logged-in part). All later calls ride
   // the cookie automatically (same-origin fetch + EventSource).

@@ -2,6 +2,7 @@
 import path from "node:path";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { DefinitionError, slugOf } from "../lib/temporal/definitions.js";
+import { commandAllowed } from "../lib/temporal/command-catalog.js";
 import { workspaceOf, runFolderName, isPipelineFolder, pipeEngineAllowed } from "../lib/temporal/workspace.js";
 import { cleanInputs } from "../lib/temporal/inputs.js";
 import { listRunFiles } from "../lib/temporal/run-files.js";
@@ -15,7 +16,7 @@ export function temporalRoutes(deps) {
   // FEAT-19.14: list summaries read Temporal through a cache (closed runs once).
   let summaries=null;
   const reader=()=>summaries??=deps.describeRun?runSummaryCache(id=>deps.describeRun(id)):null;
-  const stepShape=definition=>(definition.steps??[]).map(s=>({id:s.id,name:s.name,type:s.type,...(s.type==="model"?{engine:s.engine,model:s.model}:{}),...(s.type==="artifact"?{filename:s.filename,source:s.source}:{}),...(s.type==="condition"?{check:s.check}:{}),...(s.type==="approval"&&s.reworkTarget?{reworkTarget:s.reworkTarget,maxReworks:s.maxReworks??3}:{}),...(s.type==="pull_request"?{mode:s.mode==='same-branch'?'same-branch':'new'}:{})}));
+  const stepShape=definition=>(definition.steps??[]).map(s=>({id:s.id,name:s.name,type:s.type,...(s.type==="model"?{engine:s.engine,model:s.model}:{}),...(s.type==="command"?{command:s.command,successWhen:s.successWhen??"exit0"}:{}),...(s.type==="artifact"?{filename:s.filename,source:s.source}:{}),...(s.type==="condition"?{check:s.check}:{}),...(s.type==="approval"&&s.reworkTarget?{reworkTarget:s.reworkTarget,maxReworks:s.maxReworks??3}:{}),...(s.type==="pull_request"?{mode:s.mode==='same-branch'?'same-branch':'new'}:{})}));
   const source=(id,stored)=>stored??(/^teleharness-scheduled?-/.test(String(id))?"schedule":"manual");
   const prOutcome=(detail,steps)=>{for(const [id,v] of Object.entries(detail?.state?.pr??{}))if(v&&steps.some(s=>s.id===id))return v;return null;};
   const parseJson=(text)=>{if(typeof text!=="string"||!text)return null;try{return JSON.parse(text);}catch{return null;}};
@@ -70,12 +71,23 @@ export function temporalRoutes(deps) {
   deps.boardRuns=async user=>deps.listRuns?withSummaries(await visibleRuns(user)):null;
   return [
     route("GET",base+"/capabilities",({res,user})=>{
-      const subscriptionModels=Object.fromEntries(Object.entries(deps.subscriptionModels??{}).filter(([e])=>pipeEngineAllowed(deps.engineAllowed,user,e)));
+      const ledger=deps.ledger==="none"?"none":"postgres";
+      const subscriptionModels=ledger==="none"?{}:Object.fromEntries(Object.entries(deps.subscriptionModels??{}).filter(([e])=>pipeEngineAllowed(deps.engineAllowed,user,e)));
       const allowedIds=new Set(Object.values(subscriptionModels).flat());
       const modelLabels=Object.fromEntries(Object.entries(deps.modelLabels??{}).filter(([id])=>allowedIds.has(id)));
+      const commandsAvailable=deps.commandCatalog
+        ? deps.commandCatalog.hasAnyForUser(user)
+        : (typeof deps.commandsForUser==="function" ? deps.commandsForUser(user).length>0 : false);
+      const socketPathError=typeof deps.socketPathError==="string" && deps.socketPathError ? deps.socketPathError : null;
       return deps.sendJson(res,200,{definitions:true,subscriptionModels,modelLabels,pipelineAvailable:!!deps.startPipeline,schedulesAvailable:!!deps.schedules,runListAvailable:typeof deps.listRuns==="function",timerStartAvailable:typeof deps.startTimer==="function",triggersAvailable:typeof deps.enabledTriggers==="function",
+        ledger,commandsAvailable,socketPathError,
         triggers:{available:typeof deps.enabledTriggers==="function",publicUrl:Boolean(deps.publicUrl),adminStopped:deps.adminStopped?deps.adminStopped():false,claudeLeftToday:deps.claudeLeftToday?deps.claudeLeftToday():null},
-        execution:{available:!!deps.startPipeline,reason:deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено"},engines:["claude","codex","acp","opencode"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"});
+        execution:{available:!!deps.startPipeline,reason:socketPathError||(deps.startPipeline?"Исполнение подключено":"Исполнение Temporal ещё не подключено")},engines:["claude","codex","acp","opencode"].filter(e=>pipeEngineAllowed(deps.engineAllowed,user,e)),codexTextOnly:user.role!=="admin"});
+    }),
+    route("GET",base+"/commands",({res,user})=>{
+      if (deps.commandCatalog) return deps.sendJson(res,200,{items:deps.commandCatalog.listForUser(user)});
+      if (typeof deps.commandsForUser==="function") return deps.sendJson(res,200,{items:deps.commandsForUser(user)});
+      return deps.sendJson(res,200,{items:[]});
     }),
     route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})$/, async ({user,res,match})=>{
       if (!deps.lookupRun) throw new DefinitionError(503,"Исполнение Temporal ещё не подключено");
@@ -131,7 +143,7 @@ export function temporalRoutes(deps) {
         definitionId:row.definitionId,directory:version.definition.directory,source:source(match[1],row.source),triggerId:row.triggerId??null,eventRef:row.eventRef??null,
         eventUrl:row.eventUrl??null,attempt:Number.isSafeInteger(row.attempt)&&row.attempt>0?row.attempt:null,stepError:parseJson(row.stepError),steps,summary:summarizeRun(detail,steps),
         workspace,runFolder:folder?"runs/"+folder:null,files:folder?listRunFiles(workspace,"runs/"+folder):[],
-        chats:deps.results?.chats?.(match[1])??{},inputs,...(record.deletedAt?{pipeDeleted:true}:{})});
+        chats:deps.results?.chats?.(match[1])??{},commandMeta:deps.commandMeta?.(match[1])??{},inputs,...(record.deletedAt?{pipeDeleted:true}:{})});
     }),
     route("GET", /^\/teleharness\/api\/temporal\/runs\/([a-zA-Z0-9:.+-]{1,150})\/results\/([a-zA-Z][a-zA-Z0-9_-]{0,63})$/,async({res,user,match})=>{
       const row=await deps.lookupRun?.(user.id,match[1]);
@@ -241,6 +253,11 @@ export function temporalRoutes(deps) {
       const published = record.versions.find(v => v.version === b.version);
       if (!published) throw new DefinitionError(404, "Опубликованная версия не найдена");
       access(user, published.definition, {engines:true});
+      for (const s of published.definition.steps ?? []) {
+        if (s.type !== "command") continue;
+        const entry = deps.commandCatalog?.get(s.command);
+        if (!entry || !commandAllowed(entry, user)) throw new DefinitionError(403, "Команда недоступна");
+      }
       if (deps.startPipeline) {
         deps.validatePipeline(published.definition);
         const inputs=cleanInputs(published.definition.inputs,b.inputs);
@@ -320,14 +337,20 @@ export function temporalRoutes(deps) {
       deps.sendJson(res,200,deps.store.remove(user.id,id));
     }),
     route("POST",/^\/teleharness\/api\/temporal\/definitions\/([a-zA-Z0-9_-]+)\/validate$/,({res,user,match})=>{
-      const record=own(user,match[1]);access(user,record.draft,{engines:true});deps.sendJson(res,200,validateDefinition(record.draft));
+      const record=own(user,match[1]);access(user,record.draft,{engines:true});
+      deps.sendJson(res,200,validateDefinition(record.draft,deps.commandCatalog?{catalog:deps.commandCatalog}:{}));
     }),
     route("POST",/^\/teleharness\/api\/temporal\/definitions\/([a-zA-Z0-9_-]+)\/publish$/,async({req,res,user,match})=>{
       own(user,match[1]);const b=await body(req,["revision"]);
       // The body may arrive slowly; re-read after that await. ACL and publish
       // must examine the same current record in this single-writer process.
       const record=own(user,match[1]);access(user,record.draft,{engines:true});
-      deps.sendJson(res,200,deps.store.publish(user.id,match[1],b.revision));
+      for (const s of record.draft.steps ?? []) {
+        if (s.type !== "command") continue;
+        const entry = deps.commandCatalog?.get(s.command);
+        if (entry && !commandAllowed(entry, user)) throw new DefinitionError(403, "Команда недоступна");
+      }
+      deps.sendJson(res,200,deps.store.publish(user.id,match[1],b.revision,deps.commandCatalog?{catalog:deps.commandCatalog}:{}));
     }),
   ];
 }

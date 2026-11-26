@@ -6,6 +6,33 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.10.0] — 2026-11-26
+
+### Added
+- **Command pipeline step & admin allowlist catalog.** Added a `command` step type to Temporal pipelines
+  supporting two modes: `exec` (direct `execFile` without a shell, clean environment allowlist, symlink-escape
+  protection within `TELEHARNESS_TEMPORAL_COMMAND_ROOTS`, fail-closed Linux tenant jail, 1 MiB tail-truncated
+  stdout artifacts, concurrency semaphore with `slot_wait`, and SQLite idempotency / `uncertain` post-restart
+  protection) and `temporal-workflow` (triggering an external Temporal Schedule or starting a deterministic
+  child workflow with status polling, failure extraction, and optional child cancellation on abort).
+- **Commands catalog UI & Python worker support.** Added an admin-only **Commands** tab in Temporal
+  (`/teleharness/api/admin/temporal-commands*`) with CRUD sheets, external Temporal schedule discovery,
+  role-projected step previews in `DefinitionEditor`, `CommandStepBox` metadata in `RunDetail`, and the
+  `TeleharnessPortalCommandV1` worker activity with 30 s heartbeats and `workflow.patched("command-step-v1")`
+  replay compatibility.
+- **Local Temporal mode without PostgreSQL & macOS `launchd` examples.** Added `TELEHARNESS_TEMPORAL_LEDGER=none`
+  (lazy `psycopg` import so command, timer, condition, approval, and artifact pipelines run against a local
+  Temporal dev server with no PostgreSQL), full `TELEHARNESS_TEMPORAL_CLI` / `ADDRESS` / `NAMESPACE` / `QUEUE` /
+  `COMMAND_SLOTS` / `COMMAND_ROOTS` / `MODEL_SOCKET` configuration, Unix-socket length checks (103 B macOS /
+  107 B Linux), and `ops/temporal/` `launchd` plist templates.
+- **External Temporal workflows viewer & controller (admin-only).** Added an admin-only **External** tab in
+  Temporal and `/teleharness/api/admin/temporal-workflows*` endpoints backed by injection-safe `--flag=value`
+  CLI calls: Visibility list with status / type / task-queue filters (excluding portal pipelines by default),
+  **Start workflow** sheet with JSON input validation, workflow detail view with decoded Input / Result / Failure
+  payloads, pending activities, event history timeline with inline `Reset here` buttons, **Signal**, **Query**
+  (with copyable JSON result), **Reset** (by event ID or reset type + reapply exclude), **Cancel**, **Terminate**
+  (mandatory reason), `TELEHARNESS_TEMPORAL_UI_URL` deep links, and payload-free audit logging.
+
 ## [2.8.2] — 2026-11-25
 
 ### Fixed

@@ -15,6 +15,19 @@ export const TEMPLATES = [
     get text() { return t("temporal.tpl.planCode.text"); },
   },
 // Names and texts are getters — they follow the UI language at the moment of use.
+  {
+    id: "command-report",
+    icon: "⌘",
+    get name() { return t("temporal.tpl.cmdReport.name"); },
+    get text() { return t("temporal.tpl.cmdReport.text"); },
+    get steps() {
+      return [
+        { id: "run_cmd", type: "command", name: t("temporal.tpl.cmdReport.run"), command: "", args: {}, timeoutSeconds: 300, maxAttempts: 1, successWhen: "exit0" },
+        { id: "check", type: "condition", name: t("temporal.tpl.cmdReport.check"), check: { source: "step", ref: "run_cmd", op: "not_contains", value: "ERROR" } },
+        { id: "save_out", type: "artifact", name: t("temporal.tpl.cmdReport.save"), source: "run_cmd", filename: "report.md" },
+      ];
+    },
+  },
   { id: "review", icon: "◆", get name() { return t("temporal.tpl.review.name"); }, get text() { return t("temporal.tpl.review.text"); },
     get steps() { return [{ id: "prepare", type: "timer", name: t("temporal.tpl.review.prepare"), seconds: 60 }, { id: "approve", type: "approval", name: t("temporal.tpl.review.approve") }, { id: "finish", type: "timer", name: t("temporal.tpl.review.finish"), seconds: 10 }]; } },
   { id: "remind", icon: "⏱", get name() { return t("temporal.tpl.remind.name"); }, get text() { return t("temporal.tpl.remind.text"); },

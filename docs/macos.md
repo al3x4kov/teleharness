@@ -125,7 +125,7 @@ under **Settings → Connect phone**.
 
 - **ACP agents (Gemini CLI, Antigravity, GitHub Copilot CLI)** — install and sign in directly from **Settings → ACP Agents**.
 - **Built-in document preview** — `.pptx`, `.docx`, `.xlsx`, `.csv`, `.pdf`, `.md`, `.html`, images, audio, and video preview directly in the browser with no extra server software.
-- **Temporal durable pipelines** — supported natively on macOS and Linux; see [`docs/temporal.md`](temporal.md) and [`docs/installation.md`](installation.md).
+- **Temporal durable pipelines & external workflows** — supported natively on macOS and Linux (including local mode without PostgreSQL via `TELEHARNESS_TEMPORAL_LEDGER=none` and ready-to-use `launchd` plists); see [`docs/temporal.md`](temporal.md), [`ops/temporal/README.md`](../ops/temporal/README.md), and [`docs/installation.md`](installation.md).
 - **Obsidian active cache & cross-engine journal** — set `TELEHARNESS_KB_ROOT=/path/to/vault/agents` in `.env`.
 - **Local voice (Piper TTS + GigaAM STT)** — set up `~/.teleharness/voice/venv`; see [`ops/voice/README.md`](../ops/voice/README.md).
 - **Multi-user Linux sandbox** — see [`ops/sandbox/README.md`](../ops/sandbox/README.md) and [`ops/render/README-linux.md`](../ops/render/README-linux.md).

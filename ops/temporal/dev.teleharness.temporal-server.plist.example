@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- опциональный launchd-агент macOS для локального Temporal dev-сервера (SQLite).
+     Не нужен, если на машине уже работает собственный Temporal сервер на :7233. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.teleharness.temporal-server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/temporal</string>
+    <string>server</string>
+    <string>start-dev</string>
+    <string>--ip</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>7233</string>
+    <string>--ui-port</string>
+    <string>8233</string>
+    <string>--namespace</string>
+    <string>teleharness-local</string>
+    <string>--db-filename</string>
+    <string>/Users/YOUR_USER/.local/share/teleharness/temporal-local.db</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/teleharness-temporal/temporal-server.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/teleharness-temporal/temporal-server.err.log</string>
+</dict>
+</plist>

@@ -10,6 +10,7 @@ export const KINDS = {
   wait: { cls: "t-wait", icon: "◆", get text() { return t("temporal.kind.wait"); } },
   run: { cls: "t-run", icon: "↻", get text() { return t("temporal.kind.run"); } },
   quota: { cls: "t-quota", icon: "⧗", get text() { return t("temporal.kind.quota"); } },
+  slot: { cls: "t-quota", icon: "⧗", get text() { return t("temporal.kind.slot"); } },
   paused: { cls: "t-off", icon: "❚❚", get text() { return t("temporal.kind.paused"); } },
   github: { cls: "t-wait", icon: "⧗", get text() { return t("temporal.kind.github"); } },
   ok: { cls: "t-ok", icon: "✓", get text() { return t("temporal.kind.ok"); } },
@@ -142,6 +143,7 @@ export const STEP_TYPES_UI = {
   timer: { icon: "⏱", get label() { return t("temporal.type.timer"); } },
   approval: { icon: "◆", get label() { return t("temporal.type.approval"); } },
   model: { icon: "✦", get label() { return t("temporal.type.model"); } },
+  command: { icon: "⌘", get label() { return t("temporal.type.command"); } },
   parallel: { icon: "⑂", get label() { return t("temporal.type.parallel"); } },
   condition: { icon: "⋔", get label() { return t("temporal.type.condition"); } },
   artifact: { icon: "▤", get label() { return t("temporal.type.artifact"); } },
@@ -192,7 +194,7 @@ export function prOutcome(pr, mode = "new") {
   return null;
 }
 
-const STEP_ERROR_CODES = new Set(["branch_moved", "push_rejected", "github_rejected", "no_token", "worktree", "forbidden", "no_repo"]);
+const STEP_ERROR_CODES = new Set(["branch_moved", "push_rejected", "github_rejected", "no_token", "worktree", "forbidden", "no_repo", "command_failed"]);
 export const stepErrorTitle = (code) => t(STEP_ERROR_CODES.has(code) ? "temporal.pr.err." + code : "temporal.pr.err.default");
 
 export function RunStatus({ kind, stepError = null }) {

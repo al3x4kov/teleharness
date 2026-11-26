@@ -322,5 +322,268 @@ export function adminRoutes(deps) {
         }
       },
     },
+    // admin CRUD for Temporal command catalog + reload + schedule discovery.
+    {
+      method: "*",
+      path: "/teleharness/api/admin/temporal-commands",
+      scope: "admin",
+      handler: async ({ req, res, user }) => {
+        if (!deps.commandCatalog) return sendJson(res, 503, { error: "Каталог команд недоступен" });
+        if (req.method === "GET") return sendJson(res, 200, deps.commandCatalog.listAdmin());
+        if (req.method === "POST") {
+          const body = await deps.readJsonBody(req, deps.bodyLimit ?? 128 * 1024);
+          if (body === null || typeof body !== "object" || Array.isArray(body)) return sendJson(res, 400, { error: "bad json body" });
+          try {
+            const created = deps.commandCatalog.create(body);
+            deps.auditCommand?.({ event: "temporal.command.catalog", action: "create", user: user?.id, role: user?.role, commandId: created.id, kind: created.kind });
+            return sendJson(res, 201, created);
+          } catch (err) {
+            if (err?.status) return sendJson(res, err.status, { error: err.message, ...(err.errors ? { errors: err.errors } : {}) });
+            return apiError(res, err);
+          }
+        }
+        return sendJson(res, 405, { error: "method not allowed" });
+      },
+    },
+    {
+      method: "POST",
+      path: "/teleharness/api/admin/temporal-commands/reload",
+      scope: "admin",
+      handler: ({ res, user }) => {
+        if (!deps.commandCatalog) return sendJson(res, 503, { error: "Каталог команд недоступен" });
+        const result = deps.commandCatalog.reload();
+        deps.auditCommand?.({ event: "temporal.command.catalog", action: "reload", user: user?.id, role: user?.role, ok: result.ok, count: result.items?.length ?? 0 });
+        if (!result.ok) {
+          return sendJson(res, 422, { error: "Каталог команд повреждён — проверьте temporal-commands.json", errors: result.errors });
+        }
+        return sendJson(res, 200, { ok: true, count: result.items.length, items: deps.commandCatalog.listAdmin().items });
+      },
+    },
+    {
+      method: "GET",
+      path: "/teleharness/api/admin/temporal-commands/schedules",
+      scope: "admin",
+      handler: async ({ res, url }) => {
+        if (!deps.commandCatalog) return sendJson(res, 503, { error: "Каталог команд недоступен" });
+        try {
+          const address = url.searchParams.get("address") || undefined;
+          const namespace = url.searchParams.get("namespace") || undefined;
+          return sendJson(res, 200, await deps.commandCatalog.listExternalSchedules({ address, namespace }));
+        } catch (err) {
+          if (err?.status) return sendJson(res, err.status, { error: err.message, ...(err.errors ? { errors: err.errors } : {}) });
+          return apiError(res, err);
+        }
+      },
+    },
+    {
+      method: "*",
+      path: /^\/teleharness\/api\/admin\/temporal-commands\/([^/]+)$/,
+      scope: "admin",
+      handler: async ({ req, res, match, user }) => {
+        if (!deps.commandCatalog) return sendJson(res, 503, { error: "Каталог команд недоступен" });
+        let id;
+        try {
+          id = decodeURIComponent(match[1]);
+        } catch {
+          return sendJson(res, 400, { error: "bad command id" });
+        }
+        if (req.method === "PUT") {
+          const body = await deps.readJsonBody(req, deps.bodyLimit ?? 128 * 1024);
+          if (body === null || typeof body !== "object" || Array.isArray(body)) return sendJson(res, 400, { error: "bad json body" });
+          try {
+            const updated = deps.commandCatalog.update(id, body);
+            deps.auditCommand?.({ event: "temporal.command.catalog", action: "update", user: user?.id, role: user?.role, commandId: updated.id, kind: updated.kind });
+            return sendJson(res, 200, updated);
+          } catch (err) {
+            if (err?.status) return sendJson(res, err.status, { error: err.message, ...(err.errors ? { errors: err.errors } : {}) });
+            return apiError(res, err);
+          }
+        }
+        if (req.method === "DELETE") {
+          try {
+            const removed = deps.commandCatalog.remove(id);
+            deps.auditCommand?.({ event: "temporal.command.catalog", action: "delete", user: user?.id, role: user?.role, commandId: id });
+            return sendJson(res, 200, removed);
+          } catch (err) {
+            if (err?.status) return sendJson(res, err.status, { error: err.message, ...(err.errors ? { errors: err.errors } : {}) });
+            return apiError(res, err);
+          }
+        }
+        return sendJson(res, 405, { error: "method not allowed" });
+      },
+    },
+    // admin-only viewing & management of external Temporal workflows
+    // (list, start, describe+history, signal, query, reset, cancel, terminate).
+    {
+      method: "*",
+      path: "/teleharness/api/admin/temporal-workflows",
+      scope: "admin",
+      handler: async ({ req, res, url, user }) => {
+        if (!deps.externalWorkflows) return sendJson(res, 503, { error: "Управление внешними workflow Temporal недоступно" });
+        if (req.method === "GET") {
+          try {
+            const excludePortalRaw = url.searchParams.get("excludePortal");
+            const out = await deps.externalWorkflows.listWorkflows({
+              address: url.searchParams.get("address") || undefined,
+              namespace: url.searchParams.get("namespace") || undefined,
+              status: url.searchParams.get("status") || undefined,
+              workflowType: url.searchParams.get("workflowType") || undefined,
+              taskQueue: url.searchParams.get("taskQueue") || undefined,
+              excludePortal: excludePortalRaw === "1" || excludePortalRaw === "true",
+              query: url.searchParams.get("query") || undefined,
+              limit: url.searchParams.get("limit") || undefined,
+            });
+            return sendJson(res, 200, out);
+          } catch (err) {
+            if (err?.status) return sendJson(res, err.status, { error: err.message });
+            return apiError(res, err);
+          }
+        }
+        if (req.method === "POST") {
+          const body = await deps.readJsonBody(req, deps.bodyLimit ?? 128 * 1024);
+          if (body === null || typeof body !== "object" || Array.isArray(body)) return sendJson(res, 400, { error: "bad json body" });
+          try {
+            const started = await deps.externalWorkflows.startWorkflow(body);
+            deps.auditCommand?.({
+              event: "temporal.external",
+              action: "start",
+              user: user?.id,
+              role: user?.role,
+              workflowId: started.workflowId,
+              runId: started.runId,
+              workflowType: started.workflowType,
+              taskQueue: started.taskQueue,
+              namespace: started.namespace,
+            });
+            return sendJson(res, 201, started);
+          } catch (err) {
+            if (err?.status) return sendJson(res, err.status, { error: err.message });
+            return apiError(res, err);
+          }
+        }
+        return sendJson(res, 405, { error: "method not allowed" });
+      },
+    },
+    {
+      method: "POST",
+      path: /^\/teleharness\/api\/admin\/temporal-workflows\/([^/]+)\/(signal|query|reset|cancel|terminate)$/,
+      scope: "admin",
+      handler: async ({ req, res, match, user }) => {
+        if (!deps.externalWorkflows) return sendJson(res, 503, { error: "Управление внешними workflow Temporal недоступно" });
+        let workflowId;
+        try {
+          workflowId = decodeURIComponent(match[1]);
+        } catch {
+          return sendJson(res, 400, { error: "bad workflowId" });
+        }
+        const action = match[2];
+        const body = await deps.readJsonBody(req, deps.bodyLimit ?? 128 * 1024);
+        if (body === null || typeof body !== "object" || Array.isArray(body)) return sendJson(res, 400, { error: "bad json body" });
+        const payload = { ...body, workflowId };
+        try {
+          if (action === "signal") {
+            const out = await deps.externalWorkflows.signalWorkflow(payload);
+            deps.auditCommand?.({
+              event: "temporal.external",
+              action: "signal",
+              user: user?.id,
+              role: user?.role,
+              workflowId: out.workflowId,
+              runId: out.runId,
+              namespace: out.namespace,
+              signalName: out.name,
+            });
+            return sendJson(res, 200, out);
+          }
+          if (action === "query") {
+            const out = await deps.externalWorkflows.queryWorkflow(payload);
+            deps.auditCommand?.({
+              event: "temporal.external",
+              action: "query",
+              user: user?.id,
+              role: user?.role,
+              workflowId: out.workflowId,
+              runId: out.runId,
+              namespace: out.namespace,
+              queryType: out.type,
+            });
+            return sendJson(res, 200, out);
+          }
+          if (action === "reset") {
+            const out = await deps.externalWorkflows.resetWorkflow(payload);
+            deps.auditCommand?.({
+              event: "temporal.external",
+              action: "reset",
+              user: user?.id,
+              role: user?.role,
+              workflowId: out.workflowId,
+              newRunId: out.runId,
+              namespace: out.namespace,
+              eventId: out.eventId,
+              resetType: out.resetType,
+              reason: out.reason,
+            });
+            return sendJson(res, 200, out);
+          }
+          if (action === "cancel") {
+            const out = await deps.externalWorkflows.cancelWorkflow(payload);
+            deps.auditCommand?.({
+              event: "temporal.external",
+              action: "cancel",
+              user: user?.id,
+              role: user?.role,
+              workflowId: out.workflowId,
+              runId: out.runId,
+              namespace: out.namespace,
+              reason: out.reason,
+            });
+            return sendJson(res, 200, out);
+          }
+          const out = await deps.externalWorkflows.terminateWorkflow(payload);
+          deps.auditCommand?.({
+            event: "temporal.external",
+            action: "terminate",
+            user: user?.id,
+            role: user?.role,
+            workflowId: out.workflowId,
+            runId: out.runId,
+            namespace: out.namespace,
+            reason: out.reason,
+          });
+          return sendJson(res, 200, out);
+        } catch (err) {
+          if (err?.status) return sendJson(res, err.status, { error: err.message });
+          return apiError(res, err);
+        }
+      },
+    },
+    {
+      method: "GET",
+      path: /^\/teleharness\/api\/admin\/temporal-workflows\/([^/]+)$/,
+      scope: "admin",
+      handler: async ({ res, match, url }) => {
+        if (!deps.externalWorkflows) return sendJson(res, 503, { error: "Управление внешними workflow Temporal недоступно" });
+        let workflowId;
+        try {
+          workflowId = decodeURIComponent(match[1]);
+        } catch {
+          return sendJson(res, 400, { error: "bad workflowId" });
+        }
+        try {
+          const out = await deps.externalWorkflows.describeWorkflow({
+            workflowId,
+            runId: url.searchParams.get("runId") || undefined,
+            address: url.searchParams.get("address") || undefined,
+            namespace: url.searchParams.get("namespace") || undefined,
+            includeHistory: url.searchParams.get("history") !== "0",
+            historyLimit: url.searchParams.get("historyLimit") || undefined,
+          });
+          return sendJson(res, 200, out);
+        } catch (err) {
+          if (err?.status) return sendJson(res, err.status, { error: err.message });
+          return apiError(res, err);
+        }
+      },
+    },
   ];
 }

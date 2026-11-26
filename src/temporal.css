@@ -271,3 +271,100 @@ textarea.t-input { min-height: 96px; resize: vertical; }
 
 /* FEAT-19.32: превью переносимых шагов в шторке «Продолжить запуск». */
 .t-resume-preview { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; margin: 10px 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--input); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+
+/* Command catalog, Command step preview, RunDetail command box, and tablet breakpoint. */
+.t-commands .t-cmd-card { margin: 0; }
+.t-cmd-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.t-cmd-preview { margin: 10px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--input); font-size: 13px; overflow-wrap: anywhere; }
+.t-cmd-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.t-cmd-line { padding: 6px 8px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; overflow-wrap: anywhere; margin-bottom: 6px; }
+.t-cmd-empty { margin: 8px 0 12px; padding: 14px; border: 1px dashed var(--border); border-radius: 12px; background: var(--input); }
+.t-cmd-empty b { display: block; margin-bottom: 4px; }
+.t-cmd-empty p { margin: 0; }
+.t-cmd-params { margin-top: 10px; }
+.t-cmd-form { display: flex; flex-direction: column; gap: 2px; }
+.t-kv-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.t-param-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1fr) auto 40px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.t-cmdbox { margin-top: 8px; border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px; background: var(--surface); font-size: 13.5px; overflow-wrap: anywhere; }
+.t-cmd-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.t-cmd-files { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+
+@media (max-width: 760px) {
+  .t-kv-row { grid-template-columns: minmax(0, 1fr) 40px; }
+  .t-kv-row input:nth-child(2) { grid-column: 1 / -1; }
+  .t-param-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .t-param-row .t-iconbtn { justify-self: end; }
+}
+
+/* Планшетный брейкпоинт (761–1024 px): двухколоночные макеты без переполнения и обрезки */
+@media (min-width: 761px) and (max-width: 1024px) {
+  .t-wrap { padding: 18px 18px 40px; }
+  .t-tabs { padding: 8px 16px; }
+  .t-grid2, .t-ed { grid-template-columns: minmax(0, 1fr) 256px; gap: 14px; }
+  .t-pipes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .t-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .t-param-row { grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr) auto 40px; }
+}
+
+
+/* External Temporal workflows list & detail (390 / 820 / 1280) */
+.t-ext-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.t-ext-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+.t-ext-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.t-ext-grid3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: stretch; }
+.t-ext-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+.t-ext-row:hover { border-color: var(--accent); }
+.t-ext-row-main { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; }
+.t-ext-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.t-ext-type { overflow-wrap: anywhere; }
+.t-ext-id { overflow-wrap: anywhere; word-break: break-word; }
+.t-ext-row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: 0 0 auto; }
+.t-ext-title-wrap { min-width: 0; flex: 1 1 auto; }
+.t-ext-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+}
+.t-ext-head .t-btn, .t-ext-actions .t-btn { min-height: 44px; }
+.t-ext-actions { flex-wrap: wrap; gap: 8px; }
+.t-ext-pending { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.t-ext-events { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 8px; }
+.t-ext-ev {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.t-ext-ev-reset { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.t-ext-evid { font-size: 12px; color: var(--text-2); padding-top: 2px; }
+.t-ext-evbody { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .t-ext-grid2, .t-ext-grid3 { grid-template-columns: minmax(0, 1fr); }
+  .t-ext-row { flex-direction: column; }
+  .t-ext-row-right { align-items: flex-start; flex-direction: row; gap: 10px; }
+}

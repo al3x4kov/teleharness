@@ -6,7 +6,7 @@ from temporalio import activity
 from temporalio.client import Client
 from temporalio.worker import Worker
 
-from model_activity import portal, portal_step, portal_step_pr, subscription_model, sweep_abandoned_permits
+from model_activity import portal, portal_step, portal_step_command, portal_step_pr, subscription_model, sweep_abandoned_permits
 from pipeline import Pipeline
 
 
@@ -25,19 +25,22 @@ async def serve():
         os.environ.get("TELEHARNESS_TEMPORAL_ADDRESS", "127.0.0.1:17233"),
         namespace=os.environ.get("TELEHARNESS_TEMPORAL_NAMESPACE", "teleharness-stage"),
     )
-    # BUG-266: slots of runs closed during a model step are freed after the grace period
-    sweep = asyncio.create_task(sweep_abandoned_permits(
-        client,
-        every_s=int(os.environ.get("TELEHARNESS_TEMPORAL_PERMIT_SWEEP_S", "300")),
-        grace_s=int(os.environ.get("TELEHARNESS_TEMPORAL_PERMIT_GRACE_S", "3600")),
-    ))
+    ledger_mode = (os.environ.get("TELEHARNESS_TEMPORAL_LEDGER", "postgres") or "postgres").strip().lower()
+    sweep = None
+    if ledger_mode != "none":
+        sweep = asyncio.create_task(sweep_abandoned_permits(
+            client,
+            every_s=int(os.environ.get("TELEHARNESS_TEMPORAL_PERMIT_SWEEP_S", "300")),
+            grace_s=int(os.environ.get("TELEHARNESS_TEMPORAL_PERMIT_GRACE_S", "3600")),
+        ))
     try:
         await Worker(
             client, task_queue=os.environ.get("TELEHARNESS_TEMPORAL_QUEUE", "teleharness-stage-pipeline-v1"),
-            workflows=[Pipeline], activities=[prepare_run, subscription_model, portal_step, portal_step_pr],
+            workflows=[Pipeline], activities=[prepare_run, subscription_model, portal_step, portal_step_pr, portal_step_command],
         ).run()
     finally:
-        sweep.cancel()
+        if sweep is not None:
+            sweep.cancel()
 
 
 if __name__ == "__main__":

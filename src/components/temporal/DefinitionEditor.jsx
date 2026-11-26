@@ -12,6 +12,7 @@ import { projectDisplayName } from "../../lib/normalize.js";
 import { validateDefinition, sameDefinition } from "../../../shared/temporal-definition.js";
 import { Banner, Sheet, STEP_TYPES_UI, errorText, hashQuery } from "./ui.jsx";
 import { unsupportedReasons } from "./readiness.js";
+import { CommandFormSheet } from "./CommandsList.jsx";
 import { inputToken, stepToken } from "../../../shared/temporal-template.js";
 import { TEMPLATES } from "./PipesList.jsx";
 
@@ -50,9 +51,10 @@ function useProjects(current, onDefault) {
   return { list: withCurrent, loading: state.list === null, error: state.error };
 }
 
-function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemove, errors, engines, subscriptionModels, modelLabels = {}, inputs = [], codexTextOnly = false }) {
+function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemove, errors, engines, subscriptionModels, modelLabels = {}, inputs = [], codexTextOnly = false, commands = [], commandsLoading = false, commandsError = null, isAdmin = false, ledger = "postgres", onCreateCommand = null }) {
   const ty = STEP_TYPES_UI[step.type] ?? { icon: "?", label: step.type };
-  const unsupported = unsupportedReasons({ inputs: [], steps: [step] }, subscriptionModels);
+  const unsupported = unsupportedReasons({ inputs: [], steps: [step] }, subscriptionModels, { ledger, commands: commandsLoading ? undefined : commands });
+  const selectedCmd = step.type === "command" ? commands.find((c) => c.id === step.command) ?? null : null;
   const bad = errors.length > 0;
   const earlier = steps.slice(0, index);
   const unit = unitOf(step.seconds || 60);
@@ -82,6 +84,137 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
                   {UNITS.map(([u]) => <option key={u} value={u}>{unitLabel(u)}</option>)}</select>
               </div><span class="t-help">{t("temporal.ed.waitHelp")}</span></div>
           )}
+          {step.type === "command" && (
+            <>
+              {commandsError && (
+                <Banner tone="err" icon="⚠" title={t("temporal.ed.cmd.loadErr")}>
+                  {errorText(commandsError)}
+                </Banner>
+              )}
+              {!commandsLoading && !commandsError && commands.length === 0 ? (
+                <div class="t-cmd-empty" data-testid="command-empty-catalog">
+                  <b>{isAdmin ? t("temporal.cmd.empty") : t("temporal.ed.cmd.noAvail")}</b>
+                  <p class="t-help">
+                    {isAdmin ? t("temporal.ed.cmd.emptyAdmin") : t("temporal.ed.cmd.emptyUser")}
+                  </p>
+                  {isAdmin && (
+                    <div class="t-row">
+                      <button type="button" class="t-btn t-primary t-tight" data-action="quick-new-command"
+                        onClick={() => onCreateCommand?.(step.id)}>{t("temporal.ed.cmd.quickNew")}</button>
+                      <a class="t-btn t-tight" href="#/temporal/commands">{t("temporal.ed.cmd.openTab")}</a>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div class="t-field">
+                    <span>{t("temporal.ed.cmd.selectLabel")}</span>
+                    <div class="t-row t-nowrap">
+                      <select class="t-input" aria-label={t("temporal.ed.cmd.selectLabel")} disabled={commandsLoading} value={step.command ?? ""}
+                        onChange={(e) => {
+                          const nextId = e.currentTarget.value;
+                          const nextCmd = commands.find((c) => c.id === nextId);
+                          onChange({
+                            command: nextId,
+                            args: {},
+                            ...(nextCmd?.timeoutSeconds ? { timeoutSeconds: nextCmd.timeoutSeconds } : {}),
+                          });
+                        }}>
+                        <option value="" disabled>{commandsLoading ? t("temporal.ed.cmd.loading") : t("temporal.ed.cmd.pick")}</option>
+                        {step.command && !commands.some((c) => c.id === step.command) && (
+                          <option value={step.command}>{t("temporal.ed.cmd.missingOpt", { id: step.command })}</option>
+                        )}
+                        {commands.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.kind === "temporal-workflow" ? t("temporal.cmd.kindWf") : "exec"})
+                          </option>
+                        ))}
+                      </select>
+                      {isAdmin && (
+                        <button type="button" class="t-btn t-tight" data-action="quick-new-command"
+                          onClick={() => onCreateCommand?.(step.id)}>{t("temporal.ed.cmd.quickNew")}</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedCmd && (
+                    <div class="t-cmd-preview" data-testid="command-preview">
+                      <div class="t-cmd-preview-head">
+                        <b>{t("temporal.ed.cmd.previewTitle")}</b>
+                        <span class="t-pill t-off">{selectedCmd.kind === "temporal-workflow" ? t("temporal.cmd.kindWf") : t("temporal.ed.cmd.scriptBadge")}</span>
+                      </div>
+                      {selectedCmd.description && <p class="t-meta">{selectedCmd.description}</p>}
+                      {isAdmin && selectedCmd.kind === "exec" && selectedCmd.exec && (
+                        <code class="t-cmd-line">
+                          {selectedCmd.exec.file}{selectedCmd.exec.argv?.length ? " " + selectedCmd.exec.argv.join(" ") : ""}
+                        </code>
+                      )}
+                      {isAdmin && selectedCmd.kind === "temporal-workflow" && selectedCmd.temporal && (
+                        <code class="t-cmd-line">
+                          {selectedCmd.temporal.address} · {selectedCmd.temporal.namespace} ·{" "}
+                          {selectedCmd.temporal.schedule
+                            ? `schedule: ${selectedCmd.temporal.schedule}`
+                            : `workflow: ${selectedCmd.temporal.workflow} (${selectedCmd.temporal.taskQueue})`}
+                        </code>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedCmd?.params?.length > 0 && (
+                    <div class="t-cmd-params">
+                      {selectedCmd.params.map((p) => {
+                        const val = step.args?.[p.name] ?? "";
+                        const setVal = (next) => onChange({ args: { ...(step.args ?? {}), [p.name]: next } });
+                        const outputSteps = earlier.filter((x) => x.type === "model" || x.type === "command");
+                        return (
+                          <div class="t-field" key={p.name}>
+                            <span>
+                              <span class="t-mono">{p.name}</span>
+                              {p.required && <span class="t-err-text"> *</span>}
+                              {p.description && <span class="t-muted t-small"> — {p.description}</span>}
+                            </span>
+                            <input class="t-input t-mono" maxLength={500} aria-label={t("temporal.ed.cmd.paramAria", { name: p.name })}
+                              placeholder={p.pattern ? t("temporal.ed.cmd.paramPatternPh", { pattern: p.pattern }) : t("temporal.ed.cmd.paramPh")}
+                              value={val} onInput={(e) => setVal(e.currentTarget.value)} />
+                            {(inputs.length > 0 || outputSteps.length > 0) && (
+                              <div class="t-tokens">
+                                {inputs.map((x) => (
+                                  <button key={x.name} type="button" class="t-token"
+                                    onClick={() => setVal(val + inputToken(x.name))}>{t("temporal.ed.tokInput", { name: x.name })}</button>
+                                ))}
+                                {outputSteps.map((x) => (
+                                  <button key={x.id} type="button" class="t-token"
+                                    onClick={() => setVal(val + stepToken(x.id))}>{t("temporal.ed.cmd.tokOutput", { name: x.name || x.id })}</button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div class="t-two">
+                <label class="t-field"><span>{t("temporal.ed.cmd.timeout")}</span>
+                  <input class="t-input" type="number" min="1" max="86400" aria-label={t("temporal.ed.cmd.timeoutAria")}
+                    value={step.timeoutSeconds ?? 300}
+                    onInput={(e) => onChange({ timeoutSeconds: Number(e.currentTarget.value) })} /></label>
+                <label class="t-field"><span>{t("temporal.ed.attempts")}</span>
+                  <input class="t-input" type="number" min="1" max="10" aria-label={t("temporal.ed.cmd.attemptsAria")}
+                    value={step.maxAttempts ?? 1}
+                    onInput={(e) => onChange({ maxAttempts: Number(e.currentTarget.value) })} /></label>
+              </div>
+              <label class="t-field"><span>{t("temporal.ed.cmd.successWhen")}</span>
+                <select class="t-input" aria-label={t("temporal.ed.cmd.successWhenAria")} value={step.successWhen ?? "exit0"}
+                  onChange={(e) => onChange({ successWhen: e.currentTarget.value })}>
+                  <option value="exit0">{t("temporal.ed.cmd.exit0")}</option>
+                  <option value="always">{t("temporal.ed.cmd.always")}</option>
+                </select>
+              </label>
+            </>
+          )}
           {step.type === "model" && (
             <>
               <div class="t-two">
@@ -94,11 +227,11 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
               </div>
               <label class="t-field"><span>{t("temporal.ed.instrLabel")}</span>
                 <textarea class="t-input" rows="5" maxLength={16000} aria-label={t("temporal.ed.instrAria")} placeholder={t("temporal.ed.instrPh")} value={step.instruction} onInput={(e) => onChange({ instruction: e.currentTarget.value })} /></label>
-              {(inputs.length > 0 || earlier.some((x) => x.type === "model")) && (
+              {(inputs.length > 0 || earlier.some((x) => x.type === "model" || x.type === "command")) && (
                 <div class="t-field"><span class="t-small">{t("temporal.ed.insert")}</span>
                   <div class="t-tokens">
                     {inputs.map((x) => <button key={x.name} type="button" class="t-token" onClick={() => onChange({ instruction: (step.instruction || "") + inputToken(x.name) })}>{t("temporal.ed.tokInput", { name: x.name })}</button>)}
-                    {earlier.filter((x) => x.type === "model").map((x) => <button key={x.id} type="button" class="t-token" onClick={() => onChange({ instruction: (step.instruction || "") + stepToken(x.id) })}>{t("temporal.ed.tokAnswer", { name: x.name || x.id })}</button>)}
+                    {earlier.filter((x) => x.type === "model" || x.type === "command").map((x) => <button key={x.id} type="button" class="t-token" onClick={() => onChange({ instruction: (step.instruction || "") + stepToken(x.id) })}>{t("temporal.ed.tokAnswer", { name: x.name || x.id })}</button>)}
                   </div></div>)}
               <p class="t-help">{t("temporal.ed.modelHelp")}{step.engine === "codex" && codexTextOnly ? t("temporal.ed.codexText") : ""}{step.engine === "acp" && codexTextOnly ? t("temporal.ed.acpTenantText") : ""}</p>
               {/* FEAT-20.7 */}
@@ -121,7 +254,7 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
                 <select class="t-input" aria-label={t("temporal.ed.check")} value={(step.check?.source ?? "step") + ":" + (step.check?.ref ?? "")}
                   onChange={(e) => { const [source, ref] = e.currentTarget.value.split(":"); onChange({ check: { op: "contains", value: "", ...step.check, source, ref } }); }}>
                   <option value="step:" disabled>{t("temporal.ed.choose")}</option>
-                  {earlier.filter((x) => x.type === "model").map((x) => <option key={x.id} value={"step:" + x.id}>{t("temporal.ed.answerOf", { name: x.name || x.id })}</option>)}
+                  {earlier.filter((x) => x.type === "model" || x.type === "command").map((x) => <option key={x.id} value={"step:" + x.id}>{t("temporal.ed.answerOf", { name: x.name || x.id })}</option>)}
                   {inputs.map((x) => <option key={x.name} value={"input:" + x.name}>{t("temporal.ed.inputOf", { name: x.name })}</option>)}
                 </select></label>
               <label class="t-field"><span>{t("temporal.ed.condition")}</span>
@@ -137,7 +270,7 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
               <label class="t-field"><span>{t("temporal.ed.saveAnswer")}</span>
                 <select class="t-input" aria-label={t("temporal.ed.saveAnswerAria")} value={step.source ?? ""} onChange={(e) => onChange({ source: e.currentTarget.value })}>
                   <option value="" disabled>{t("temporal.ed.chooseStep")}</option>
-                  {earlier.filter((x) => x.type === "model").map((x) => <option key={x.id} value={x.id}>{t("temporal.quote", { text: x.name || x.id })}</option>)}
+                  {earlier.filter((x) => x.type === "model" || x.type === "command").map((x) => <option key={x.id} value={x.id}>{t("temporal.quote", { text: x.name || x.id })}</option>)}
                 </select></label>
               <label class="t-field"><span>{t("temporal.ed.fileName")}</span>
                 <input class="t-input" aria-label={t("temporal.ed.fileName")} maxLength={100} placeholder={t("temporal.ed.defaultFile")} value={step.filename ?? ""} onInput={(e) => onChange({ filename: e.currentTarget.value })} />
@@ -184,8 +317,8 @@ function StepCard({ step, index, steps, open, onToggle, onChange, onMove, onRemo
   );
 }
 
-function AddMenu({ onAdd, onClose, engines, subscriptionModels }) {
-  const noModels = !engines.some((e) => subscriptionModels?.[e]?.length);
+function AddMenu({ onAdd, onClose, engines, subscriptionModels, ledger = "postgres" }) {
+  const noModels = ledger === "none" || !engines.some((e) => subscriptionModels?.[e]?.length);
   const opt = (type, text, disabled) => (
     <button key={type} type="button" class="t-tile" aria-disabled={disabled ? "true" : undefined} data-type={type}
       onClick={() => !disabled && onAdd(type)}>
@@ -199,7 +332,8 @@ function AddMenu({ onAdd, onClose, engines, subscriptionModels }) {
       <div class="t-tiles">
         {opt("timer", t("temporal.ed.add.timer"))}
         {opt("approval", t("temporal.ed.add.approval"))}
-        {opt("model", noModels ? t("temporal.ed.add.modelOff") : t("temporal.ed.add.model"), noModels)}
+        {opt("command", t("temporal.ed.add.command"))}
+        {opt("model", ledger === "none" ? t("temporal.ed.add.modelNoLedger") : noModels ? t("temporal.ed.add.modelOff") : t("temporal.ed.add.model"), noModels)}
         {opt("parallel", t("temporal.ed.add.parallel"))}
         {opt("condition", t("temporal.ed.add.condition"))}
         {opt("artifact", t("temporal.ed.add.artifact"))}
@@ -209,7 +343,7 @@ function AddMenu({ onAdd, onClose, engines, subscriptionModels }) {
   );
 }
 
-export default function DefinitionEditor({ record = null, engines = [], pipelineAvailable = false, schedulesAvailable = false, subscriptionModels, modelLabels = {}, codexTextOnly = false }) {
+export default function DefinitionEditor({ record = null, engines = [], pipelineAvailable = false, schedulesAvailable = false, subscriptionModels, modelLabels = {}, codexTextOnly = false, ledger = "postgres" }) {
   const [saved, setSaved] = useState(record);
   const [draft, setDraft] = useState(() => structuredClone(record?.draft ?? fromTemplate(hashQuery().get("template"))));
   const [dirty, setDirty] = useState(!record && !!hashQuery().get("template"));
@@ -222,6 +356,21 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
   const latest = useRef({ draft, saved, dirty });
   latest.current = { draft, saved, dirty };
   const modelEngines = engines.filter((e) => subscriptionModels?.[e]?.length);
+  const isAdmin = me.value?.role === "admin";
+  const [cmdState, setCmdState] = useState({ items: null, allowedRoots: [], error: null });
+  const [creatingCmdFor, setCreatingCmdFor] = useState(null);
+  function loadCommands() {
+    const req = api.temporalCommands();
+    req.then(
+      (r) => setCmdState({ items: r.items ?? [], allowedRoots: r.allowedRoots ?? [], error: null }),
+      (e) => setCmdState((prev) => ({ items: prev.items ?? [], allowedRoots: prev.allowedRoots, error: e }))
+    );
+  }
+  useEffect(() => { loadCommands(); }, [isAdmin]);
+  const commands = cmdState.items ?? [];
+  const commandsLoading = cmdState.items === null && !cmdState.error;
+  const allowedRoots = cmdState.allowedRoots ?? [];
+  const openQuickCreateCommand = (stepId) => setCreatingCmdFor(stepId);
 
   useEffect(() => {
     const before = (e) => { if (latest.current.dirty) { e.preventDefault(); e.returnValue = ""; } };
@@ -262,11 +411,14 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
     let n = draft.steps.length + 1; while (draft.steps.some((s) => s.id === "step" + n)) n++;
     const id = "step" + n;
     const last = draft.steps.at(-1);
+    const lastOut = [...draft.steps].reverse().find((x) => x.type === "model" || x.type === "command")?.id ?? "";
+    const firstCmd = commands[0];
     const step = { id, type, name: STEP_TYPES_UI[type].label, dependsOn: last ? (type === "parallel" ? draft.steps.map((s) => s.id).filter((x) => !draft.steps.some((o) => o.dependsOn.includes(x))) : [last.id]) : [],
       ...(type === "model" ? { engine: modelEngines[0] ?? "opencode", model: subscriptionModels?.[modelEngines[0]]?.[0] ?? "project-default", instruction: "", timeoutSeconds: 600, maxAttempts: 2 } : {}),
+      ...(type === "command" ? { command: firstCmd?.id ?? "", args: {}, timeoutSeconds: firstCmd?.timeoutSeconds ?? 300, maxAttempts: 1, successWhen: "exit0" } : {}),
       ...(type === "timer" ? { seconds: 60 } : {}), ...(type === "parallel" ? { join: "all-success" } : {}),
-      ...(type === "condition" ? { check: { source: "step", ref: [...draft.steps].reverse().find((x) => x.type === "model")?.id ?? "", op: "contains", value: "" } } : {}),
-      ...(type === "artifact" ? { source: [...draft.steps].reverse().find((x) => x.type === "model")?.id ?? "", filename: t("temporal.ed.defaultFile") } : {}) };
+      ...(type === "condition" ? { check: { source: "step", ref: lastOut, op: "contains", value: "" } } : {}),
+      ...(type === "artifact" ? { source: lastOut, filename: t("temporal.ed.defaultFile") } : {}) };
     setSteps([...draft.steps, step]); setOpen(id); setAdding(false);
   }
   function move(index, delta) {
@@ -319,13 +471,13 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
     }
   }
 
-  const validation = validateDefinition(draft, { tr: t });
+  const catalogOpt = !commandsLoading && !cmdState.error ? commands : undefined;
+  const validation = validateDefinition(draft, catalogOpt ? { tr: t, catalog: catalogOpt } : { tr: t });
   const stepErrors = (id) => validation.errors.filter((e) => e.field === id).map((e) => e.message);
   const general = validation.errors.filter((e) => !draft.steps.some((s) => s.id === e.field));
-  const reasons = unsupportedReasons(draft, subscriptionModels);
+  const reasons = unsupportedReasons(draft, subscriptionModels, { ledger, commands: catalogOpt });
   const checks = { valid: validation.valid };
   const projects = useProjects(draft.directory, (d) => setDraft((x) => (x.directory ? x : { ...x, directory: d })));
-  const isAdmin = me.value?.role === "admin";
   const versions = saved?.versions ?? [];
   const nextVersion = versions.length + 1;
   // BUG-259: nothing changed since the last version — nothing to publish.
@@ -379,11 +531,13 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
                   {i > 0 && <div class="t-conn" aria-hidden="true" />}
                   <StepCard step={step} index={i} steps={draft.steps} open={open === step.id} onToggle={() => setOpen(open === step.id ? null : step.id)}
                     onChange={(p) => patch(step.id, p)} onMove={(d) => move(i, d)} onRemove={() => remove(i)}
-                    errors={showIssues ? stepErrors(step.id) : []} engines={engines} subscriptionModels={subscriptionModels} modelLabels={modelLabels} inputs={draft.inputs} codexTextOnly={codexTextOnly} />
+                    errors={showIssues ? stepErrors(step.id) : []} engines={engines} subscriptionModels={subscriptionModels} modelLabels={modelLabels}
+                    inputs={draft.inputs} codexTextOnly={codexTextOnly} commands={commands} commandsLoading={commandsLoading}
+                    commandsError={cmdState.error} isAdmin={isAdmin} ledger={ledger} onCreateCommand={openQuickCreateCommand} />
                 </div>
               ))}
             </div>
-            {adding ? <AddMenu onAdd={addStep} onClose={() => setAdding(false)} engines={engines} subscriptionModels={subscriptionModels} />
+            {adding ? <AddMenu onAdd={addStep} onClose={() => setAdding(false)} engines={engines} subscriptionModels={subscriptionModels} ledger={ledger} />
               : <button type="button" class="t-btn t-block t-dashed" disabled={draft.steps.length >= 64} onClick={() => setAdding(true)}>{t("temporal.ed.addStep")}</button>}
           </section>
           <section class="t-card t-sec">
@@ -421,7 +575,7 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
               <h2>{t("temporal.ed.versions")}</h2>
               <ul class="t-versions">
                 {versions.slice().reverse().map((v) => {
-                  const why = unsupportedReasons(v.definition, subscriptionModels);
+                  const why = unsupportedReasons(v.definition, subscriptionModels, { ledger, commands: catalogOpt });
                   return (
                     <li key={v.version}>
                       <b>{t("temporal.runs.version", { n: v.version })}</b> <span class="t-meta">{v.definition.steps.map((s) => s.name).join(" → ")}</span>
@@ -455,6 +609,24 @@ export default function DefinitionEditor({ record = null, engines = [], pipeline
               <button class="t-btn t-danger-fill" type="button" data-action="confirm-delete" disabled={deleting.busy} onClick={deletePipe}>{deleting.busy ? t("temporal.ed.deleting") : t("temporal.ed.deleteConfirm")}</button></>}
           </div>
         </Sheet>
+      )}
+      {creatingCmdFor && (
+        <CommandFormSheet
+          allowedRoots={allowedRoots}
+          onClose={() => setCreatingCmdFor(null)}
+          onSaved={(created) => {
+            const targetStep = creatingCmdFor;
+            setCreatingCmdFor(null);
+            loadCommands();
+            if (created?.id && targetStep) {
+              patch(targetStep, {
+                command: created.id,
+                args: {},
+                ...(created.timeoutSeconds ? { timeoutSeconds: created.timeoutSeconds } : {}),
+              });
+            }
+          }}
+        />
       )}
       <div class="t-savebar">
         <span class="t-muted t-small t-hide-phone t-grow">{statusText}</span>

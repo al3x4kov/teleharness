@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- пример launchd-агента macOS для воркера пайпов Temporal без PostgreSQL.
+     Скопируйте в ~/Library/LaunchAgents/dev.teleharness.temporal-worker.plist и подставьте свои пути. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.teleharness.temporal-worker</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/YOUR_USER/.local/share/teleharness/venv/bin/python3</string>
+    <string>/Users/YOUR_USER/Projects/teleharness/worker/temporal/pipeline_worker.py</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/YOUR_USER/Projects/teleharness/worker/temporal</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TELEHARNESS_TEMPORAL_ADDRESS</key>
+    <string>127.0.0.1:7233</string>
+    <key>TELEHARNESS_TEMPORAL_NAMESPACE</key>
+    <string>teleharness-local</string>
+    <key>TELEHARNESS_TEMPORAL_QUEUE</key>
+    <string>teleharness-local-pipeline-v1</string>
+    <key>TELEHARNESS_TEMPORAL_LEDGER</key>
+    <string>none</string>
+    <!-- Лимит длины Unix-сокета на macOS — 103 байта. Держите путь коротким. -->
+    <key>TELEHARNESS_TEMPORAL_MODEL_SOCKET</key>
+    <string>/tmp/teleharness-temporal/worker.sock</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/teleharness-temporal/worker.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/teleharness-temporal/worker.err.log</string>
+</dict>
+</plist>

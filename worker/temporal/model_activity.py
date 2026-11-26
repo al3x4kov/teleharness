@@ -8,23 +8,38 @@ import time
 import threading
 from uuid import uuid4
 
-import psycopg
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
+
+
+def _import_psycopg():
+    try:
+        import psycopg
+    except ImportError as err:
+        raise ApplicationError(
+            "Model steps require the PostgreSQL ledger (install psycopg and set TELEHARNESS_TEMPORAL_LEDGER=postgres)",
+            type="ledger_unavailable",
+            non_retryable=True,
+        ) from err
+    return psycopg
 
 
 class PortalConnection(http.client.HTTPConnection):
     def connect(self):
         self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.sock.settimeout(self.timeout)
-        self.sock.connect(os.environ["TELEHARNESS_TEMPORAL_MODEL_SOCKET"])
+        sock_path = os.environ.get("TELEHARNESS_TEMPORAL_MODEL_SOCKET")
+        if not sock_path:
+            raise KeyError("TELEHARNESS_TEMPORAL_MODEL_SOCKET")
+        self.sock.connect(sock_path)
 
 
 def portal(action, request, deadline_ms=None):
     remaining = (deadline_ms / 1000 - time.time()) if deadline_ms else 30
     if remaining <= 0:
         raise TimeoutError("Activity deadline elapsed")
-    conn = PortalConnection("localhost", timeout=min(3600, remaining))  # FEAT-19.16: chat-turn steps run up to an hour
+    max_timeout = 86400 if action == "step" else 3600
+    conn = PortalConnection("localhost", timeout=min(max_timeout, remaining))
     headers = {"Content-Type": "application/json"}
     if deadline_ms:
         headers["X-Teleharness-Deadline-Ms"] = str(deadline_ms)
@@ -45,7 +60,7 @@ def portal(action, request, deadline_ms=None):
             raise ApplicationError("Portal model dispatch unavailable" + (f": {detail}" if detail else ""),
                                    type="ModelUnavailable",
                                    non_retryable=(400 <= response.status < 500 and response.status != 408))
-        limit = 256 * 1024 if action == 'prepare' else 2048
+        limit = 256 * 1024 if action == 'prepare' else (16 * 1024 if action == 'step' else 2048)
         data = response.read(limit + 1)
         if len(data) > limit:
             raise ValueError('Oversized portal response')
@@ -181,7 +196,7 @@ async def closed_times(client, workflow_ids):
 
 async def sweep_abandoned_permits(client, every_s=300, grace_s=3600, connect=None, log=print):
     """BUG-266: the worker's background pass over unreleased permits."""
-    connect = connect or psycopg.connect
+    connect = connect or _import_psycopg().connect
     while True:
         try:
             def pending():
@@ -214,6 +229,13 @@ async def sweep_abandoned_permits(client, every_s=300, grace_s=3600, connect=Non
 
 @activity.defn(name="TeleharnessSubscriptionModelV1")
 async def subscription_model(step_id: str) -> dict:
+    if (os.environ.get("TELEHARNESS_TEMPORAL_LEDGER", "postgres") or "postgres").strip().lower() == "none":
+        raise ApplicationError(
+            "Model steps require the PostgreSQL ledger (TELEHARNESS_TEMPORAL_LEDGER=postgres)",
+            type="ledger_unavailable",
+            non_retryable=True,
+        )
+    psycopg = _import_psycopg()
     info = activity.info()
     workflow_id = info.workflow_id
     deadline_ms = int((info.started_time + info.start_to_close_timeout).timestamp() * 1000)
@@ -270,4 +292,49 @@ async def portal_step_pr(arg: dict) -> dict:
     for key in ("outcome", "branch", "base", "sha"):
         if isinstance(reply.get(key), str):
             out[key] = reply[key][:200]
+    return out
+
+
+@activity.defn(name="TeleharnessPortalCommandV1")
+async def portal_step_command(step_id: str) -> dict:
+    """Execute a pipeline command step (exec / temporal-workflow) via the portal Unix socket.
+
+    Does not require PostgreSQL. Sends heartbeats every 10s (or heartbeat_timeout / 3)
+    and returns only compact metadata (never raw stdout or secrets).
+    """
+    info = activity.info()
+    if not isinstance(step_id, str) or not step_id:
+        raise ApplicationError("Invalid command step id", type="InvalidPortalCommand", non_retryable=True)
+    deadline_ms = int((info.started_time + info.start_to_close_timeout).timestamp() * 1000)
+    hb_interval = min(10.0, info.heartbeat_timeout.total_seconds() / 3.0) if info.heartbeat_timeout else 10.0
+    hb_interval = max(0.2, hb_interval)
+    request = {"workflowId": info.workflow_id, "stepId": step_id}
+    task = asyncio.create_task(asyncio.to_thread(portal, "step", request, deadline_ms))
+    try:
+        while not task.done():
+            activity.heartbeat()
+            await asyncio.wait({task}, timeout=hb_interval)
+        reply = task.result()
+    except asyncio.CancelledError:
+        task.cancel()
+        raise
+    if not isinstance(reply, dict):
+        raise ApplicationError("Invalid portal command reply", type="InvalidPortalCommand", non_retryable=True)
+    state = reply.get("state")
+    if state == "failed":
+        detail = str(reply.get("error") or reply.get("reason") or "Command step failed")[:500]
+        raise ApplicationError(detail, type="CommandFailed", non_retryable=bool(reply.get("nonRetryable")))
+    if state == "slot_wait":
+        return {"state": "slot_wait", "reason": str(reply.get("reason") or "command_slots_busy")[:120]}
+    if state != "done":
+        raise ApplicationError("Invalid portal command reply", type="InvalidPortalCommand", non_retryable=True)
+    out = {"state": "done"}
+    for key in ("exitCode", "durationMs", "filesCount"):
+        val = reply.get(key)
+        if isinstance(val, int) and not isinstance(val, bool):
+            out[key] = val
+    for key in ("childWorkflowId", "childStatus", "uiUrl", "kind"):
+        val = reply.get(key)
+        if isinstance(val, str):
+            out[key] = val[:300]
     return out
