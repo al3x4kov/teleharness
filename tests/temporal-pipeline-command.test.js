@@ -28,11 +28,11 @@ const TEMPORAL_PY = (() => {
 })();
 
 test("worker: command step (slot_wait, heartbeat, CommandFailed, seed, patched)", { skip: !PYTHON_BIN && "python3 is required" }, () => {
-  const out = execFileSync(PYTHON_BIN, [UNIT_PY], { encoding: "utf8", timeout: 60_000 });
+  const out = execFileSync(PYTHON_BIN, [UNIT_PY], { encoding: "utf8", timeout: 60_000, env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } });
   assert.match(out, /ALL OK/, out);
 });
 
 test("Replayer: backward compatibility of legacy TeleharnessPipelineV1 history without command-step-v1", { skip: !TEMPORAL_PY && "temporalio python package is required" }, () => {
-  const out = execFileSync(TEMPORAL_PY, [REPLAY_PY], { encoding: "utf8", timeout: 60_000 });
+  const out = execFileSync(TEMPORAL_PY, [REPLAY_PY], { encoding: "utf8", timeout: 60_000, env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" } });
   assert.match(out, /REPLAY OK/, out);
 });

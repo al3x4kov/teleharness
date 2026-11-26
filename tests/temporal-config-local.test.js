@@ -38,7 +38,7 @@ test("lib/config.js validates TELEHARNESS_TEMPORAL_* and stand/prod defaults", (
     TELEHARNESS_TEMPORAL_LEDGER: "none",
     TELEHARNESS_TEMPORAL_COMMAND_SLOTS: "4",
     TELEHARNESS_TEMPORAL_COMMAND_ROOTS: "/opt/scripts;/srv/scripts",
-    TELEHARNESS_TEMPORAL_MODEL_SOCKET: "/tmp/teleharness-temporal/worker.sock",
+    TELEHARNESS_TEMPORAL_MODEL_SOCKET: path.join(os.tmpdir(), "teleharness-temporal", "worker.sock"),
     TELEHARNESS_TEMPORAL_UI_URL: "http://127.0.0.1:8233",
   });
   assert.deepEqual(custom.errors, []);

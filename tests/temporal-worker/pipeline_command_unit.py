@@ -17,6 +17,9 @@ import sys
 import time
 import types
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STEP = {"id": "cmd1", "type": "command", "dependsOn": [], "timeoutSeconds": 600, "maxAttempts": 2}
 
