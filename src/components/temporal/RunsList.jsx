@@ -92,6 +92,7 @@ export default function RunsList() {
   if (!runs) return <>{head}<Skeleton rows={5} /></>;
   if (rows.length === 0) {
     return (
+      <>{head}
       <Empty icon="⇄" title={t("temporal.runs.empty")} actions={<>
         <button class="t-btn t-primary" type="button" onClick={() => navigate("/temporal/new")}>{t("temporal.runs.createPipe")}</button>
         <button class="t-btn" type="button" onClick={() => navigate("/temporal/pipes")}>{t("temporal.runs.myPipes")}</button></>}>
@@ -101,7 +102,7 @@ export default function RunsList() {
           <div class="t-card"><b>{t("temporal.runs.how2")}</b><span>{t("temporal.runs.how2t")}</span></div>
           <div class="t-card"><b>{t("temporal.runs.how3")}</b><span>{t("temporal.runs.how3t")}</span></div>
         </div>
-      </Empty>
+      </Empty></>
     );
   }
   const waiting = rows.filter((r) => r.kind === "wait");

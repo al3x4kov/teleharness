@@ -131,7 +131,7 @@ test("/ ISSUE-003 (TemporalView): ровно один <h1> на каждой в�
 
   for (const section of ["runs", "pipes", "schedules", "triggers", "commands", "external"]) {
     const h = t$.mount(ui.TemporalView, { section });
-    await t$.waitFor(() => $(h.root, ".t-head h1, .t-wrap h1") || $(h.root, ".t-empty"));
+    await t$.waitFor(() => !$(h.root, ".t-skel") && ($(h.root, ".t-head h1, .t-wrap h1") || $(h.root, ".t-empty")));
     const h1s = $$(h.root, "h1");
     assert.equal(h1s.length, 1, `section=${section}: должен быть ровно один <h1>, найдено ${h1s.length} (${h1s.map((x) => x.textContent).join(", ")})`);
     h.unmount();

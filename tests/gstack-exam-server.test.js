@@ -35,7 +35,7 @@ before(async () => {
     upstream: up.url,
     env: {
       TELEHARNESS_ADMIN_TOKEN: ADMIN,
-      TELEHARNESS_TEMPORAL_PIPELINES: "1",
+      ...(process.platform !== "win32" ? { TELEHARNESS_TEMPORAL_PIPELINES: "1" } : {}),
       TELEHARNESS_PUBLIC_URL: "http://127.0.0.1:1/teleharness/",
     },
   });
@@ -55,7 +55,7 @@ after(async () => {
   await up?.close();
 });
 
-test("/ ISSUE-001: тенант не может создать триггер на явную Claude-версию (POST) и включить его через PATCH {enabled:true}", async () => {
+test("/ ISSUE-001: тенант не может создать триггер на явную Claude-версию (POST) и включить его через PATCH {enabled:true}", { skip: process.platform === "win32" && "Linux/macOS-only feature (POSIX paths, Unix socket, uid)" }, async () => {
   // v1: шаг с engine=claude; v2 (latest): шаг без Claude (approval).
   // Создадим пайп под тенантом как opencode, затем подменим v1→claude через admin или создадим с v1=claude (опубликовать пайп с claude тенант может? проверим!).
   const v1Draft = {
