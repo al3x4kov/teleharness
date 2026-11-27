@@ -56,7 +56,7 @@ exceptions = types.ModuleType("temporalio.exceptions")
 exceptions.ApplicationError = ApplicationError
 sys.modules.update({"temporalio": fake, "temporalio.workflow": workflow, "temporalio.common": common, "temporalio.exceptions": exceptions})
 
-spec = importlib.util.spec_from_file_location("zai_pipeline", ROOT / "worker" / "temporal" / "pipeline.py")
+spec = importlib.util.spec_from_file_location("teleharness_pipeline", ROOT / "worker" / "temporal" / "pipeline.py")
 pipeline = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline)
 

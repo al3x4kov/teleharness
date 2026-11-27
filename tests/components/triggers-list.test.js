@@ -35,7 +35,7 @@ function routes({ conn = CONN_OK, triggers, defs = DEF, templates = [] } = {}) {
     { method: "GET", path: "/teleharness/api/temporal/templates", reply: () => ({ templates, readiness: {} }) },
   ]);
 }
-const CAPS = { triggers: { available: true, publicUrl: "https://zai.example", adminStopped: false, claudeLeftToday: 5 } };
+const CAPS = { triggers: { available: true, publicUrl: "https://teleharness.example", adminStopped: false, claudeLeftToday: 5 } };
 const trig = (over = {}) => ({ id: "t-1", definitionId: "def-1", repo: "acme/app", kinds: ["issue_labeled"], filters: { label: "agent" }, delivery: "auto", pollSeconds: 120, enabled: true, hookConfigured: true, limits: {}, revision: 1, createdAt: 1, lastAt: Date.now() - 120_000, errors: 0, badSignature: 0, ciAttempts: 0, stormAt: null, ...over });
 
 test("статусы триггеров словом (triggerPill)", () => {

@@ -100,7 +100,7 @@ test("/ ISSUE-005 & / ISSUE-011: SettingsView рендерит ровно 1 <h1>
   installFetch([
     { path: "/teleharness/api/usage", reply: () => { calls.push("/teleharness/api/usage"); return { ok: true }; } },
     { path: "/teleharness/api/mcp", reply: () => { calls.push("/teleharness/api/mcp"); return { ctx: { status: "connected" } }; } },
-    { path: /^\/zai\/api\//, reply: (req) => { calls.push(req.path); return {}; } },
+    { path: /^\/teleharness\/api\//, reply: (req) => { calls.push(req.path); return {}; } },
   ]);
   ui.store.me.value = { id: "admin", name: "Admin", role: "admin", engines: ["opencode", "claude"] };
 
@@ -233,7 +233,7 @@ test("/ ISSUE-007: несуществующий чат не вызывает /te
     { path: "/teleharness/api/session/ses_missing_ui/message", reply: () => ({ status: 404, body: { error: "not found" } }) },
     { path: "/teleharness/api/session/ses_missing_ui/plan", reply: () => ({ status: 404, body: { error: "not found" } }) },
     { path: "/teleharness/api/session", reply: () => [] },
-    { path: /^\/zai\/api\//, reply: () => ({}) },
+    { path: /^\/teleharness\/api\//, reply: () => ({}) },
   ]);
   ui.store.me.value = { id: "admin", name: "Admin", role: "admin", engines: ["opencode"] };
   ui.store.sessions.value = [];

@@ -269,7 +269,7 @@ test("T-8, кр. 7: ревизия 2 — «С прошлого ревью · N /
   assert.match($(root, ".rv-comment.is-sent").textContent, /строки изменились/);
 });
 
-const S = (id, over = {}) => ({ id, key: `review:${id}`, source: "chat", title: "Чат " + id, project: { name: "zai" }, status: "waiting", needsYou: true, revision: 1, turns: 1, files: 2, additions: 3, deletions: 1, drafts: 0, since: 1000, href: `#/review/${id}`, ...over });
+const S = (id, over = {}) => ({ id, key: `review:${id}`, source: "chat", title: "Чат " + id, project: { name: "teleharness" }, status: "waiting", needsYou: true, revision: 1, turns: 1, files: 2, additions: 3, deletions: 1, drafts: 0, since: 1000, href: `#/review/${id}`, ...over });
 
 test("T-10, кр. 11, P-10: «Ждёт ревью» — самые давние первыми, фильтры «Все / Чаты / Пайпы / Агент правит», «Ещё 30»", async () => {
   const list = [S("rv_b", { since: 2000 }), S("rv_a", { since: 1000, drafts: 3 }), S("rv_p", { source: "run", since: 3000 }), S("rv_r", { status: "returned", needsYou: false, since: 500 })];

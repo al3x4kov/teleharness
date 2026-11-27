@@ -280,7 +280,7 @@ test("BUG-301 / BUG-302: HTTP symlink escape returns 403; .xlsm/.pptx MIME; RFC 
 
   // HTTP symlink escape returns 403
   if (process.platform !== "win32") {
-    const out = mkdtempSync(path.join(tmpdir(), "zai-file-sym-out-"));
+    const out = mkdtempSync(path.join(tmpdir(), "teleharness-file-sym-out-"));
     const secret = path.join(out, "secret.txt");
     writeFileSync(secret, "nope");
     const link = path.join(ROOT, "escape-link.txt");

@@ -88,7 +88,7 @@ test("BUG-302 clientIp: XFF игнорируется для внешнего rem
 
 test("BUG-302 accessLogger: prune использует инжектированный now(), а не Date.now()", async () => {
   const { writeFileSync, existsSync } = await import("node:fs");
-  const dir = mkdtempSync(path.join(tmpdir(), "zai-accesslog-prune-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "teleharness-accesslog-prune-"));
   try {
     const oldFile = path.join(dir, "access-20260101.log");
     writeFileSync(oldFile, '{"ok":1}\n', "utf8"); // mtime == сейчас (Date.now())
@@ -105,7 +105,7 @@ test("BUG-302 accessLogger: prune использует инжектирован�
 
 test("BUG-302 accessLogger: ротация через >2 переполненные части (while вместо if)", async () => {
   const { writeFileSync, truncateSync, existsSync } = await import("node:fs");
-  const dir = mkdtempSync(path.join(tmpdir(), "zai-accesslog-rot-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "teleharness-accesslog-rot-"));
   try {
     const fixed = new Date("2026-11-20T12:00:00.000Z");
     const base = path.join(dir, "access-20261120.log");

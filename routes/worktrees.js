@@ -273,7 +273,7 @@ export function worktreeRoutes(deps) {
           const i = await run(["init", "-q", "-b", "main"]);
           if (i.code !== 0) throw new GitError(500, `git init не выполнен: ${sanitize(i.stderr)}`);
           await run(["add", "-A"]);
-          const c = await run([...id, "commit", "-q", "--allow-empty", "--no-verify", "-m", "Первый коммит (zai)"]);
+          const c = await run([...id, "commit", "-q", "--allow-empty", "--no-verify", "-m", "Первый коммит (teleharness)"]);
           if (c.code !== 0) throw new GitError(500, `Первый коммит не создан: ${sanitize(c.stderr)}`);
           return sendJson(res, 200, { ok: true });
         } catch (err) {

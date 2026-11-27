@@ -15,7 +15,7 @@ const DIR = "C:\\Home";
 
 // ---- юнит: книжность хаба (emit → #noteEvent → planOf), без сети -------------
 
-const zaiPlanEvents = (hub) => {
+const teleharnessPlanEvents = (hub) => {
   const seen = [];
   hub.onEvent((data) => {
     try {
@@ -28,7 +28,7 @@ const zaiPlanEvents = (hub) => {
 
 test("FEAT-20.37: todo.updated → подписчику уходит teleharness.plan, planOf отдаёт нормализованные этапы", () => {
   const hub = new EventHub({});
-  const seen = zaiPlanEvents(hub);
+  const seen = teleharnessPlanEvents(hub);
   hub.emit(
     {
       type: "todo.updated",
@@ -55,7 +55,7 @@ test("FEAT-20.37: todo.updated → подписчику уходит teleharness
 
 test("FEAT-20.37: opencode v2 message.part.updated (tool=todowrite) → teleharness.plan и planOf без дублей", () => {
   const hub = new EventHub({});
-  const seen = zaiPlanEvents(hub);
+  const seen = teleharnessPlanEvents(hub);
   const part = {
     id: "prt_1",
     messageID: "msg_1",
@@ -92,7 +92,7 @@ test("FEAT-20.37: opencode v2 message.part.updated (tool=todowrite) → teleharn
 
 test("FEAT-20.37: teleharness.plan от раннера напрямую — planOf заполнен, follow-up НЕ создаётся", () => {
   const hub = new EventHub({});
-  const seen = zaiPlanEvents(hub);
+  const seen = teleharnessPlanEvents(hub);
   hub.emit(
     {
       type: "teleharness.plan",
@@ -152,13 +152,13 @@ test("FEAT-20.37: planOf неизвестной сессии — null (не ма
   assert.equal(hub.planOf("ses_none"), null);
 });
 
-test("FEAT-20.37: todo.updated со статусом cancelled не вызывает ложный zai.turn.incomplete (BUG-07.8)", () => {
+test("FEAT-20.37: todo.updated со статусом cancelled не вызывает ложный teleharness.turn.incomplete (BUG-07.8)", () => {
   const hub = new EventHub({});
   const incomplete = [];
   hub.onEvent((data) => {
     try {
       const e = JSON.parse(data);
-      if (e.type === "zai.turn.incomplete") incomplete.push(e);
+      if (e.type === "teleharness.turn.incomplete") incomplete.push(e);
     } catch {}
   });
   hub.emit({ type: "session.status", properties: { sessionID: "ses_cancel", status: { type: "busy" } } }, DIR);

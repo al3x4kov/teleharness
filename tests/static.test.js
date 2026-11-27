@@ -73,7 +73,7 @@ test("encoded %2e%2e traversal is blocked", async () => {
 });
 
 test("BUG-302: symlink escaping public/ is blocked with 403", async () => {
-  const outside = mkdtempSync(path.join(tmpdir(), "zai-static-out-"));
+  const outside = mkdtempSync(path.join(tmpdir(), "teleharness-static-out-"));
   const secret = path.join(outside, "secret.txt");
   writeFileSync(secret, "top-secret");
   const linkPath = path.join(ROOT, "public", `_test_escape_${process.pid}.txt`);

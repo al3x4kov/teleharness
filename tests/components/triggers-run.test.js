@@ -45,7 +45,7 @@ const WAIT_STEPS = [{ id: "work", name: "Правки в отдельной ра
 const CI_STEPS = [{ id: "fix", name: "Найти причину и исправить", type: "model", engine: "opencode", model: "glm-5.3" }, { id: "pr", name: "Открыть PR", type: "pull_request", mode: "same-branch" }];
 const CI_REF = "acme/app · PR #320 · feature/upload · CI «test»";
 const CI_LOG = "FAIL tests/upload.test.js\n● upload › rejects 0-byte file\nexpected 400, received 500\nat handleUpload (routes/files.js:212)";
-const REFUSED = "GitHub отклонил отправку: правило репозитория «Require signed commits». Коммит 5be01d3 остался в рабочей копии — отправьте вручную или ослабьте правило для веток zai/*.";
+const REFUSED = "GitHub отклонил отправку: правило репозитория «Require signed commits». Коммит 5be01d3 остался в рабочей копии — отправьте вручную или ослабьте правило для веток teleharness/*.";
 const MOVED = "Ветка обновлена человеком — правки агента не отправлены, перезапись не выполняется. Коммит остался в рабочей копии запуска.";
 
 // Запуск «Задача → PR» от метки agent на задаче #142 — как в кадре T-14.
@@ -89,7 +89,7 @@ test("ui: prOutcome / ghWait / sourceText / stepErrorTitle / eventTarget — и�
   assert.equal(ui.CI_ATTEMPTS_MAX, 2, "предел попыток — из shared, тот же, что на сервере");
   assert.equal(out(null), null);
   assert.deepEqual(out({ state: "no_changes", url: null }), { tone: "off", title: "Изменений нет — PR не открыт", text: "Агент ничего не поменял, отправлять нечего." });
-  assert.equal(out({ state: "done", url: PR, outcome: "created", branch: "zai/142-fix", base: "main" }).title, "Draft PR #318 открыт");
+  assert.equal(out({ state: "done", url: PR, outcome: "created", branch: "teleharness/142-fix", base: "main" }).title, "Draft PR #318 открыт");
   assert.equal(out({ state: "done", url: PR, outcome: "updated" }).title, "PR #318 обновлён");
   assert.equal(out({ state: "done", url: PR320, outcome: "pushed", branch: "feature/upload", sha: "7c21e0a" }).title, "Коммит 7c21e0a отправлен в feature/upload");
   assert.equal(out({ state: "done", url: PR }).title, "PR #318 готов к ревью", "старый портал без outcome");
@@ -131,7 +131,7 @@ test("ui: prOutcome / ghWait / sourceText / stepErrorTitle / eventTarget — и�
 
 test("T-14: запуск от GitHub — источник ссылкой на задачу, шаг PR «Draft PR #318 открыт» со ссылкой, триггер в «О запуске»", async () => {
   const root = await mountRun(ghRun({ state: { generation: "g", paused: false, pending: [], steps: DONE,
-    pr: { pr: { state: "done", url: PR, outcome: "created", branch: "zai/142-empty-projects-list", base: "main", sha: "a41f9c2" } } } }));
+    pr: { pr: { state: "done", url: PR, outcome: "created", branch: "teleharness/142-empty-projects-list", base: "main", sha: "a41f9c2" } } } }));
   await t$.waitFor(() => root.textContent.includes("Draft PR #318 открыт"));
   const source = $(root, `.t-facts a[href="${ISSUE}"]`);
   assert.ok(source, "источник — ссылкой в шапке");
@@ -141,7 +141,7 @@ test("T-14: запуск от GitHub — источник ссылкой на з
   assert.ok(step.classList.contains("t-tl-done"));
   assert.match($(step, ".t-meta").textContent, /Шаг портала · готово/);
   const box = $(step, ".t-prbox");
-  assert.ok(box.textContent.includes("zai/142-empty-projects-list → main"));
+  assert.ok(box.textContent.includes("teleharness/142-empty-projects-list → main"));
   const link = $(box, "a");
   assert.equal(link.getAttribute("href"), PR);
   assert.equal(link.textContent, "Открыть PR #318 ↗");
@@ -156,7 +156,7 @@ test("T-14: запуск от GitHub — источник ссылкой на з
 
 test("N-7 / T-16: PR по ветке уже был — «PR #318 обновлён» комментарием, второй PR не создан", async () => {
   const root = await mountRun(ghRun({ state: { generation: "g", paused: false, pending: [], steps: DONE,
-    pr: { pr: { state: "done", url: PR, outcome: "updated", branch: "zai/142-empty-projects-list", sha: "165993f" } } } }));
+    pr: { pr: { state: "done", url: PR, outcome: "updated", branch: "teleharness/142-empty-projects-list", sha: "165993f" } } } }));
   await t$.waitFor(() => root.textContent.includes("PR #318 обновлён"));
   const box = $(prStep(root), ".t-prbox");
   assert.ok(box.textContent.includes("новый коммит 165993f добавлен туда"));
@@ -259,7 +259,7 @@ test("T-16: человек обновил ветку PR — «Ветка обн�
 });
 
 test("«Открыть рабочую копию» ведёт к карточке копии; без карточки — честное пояснение тостом", async () => {
-  const wt = { id: "wt_aaaaaaaaaaaa", kind: "run", branch: "zai/142-empty-projects-list", base: "main", state: "ready", ahead: 1, behind: 0, files: [], filesCount: 1, uncommitted: 0, overlaps: [], op: null, queue: null, canUndoMerge: false, tenant: false };
+  const wt = { id: "wt_aaaaaaaaaaaa", kind: "run", branch: "teleharness/142-empty-projects-list", base: "main", state: "ready", ahead: 1, behind: 0, files: [], filesCount: 1, uncommitted: 0, overlaps: [], op: null, queue: null, canUndoMerge: false, tenant: false };
   const scrolled = [];
   const proto = globalThis.HTMLElement?.prototype;
   const original = proto?.scrollIntoView;
@@ -338,7 +338,7 @@ test("длинный вход (тело задачи с GitHub) свёрнут �
 const row = (id, kind, extra = {}) => ({ workflowId: id, definitionId: "a", name: "Пайп " + id, version: 1, accepted: true, source: "github",
   eventRef: "acme/app#142 · метка agent", steps: [{ id: "pr", name: "Открыть PR", type: "pull_request" }],
   summary: { kind, status: kind === "ok" ? "COMPLETED" : "RUNNING", startTime: null, stepsTotal: 1, current: null, waiting: false }, ...extra });
-const CREATED = { state: "done", url: PR, outcome: "created", branch: "zai/142-fix", sha: "a41f9c2" };
+const CREATED = { state: "done", url: PR, outcome: "created", branch: "teleharness/142-fix", sha: "a41f9c2" };
 const rowById = (root, id) => $$(root, ".t-runrow").find((el) => el.textContent.includes("Пайп " + id));
 
 test("список (кр. 19): запуск от GitHub — итог PR словами, ссылки на событие и PR; строка role=link: чипы её не открывают, клик и Enter — открывают", async () => {

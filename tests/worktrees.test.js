@@ -693,3 +693,37 @@ test("BUG-303: touchRepoOf учитывает baseChanged и conflicts в сиг
   assert.ok(overlapEvts.length >= 1, "touchRepoOf должен замечать изменение baseChanged/conflicts");
 });
 
+
+test("TASK-18.18: POST /teleharness/api/worktrees/init создаёт первый коммит под брендом teleharness", async () => {
+  const { worktreeRoutes } = await import("../routes/worktrees.js");
+  const { dispatchRoute } = await import("../routes/router.js");
+  const { svc } = makeSvc();
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wt-init-brand-"));
+  try {
+    let status = 0;
+    let body = null;
+    const routes = worktreeRoutes({
+      wt: svc,
+      sendJson: (res, s, b) => { status = s; body = b; },
+      readJsonBody: async () => ({}),
+      dirAllowed: () => true,
+      existingChatFolder: () => true,
+      chatDirOf: async () => dir,
+      isUnderAny: () => false,
+      gitAuthor: () => ({ name: "", email: "" }),
+      tenantDir: () => null,
+      titleOf: () => null,
+    });
+    await dispatchRoute(routes, {
+      req: { method: "POST" },
+      res: {},
+      url: new URL(`http://test/teleharness/api/worktrees/init?directory=${encodeURIComponent(dir)}`),
+      user: { id: "u" },
+      admin: true,
+    }, { sendJson: (res, s, b) => { status = s; body = b; } });
+    assert.equal(status, 200, JSON.stringify(body));
+    assert.equal(sh(dir, "log", "-1", "--format=%s|%an|%ae").trim(), "Первый коммит (teleharness)|teleharness|teleharness@localhost");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 const TID = "11111111-1111-1111-1111-111111111111";
-const CAPS = { triggers: { available: true, publicUrl: "https://zai.example/zai", adminStopped: false, claudeLeftToday: 5 } };
+const CAPS = { triggers: { available: true, publicUrl: "https://teleharness.example/teleharness", adminStopped: false, claudeLeftToday: 5 } };
 const TRIG = { id: TID, repo: "acme/app", definitionId: "pipe-1", version: null, kinds: ["issue_labeled", "comment_command"], filters: { label: "agent" }, delivery: "auto", pollSeconds: 120, enabled: true, limits: { perHour: 6, queue: 20 }, hookConfigured: true, revision: 1, createdAt: 1, lastAt: Date.now(), errors: 0, badSignature: 0, ciAttempts: 0, stormAt: null };
 const ROWS = [
   { id: 5, at: Date.now() - 60_000, kind: "issue_labeled", repo: "acme/app", number: 142, actor: "owner-gh", decision: "started", reason: null, workflowId: "wf-2c9f41a8", via: "webhook", eventJson: null },

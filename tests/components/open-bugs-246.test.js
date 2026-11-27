@@ -25,7 +25,7 @@ before(async () => {
 after(() => { ui?.store?.dispose?.(); });
 afterEach(() => {
   t$.cleanup();
-  delete globalThis.__zaiActiveId;
+  delete globalThis.__teleharnessActiveId;
   ui.store.sessions.value = [];
   ui.store.active.value = null;
   ui.store.subscriptions.value = [];

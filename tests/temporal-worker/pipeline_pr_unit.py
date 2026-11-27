@@ -62,7 +62,7 @@ exceptions = types.ModuleType("temporalio.exceptions")
 exceptions.ApplicationError = ApplicationError
 sys.modules.update({"temporalio": fake, "temporalio.workflow": workflow, "temporalio.common": common, "temporalio.exceptions": exceptions})
 
-spec = importlib.util.spec_from_file_location("zai_pipeline", ROOT / "worker" / "temporal" / "pipeline.py")
+spec = importlib.util.spec_from_file_location("teleharness_pipeline", ROOT / "worker" / "temporal" / "pipeline.py")
 pipeline = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline)
 
@@ -89,13 +89,13 @@ async def wait_pending(p, key):
 
 
 async def main():
-    done = {"state": "done", "url": "https://github.com/o/r/pull/318", "outcome": "created", "branch": "zai/142-fix", "base": "main", "sha": "a41f9c2"}
+    done = {"state": "done", "url": "https://github.com/o/r/pull/318", "outcome": "created", "branch": "teleharness/142-fix", "base": "main", "sha": "a41f9c2"}
 
     # 1. Ждёт GitHub: 5 мин между проверками, затем успех — итог сохранён для экрана запуска.
     p = reset([{"state": "github_wait", "reason": "github_auth"}, {"state": "github_wait", "reason": "github_network"}, done])
     await p.execute_step(dict(STEP))
     check("github_wait ×2 → done: повтор каждые 300 с", state["sleeps"] == [300, 300])
-    check("github_wait ×2 → done: итог шага с веткой и коммитом", p.pr["pr"] == {"state": "done", "url": done["url"], "outcome": "created", "branch": "zai/142-fix", "base": "main", "sha": "a41f9c2"})
+    check("github_wait ×2 → done: итог шага с веткой и коммитом", p.pr["pr"] == {"state": "done", "url": done["url"], "outcome": "created", "branch": "teleharness/142-fix", "base": "main", "sha": "a41f9c2"})
     check("github_wait ×2 → done: причина ожидания снята, шаг завершён", "pr" not in p.wait_reasons and p.steps["pr"] == "completed")
     check("активити — TeleharnessPortalPrV1 с шагом и approved=false", [c["name"] for c in state["calls"]] == ["TeleharnessPortalPrV1"] * 3 and state["calls"][0]["arg"] == {"stepId": "pr", "approved": False})
     check("таймаут активити 120 с, до 3 попыток", state["calls"][0]["start_to_close_timeout"].total_seconds() == 120 and state["calls"][0]["retry_policy"].kw == {"maximum_attempts": 3})

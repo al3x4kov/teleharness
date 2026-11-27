@@ -248,7 +248,7 @@ test("BUG-273: доска — у карточки ревью нет строки
 
 test("BUG-303: ReviewService.lock освобождает ключ в this.locks после завершения (одиночный и конкурентный)", async () => {
   const { ReviewService, ReviewStore } = await import("../lib/review.js");
-  const data = mkdtempSync(path.join(os.tmpdir(), "zai-rv-lock-"));
+  const data = mkdtempSync(path.join(os.tmpdir(), "teleharness-rv-lock-"));
   try {
     const svc = new ReviewService({ store: new ReviewStore({ dir: path.join(data, "review"), log: () => {} }), objectsRoot: path.join(data, "o"), tmpDir: path.join(data, "t"), log: () => {} });
     await svc.lock("u1", async () => "ok");
@@ -279,7 +279,7 @@ test("BUG-303: ReviewService.lock освобождает ключ в this.locks 
 
 test("BUG-303: ReviewService.chatDeleted помечает открытые ревью ветки (source.kind === 'branch') и чата", async () => {
   const { ReviewService, ReviewStore } = await import("../lib/review.js");
-  const data = mkdtempSync(path.join(os.tmpdir(), "zai-rv-del-"));
+  const data = mkdtempSync(path.join(os.tmpdir(), "teleharness-rv-del-"));
   try {
     const emitted = [];
     const svc = new ReviewService({

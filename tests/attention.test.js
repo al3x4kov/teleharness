@@ -173,7 +173,7 @@ test("кр. 3: запуски Temporal — решение, работа, гот�
 });
 
 test("кр. 21, N-32: ревью — needsYou в «Ждёт вас» и счётчиках; «Агент правит» — только на вкладке; запуск с ревью — один элемент", () => {
-  const rv = (id, status, extra = {}) => ({ id, key: `review:${id}`, source: "chat", title: "Ревью " + id, project: { name: "zai", dir: "/p/teleharness" }, status, needsYou: ["waiting", "decision", "changed", "interrupted"].includes(status), files: 7, since: NOW - 25 * MIN, href: `#/review/${id}`, ...extra });
+  const rv = (id, status, extra = {}) => ({ id, key: `review:${id}`, source: "chat", title: "Ревью " + id, project: { name: "teleharness", dir: "/p/teleharness" }, status, needsYou: ["waiting", "decision", "changed", "interrupted"].includes(status), files: 7, since: NOW - 25 * MIN, href: `#/review/${id}`, ...extra });
   const b = board({
     chats: [chat("a")],
     live: { busy: {}, dialogs: [{ id: "p", sessionID: "a", kind: "permission", askedAt: NOW - 40 * MIN }] },

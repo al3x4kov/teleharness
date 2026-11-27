@@ -246,7 +246,6 @@ async def main():
                     srv_closed.set()
             srv_thread = threading.Thread(target=hold_connection, daemon=True)
             srv_thread.start()
-            prev_sock = os.environ.get("ZAI_TEMPORAL_MODEL_SOCKET")
             prev_tel_sock = os.environ.get("TELEHARNESS_TEMPORAL_MODEL_SOCKET")
             try:
                 os.environ["TELEHARNESS_TEMPORAL_MODEL_SOCKET"] = sock_path
@@ -272,7 +271,6 @@ async def main():
                 try: os.rmdir(tmp_dir)
                 except OSError: pass
                 for k, v in (
-                    ("ZAI_TEMPORAL_MODEL_SOCKET", prev_sock),
                     ("TELEHARNESS_TEMPORAL_MODEL_SOCKET", prev_tel_sock),
                 ):
                     if v is None: os.environ.pop(k, None)

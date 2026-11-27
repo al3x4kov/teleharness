@@ -17,11 +17,11 @@ afterEach(() => {
 });
 
 const CAPS = { engines: ["claude"], pipelineAvailable: true, schedulesAvailable: true, runListAvailable: true, triggersAvailable: true,
-  triggers: { available: true, publicUrl: "https://zai.example/zai", adminStopped: false, claudeLeftToday: 5 },
+  triggers: { available: true, publicUrl: "https://teleharness.example/teleharness", adminStopped: false, claudeLeftToday: 5 },
   subscriptionModels: { claude: ["claude-opus-5-5", "claude-sonnet-4-5"] } };
 const KEY = "K".repeat(43);
 const SECRET = "S".repeat(43);
-const HOOK_URL = `https://zai.example/teleharness/hooks/github/${KEY}`;
+const HOOK_URL = `https://teleharness.example/teleharness/hooks/github/${KEY}`;
 
 // Реальное стеночное время: waitFor крутит setImmediate и не даёт сработать
 // дебаунсу «Готовности» (500 мс). Здесь — sleep + act, как в харнессе.
