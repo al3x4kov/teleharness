@@ -275,7 +275,7 @@ test("«Открыть рабочую копию» ведёт к карточк�
   }
   t$.cleanup();
   const bare = await mountRun(pushRefused(), [{ method: "GET", path: "/teleharness/api/worktrees", reply: () => ({ item: null, pending: null }) }]);
-  await t$.waitFor(() => $(bare, ".t-prbox-err"));
+  await t$.waitFor(() => $(bare, ".t-prbox-err") && !$(bare, '[data-req="FEAT-20.7"]'));
   t$.click($($(bare, ".t-prbox-err"), '[data-action="to-worktree"]'));
   await t$.waitFor(() => $(bare, ".t-toast"));
   assert.match($(bare, ".t-toast").textContent, /Коммит не потерян — он в ветке рабочей копии/);
