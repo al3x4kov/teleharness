@@ -6,6 +6,23 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.13.2] — 2026-11-28
+
+Instant demo mode, npm package publishing, Docker/Render templates, and a shorter README.
+
+### Added
+- **`npx teleharness --demo` CLI mode.** `bin/teleharness.mjs` now supports `--demo` and `TELEHARNESS_DEMO=1`: creates a temporary sandbox with time-shifted demo fixtures, serves the UI without engines or API keys, and removes the temp directory on exit.
+- **npm package distribution.** Removed `private: true` from `package.json`, added a compact `files` allowlist (~2.8 MB tarball, excluding screenshots, tests, and openspec), `prepublishOnly` build hook, and `.github/workflows/publish-npm.yml` for automated npm publishing with provenance on GitHub Releases.
+- **Docker and Render templates.** Added `Dockerfile`, `.dockerignore`, `docker-compose.yml` (instant demo default plus `selfhosted` profile), `render.yaml` Blueprint, and a `docker (demo smoke)` job in `.github/workflows/ci.yml`.
+- **Desktop demo GIFs and visual tour pages.** Added EN/RU desktop walkthrough GIFs (`docs/screenshots/desktop-demo.gif`, `docs/screenshots/ru/desktop-demo.gif`) and moved the full screenshot gallery into `docs/tour.md` and `docs/tour.ru.md`.
+- **Onboarding contract tests.** Added `tests/public-onboarding.test.js`, extended `tests/teleharness-bin.test.js` with `--demo` unit and live smoke tests, and extended `tests/readme-links.test.js` to check `docs/tour*.md`.
+
+### Changed
+- **Focused README (EN/RU) and SECURITY.md.** Shortened `README.md` and `README.ru.md` to lead with the desktop demo GIF, 10-second demo options, and a comparison table; clarified in `SECURITY.md` that single-user `localhost` / Tailscale setups do not require tenant sandboxing.
+
+### Removed
+- Deleted empty 0-byte `projects.html` and `settings.html` stub files from the repository root.
+
 ## [2.13.1] — 2026-11-28
 
 Codex OAuth token auto-refresh and clear refresh failure diagnostics.

@@ -1,13 +1,14 @@
 <div align="center">
 
-<img src="docs/screenshots/social-preview.png" alt="Teleharness: one web control room for Claude Code, Codex, Gemini (ACP) and opencode, with optional mobile PWA" width="100%">
+<img src="docs/screenshots/social-preview.png" alt="Teleharness: self-hosted web UI for Claude Code, Codex, Gemini (ACP) and opencode, with optional mobile PWA" width="100%">
 
-## One web control room for your AI coding CLIs
+## Self-hosted web UI for Claude Code, Codex, Gemini (ACP), and opencode
 
-**Run Claude Code, Codex, Gemini (ACP) and opencode from one self-hosted desktop web UI — on the subscriptions you already pay for. Review diffs in isolated git worktrees, switch CLIs mid-task when a usage limit hits, and chain agents into durable Temporal pipelines. Need access away from your desk? The same app works as an optional mobile PWA.**
+**Run your local coding CLIs from one browser tab using the subscriptions you already pay for. Review diffs in isolated git worktrees, hand off a chat to another CLI when a usage limit hits, or chain agents into Temporal pipelines. Works on desktop and as an optional mobile PWA.**
 
 **Chat** · **Attention Board** · **Diff Review & Worktrees** · **Cross-CLI Relay** · **Temporal Pipelines** · **Self-Hosted**
 
+[![npm](https://img.shields.io/npm/v/teleharness?style=flat-square&color=cb3837)](https://www.npmjs.com/package/teleharness)
 [![Release](https://img.shields.io/github/v/release/al3x4kov/teleharness?style=flat-square&color=6366f1)](https://github.com/al3x4kov/teleharness/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/al3x4kov/teleharness/ci.yml?branch=main&style=flat-square&label=tests)](https://github.com/al3x4kov/teleharness/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
@@ -15,8 +16,8 @@
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-0ea5e9?style=flat-square)](#platform-support)
 
 [Try in 10s](#try-it-in-10-seconds) •
-[Why Teleharness](#how-teleharness-compares) •
-[What it does](#what-it-does) •
+[Comparison](#how-teleharness-compares) •
+[Features](#what-it-does) •
 [Visual tour](docs/tour.md) •
 [Quick start](#quick-start) •
 [Security](#security-model) •
@@ -32,25 +33,22 @@
 
 ## Try it in 10 seconds
 
-No engines, no API keys, nothing written to your home folder — opens the full UI on synthetic chats:
+Runs on synthetic demo chats in a temporary directory. No agent CLIs, no API keys, nothing written to your home folder.
 
-**Option 1 — One command (Node.js ≥ 22):**
+**1. Node.js ≥ 22:**
 ```bash
 npx teleharness --demo
-# or directly from GitHub before npm publish:
-npx github:al3x4kov/teleharness --demo
-# → http://127.0.0.1:4180/teleharness/  (login token: demo-demo-demo-demo)
+# → http://127.0.0.1:4180/teleharness/  (token: demo-demo-demo-demo)
 ```
 
-**Option 2 — Docker Compose:**
+**2. Docker Compose:**
 ```bash
 git clone https://github.com/al3x4kov/teleharness.git && cd teleharness
 docker compose up
-# → http://127.0.0.1:4180/teleharness/  (login token: demo-demo-demo-demo)
+# → http://127.0.0.1:4180/teleharness/  (token: demo-demo-demo-demo)
 ```
 
-**Option 3 — One-click cloud sandbox (free tier, read-only demo):**
-Deploy your own throwaway demo instance directly from [`render.yaml`](render.yaml):
+**3. Free-tier cloud sandbox (read-only demo via [`render.yaml`](render.yaml)):**
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/al3x4kov/teleharness)
 
@@ -58,36 +56,36 @@ Deploy your own throwaway demo instance directly from [`render.yaml`](render.yam
 
 ## How Teleharness compares
 
-Teleharness wraps the **real local CLIs** (with all their skills, MCP servers, hooks, and project context) instead of calling a metered API directly.
+Teleharness launches the **real local CLIs** installed on your machine (keeping their skills, MCP servers, hooks, and project files) instead of proxying requests through a metered API.
 
 | Capability | Teleharness | Claude Code Web | OpenCode Web | Cursor | Vibe Kanban |
 |---|:---:|:---:|:---:|:---:|:---:|
-| Uses your existing CLI subscriptions (no metered API) | **Yes** | Claude only | BYO API / OAuth | Own plan | Yes |
+| Uses existing CLI subscriptions (no extra API billing) | **Yes** | Claude only | BYO API / OAuth | Own plan | Yes |
 | Claude Code + Codex + Gemini/ACP + opencode in one UI | **Yes (4 families)** | No | opencode only | IDE models | Partial |
-| Switch CLI mid-chat on usage limit (manual & Auto-Relay) | **Yes** | No | No | No | No |
+| Hand off chat to another CLI on quota limit (manual & Auto-Relay) | **Yes** | No | No | No | No |
 | Attention Board + inline Diff Review + Plan-First | **Yes** | Partial | Partial | IDE | Partial |
-| Isolated Git Worktrees with live overlap & conflict check | **Yes** | No | No | Background | Yes |
-| Durable multi-agent pipelines surviving restarts (Temporal) | **Yes** | No | No | No | No |
+| Isolated Git Worktrees with overlap & dry-run conflict checks | **Yes** | No | No | Background | Yes |
+| Multi-agent pipelines that survive restarts (Temporal) | **Yes** | No | No | No | No |
 | Self-hosted, zero backend deps, optional mobile PWA | **Yes** | Cloud | Local | Desktop | Local |
 
 ---
 
 ## What it does
 
-- **Unified Multi-CLI Workspace** — run **Claude Code**, **Codex**, **Gemini / Copilot (ACP)** and **opencode** side by side with live tool steps, subagent cards, an MCP/Skills/Plan desktop right panel, full-text SQLite FTS5 search, Office/PPTX preview, Obsidian active cache, and local CPU voice.
-- **Attention Board, Diff Review & Plan-First** — one inbox across all chats and pipelines (*Waiting for you*, *Working*, *Done*, *Failed*) with a side preview pane, line-range inline diff comments, and read-only Plan-First approval before any file is edited.
-- **Isolated Git Worktrees & Cost Payback** — run parallel chats on separate branches with live overlap and dry-run merge conflict checks, plus API-equivalent spend tracking against your flat monthly subscriptions.
-- **Cross-CLI Relay (Manual & Auto)** — hit a Claude or Codex quota limit mid-task? Continue the same chat in the same folder on another CLI or model in one click — or automatically via backup models. ([Details](docs/cross-cli-handoff.md))
-- **Durable Pipelines on Temporal & GitHub Background Agents** *(optional)* — chain Claude, Codex, Gemini (ACP), opencode, allowlisted local commands, and human approvals into multi-step runs that survive restarts, resume from any step, and trigger from GitHub issues/CI. ([Details](docs/temporal.md))
+- **Four CLI families in one window:** Claude Code, Codex, Gemini/Copilot (ACP), and opencode run side by side with live tool steps, subagent cards, an MCP/Skills/Plan side panel, SQLite FTS5 search, Office/PPTX preview, Obsidian vault cache, and optional local CPU voice.
+- **Attention Board, diff review, and Plan-First:** all sessions and runs are grouped into *Waiting*, *Working*, *Done*, and *Failed* with a side preview pane, inline diff comments by line range, and read-only plan approval before files are edited.
+- **Git worktrees and cost accounting:** parallel chats work in separate git worktrees with file-overlap warnings and dry-run conflict checks. Cost tracking compares API-equivalent token spend against your flat subscriptions.
+- **Cross-CLI Relay (manual and automatic):** when a Claude or Codex quota limit hits mid-task, continue the same thread in the same folder on another CLI or fallback model. ([Details](docs/cross-cli-handoff.md))
+- **Temporal pipelines and GitHub background agents (optional):** chain Claude, Codex, Gemini (ACP), opencode, allowlisted shell commands, and human approval gates into workflows that survive restarts, resume from any step, and trigger from GitHub issues or failed CI. ([Details](docs/temporal.md))
 
-> **Want to see every screen?** Open the full **[Visual Tour & Feature Catalog (`docs/tour.md`)](docs/tour.md)** — desktop & optional mobile PWA screenshots, animated walkthroughs, and the complete feature table.
+Full screen-by-screen walkthrough and feature table: **[Visual Tour (`docs/tour.md`)](docs/tour.md)**.
 
 ---
 
 ## Quick start
 
 > [!TIP]
-> **Full step-by-step setup for Linux, macOS, and Windows** (all 4 engine families, Worktrees, Obsidian cache, Temporal pipelines, GitHub Background Agents, HTTPS + QR mobile PWA, autostart services): **[`docs/installation.md`](docs/installation.md)** ([по-русски](docs/installation.ru.md)).
+> Step-by-step setup for Linux, macOS, and Windows (all 4 engines, Worktrees, Obsidian cache, Temporal, GitHub triggers, HTTPS + QR PWA, autostart): **[`docs/installation.md`](docs/installation.md)** ([по-русски](docs/installation.ru.md)).
 
 ### Requirements
 
@@ -101,32 +99,29 @@ Teleharness wraps the **real local CLIs** (with all their skills, MCP servers, h
 | ACP CLI (`gemini` / `copilot` / custom) | latest | optional, configured in Settings → ACP Agents |
 | Python | 3.11+ | optional, local CPU voice & Temporal pipeline worker |
 
-You only need **at least one** engine installed (or zero for `--demo`).
+You only need **at least one** engine installed (or none for `--demo`).
 
 ### One command
 
 ```bash
 npx teleharness                                # → http://127.0.0.1:4180/teleharness/
-# or directly from GitHub:
-npx github:al3x4kov/teleharness
 ```
 
-Checks Node, stores data in `~/.teleharness`, uses the prebuilt UI bundle (or builds on demand), detects installed engines, and prints your admin login token. Flags: `--demo`, `--port N`, `--host 0.0.0.0`, `--rebuild`.
+Checks Node, stores state in `~/.teleharness`, serves the prebuilt UI bundle (or rebuilds on demand), detects installed CLIs, and prints the admin login token. Flags: `--demo`, `--port N`, `--host 0.0.0.0`, `--rebuild`.
 
-### Install from source
+### From source
 
 <details open>
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.13.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
 cp .env.example .env               # every value is optional
 
-# engines (you need at least one)
-opencode auth login                # add the providers you want
+opencode auth login                # opencode
 claude setup-token                 # put token into .env as CLAUDE_CODE_OAUTH_TOKEN
 
 ./ops/opencode/serve-v2.sh &       # opencode 2.x on 127.0.0.1:4196
@@ -138,7 +133,7 @@ claude setup-token                 # put token into .env as CLAUDE_CODE_OAUTH_TO
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.13.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
@@ -164,7 +159,7 @@ docker compose --profile selfhosted up -d teleharness
 </details>
 
 > [!NOTE]
-> The portal is served under `/teleharness/`; every option is a `TELEHARNESS_*` environment variable ([`.env.example`](.env.example)). Mac launchd checklist: [`docs/macos.md`](docs/macos.md). Linux systemd service: [`ops/linux/teleharness.service`](ops/linux/teleharness.service).
+> The portal is served under `/teleharness/`; all options are `TELEHARNESS_*` environment variables ([`.env.example`](.env.example)). macOS launchd notes: [`docs/macos.md`](docs/macos.md). Linux systemd unit: [`ops/linux/teleharness.service`](ops/linux/teleharness.service).
 
 ### Platform support
 
@@ -179,8 +174,8 @@ docker compose --profile selfhosted up -d teleharness
 
 ## Security model
 
-- **Single-user on `localhost` / Tailscale (most common):** Teleharness runs as a local web control room over your own CLI tools under your OS user. **No tenant sandbox is needed**, and every engine works identically on macOS, Linux, and Windows.
-- **Multi-user / shared server:** Non-admin users get isolated folders, quotas, and MCP sets; shell execution is fail-closed unless you enable the Linux per-user runner (`ops/sandbox/linux`) or Windows AppContainer. See [SECURITY.md](SECURITY.md).
+- **Single-user on `localhost` / Tailscale:** Teleharness runs under your own OS user over your local CLIs. No tenant sandbox is needed, and all engines work the same on macOS, Linux, and Windows.
+- **Multi-user / shared server:** non-admin accounts get isolated folders, quotas, and MCP sets; shell execution is fail-closed unless you configure the Linux per-user runner (`ops/sandbox/linux`) or Windows AppContainer. See [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -188,17 +183,17 @@ docker compose --profile selfhosted up -d teleharness
 
 <p align="center"><img src="docs/architecture-components.png" alt="Teleharness components: desktop web UI and optional mobile PWA, portal with SQLite FTS5/costs/board, four CLI engine families, Obsidian, voice, sandbox, GitHub and Temporal pipelines" width="880"></p>
 
-- **Portal (`server.js`, `lib/`, `routes/`)** — zero-dependency Node.js stdlib backend: auth, SSE hub with replay, SQLite FTS5 search, attention board, costs, Git/Worktrees, and one adapter per engine family (`lib/oc-client.js`, `claude` CLI runner, `codex-shim.mjs`, `lib/acp-chat.js`).
-- **Frontend (`src/` → `public/`)** — Preact + Signals bundled with esbuild, light/dark themes, EN/RU i18n, optional mobile PWA.
-- **Optional add-ons** — Obsidian active cache, local Python CPU voice worker (Piper TTS / GigaAM STT), Temporal pipeline worker ([`docs/temporal.md`](docs/temporal.md)).
+- **Backend (`server.js`, `lib/`, `routes/`):** zero-dependency Node.js stdlib (`node:http`, SSE with replay, built-in `node:sqlite` FTS5, attention board, costs, Git/Worktrees) and one adapter per engine family (`lib/oc-client.js`, `claude` CLI runner, `codex-shim.mjs`, `lib/acp-chat.js`).
+- **Frontend (`src/` → `public/`):** Preact + Signals bundled with esbuild, light/dark themes, EN/RU UI, optional mobile PWA.
+- **Optional add-ons:** Obsidian vault cache, local Python CPU voice worker (Piper TTS / GigaAM STT), Temporal pipeline worker ([`docs/temporal.md`](docs/temporal.md)).
 
-Layer diagram & search pipeline: [`docs/tour.md#architecture-diagrams`](docs/tour.md#architecture-diagrams). Full architecture notes: [`docs/architecture.md`](docs/architecture.md), specs: [`openspec/specs/`](openspec/specs/).
+Layer diagram and search pipeline: [`docs/tour.md#architecture-diagrams`](docs/tour.md#architecture-diagrams). Architecture notes: [`docs/architecture.md`](docs/architecture.md), specs: [`openspec/specs/`](openspec/specs/).
 
 ---
 
 ## Configuration
 
-Every setting is validated by schema in [`lib/config.js`](lib/config.js); template in [`.env.example`](.env.example).
+Settings are schema-validated in [`lib/config.js`](lib/config.js); template in [`.env.example`](.env.example).
 
 | Variable | Default | Purpose |
 |---|---|---|

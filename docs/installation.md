@@ -55,11 +55,11 @@ git --version     # 2.20 or newer
 
 ## 2. Install & build the portal
 
-Clone the latest release tag (`v2.13.1`), install dev build dependencies, build the production frontend
+Clone the latest release tag (`v2.13.2`), install dev build dependencies, build the production frontend
 bundle, and create `.env`:
 
 ```bash
-git clone --branch v2.13.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
@@ -69,7 +69,7 @@ cp .env.example .env
 On Windows PowerShell:
 
 ```powershell
-git clone --branch v2.13.1 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 $env:TELEHARNESS_BUILD_PROD = "1"; npm run build
