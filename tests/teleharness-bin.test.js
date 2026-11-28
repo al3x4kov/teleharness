@@ -3,14 +3,19 @@
 // поиск движков (подмена PATH), каталог данных и окружение сервера.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  DEFAULT_DEMO_TOKEN,
   DEFAULT_PORT,
   dataHome,
+  demoServerEnv,
+  hasPrebuiltPublic,
+  prepareDemoWorkspace,
+  shiftFixtureTimes,
   engineReport,
   findEngines,
   findInPath,
@@ -181,4 +186,97 @@ test("needsBuild: нет сборки / другая версия — собра
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("parseArgs: --demo flag and --help mentions --demo", () => {
+  assert.equal(parseArgs(["--demo"]).demo, true);
+  assert.equal(parseArgs(["--demo", "--port", "4191", "--host", "0.0.0.0"]).demo, true);
+  assert.equal(parseArgs([]).demo, false);
+  const r = spawnSync(process.execPath, [BIN, "--help"], { encoding: "utf8", timeout: 20_000 });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /--demo/);
+  assert.match(r.stdout, /npx teleharness/);
+  assert.match(r.stdout, /TELEHARNESS_DEMO=1/);
+});
+
+test("shiftFixtureTimes & prepareDemoWorkspace: shifts timestamps and isolates fixtures", () => {
+  const shifted = shiftFixtureTimes({ updated: 1700000000000, count: 42, nested: [{ created: 1700000001000 }] }, 5000);
+  assert.equal(shifted.updated, 1700000005000);
+  assert.equal(shifted.count, 42);
+  assert.equal(shifted.nested[0].created, 1700000006000);
+
+  const now = 1800000000000;
+  const dirs = prepareDemoWorkspace(path.join(ROOT, "fixtures-demo"), os.tmpdir(), now);
+  try {
+    const sessions = JSON.parse(readFileSync(path.join(dirs.fixtures, "sessions.json"), "utf8"));
+    const newest = Math.max(...sessions.map((s) => Number(s?.time?.updated) || 0));
+    assert.equal(newest, now - 2 * 60_000);
+    assert.ok(existsSync(dirs.data));
+    assert.ok(existsSync(dirs.home));
+  } finally {
+    rmSync(dirs.tmp, { recursive: true, force: true });
+  }
+});
+
+test("demoServerEnv: strips host TELEHARNESS_* and configures isolated mock sandbox", () => {
+  const dirs = {
+    tmp: "/tmp/demo",
+    data: "/tmp/demo/data",
+    fixtures: "/tmp/demo/fixtures",
+    home: "/tmp/demo/home",
+    tenants: "/tmp/demo/tenants",
+    vault: "/tmp/demo/vault",
+  };
+  const env = demoServerEnv({
+    env: { PATH: "/usr/bin", TELEHARNESS_ADMIN_TOKEN: "host-secret", CLAUDE_CODE_OAUTH_TOKEN: "oauth-secret", PORT: "4170" },
+    dirs,
+    publicDir: "/tmp/demo/public",
+    port: 4189,
+    host: "0.0.0.0",
+  });
+  assert.equal(env.PORT, "4189");
+  assert.equal(env.TELEHARNESS_LISTEN_HOST, "0.0.0.0");
+  assert.equal(env.TELEHARNESS_MOCK, "1");
+  assert.equal(env.TELEHARNESS_ADMIN_TOKEN, DEFAULT_DEMO_TOKEN);
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, undefined);
+  assert.equal(env.TELEHARNESS_PUBLIC_DIR, "/tmp/demo/public");
+  assert.equal(env.TELEHARNESS_UPSTREAM, "http://127.0.0.1:1");
+});
+
+test("--demo live smoke: starts sandbox, serves /teleharness/api/healthz 200, cleans up temp dir on SIGTERM", async () => {
+  const port = 4389;
+  const child = spawn(process.execPath, [BIN, "--demo", "--port", String(port)], {
+    cwd: ROOT,
+    env: { ...process.env, TELEHARNESS_DEMO_TOKEN: DEFAULT_DEMO_TOKEN },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let out = "";
+  let err = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (c) => { out += c; });
+  child.stderr.on("data", (c) => { err += c; });
+
+  const deadline = Date.now() + 25_000;
+  let health = null;
+  while (Date.now() < deadline && child.exitCode === null) {
+    if (out.includes("Teleharness demo is running:")) {
+      const r = await fetch(`http://127.0.0.1:${port}/teleharness/api/healthz`);
+      if (r.ok) {
+        health = await r.json();
+        break;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const tmpMatch = out.match(/temporary sandbox:\s+(.+)/);
+  const tmpDir = tmpMatch ? tmpMatch[1].trim() : null;
+
+  child.kill("SIGTERM");
+  await new Promise((resolve) => child.once("exit", resolve));
+
+  assert.ok(health?.ok, `demo healthz failed. stdout=${out}\nstderr=${err}`);
+  assert.match(out, /Login token: demo-demo-demo-demo/);
+  assert.ok(tmpDir, "expected temporary sandbox path in stdout");
+  assert.equal(existsSync(tmpDir), false, `expected temp sandbox ${tmpDir} to be removed on exit`);
 });

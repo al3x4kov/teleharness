@@ -2,7 +2,6 @@
   "name": "teleharness",
   "version": "2.13.1",
   "license": "MIT",
-  "private": true,
   "type": "module",
   "bin": {
     "teleharness": "bin/teleharness.mjs"
@@ -18,7 +17,8 @@
     "test:server": "node tests/run-tests.mjs server",
     "test:components": "node --test --test-timeout=60000 \"tests/components/*.test.js\"",
     "test:batched": "node tests/run-tests.mjs all --batch=4",
-    "graph:fresh": "node scripts/graph-fresh.mjs"
+    "graph:fresh": "node scripts/graph-fresh.mjs",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@preact/signals": "^2.0.0",
@@ -58,5 +58,24 @@
     "web-ui",
     "pwa",
     "mcp"
+  ],
+  "files": [
+    "bin/",
+    "lib/",
+    "routes/",
+    "shared/",
+    "ops/",
+    "public/",
+    "src/",
+    "fixtures-demo/",
+    "config/",
+    "scripts/demo.mjs",
+    "server.js",
+    "build.mjs",
+    ".env.example",
+    "README.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ]
 }

@@ -1,0 +1,15 @@
+# One-click read-only Teleharness Demo on Render (free tier, Docker runtime).
+# No real AI engines or API keys are attached — runs synthetic fixtures only.
+services:
+  - type: web
+    name: teleharness-demo
+    runtime: docker
+    plan: free
+    healthCheckPath: /teleharness/
+    envVars:
+      - key: TELEHARNESS_DEMO
+        value: "1"
+      - key: TELEHARNESS_LISTEN_HOST
+        value: "0.0.0.0"
+      - key: TELEHARNESS_DEMO_TOKEN
+        value: "demo-demo-demo-demo"

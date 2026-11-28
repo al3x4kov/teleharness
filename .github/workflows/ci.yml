@@ -39,3 +39,25 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+
+  docker:
+    name: docker (demo smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t teleharness:ci .
+      - name: Smoke-test demo container
+        run: |
+          docker run -d --name teleharness-ci -p 4180:4180 teleharness:ci
+          trap "docker logs teleharness-ci || true; docker rm -f teleharness-ci || true" EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4180/teleharness/api/healthz | grep -q '"ok":true'; then
+              echo "Docker demo healthz OK"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Docker demo did not become healthy"
+          exit 1

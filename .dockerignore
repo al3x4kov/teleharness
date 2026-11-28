@@ -1,0 +1,13 @@
+.git
+.github
+node_modules
+data
+docs
+openspec
+tests
+fixtures
+*.log
+*.tgz
+.env
+.env.*
+!.env.example

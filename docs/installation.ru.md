@@ -56,10 +56,10 @@ git --version     # 2.20 или новее
 
 ## 2. Установка и сборка портала
 
-Клонируйте релизный тег (`v2.12.0`), поставьте dev-зависимости сборки, соберите фронтенд и создайте `.env`:
+Клонируйте релизный тег (`v2.13.1`), поставьте dev-зависимости сборки, соберите фронтенд и создайте `.env`:
 
 ```bash
-git clone --branch v2.12.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.1 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
@@ -69,7 +69,7 @@ cp .env.example .env
 В Windows PowerShell:
 
 ```powershell
-git clone --branch v2.12.0 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.1 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 $env:TELEHARNESS_BUILD_PROD = "1"; npm run build

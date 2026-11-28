@@ -1,0 +1,36 @@
+# Try Teleharness in 10 seconds (synthetic demo, no engines or API keys needed):
+#   docker compose up
+#   → http://127.0.0.1:4180/teleharness/  (login token: demo-demo-demo-demo)
+#
+# Self-hosted mode (persists data in a Docker volume; connect your upstream engines):
+#   docker compose --profile selfhosted up teleharness
+services:
+  demo:
+    build: .
+    ports:
+      - "${PORT:-4180}:4180"
+    environment:
+      PORT: "4180"
+      TELEHARNESS_LISTEN_HOST: "0.0.0.0"
+      TELEHARNESS_DEMO: "1"
+      TELEHARNESS_DEMO_TOKEN: "${TELEHARNESS_DEMO_TOKEN:-demo-demo-demo-demo}"
+    restart: unless-stopped
+
+  teleharness:
+    build: .
+    profiles: ["selfhosted"]
+    ports:
+      - "${PORT:-4180}:4180"
+    environment:
+      PORT: "4180"
+      TELEHARNESS_LISTEN_HOST: "0.0.0.0"
+      TELEHARNESS_DEMO: "0"
+      TELEHARNESS_UPSTREAM: "${TELEHARNESS_UPSTREAM:-http://host.docker.internal:4096}"
+    volumes:
+      - teleharness-data:/home/node/.teleharness
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  teleharness-data:
