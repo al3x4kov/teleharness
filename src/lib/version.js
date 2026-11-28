@@ -1,2 +1,2 @@
 // Single source of truth for the Teleharness version shown in Settings → About and /api/healthz.
-export const VERSION = "2.12.0";
+export const VERSION = "2.13.0";

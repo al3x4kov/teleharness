@@ -387,6 +387,14 @@
   height: 48px;
 }
 
+/* Embedded footer (e.g. SystemPromptEditor inside .card) stays transparent and static. */
+.card .sheet-footer {
+  position: static;
+  background: transparent;
+  border-top: none;
+  padding: 12px 0 0;
+}
+
 @media (min-width: 900px) {
   .sheet-backdrop {
     align-items: center;
@@ -983,8 +991,11 @@
 
 .host-label {
   flex-shrink: 0;
-  width: 44px;
+  width: 76px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .host-bar {
@@ -2115,6 +2126,20 @@
 .sheet-footer .sysprompt-clear {
   height: 48px;
   padding: 0 16px;
+}
+
+/* Settings -> Background agents: GitHub connection rows inside .t-card. */
+[data-bg-admin] .card-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 6px 0;
+}
+
+[data-bg-admin] .card-row + .card-row {
+  border-top: 1px solid var(--border);
 }
 
 /* == FEAT-01.69: меню чата «⋯», закреплённые == */

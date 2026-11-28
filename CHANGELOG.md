@@ -6,6 +6,21 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.13.0] — 2026-11-28
+
+UI & Settings layout polish, PWA metadata fix, and legacy brand cleanup with automated regression guard.
+
+### Added
+- **Legacy brand regression guard.** Added `tests/no-legacy-brand.test.js` to verify no stray pre-rebrand identifiers leak into source, docs, or tests across releases (while preserving third-party LLM provider names such as `z.ai` / `zai-coding-plan`).
+
+### Fixed
+- **Temporal header breadcrumbs.** Centered `.page-header > .t-crumbs` in grid column 2 and excluded it from the right-action column 3 rule so breadcrumb headers never crowd the right edge.
+- **Settings → Computer disk labels.** Widened `.host-label` to 76 px with single-line ellipsis and added a `title` tooltip so Linux mount paths (e.g. `/boot/efi`) never wrap or collide with usage bars.
+- **Settings → Background agents layout.** Fixed number limit inputs to use `.t-input.t-num` and styled `[data-bg-admin] .card-row` as spaced flex rows.
+- **Settings → System prompt footer.** Scoped `.card .sheet-footer` to static/transparent so embedded footers no longer paint a sticky background band over cards.
+- **PWA capability meta tag.** Added standard `<meta name="mobile-web-app-capable" content="yes" />` alongside `apple-mobile-web-app-capable` in `public/index.html`.
+- **Remaining legacy identifiers.** Cleaned up remaining pre-rebrand strings in worktrees default git author/commit message, GitHub token expiry push tag, Temporal command step env filter, and tests.
+
 ## [2.12.0] — 2026-11-27
 
 Desktop-first README & refreshed v2.12.0 architecture diagrams, Temporal pipeline hardening and cancellation, UI accessibility & layout polish, and full demo/mock route parity.

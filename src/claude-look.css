@@ -151,13 +151,14 @@ body {
 
 .page-header > h1,
 .page-header > .settings-root-h,
-.page-header > .project-heading {
+.page-header > .project-heading,
+.page-header > .t-crumbs {
   grid-column: 2;
   text-align: center;
   min-width: 0;
 }
 
-.page-header > :last-child:not(h1):not(.settings-root-h):not(.project-heading) {
+.page-header > :last-child:not(h1):not(.settings-root-h):not(.project-heading):not(.t-crumbs) {
   grid-column: 3;
 }
 

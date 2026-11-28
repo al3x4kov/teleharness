@@ -852,7 +852,7 @@ function ComputerSection() {
             <div class="host-list">
               {hostRows.map((r) => (
                 <div key={r.label} class="host-row">
-                  <span class="host-label">{r.label}</span>
+                  <span class="host-label" title={r.label}>{r.label}</span>
                   <span class="host-bar" aria-hidden="true">
                     <span class={"host-bar-fill" + ((r.pct ?? 0) >= 90 ? " is-high" : "")} style={`width: ${Math.max(0, Math.min(100, r.pct ?? 0))}%`} />
                   </span>

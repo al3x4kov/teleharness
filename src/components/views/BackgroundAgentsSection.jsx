@@ -164,7 +164,7 @@ export default function BackgroundAgentsSection() {
           <label class="t-small" for="bg-claude-limit">{t("bgAdmin.limitLabel")}</label>
           <input
             id="bg-claude-limit"
-            class="t-in"
+            class="t-input t-num"
             type="number"
             min="0"
             max="500"
@@ -184,7 +184,7 @@ export default function BackgroundAgentsSection() {
           <label class="t-small" for="bg-user-per-day">{t("bgAdmin.userPerDayLabel")}</label>
           <input
             id="bg-user-per-day"
-            class="t-in"
+            class="t-input t-num"
             type="number"
             min="1"
             max="500"
@@ -198,7 +198,7 @@ export default function BackgroundAgentsSection() {
           <label class="t-small" for="bg-default-per-hour">{t("bgAdmin.perHourLabel")}</label>
           <input
             id="bg-default-per-hour"
-            class="t-in"
+            class="t-input t-num"
             type="number"
             min="1"
             max="60"
@@ -212,7 +212,7 @@ export default function BackgroundAgentsSection() {
           <label class="t-small" for="bg-default-queue">{t("bgAdmin.queueLabel")}</label>
           <input
             id="bg-default-queue"
-            class="t-in"
+            class="t-input t-num"
             type="number"
             min="1"
             max="100"
