@@ -243,7 +243,7 @@ test("demoServerEnv: strips host TELEHARNESS_* and configures isolated mock sand
   assert.equal(env.TELEHARNESS_UPSTREAM, "http://127.0.0.1:1");
 });
 
-test("--demo live smoke: starts sandbox, serves /teleharness/api/healthz 200, cleans up temp dir on SIGTERM", async () => {
+test("--demo live smoke: starts sandbox, serves /teleharness/api/healthz 200, cleans up temp dir on exit", async () => {
   const port = 4389;
   const child = spawn(process.execPath, [BIN, "--demo", "--port", String(port)], {
     cwd: ROOT,
@@ -252,31 +252,48 @@ test("--demo live smoke: starts sandbox, serves /teleharness/api/healthz 200, cl
   });
   let out = "";
   let err = "";
+  let tmpDir = null;
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stdout.on("data", (c) => { out += c; });
   child.stderr.on("data", (c) => { err += c; });
 
-  const deadline = Date.now() + 25_000;
-  let health = null;
-  while (Date.now() < deadline && child.exitCode === null) {
-    if (out.includes("Teleharness demo is running:")) {
-      const r = await fetch(`http://127.0.0.1:${port}/teleharness/api/healthz`);
-      if (r.ok) {
-        health = await r.json();
-        break;
+  try {
+    const deadline = Date.now() + 25_000;
+    let health = null;
+    while (Date.now() < deadline && child.exitCode === null) {
+      if (out.includes("Teleharness demo is running:")) {
+        const r = await fetch(`http://127.0.0.1:${port}/teleharness/api/healthz`);
+        if (r.ok) {
+          health = await r.json();
+          break;
+        }
       }
+      await new Promise((r) => setTimeout(r, 200));
     }
-    await new Promise((r) => setTimeout(r, 200));
+    const tmpMatch = out.match(/temporary sandbox:\s+(.+)/);
+    tmpDir = tmpMatch ? tmpMatch[1].trim() : null;
+
+    assert.ok(health?.ok, `demo healthz failed. stdout=${out}\nstderr=${err}`);
+    assert.match(out, /Login token: demo-demo-demo-demo/);
+    assert.ok(tmpDir, "expected temporary sandbox path in stdout");
+
+    if (process.platform === "win32") {
+      // Windows has no graceful POSIX SIGTERM for detached child trees; kill tree cleanly.
+      spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
+      await new Promise((resolve) => child.exitCode !== null ? resolve() : child.once("exit", resolve));
+    } else {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.exitCode !== null ? resolve() : child.once("exit", resolve));
+      assert.equal(existsSync(tmpDir), false, `expected temp sandbox ${tmpDir} to be removed on SIGTERM`);
+    }
+  } finally {
+    if (child.exitCode === null) {
+      if (process.platform === "win32") spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
+      else child.kill("SIGKILL");
+    }
+    if (tmpDir && existsSync(tmpDir)) {
+      try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    }
   }
-  const tmpMatch = out.match(/temporary sandbox:\s+(.+)/);
-  const tmpDir = tmpMatch ? tmpMatch[1].trim() : null;
-
-  child.kill("SIGTERM");
-  await new Promise((resolve) => child.once("exit", resolve));
-
-  assert.ok(health?.ok, `demo healthz failed. stdout=${out}\nstderr=${err}`);
-  assert.match(out, /Login token: demo-demo-demo-demo/);
-  assert.ok(tmpDir, "expected temporary sandbox path in stdout");
-  assert.equal(existsSync(tmpDir), false, `expected temp sandbox ${tmpDir} to be removed on exit`);
 });
