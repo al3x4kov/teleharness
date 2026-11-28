@@ -6,6 +6,14 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.13.1] — 2026-11-28
+
+Codex OAuth token auto-refresh and clear refresh failure diagnostics.
+
+### Fixed
+- **Automatic Codex OAuth token refresh.** `lib/codex-shim.mjs` now retries `account/read` once with `{ refreshToken: true }` in both `--teleharness-catalog` and turn execution when `{ refreshToken: false }` returns `account: null` under `requiresOpenaiAuth !== false`, preventing unnecessary Codex engine disablement on expired access tokens.
+- **Sanitized Codex refresh diagnostics.** `lib/codex-shim.mjs` captures `codex app-server` stderr, strips ANSI escapes, redacts tokens/JWTs, and forwards `authError` to `lib/codex-catalog.js`, which logs the exact refresh failure reason on both active-to-off transitions and cold starts.
+
 ## [2.13.0] — 2026-11-28
 
 UI & Settings layout polish, PWA metadata fix, and legacy brand cleanup with automated regression guard.

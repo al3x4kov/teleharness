@@ -536,3 +536,59 @@ test("FEAT-20.35: --restricted (tenant) auto-declines item/permissions/requestAp
   const ans = JSON.parse(r.result.result);
   assert.deepEqual(ans, { permissions: {} });
 });
+
+test("--teleharness-catalog retries account/read once with refreshToken:true on expired access token; active account sends account/read once", async () => {
+  const runCat = (env) =>
+    new Promise((resolve) => {
+      const logFile = path.join(TMP, `cat-log-${++seq}.jsonl`);
+      const c = spawn(process.execPath, [SHIM, "--teleharness-catalog"], {
+        cwd: workDir(),
+        env: { ...process.env, TELEHARNESS_CODEX_BIN: FAKE, CODEX_FAKE_LOG: logFile, ...env },
+        windowsHide: true,
+      });
+      let out = "";
+      c.stdout.on("data", (d) => (out += d));
+      c.on("close", (code) => {
+        const rec = existsSync(logFile) ? readFileSync(logFile, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
+        resolve({ code, json: JSON.parse(out.trim().split("\n").at(-1)), received: rec });
+      });
+    });
+
+  const active = await runCat({});
+  assert.equal(active.code, 0);
+  assert.equal(active.json.loggedIn, true);
+  assert.deepEqual(sentTo(active.received, "account/read").map((m) => m.params), [{ refreshToken: false }]);
+
+  const refreshed = await runCat({ CODEX_FAKE_EXPIRED_ONCE: "1" });
+  assert.equal(refreshed.code, 0);
+  assert.equal(refreshed.json.ok, true);
+  assert.equal(refreshed.json.loggedIn, true);
+  assert.equal(refreshed.json.plan, "pro");
+  assert.deepEqual(sentTo(refreshed.received, "account/read").map((m) => m.params), [{ refreshToken: false }, { refreshToken: true }]);
+
+  const failed = await runCat({ CODEX_FAKE_REFRESH_ERR: "1" });
+  assert.equal(failed.code, 0);
+  assert.equal(failed.json.ok, true);
+  assert.equal(failed.json.loggedIn, false);
+  assert.match(failed.json.authError ?? "", /Failed to refresh token:.*already used/i);
+  assert.doesNotMatch(failed.json.authError ?? "", /eyJhbGci|rt_secret12345678/);
+  assert.deepEqual(sentTo(failed.received, "account/read").map((m) => m.params), [{ refreshToken: false }, { refreshToken: true }]);
+});
+
+test("runTurn retries account/read once with refreshToken:true on expired access token", async () => {
+  const r = await runShim({ prompt: "hi", env: { CODEX_FAKE_EXPIRED_ONCE: "1" } });
+  assert.equal(r.code, 0, r.stderr);
+  assert.equal(r.result?.is_error, false);
+  assert.deepEqual(sentTo(r.received, "account/read").map((m) => m.params), [{ refreshToken: false }, { refreshToken: true }]);
+});
+
+test("extractAuthError strips ANSI escapes, redacts secrets and prefers Failed to refresh token over 401", async () => {
+  const { extractAuthError } = await import("../lib/codex-shim.mjs");
+  const sample = [
+    "\u001b[2m2026-11-28T11:30:39Z\u001b[0m \u001b[31mERROR\u001b[0m codex_login::auth::manager: Failed to refresh token: Your refresh token was already used. Bearer sk-secret12345678",
+    "\u001b[2m2026-11-28T11:30:40Z\u001b[0m \u001b[31mERROR\u001b[0m codex_models_manager::manager: failed to refresh available models: unexpected status 401 Unauthorized",
+  ].join("\n");
+  const msg = extractAuthError(sample);
+  assert.equal(msg, "Failed to refresh token: Your refresh token was already used. Bearer [redacted]");
+  assert.doesNotMatch(msg, /\u001b\[/);
+});

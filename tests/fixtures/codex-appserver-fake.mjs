@@ -188,6 +188,18 @@ function handle(m) {
     case "initialized":
       return;
     case "account/read":
+      if (process.env.CODEX_FAKE_REFRESH_ERR === "1") {
+        if (p.refreshToken === true) {
+          process.stderr.write("2026-11-28T11:00:00.000Z ERROR codex_login::auth::manager: Failed to refresh token: Your access token could not be refreshed because your refresh token was already used. Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.sig rt_secret12345678\n");
+        }
+        return reply({ account: null, requiresOpenaiAuth: true });
+      }
+      if (process.env.CODEX_FAKE_EXPIRED_ONCE === "1") {
+        if (p.refreshToken === true) {
+          return reply({ account: { type: "chatgpt", email: null, planType: "pro" }, requiresOpenaiAuth: true });
+        }
+        return reply({ account: null, requiresOpenaiAuth: true });
+      }
       if (process.env.CODEX_FAKE_NOAUTH === "1") return reply({ account: null, requiresOpenaiAuth: true });
       return reply({ account: { type: "chatgpt", email: null, planType: "pro" }, requiresOpenaiAuth: true });
     case "model/list":

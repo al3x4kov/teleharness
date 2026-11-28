@@ -104,3 +104,37 @@ test("без кэша и без codex — Codex выключен; TELEHARNESS_CO
   assert.equal(calls.length, 0);
   assert.equal(off.models().length, 0);
 });
+
+test("parseCatalogLine and refresh log authError diagnostics on loggedIn:false", async () => {
+  const parsed = parseCatalogLine(JSON.stringify({ ok: true, loggedIn: false, authError: "Failed to refresh token: refresh token already used" }));
+  assert.equal(parsed.state, "off");
+  assert.equal(parsed.error, "Failed to refresh token: refresh token already used");
+
+  const dir1 = dirFor("auth-err-on-off");
+  mkdirSync(dir1, { recursive: true });
+  writeFileSync(path.join(dir1, "codex-models.json"), JSON.stringify({ models: RAW }));
+  const logs1 = [];
+  const cat1 = createCodexCatalog({
+    dataDir: dir1,
+    env: {},
+    log: (m) => logs1.push(m),
+    spawnImpl: fakeSpawn(JSON.stringify({ ok: true, loggedIn: false, authError: "Failed to refresh token: already used" })),
+  });
+  cat1.load();
+  await cat1.refresh();
+  assert.equal(existsSync(path.join(dir1, "codex-models.json")), false);
+  assert.ok(logs1.some((l) => /Failed to refresh token: already used/.test(l)));
+
+  const dir2 = dirFor("auth-err-off-off");
+  mkdirSync(dir2, { recursive: true });
+  const logs2 = [];
+  const cat2 = createCodexCatalog({
+    dataDir: dir2,
+    env: {},
+    log: (m) => logs2.push(m),
+    spawnImpl: fakeSpawn(JSON.stringify({ ok: true, loggedIn: false, authError: "Failed to refresh token: already used" })),
+  });
+  cat2.load();
+  await cat2.refresh();
+  assert.ok(logs2.some((l) => /Failed to refresh token: already used/.test(l)));
+});
