@@ -2,32 +2,46 @@
 #   docker compose up
 #   → http://127.0.0.1:4180/teleharness/  (login token: demo-demo-demo-demo)
 #
-# Self-hosted mode (persists data in a Docker volume; connect your upstream engines):
-#   docker compose --profile selfhosted up teleharness
+# Self-hosted mode (persists state in the teleharness-data volume, connects to upstream engines):
+#   docker compose --profile selfhosted up -d teleharness
+#   docker compose --profile selfhosted logs teleharness | grep -i "admin token"
+#   → http://127.0.0.1:4170/teleharness/
 services:
   demo:
     build: .
     ports:
-      - "${PORT:-4180}:4180"
+      - "${DEMO_PORT:-${PORT:-4180}}:4180"
     environment:
       PORT: "4180"
       TELEHARNESS_LISTEN_HOST: "0.0.0.0"
       TELEHARNESS_DEMO: "1"
       TELEHARNESS_DEMO_TOKEN: "${TELEHARNESS_DEMO_TOKEN:-demo-demo-demo-demo}"
+      TELEHARNESS_COOKIE_NAME: "teleharness_t_demo"
     restart: unless-stopped
 
   teleharness:
     build: .
     profiles: ["selfhosted"]
     ports:
-      - "${PORT:-4180}:4180"
+      - "${SELFHOSTED_PORT:-4170}:4170"
     environment:
-      PORT: "4180"
+      PORT: "4170"
       TELEHARNESS_LISTEN_HOST: "0.0.0.0"
       TELEHARNESS_DEMO: "0"
-      TELEHARNESS_UPSTREAM: "${TELEHARNESS_UPSTREAM:-http://host.docker.internal:4096}"
+      TELEHARNESS_DATA_DIR: "/data"
+      TELEHARNESS_HOME: "/workspace"
+      TELEHARNESS_TENANT_HOME: "/data/tenants"
+      TELEHARNESS_TENANT_VAULT: "/data/tenants-vault"
+      TELEHARNESS_FILE_ROOTS: "/workspace"
+      TELEHARNESS_UPSTREAM: "${TELEHARNESS_UPSTREAM:-http://host.docker.internal:4196}"
+      TELEHARNESS_OC_API: "${TELEHARNESS_OC_API:-v2}"
+      TELEHARNESS_OC_PASSWORD: "${TELEHARNESS_OC_PASSWORD:-}"
+      TELEHARNESS_ADMIN_TOKEN: "${TELEHARNESS_ADMIN_TOKEN:-}"
+      TELEHARNESS_PUBLIC_URL: "${TELEHARNESS_PUBLIC_URL:-}"
     volumes:
-      - teleharness-data:/home/node/.teleharness
+      - teleharness-data:/data
+      # Optionally mount your local repositories into the portal workspace:
+      # - ./workspace:/workspace
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

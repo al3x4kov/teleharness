@@ -41,25 +41,111 @@ jobs:
       - run: npm test
 
   docker:
-    name: docker (demo smoke)
+    name: docker (demo, compose, selfhosted, render)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml (demo and selfhosted profiles)
+        run: |
+          docker compose config --quiet
+          docker compose --profile selfhosted config --quiet
+
       - name: Build Docker image
         run: docker build -t teleharness:ci .
-      - name: Smoke-test demo container
+
+      - name: Scenario 1 — docker compose up (demo mode end-to-end)
         run: |
-          docker run -d --name teleharness-ci -p 4180:4180 teleharness:ci
-          trap "docker logs teleharness-ci || true; docker rm -f teleharness-ci || true" EXIT
+          set -euo pipefail
+          trap "docker compose logs || true; docker compose down -v || true" EXIT
+          docker compose up -d --build
+          CID="$(docker compose ps -q demo)"
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4180/teleharness/ | grep -q "app.js"; then
-              curl -fsS -o /dev/null http://127.0.0.1:4180/teleharness/app.js
-              docker exec teleharness-ci node -e "fetch('http://127.0.0.1:4180/teleharness/api/healthz').then(r=>r.json()).then(j=>{console.log(JSON.stringify(j));process.exit(j.ok&&j.mock?0:1)})"
-              echo "Docker demo UI + loopback healthz OK"
-              exit 0
-            fi
+            STATUS="$(docker inspect -f "{{.State.Health.Status}}" "$CID" 2>/dev/null || echo starting)"
+            if [ "$STATUS" = "healthy" ]; then break; fi
             sleep 1
           done
-          echo "Docker demo did not become healthy"
-          exit 1
+          [ "$(docker inspect -f "{{.State.Health.Status}}" "$CID")" = "healthy" ]
+          curl -fsS http://127.0.0.1:4180/teleharness/ | grep -q "app.js"
+          curl -fsS -o /dev/null http://127.0.0.1:4180/teleharness/app.js
+          docker exec "$CID" node -e "fetch('http://127.0.0.1:4180/teleharness/api/healthz').then(r=>r.json()).then(j=>{console.log(JSON.stringify(j));process.exit(j.ok&&j.mock?0:1)})"
+          COOKIES="$(mktemp)"
+          curl -fsS -c "$COOKIES" -H "Content-Type: application/json" \
+            -d '{"token":"demo-demo-demo-demo"}' \
+            http://127.0.0.1:4180/teleharness/api/auth/login | grep -q '"role":"admin"'
+          grep -q "teleharness_t_demo" "$COOKIES"
+          curl -fsS -b "$COOKIES" http://127.0.0.1:4180/teleharness/api/auth/me | grep -q '"role":"admin"'
+          SESS_COUNT="$(curl -fsS -b "$COOKIES" http://127.0.0.1:4180/teleharness/api/session | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));const arr=Array.isArray(d)?d:(d.sessions||[]);console.log(arr.length)")"
+          echo "Demo sessions: $SESS_COUNT"
+          [ "$SESS_COUNT" -ge 1 ]
+          rm -f "$COOKIES"
+          echo "Scenario 1 (compose demo) PASS"
+
+      - name: Scenario 2 — docker compose --profile selfhosted (fresh volume, login, workspace, restart persistence)
+        run: |
+          set -euo pipefail
+          trap "docker compose --profile selfhosted logs teleharness || true; docker compose --profile selfhosted down -v || true" EXIT
+          docker compose --profile selfhosted up -d teleharness
+          CID="$(docker compose --profile selfhosted ps -q teleharness)"
+          for i in $(seq 1 30); do
+            STATUS="$(docker inspect -f "{{.State.Health.Status}}" "$CID" 2>/dev/null || echo starting)"
+            if [ "$STATUS" = "healthy" ]; then break; fi
+            sleep 1
+          done
+          [ "$(docker inspect -f "{{.State.Health.Status}}" "$CID")" = "healthy" ]
+          curl -fsS http://127.0.0.1:4170/teleharness/ | grep -q "app.js"
+          docker exec "$CID" node -e "fetch('http://127.0.0.1:4170/teleharness/api/healthz').then(async r=>{const j=await r.json();console.log(r.status,JSON.stringify(j));process.exit((r.status===200||r.status===503)&&typeof j.version==='string'&&!j.mock?0:1)})"
+          # Verify /data and /workspace separation
+          docker exec "$CID" sh -c "test -f /data/users.json && test -f /data/admin-token.txt && ! test -e /workspace/admin-token.txt && ! test -e /workspace/users.json"
+          # Extract generated admin token from container logs (as documented for first-time users)
+          TOKEN=""
+          for i in $(seq 1 15); do
+            TOKEN="$(docker compose --profile selfhosted logs teleharness | sed -n 's/.*Admin token (sign in to the portal): //p' | tr -d '\r\n' | tail -n 1)"
+            if [ "${#TOKEN}" -ge 16 ]; then break; fi
+            sleep 1
+          done
+          [ "${#TOKEN}" -ge 16 ]
+          COOKIES="$(mktemp)"
+          curl -fsS -c "$COOKIES" -H "Content-Type: application/json" \
+            -d "{\"token\":\"$TOKEN\"}" \
+            http://127.0.0.1:4170/teleharness/api/auth/login | grep -q '"role":"admin"'
+          curl -fsS -b "$COOKIES" http://127.0.0.1:4170/teleharness/api/auth/me | grep -q '"role":"admin"'
+          curl -fsS -b "$COOKIES" "http://127.0.0.1:4170/teleharness/api/dircheck?directory=/workspace" | grep -q '"ok":true'
+          # Restart container and verify token persists in named volume
+          docker compose --profile selfhosted restart teleharness
+          for i in $(seq 1 30); do
+            STATUS="$(docker inspect -f "{{.State.Health.Status}}" "$CID" 2>/dev/null || echo starting)"
+            if [ "$STATUS" = "healthy" ]; then break; fi
+            sleep 1
+          done
+          [ "$(docker inspect -f "{{.State.Health.Status}}" "$CID")" = "healthy" ]
+          rm -f "$COOKIES"
+          COOKIES="$(mktemp)"
+          curl -fsS -c "$COOKIES" -H "Content-Type: application/json" \
+            -d "{\"token\":\"$TOKEN\"}" \
+            http://127.0.0.1:4170/teleharness/api/auth/login | grep -q '"role":"admin"'
+          rm -f "$COOKIES"
+          echo "Scenario 2 (compose selfhosted + volume persistence) PASS"
+
+      - name: Scenario 3 — docker run with Render Blueprint contract (PORT=10000)
+        run: |
+          set -euo pipefail
+          trap "docker logs teleharness-render || true; docker rm -f teleharness-render || true" EXIT
+          docker run -d --name teleharness-render -p 10000:10000 \
+            -e PORT=10000 \
+            -e TELEHARNESS_DEMO=1 \
+            -e TELEHARNESS_LISTEN_HOST=0.0.0.0 \
+            -e TELEHARNESS_DEMO_TOKEN=demo-demo-demo-demo \
+            teleharness:ci
+          for i in $(seq 1 30); do
+            STATUS="$(docker inspect -f "{{.State.Health.Status}}" teleharness-render 2>/dev/null || echo starting)"
+            if [ "$STATUS" = "healthy" ]; then break; fi
+            sleep 1
+          done
+          [ "$(docker inspect -f "{{.State.Health.Status}}" teleharness-render)" = "healthy" ]
+          curl -fsS http://127.0.0.1:10000/teleharness/ | grep -q "app.js"
+          curl -fsS -H "Content-Type: application/json" \
+            -d '{"token":"demo-demo-demo-demo"}' \
+            http://127.0.0.1:10000/teleharness/api/auth/login | grep -q '"role":"admin"'
+          echo "Scenario 3 (Render PORT=10000) PASS"

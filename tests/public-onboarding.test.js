@@ -26,10 +26,15 @@ test("repo root has no zero-byte stub html files", () => {
   assert.equal(existsSync(path.join(ROOT, "settings.html")), false, "settings.html stub should be removed");
 });
 
-test("Dockerfile, .dockerignore, docker-compose.yml and render.yaml exist and match healthz/demo contracts", () => {
+test("Dockerfile, .dockerignore, docker-compose.yml and render.yaml exist and match healthz/demo/selfhosted contracts", () => {
   const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
   assert.match(dockerfile, /^FROM node:22-slim/m);
   assert.match(dockerfile, /TELEHARNESS_DEMO=1/);
+  assert.match(dockerfile, /TELEHARNESS_DATA_DIR=\/data/);
+  assert.match(dockerfile, /TELEHARNESS_HOME=\/workspace/);
+  assert.match(dockerfile, /TELEHARNESS_FILE_ROOTS=\/workspace/);
+  assert.match(dockerfile, /VOLUME \["\/data"\]/);
+  assert.match(dockerfile, /chown -R node:node \/app \/data \/workspace/);
   assert.match(dockerfile, /\/teleharness\/api\/healthz/);
   assert.match(dockerfile, /USER node/);
 
@@ -39,7 +44,17 @@ test("Dockerfile, .dockerignore, docker-compose.yml and render.yaml exist and ma
 
   const compose = readFileSync(path.join(ROOT, "docker-compose.yml"), "utf8");
   assert.match(compose, /TELEHARNESS_DEMO:\s*"1"/);
+  assert.match(compose, /TELEHARNESS_COOKIE_NAME:\s*"teleharness_t_demo"/);
   assert.match(compose, /profiles:\s*\["selfhosted"\]/);
+  assert.match(compose, /PORT:\s*"4170"/);
+  assert.match(compose, /TELEHARNESS_DATA_DIR:\s*"\/data"/);
+  assert.match(compose, /TELEHARNESS_HOME:\s*"\/workspace"/);
+  assert.match(compose, /host\.docker\.internal:4196/);
+  assert.doesNotMatch(compose, /:4096/, "docker-compose.yml must not reference legacy opencode 1.x port :4096");
+  assert.match(compose, /TELEHARNESS_OC_API:/);
+  assert.match(compose, /TELEHARNESS_OC_PASSWORD:/);
+  assert.match(compose, /TELEHARNESS_ADMIN_TOKEN:/);
+  assert.match(compose, /teleharness-data:\/data/);
 
   const render = readFileSync(path.join(ROOT, "render.yaml"), "utf8");
   assert.match(render, /runtime:\s*docker/);
@@ -47,10 +62,14 @@ test("Dockerfile, .dockerignore, docker-compose.yml and render.yaml exist and ma
   assert.match(render, /TELEHARNESS_DEMO/);
 });
 
-test("CI and npm publish workflows exist with docker smoke and npm publish steps", () => {
+test("CI and npm publish workflows exist with full docker from-scratch smoke and npm publish steps", () => {
   const ci = readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(ci, /^\s+docker:/m);
-  assert.match(ci, /docker build/);
+  assert.match(ci, /docker compose config --quiet/);
+  assert.match(ci, /docker compose --profile selfhosted up -d teleharness/);
+  assert.match(ci, /docker compose --profile selfhosted restart teleharness/);
+  assert.match(ci, /PORT=10000/);
+  assert.match(ci, /\/teleharness\/api\/auth\/login/);
   assert.match(ci, /\/teleharness\/api\/healthz/);
 
   const pub = readFileSync(path.join(ROOT, ".github/workflows/publish-npm.yml"), "utf8");

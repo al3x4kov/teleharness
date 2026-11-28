@@ -238,6 +238,7 @@ test("demoServerEnv: strips host TELEHARNESS_* and configures isolated mock sand
   assert.equal(env.TELEHARNESS_LISTEN_HOST, "0.0.0.0");
   assert.equal(env.TELEHARNESS_MOCK, "1");
   assert.equal(env.TELEHARNESS_ADMIN_TOKEN, DEFAULT_DEMO_TOKEN);
+  assert.equal(env.TELEHARNESS_COOKIE_NAME, "teleharness_t_demo");
   assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, undefined);
   assert.equal(env.TELEHARNESS_PUBLIC_DIR, "/tmp/demo/public");
   assert.equal(env.TELEHARNESS_UPSTREAM, "http://127.0.0.1:1");
@@ -295,5 +296,114 @@ test("--demo live smoke: starts sandbox, serves /teleharness/api/healthz 200, cl
     if (tmpDir && existsSync(tmpDir)) {
       try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     }
+  }
+});
+
+test("self-hosted Docker ENV live smoke: separates /data and /workspace, prints admin token, logs in, clean SIGTERM", async () => {
+  const port = 4391;
+  const dir = tmp();
+  const dataDir = path.join(dir, "data");
+  const workspaceDir = path.join(dir, "workspace");
+  mkdirSync(dataDir, { recursive: true });
+  mkdirSync(workspaceDir, { recursive: true });
+
+  const child = spawn(process.execPath, [BIN], {
+    cwd: ROOT,
+    env: {
+      PATH: process.env.PATH || "",
+      HOME: dir,
+      USERPROFILE: dir,
+      PORT: String(port),
+      TELEHARNESS_LISTEN_HOST: "127.0.0.1",
+      TELEHARNESS_DEMO: "0",
+      TELEHARNESS_DATA_DIR: dataDir,
+      TELEHARNESS_HOME: workspaceDir,
+      TELEHARNESS_TENANT_HOME: path.join(dataDir, "tenants"),
+      TELEHARNESS_TENANT_VAULT: path.join(dataDir, "tenants-vault"),
+      TELEHARNESS_FILE_ROOTS: workspaceDir,
+      TELEHARNESS_UPSTREAM: "http://127.0.0.1:1",
+      TELEHARNESS_OC_API: "v2",
+      TELEHARNESS_OC_PASSWORD: "",
+      TELEHARNESS_ADMIN_TOKEN: "",
+      TELEHARNESS_PUBLIC_URL: "",
+      TELEHARNESS_TITLE_LLM: "0",
+      TELEHARNESS_VOICE: "0",
+      TELEHARNESS_PUSH: "0",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let out = "";
+  let err = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (c) => { out += c; });
+  child.stderr.on("data", (c) => { err += c; });
+
+  try {
+    const deadline = Date.now() + 25_000;
+    let token = null;
+    while (Date.now() < deadline && child.exitCode === null) {
+      const m = out.match(/Admin token \(sign in to the portal\): (\S+)/);
+      if (m) {
+        token = m[1].trim();
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+
+    assert.ok(token && token.length >= 16, `expected printed admin token. stdout=${out}\nstderr=${err}`);
+    assert.ok(out.includes(`data: ${dataDir}`), `expected data dir in banner. stdout=${out}`);
+    assert.equal(existsSync(path.join(dataDir, "users.json")), true, "users.json must be in dataDir");
+    assert.equal(existsSync(path.join(dataDir, "admin-token.txt")), true, "admin-token.txt must be in dataDir");
+    assert.equal(existsSync(path.join(workspaceDir, "users.json")), false, "users.json must not leak into workspace");
+    assert.equal(existsSync(path.join(workspaceDir, "admin-token.txt")), false, "admin-token.txt must not leak into workspace");
+
+    const hzRes = await fetch(`http://127.0.0.1:${port}/teleharness/api/healthz`);
+    // Self-hosted without an opencode upstream answers 503 with full version payload (portal itself is healthy)
+    assert.ok(hzRes.status === 200 || hzRes.status === 503, `unexpected healthz status ${hzRes.status}`);
+    const hz = await hzRes.json();
+    assert.equal(typeof hz.version, "string");
+    assert.equal(Boolean(hz.mock), false);
+
+    const loginRes = await fetch(`http://127.0.0.1:${port}/teleharness/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    assert.equal(loginRes.status, 200);
+    const loginBody = await loginRes.json();
+    assert.equal(loginBody?.user?.role, "admin");
+    const cookie = (loginRes.headers.get("set-cookie") || "").split(";")[0];
+    assert.ok(cookie.startsWith("teleharness_t="), `unexpected cookie: ${cookie}`);
+
+    const dirRes = await fetch(`http://127.0.0.1:${port}/teleharness/api/dircheck?directory=${encodeURIComponent(workspaceDir)}`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(dirRes.status, 200);
+    const dirBody = await dirRes.json();
+    assert.equal(dirBody.ok, true);
+
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
+      await new Promise((resolve) => (child.exitCode !== null ? resolve() : child.once("exit", resolve)));
+    } else {
+      child.kill("SIGTERM");
+      const code = await new Promise((resolve) => (child.exitCode !== null ? resolve(child.exitCode) : child.once("exit", (c) => resolve(c))));
+      assert.equal(code, 0, `expected clean exit 0 on SIGTERM, got ${code}`);
+    }
+  } finally {
+    if (child.exitCode === null) {
+      if (process.platform === "win32") {
+        spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], { stdio: "ignore" });
+      } else {
+        child.kill("SIGTERM");
+        await Promise.race([
+          new Promise((resolve) => child.once("exit", resolve)),
+          new Promise((resolve) => setTimeout(resolve, 3500)),
+        ]);
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }
+    }
+    try { rmSync(dir, { recursive: true, force: true }); } catch {}
   }
 });

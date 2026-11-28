@@ -154,8 +154,13 @@ node server.js                     # → http://127.0.0.1:4170/teleharness/
 <summary><b>Docker (self-hosted profile)</b></summary>
 
 ```bash
+git clone https://github.com/al3x4kov/teleharness.git && cd teleharness
 docker compose --profile selfhosted up -d teleharness
+docker compose --profile selfhosted logs teleharness | grep -i "admin token"
+# → http://127.0.0.1:4170/teleharness/
 ```
+
+State persists in the `teleharness-data` volume (`/data`); mount local repos to `/workspace` and pass `TELEHARNESS_UPSTREAM` / `TELEHARNESS_OC_PASSWORD` for OpenCode 2.x on the host. Full Docker notes (Linux vs macOS/Windows host access, local CLIs): [`docs/installation.md#docker`](docs/installation.md#docker-demo--self-hosted).
 </details>
 
 > [!NOTE]

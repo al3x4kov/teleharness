@@ -261,6 +261,7 @@ export function demoServerEnv({ env = process.env, dirs, publicDir, port, host =
     TELEHARNESS_FILE_ROOTS: dirs.home,
     TELEHARNESS_KB_ROOT: "off",
     TELEHARNESS_ADMIN_TOKEN: token,
+    TELEHARNESS_COOKIE_NAME: "teleharness_t_demo",
     TELEHARNESS_UPSTREAM: "http://127.0.0.1:1",
     TELEHARNESS_TITLE_LLM: "0",
     TELEHARNESS_VOICE: "0",
@@ -442,7 +443,7 @@ export async function main(argv = process.argv.slice(2)) {
   mkdirSync(dataDir, { recursive: true });
   const firstRun = !existsSync(path.join(dataDir, "users.json"));
 
-  console.log(`Teleharness ${version} — data: ${thHome}`);
+  console.log(`Teleharness ${version} — data: ${dataDir}`);
   if (!usePrebuilt && (args.rebuild || needsBuild(publicDir, version))) buildFrontend(publicDir, version);
 
   console.log("Engines:");
@@ -454,12 +455,17 @@ export async function main(argv = process.argv.slice(2)) {
   if (!(await portFree(port, host))) fail(`port ${port} is busy. Pick another one: --port ${port + 1}`);
 
   const child = spawn(process.execPath, [path.join(PKG_ROOT, "server.js")], { cwd: PKG_ROOT, env, stdio: "inherit" });
+  let stopping = false;
   const stop = (sig) => {
+    if (stopping) return;
+    stopping = true;
     if (child.exitCode === null) child.kill(sig);
+    setTimeout(() => process.exit(0), 3000).unref();
   };
   process.on("SIGINT", () => stop("SIGINT"));
   process.on("SIGTERM", () => stop("SIGTERM"));
-  child.on("exit", (code, sig) => process.exit(code ?? (sig ? 1 : 0)));
+  process.on("SIGHUP", () => stop("SIGHUP"));
+  child.on("exit", (code, sig) => process.exit(stopping ? 0 : code ?? (sig ? 1 : 0)));
 
   const local = `http://${host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host}:${port}/teleharness/`;
   if (!(await waitListening(local, child))) {

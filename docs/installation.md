@@ -173,9 +173,44 @@ initial login token to **`data/admin-token.txt`**.
 2. Paste the token from `data/admin-token.txt`.
 3. Verify the health endpoint:
    ```bash
-   curl -s http://127.0.0.1:4170/teleharness/healthz
+   curl -s http://127.0.0.1:4170/teleharness/api/healthz
    ```
-   Expected response includes `"ok":true` and `"version":"2.12.0"`.
+   Expected response includes `"ok":true` and `"version":"2.13.2"`.
+
+---
+
+## Docker (demo & self-hosted)
+
+The repository ships a rootless `Dockerfile` (Node 22 slim, `USER node`) and `docker-compose.yml` with two isolated services on separate ports.
+
+### Demo mode (no engines or API keys)
+
+```bash
+git clone https://github.com/al3x4kov/teleharness.git && cd teleharness
+docker compose up
+# → http://127.0.0.1:4180/teleharness/  (token: demo-demo-demo-demo)
+```
+
+### Self-hosted mode
+
+```bash
+docker compose --profile selfhosted up -d teleharness
+docker compose --profile selfhosted logs teleharness | grep -i "admin token"
+# → http://127.0.0.1:4170/teleharness/
+```
+
+How the container layout works:
+- **State volume (`/data`):** mounted to named volume `teleharness-data` (stores `users.json`, `admin-token.txt`, SQLite ledgers and search index). Persists across restarts and rebuilds. You can also pre-set `TELEHARNESS_ADMIN_TOKEN` in `.env` before the first boot.
+- **Project workspace (`/workspace`):** separate from `/data`. Uncomment `- ./workspace:/workspace` in `docker-compose.yml` to expose your repositories to the portal.
+- **Connecting OpenCode 2.x on the host:** set `TELEHARNESS_OC_API=v2`, `TELEHARNESS_UPSTREAM=http://host.docker.internal:4196`, and `TELEHARNESS_OC_PASSWORD=...` in `.env`. On macOS/Windows Docker Desktop, `host.docker.internal` reaches host `127.0.0.1` automatically. On Linux, `serve-v2.sh` binds `127.0.0.1` by default, so either bind OpenCode to the Docker bridge / LAN address or run the portal natively on the host.
+- **Local CLIs (Claude Code, Codex, Gemini/ACP):** the base image stays small and does not bundle agent CLIs or OAuth logins. If your primary engine is `claude` or `codex`, running Teleharness directly on the host (`npx teleharness` or `systemd`/`launchd`) is simpler. If you want CLIs inside Docker, extend the image:
+
+```dockerfile
+FROM teleharness:latest
+USER root
+RUN npm install -g @anthropic-ai/claude-code @openai/codex
+USER node
+```
 
 ---
 
@@ -390,7 +425,7 @@ Register scheduled tasks (LogonType `S4U` or at startup) running:
 
 Run through this quick checklist after installation:
 
-- [ ] **Health:** `curl -s http://127.0.0.1:4170/teleharness/healthz` returns `{"ok":true,"version":"2.12.0",...}`.
+- [ ] **Health:** `curl -s http://127.0.0.1:4170/teleharness/api/healthz` returns `{"ok":true,"version":"2.13.2",...}`.
 - [ ] **Engines:** open **New chat → Model picker** and confirm every engine you installed (Claude / OpenCode / Codex / ACP) lists models.
 - [ ] **Search:** type a keyword in the Home search bar (confirms Node ≥ 22.5 `node:sqlite` FTS5 is active).
 - [ ] **Git & Worktrees:** open a git repository project → **Git** tab shows status/diffs; **Worktrees** tab creates a clean isolated branch.
