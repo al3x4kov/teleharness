@@ -55,11 +55,11 @@ git --version     # 2.20 or newer
 
 ## 2. Install & build the portal
 
-Clone the latest release tag (`v2.13.2`), install dev build dependencies, build the production frontend
+Clone the latest release tag (`v2.13.3`), install dev build dependencies, build the production frontend
 bundle, and create `.env`:
 
 ```bash
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
@@ -69,7 +69,7 @@ cp .env.example .env
 On Windows PowerShell:
 
 ```powershell
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 $env:TELEHARNESS_BUILD_PROD = "1"; npm run build
@@ -114,16 +114,18 @@ OpenCode gives you access to any model provider (Z.ai GLM, OpenRouter, Anthropic
      ```bash
      ./ops/opencode/serve-v2.sh
      ```
-   - **Windows:**
-     ```cmd
-     ops\opencode\serve-v2.cmd
+   - **Windows (PowerShell):**
+     ```powershell
+     $env:OPENCODE_SERVER_PASSWORD = [guid]::NewGuid().ToString("N")
+     $env:OPENCODE_DISABLE_PROJECT_CONFIG = "1"
+     $env:OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX = "65536"
+     opencode serve --hostname 127.0.0.1 --port 4196
      ```
-   On first run, `serve-v2` generates a 48-char random password in `~/.teleharness/oc2-password` (`0600`),
-   binds strictly to `127.0.0.1:4196`, sets `OPENCODE_DISABLE_PROJECT_CONFIG=1` (prevents untrusted chat
-   folders from overriding OpenCode config), and raises `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=65536`.
-3. Start the portal with the matching `web-v2` launcher so it reads the same password file and enables `TELEHARNESS_OC_API=v2`:
-   - **Linux / macOS:** `./ops/web-v2.sh`
-   - **Windows:** `ops\web-v2.cmd`
+   On Linux/macOS, `serve-v2.sh` generates a 48-char random password in `~/.teleharness/oc2-password` (`0600`),
+   binds strictly to `127.0.0.1:4196`, sets `OPENCODE_DISABLE_PROJECT_CONFIG=1`, and raises `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=65536`.
+3. Start the portal pointing at the same OpenCode 2.x password:
+   - **Linux / macOS:** `./ops/web-v2.sh` (reads `~/.teleharness/oc2-password` and `.env` automatically)
+   - **Windows (PowerShell):** set `TELEHARNESS_OC_API=v2`, `TELEHARNESS_UPSTREAM=http://127.0.0.1:4196`, and `TELEHARNESS_OC_PASSWORD=$env:OPENCODE_SERVER_PASSWORD` in `.env` (or the shell), then run `node server.js`. Reference `.cmd` templates for fixed-path Task Scheduler installs live in `ops\opencode\serve-v2.cmd` and `ops\web-v2.cmd` (edit the `D:\Apps\...` paths before using them).
 4. **Optional OpenCode plugin & document skills:**
    Reference skills (`teleharness-docx`, `teleharness-pdf`, `teleharness-pptx`, `teleharness-xlsx`, `teleharness-html`)
    and the `vault-cache.ts` plugin live under `ops/opencode/`. Copy the skills you want into your
@@ -175,7 +177,7 @@ initial login token to **`data/admin-token.txt`**.
    ```bash
    curl -s http://127.0.0.1:4170/teleharness/api/healthz
    ```
-   Expected response includes `"ok":true` and `"version":"2.13.2"`.
+   Expected response includes `"ok":true` and `"version":"2.13.3"`.
 
 ---
 
@@ -425,7 +427,7 @@ Register scheduled tasks (LogonType `S4U` or at startup) running:
 
 Run through this quick checklist after installation:
 
-- [ ] **Health:** `curl -s http://127.0.0.1:4170/teleharness/api/healthz` returns `{"ok":true,"version":"2.13.2",...}`.
+- [ ] **Health:** `curl -s http://127.0.0.1:4170/teleharness/api/healthz` returns `{"ok":true,"version":"2.13.3",...}`.
 - [ ] **Engines:** open **New chat → Model picker** and confirm every engine you installed (Claude / OpenCode / Codex / ACP) lists models.
 - [ ] **Search:** type a keyword in the Home search bar (confirms Node ≥ 22.5 `node:sqlite` FTS5 is active).
 - [ ] **Git & Worktrees:** open a git repository project → **Git** tab shows status/diffs; **Worktrees** tab creates a clean isolated branch.

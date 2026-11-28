@@ -448,7 +448,9 @@ export async function main(argv = process.argv.slice(2)) {
 
   console.log("Engines:");
   for (const line of engineReport(engines)) console.log(line);
-  const upstream = env.TELEHARNESS_UPSTREAM || "http://127.0.0.1:4096";
+  const upstream = env.TELEHARNESS_OC_API === "v2"
+    ? (env.TELEHARNESS_UPSTREAM_V2 || "http://127.0.0.1:4196")
+    : (env.TELEHARNESS_UPSTREAM || "http://127.0.0.1:4096");
   if (engines.opencode && !(await reachable(upstream))) console.log(opencodeHint(upstream));
   if (!engines.claude.bin && !engines.opencode) console.log("  The portal starts without engines: chats work once you install at least one.");
 

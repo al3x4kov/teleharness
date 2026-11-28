@@ -6,6 +6,21 @@ and is shown in Settings → About.
 
 ## [Unreleased]
 
+## [2.13.3] — 2026-11-28
+
+End-to-end installation & Docker fixes so every documented setup path works cleanly from scratch.
+
+### Fixed
+- **Automatic `.env` loading in `node server.js`.** `lib/config.js` now loads `<repo>/.env` on startup without overriding explicit environment variables (and stays disabled in test/mock runs), so following `cp .env.example .env && node server.js` works on Linux, macOS, and Windows.
+- **Docker container isolation & self-hosted `HEALTHCHECK`.** Separated persistent state (`/data`, `VOLUME ["/data"]`) from the project workspace (`/workspace`) in `Dockerfile`; updated `HEALTHCHECK` so self-hosted containers without an attached `opencode serve` upstream report `healthy` instead of staying `unhealthy`.
+- **`docker-compose.yml` ports, cookies, and OpenCode 2.x defaults.** Moved the `selfhosted` service to port `4170` (eliminating the port collision with `demo` on `4180`), isolated demo cookies (`teleharness_t_demo`), updated the default upstream to OpenCode 2.x (`:4196`, `TELEHARNESS_OC_API=v2`), and forwarded `TELEHARNESS_OC_PASSWORD`, `TELEHARNESS_ADMIN_TOKEN`, and `TELEHARNESS_PUBLIC_URL`.
+- **CLI shutdown & executable mode.** `bin/teleharness.mjs` now sets `TELEHARNESS_COOKIE_NAME=teleharness_t_demo` in demo mode, prints the actual `dataDir` in self-hosted mode, exits cleanly with code `0` on `SIGTERM`, and ships with executable mode `0755` in git.
+- **Installation docs (EN/RU & macOS).** Added a dedicated Docker section in `docs/installation.md` and `docs/installation.ru.md`, fixed `/teleharness/healthz` → `/teleharness/api/healthz`, replaced hardcoded Windows `.cmd` instructions with portable PowerShell commands, and updated `docs/macos.md` from `v2.8.2` to `v2.13.3`.
+
+### Testing
+- Expanded the GitHub Actions `docker` job to verify all four flows from scratch: `docker compose config`, `docker compose up` (demo login & sessions), `docker compose --profile selfhosted` (fresh volume, log token extraction, login, `/workspace` check, restart persistence), and `docker run -e PORT=10000` (Render Blueprint contract).
+- Added unit and live smoke tests for `.env` loading (`tests/config-posix.test.js`) and self-hosted Docker ENV startup (`tests/teleharness-bin.test.js`).
+
 ## [2.13.2] — 2026-11-28
 
 Instant demo mode, npm package publishing, Docker/Render templates, and a shorter README.

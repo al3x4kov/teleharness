@@ -115,7 +115,7 @@ Checks Node, stores state in `~/.teleharness`, serves the prebuilt UI bundle (or
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -133,7 +133,7 @@ claude setup-token                 # put token into .env as CLAUDE_CODE_OAUTH_TO
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 

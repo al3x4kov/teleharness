@@ -56,10 +56,10 @@ git --version     # 2.20 или новее
 
 ## 2. Установка и сборка портала
 
-Клонируйте релизный тег (`v2.13.2`), поставьте dev-зависимости сборки, соберите фронтенд и создайте `.env`:
+Клонируйте релизный тег (`v2.13.3`), поставьте dev-зависимости сборки, соберите фронтенд и создайте `.env`:
 
 ```bash
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 TELEHARNESS_BUILD_PROD=1 npm run build
@@ -69,7 +69,7 @@ cp .env.example .env
 В Windows PowerShell:
 
 ```powershell
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci
 $env:TELEHARNESS_BUILD_PROD = "1"; npm run build
@@ -115,16 +115,18 @@ Ollama/LM Studio), субагентам `oh-my-opencode-slim` и скиллам.
      ```bash
      ./ops/opencode/serve-v2.sh
      ```
-   - **Windows:**
-     ```cmd
-     ops\opencode\serve-v2.cmd
+   - **Windows (PowerShell):**
+     ```powershell
+     $env:OPENCODE_SERVER_PASSWORD = [guid]::NewGuid().ToString("N")
+     $env:OPENCODE_DISABLE_PROJECT_CONFIG = "1"
+     $env:OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX = "65536"
+     opencode serve --hostname 127.0.0.1 --port 4196
      ```
-   При первом запуске `serve-v2` создаст случайный пароль (48 символов, права `0600`) в
-   `~/.teleharness/oc2-password`, выставит `OPENCODE_DISABLE_PROJECT_CONFIG=1` (защита от чужих конфигов
-   в папках чатов) и поднимет `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=65536`.
-3. Запускайте портал парным скриптом `web-v2` — он сам прочитает пароль и включит `TELEHARNESS_OC_API=v2`:
-   - **Linux / macOS:** `./ops/web-v2.sh`
-   - **Windows:** `ops\web-v2.cmd`
+   На Linux/macOS `serve-v2.sh` создаст случайный пароль (48 символов, права `0600`) в
+   `~/.teleharness/oc2-password`, выставит `OPENCODE_DISABLE_PROJECT_CONFIG=1` и поднимет `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX=65536`.
+3. Запускайте портал с тем же паролем OpenCode 2.x:
+   - **Linux / macOS:** `./ops/web-v2.sh` (сам читает `~/.teleharness/oc2-password` и `.env`)
+   - **Windows (PowerShell):** пропишите `TELEHARNESS_OC_API=v2`, `TELEHARNESS_UPSTREAM=http://127.0.0.1:4196` и `TELEHARNESS_OC_PASSWORD` в `.env` (или в сессии PowerShell) и запустите `node server.js`. В `ops\opencode\serve-v2.cmd` и `ops\web-v2.cmd` лежат референс-шаблоны для планировщика задач (перед использованием замените в них пути `D:\Apps\...`).
 4. **Опционально — скиллы и плагин OpenCode:**
    В `ops/opencode/` лежат готовые скиллы (`teleharness-docx`, `teleharness-pdf`, `teleharness-pptx`,
    `teleharness-xlsx`, `teleharness-html`) и плагин `vault-cache.ts`. Скопируйте нужные скиллы в
@@ -176,7 +178,7 @@ Ollama/LM Studio), субагентам `oh-my-opencode-slim` и скиллам.
    ```bash
    curl -s http://127.0.0.1:4170/teleharness/api/healthz
    ```
-   В ответе должно быть `"ok":true` и `"version":"2.13.2"`.
+   В ответе должно быть `"ok":true` и `"version":"2.13.3"`.
 
 ---
 
@@ -427,7 +429,7 @@ python3 -m venv ~/.teleharness/voice/venv
 
 После запуска пробегитесь по этим пунктам:
 
-- [ ] **Healthz:** `curl -s http://127.0.0.1:4170/teleharness/api/healthz` возвращает `{"ok":true,"version":"2.13.2",...}`.
+- [ ] **Healthz:** `curl -s http://127.0.0.1:4170/teleharness/api/healthz` возвращает `{"ok":true,"version":"2.13.3",...}`.
 - [ ] **Движки:** в **Новый чат → выбор модели** видны модели всех подключённых вами движков (Claude / OpenCode / Codex / ACP).
 - [ ] **Поиск:** строка поиска на главном экране находит сообщения (значит, активен встроенный SQLite FTS5 в Node ≥ 22.5).
 - [ ] **Git и Worktrees:** в проекте с git-репозиторием вкладка **Git** показывает диффы, а **Worktrees** создаёт изолированную ветку.

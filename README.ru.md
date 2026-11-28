@@ -115,7 +115,7 @@ npx teleharness                                # → http://127.0.0.1:4180/teleh
 <summary><b>macOS / Linux</b></summary>
 
 ```bash
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci && npm run build
 
@@ -133,7 +133,7 @@ claude setup-token                 # прописать токен в .env ка�
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-git clone --branch v2.13.2 https://github.com/al3x4kov/teleharness.git
+git clone --branch v2.13.3 https://github.com/al3x4kov/teleharness.git
 cd teleharness
 npm ci; npm run build
 
