@@ -108,7 +108,14 @@ test("direct node server.js reads .env via TELEHARNESS_ENV_FILE and signs in wit
 
   const child = spawn(process.execPath, [path.join(repoRoot, "server.js")], {
     cwd: repoRoot,
-    env: { PATH: process.env.PATH || "", HOME: homeDir, USERPROFILE: homeDir, TELEHARNESS_ENV_FILE: envFile },
+    env: {
+      PATH: process.env.PATH || "",
+      HOME: homeDir,
+      USERPROFILE: homeDir,
+      TELEHARNESS_DATA_DIR: dataDir,
+      TELEHARNESS_UPSTREAM: "http://127.0.0.1:1",
+      TELEHARNESS_ENV_FILE: envFile,
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let out = "";
